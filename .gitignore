@@ -6,9 +6,16 @@ target/
 *.log
 coverage/
 artifacts/
+.opencode/
+.opencode-src/
 .env
 .env.*
 !.env.example
 packages/*/dist/
 crates/*/target/
 
+# Generated into the thin npm package by its prepack hook.
+packages/cli/LICENSE
+packages/cli/NOTICE
+packages/cli/README.md
+packages/cli/THIRD_PARTY_NOTICES.md

@@ -1,0 +1,112 @@
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing v-prefixed release tag
+        required: true
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  build-platform:
+    strategy:
+      matrix:
+        include:
+          - os: macos-13
+            target: x86_64-apple-darwin
+            package_dir: runtime-darwin-x64
+          - os: macos-14
+            target: aarch64-apple-darwin
+            package_dir: runtime-darwin-arm64
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            package_dir: runtime-linux-x64-gnu
+          - os: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+            package_dir: runtime-linux-arm64-gnu
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/checkout@v4
+        with:
+          repository: anomalyco/opencode
+          ref: 0317531906d3f3bb01cf33c16319870cfde9170c
+          path: .opencode-src
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-${{ runner.arch }}-bun-opencode-${{ hashFiles('.opencode-src/bun.lock') }}
+      - name: Validate release tag
+        run: node -e "if (process.env.RELEASE_TAG !== 'v' + require('./package.json').version) throw new Error('release tag/version mismatch')"
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+      - run: npm ci
+      - run: npm run build:ts
+      - run: cargo build --workspace --release --locked --target=${{ matrix.target }}
+      - name: Build audited OpenCode binary
+        run: node scripts/build-opencode.mjs --source=.opencode-src --output=.opencode/opencode
+      - run: npm test
+        env:
+          CUPPET_CONTRACT_OPENCODE_BIN: ${{ github.workspace }}/.opencode/opencode
+          CUPPET_TEST_TST_BIN: ${{ github.workspace }}/target/${{ matrix.target }}/release/tst-daemon
+      - uses: apple-actions/import-codesign-certs@v3
+        if: startsWith(matrix.target, 'aarch64-apple') || startsWith(matrix.target, 'x86_64-apple')
+        with:
+          p12-file-base64: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      - run: node scripts/package-platform.mjs --target=${{ matrix.target }}
+        env:
+          CUPPET_OPENCODE_BIN: ${{ github.workspace }}/.opencode/opencode
+          CUPPET_APPLE_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
+      - name: Notarize macOS runtime
+        if: startsWith(matrix.target, 'aarch64-apple') || startsWith(matrix.target, 'x86_64-apple')
+        run: |
+          ditto -c -k --keepParent "artifacts/${{ matrix.package_dir }}" runtime.zip
+          xcrun notarytool submit runtime.zip --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cuppet-${{ matrix.target }}
+          path: artifacts/
+
+  publish:
+    needs: build-platform
+    runs-on: ubuntu-22.04
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - run: npm ci
+      - run: npm run build:ts
+      - run: node scripts/verify-release.mjs artifacts
+      - run: node scripts/publish-release.mjs artifacts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

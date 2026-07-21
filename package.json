@@ -1,35 +1,34 @@
 {
-  "name": "cuppet",
-  "version": "1.0.0",
-  "description": "Ultra-efficient Native TST (Tiered Storage Memory) + OpenCode Terminal Coding Agent",
+  "name": "cuppet-monorepo",
+  "version": "0.2.0-alpha.1",
+  "private": true,
+  "description": "Cuppet public alpha: OpenCode-backed terminal coding agent with native TST memory",
+  "license": "Apache-2.0",
   "type": "module",
-  "bin": {
-    "cuppet": "./dist/cli.js"
+  "workspaces": [
+    "packages/cli",
+    "packages/opencode-plugin"
+  ],
+  "engines": {
+    "node": ">=22"
   },
   "scripts": {
-    "build": "tsc",
-    "dev": "tsx src/cli.ts",
-    "start": "node dist/cli.js",
-    "test": "node --import tsx --test tests/*.test.ts"
-  },
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
-    "@google/genai": "*",
-    "chalk": "^5.4.1",
-    "chokidar": "^4.0.3",
-    "commander": "^13.1.0",
-    "ink": "^5.1.0",
-    "ink-select-input": "^6.0.0",
-    "ink-spinner": "^5.0.0",
-    "ink-text-input": "^6.0.0",
-    "openai": "^4.86.1",
-    "react": "^18.3.1",
-    "zod": "^3.24.2"
+    "build": "npm run build --workspaces --if-present && cargo build --workspace --locked",
+    "build:ts": "npm run build --workspaces --if-present",
+    "build:rust": "cargo build --workspace --locked",
+    "check": "npm run typecheck --workspaces --if-present && cargo check --workspace --locked",
+    "dev": "npm run dev --workspace=cuppet",
+    "lint": "cargo clippy --workspace --all-targets --locked -- -D warnings",
+    "test": "npm run test --workspaces --if-present && cargo test --workspace --locked",
+    "test:ts": "npm run test --workspaces --if-present",
+    "test:rust": "cargo test --workspace --locked",
+    "fmt:check": "cargo fmt --all -- --check",
+    "clean": "npm run clean --workspaces --if-present && cargo clean"
   },
   "devDependencies": {
-    "@types/node": "^22.13.5",
-    "@types/react": "^18.3.18",
-    "tsx": "^4.19.3",
-    "typescript": "^5.7.3"
+    "@types/node": "22.15.3",
+    "@types/react": "18.3.20",
+    "tsx": "4.19.4",
+    "typescript": "5.8.3"
   }
 }

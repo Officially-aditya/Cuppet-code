@@ -1,0 +1,22 @@
+{
+  "name": "@cuppet/opencode-plugin",
+  "version": "0.2.0-alpha.1",
+  "private": true,
+  "description": "Read-only Cuppet TST search tool for bundled OpenCode",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": "./dist/index.js",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "test": "node --import tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "tsup": "8.4.0"
+  }
+}

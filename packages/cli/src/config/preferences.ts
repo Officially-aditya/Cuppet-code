@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { z } from 'zod'
-import type { ModelRef } from '../types.js'
+import type { ModelRef, Platform } from '../types.js'
 
 const modelRef = z.object({
   providerID: z.string().min(1),
@@ -12,6 +12,7 @@ const modelRef = z.object({
 
 const preferencesSchema = z.object({
   schema: z.literal(1),
+  platform: z.enum(['anthropic', 'openai', 'google', 'opencode']).optional(),
   primary: modelRef.optional(),
   secondary: modelRef.optional(),
   backgroundPaused: z.boolean().default(false),
@@ -20,6 +21,7 @@ const preferencesSchema = z.object({
 
 export type Preferences = {
   schema: 1
+  platform?: Platform | undefined
   primary?: ModelRef | undefined
   secondary?: ModelRef | undefined
   backgroundPaused: boolean

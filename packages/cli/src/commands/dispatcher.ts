@@ -1,6 +1,7 @@
 import type { CuppetController } from '../controller.js'
 
 export type CommandAction =
+  | { type: 'platform' }
   | { type: 'login'; provider?: string }
   | { type: 'model'; role: 'primary' | 'secondary' }
   | { type: 'resume' }
@@ -26,6 +27,8 @@ export class CommandDispatcher {
     const name = command.toLowerCase()
 
     switch (name) {
+      case 'platform':
+        return { handled: true, action: { type: 'platform' } }
       case 'login':
         return {
           handled: true,
@@ -125,6 +128,7 @@ export class CommandDispatcher {
 }
 
 export const COMMANDS = [
+  '/platform',
   '/login',
   '/model primary',
   '/model secondary',
@@ -145,6 +149,7 @@ export const COMMANDS = [
 ]
 
 const HELP = `Cuppet commands:
+/platform                        Choose Anthropic, OpenAI, Google, or OpenCode
 /login [provider]                 OpenCode-advertised key or OAuth login
 /model primary|secondary         Select a live authenticated model
 /sessions, /new, /resume [id]    Manage project sessions

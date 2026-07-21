@@ -7,11 +7,13 @@ import type { PreferenceStore } from './config/preferences.js'
 import type { OpenCodeGateway } from './opencode/gateway.js'
 import type { RuntimeAssets } from './runtime/assets.js'
 import type { RuntimePaths } from './runtime/paths.js'
+import { integrationMatchesPlatform, modelMatchesPlatform } from './platforms.js'
 import type {
   AgentEvent,
   IntegrationInfo,
   ModelInfo,
   ModelRef,
+  Platform,
   PermissionRequest,
   SessionInfo,
   TokenUsage,
@@ -25,6 +27,7 @@ const emptyUsage = (): TokenUsage => ({ input: 0, output: 0, reasoning: 0, cache
 export type ControllerSnapshot = {
   models: ModelInfo[]
   integrations: IntegrationInfo[]
+  platform?: Platform
   primary?: ModelRef
   secondary?: ModelRef
   activeSession?: SessionInfo
@@ -46,6 +49,7 @@ export class CuppetController extends EventEmitter {
   readonly #interactive: boolean
   #models: ModelInfo[] = []
   #integrations: IntegrationInfo[] = []
+  #platform: Platform | undefined
   #primary: ModelRef | undefined
   #secondary: ModelRef | undefined
   #session: SessionInfo | undefined
@@ -86,8 +90,21 @@ export class CuppetController extends EventEmitter {
     })
     await this.#loadCatalog()
     const preferences = this.#preferences.value
-    this.#primary = preferences.primary && this.#findModel(preferences.primary) ? preferences.primary : undefined
-    this.#secondary = preferences.secondary && this.#findModel(preferences.secondary) ? preferences.secondary : undefined
+    this.#platform = preferences.platform
+    this.#primary =
+      this.#platform &&
+      preferences.primary &&
+      this.#findModel(preferences.primary) &&
+      modelMatchesPlatform(preferences.primary, this.#platform)
+        ? preferences.primary
+        : undefined
+    this.#secondary =
+      this.#platform &&
+      preferences.secondary &&
+      this.#findModel(preferences.secondary) &&
+      modelMatchesPlatform(preferences.secondary, this.#platform)
+        ? preferences.secondary
+        : undefined
     if (this.#secondary) this.#createBackground(preferences.backgroundPaused)
 
     this.#unsubscribe = this.#gateway.onEvent((event) => void this.#handleEvent(event))
@@ -116,6 +133,7 @@ export class CuppetController extends EventEmitter {
     return {
       models: [...this.#models],
       integrations: [...this.#integrations],
+      ...(this.#platform ? { platform: this.#platform } : {}),
       ...(this.#primary ? { primary: { ...this.#primary } } : {}),
       ...(this.#secondary ? { secondary: { ...this.#secondary } } : {}),
       ...(this.#session ? { activeSession: { ...this.#session } } : {}),
@@ -139,7 +157,32 @@ export class CuppetController extends EventEmitter {
     return () => this.off('agent-event', listener)
   }
 
+  async selectPlatform(platform: Platform): Promise<void> {
+    this.#platform = platform
+    this.#primary = undefined
+    this.#secondary = undefined
+    this.#background?.pause()
+    await this.#preferences.update({ platform, primary: undefined, secondary: undefined })
+    this.#changed()
+  }
+
+  modelsForPlatform(platform = this.#platform): ModelInfo[] {
+    if (!platform) return []
+    return this.#models.filter((model) => modelMatchesPlatform(model, platform)).map((model) => ({ ...model }))
+  }
+
+  integrationsForPlatform(platform = this.#platform): IntegrationInfo[] {
+    if (!platform) return []
+    return this.#integrations
+      .filter((integration) => integrationMatchesPlatform(integration, platform))
+      .map((integration) => structuredClone(integration))
+  }
+
   async selectModel(role: 'primary' | 'secondary', model: ModelRef): Promise<void> {
+    if (!this.#platform) throw new Error('Choose a platform before selecting a model')
+    if (!modelMatchesPlatform(model, this.#platform)) {
+      throw new Error(`The selected model does not belong to the ${this.#platform} platform`)
+    }
     if (!this.#findModel(model)) throw new Error('The selected model is no longer available')
     if (role === 'primary') {
       this.#primary = model
@@ -148,7 +191,10 @@ export class CuppetController extends EventEmitter {
     } else {
       this.#secondary = model
       await this.#preferences.update({ secondary: model })
-      if (this.#background) this.#background.setModel(model)
+      if (this.#background) {
+        this.#background.setModel(model)
+        if (!this.#preferences.value.backgroundPaused) this.#background.resume()
+      }
       else this.#createBackground(this.#preferences.value.backgroundPaused)
     }
     this.#changed()
@@ -161,7 +207,7 @@ export class CuppetController extends EventEmitter {
 
   recommendedSecondary(): ModelRef | undefined {
     if (!this.#primary) return undefined
-    return recommendSecondary(this.#models, this.#primary)
+    return recommendSecondary(this.modelsForPlatform(), this.#primary)
   }
 
   async submit(prompt: string, delivery: 'queue' | 'steer' = 'queue'): Promise<void> {
@@ -321,6 +367,7 @@ export class CuppetController extends EventEmitter {
       ? await this.#tst.call<Record<string, unknown>>('status').catch((error) => ({ error: (error as Error).message }))
       : { mode: 'degraded', reason: 'TST daemon unavailable' }
     return {
+      platform: this.#platform,
       session: this.#session,
       primary: this.#primary,
       secondary: this.#secondary,
@@ -352,6 +399,7 @@ export class CuppetController extends EventEmitter {
     )
     return {
       platform: `${process.platform}-${process.arch}`,
+      selectedPlatform: this.#platform,
       node: process.version,
       runtimeSource: this.#assets.source,
       runtimeDiagnostics: this.#assets.diagnostics,

@@ -4,7 +4,8 @@ import SelectInput from 'ink-select-input'
 import TextInput from 'ink-text-input'
 import type { CommandAction, CommandDispatcher } from '../commands/dispatcher.js'
 import type { ControllerSnapshot, CuppetController } from '../controller.js'
-import type { AgentEvent, IntegrationInfo, IntegrationMethod, MessageItem, ModelRef, PermissionRequest, SessionInfo } from '../types.js'
+import { PLATFORM_OPTIONS, platformLabel } from '../platforms.js'
+import type { AgentEvent, IntegrationInfo, IntegrationMethod, MessageItem, ModelRef, PermissionRequest, Platform, SessionInfo } from '../types.js'
 import { MultilineEditor } from './MultilineEditor.js'
 
 type Props = {
@@ -15,8 +16,9 @@ type Props = {
 
 type Modal =
   | { type: 'none' }
+  | { type: 'platform'; required: boolean }
   | { type: 'model'; role: 'primary' | 'secondary'; required: boolean }
-  | { type: 'login-integration'; provider?: string }
+  | { type: 'login-integration'; provider?: string; platform?: Platform; required?: boolean }
   | { type: 'login-method'; integration: IntegrationInfo }
   | { type: 'login-key'; integration: IntegrationInfo }
   | {
@@ -65,10 +67,15 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
     [controller],
   )
   useEffect(() => {
-    if (snapshot.models.length === 0 || modal.type !== 'none') return
-    if (!snapshot.primary) setModal({ type: 'model', role: 'primary', required: true })
-    else if (!snapshot.secondary) setModal({ type: 'model', role: 'secondary', required: true })
-  }, [modal.type, snapshot.models.length, snapshot.primary, snapshot.secondary])
+    if (modal.type !== 'none') return
+    const next = nextOnboardingModal(controller, snapshot)
+    if (next.type !== 'none') {
+      if (next.type === 'platform' && snapshot.platform) {
+        setNotice(`${platformLabel(snapshot.platform)} has no available models or authentication methods.`)
+      }
+      setModal(next)
+    }
+  }, [controller, modal.type, snapshot.integrations.length, snapshot.models.length, snapshot.platform, snapshot.primary, snapshot.secondary])
   useEffect(() => {
     if (!notice) return
     const timer = setTimeout(() => setNotice(undefined), 5_000)
@@ -139,7 +146,7 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
       <Box borderStyle="round" borderColor="cyan" paddingX={1} justifyContent="space-between">
         <Text bold color="cyan">CUPPET</Text>
         <Text dimColor>
-          {modelLabel(snapshot.primary)} → {modelLabel(snapshot.secondary)}{snapshot.degraded ? '  [TST degraded]' : ''}
+          {snapshot.platform ? `${platformLabel(snapshot.platform)} · ` : ''}{modelLabel(snapshot.primary)} → {modelLabel(snapshot.secondary)}{snapshot.degraded ? '  [TST degraded]' : ''}
         </Text>
       </Box>
 
@@ -190,9 +197,35 @@ function ModalView(props: {
   const { modal, controller, snapshot } = props
   if (modal.type === 'none') return null
 
+  if (modal.type === 'platform') {
+    return (
+      <ModalBox title={`Select platform${modal.required ? ' (required)' : ''}`}>
+        <SelectInput
+          items={PLATFORM_OPTIONS.map((option) => ({
+            label: `${option.label} · ${option.description}`,
+            value: option.value,
+          }))}
+          onSelect={(item) => {
+            const platform = item.value as Platform
+            void controller
+              .selectPlatform(platform)
+              .then(() => {
+                const next = nextOnboardingModal(controller, controller.snapshot)
+                if (next.type === 'platform') {
+                  props.setNotice(`${platformLabel(platform)} has no available models or authentication methods.`)
+                }
+                props.setModal(next)
+              })
+              .catch((error) => addMessage(props.setMessages, 'system', `Platform error: ${error.message}`))
+          }}
+        />
+      </ModalBox>
+    )
+  }
+
   if (modal.type === 'model') {
     const recommended = modal.role === 'secondary' ? controller.recommendedSecondary() : undefined
-    const models = [...snapshot.models].sort((left, right) => {
+    const models = controller.modelsForPlatform(snapshot.platform).sort((left, right) => {
       const leftRecommended = recommended && sameModel(left, recommended) ? -1 : 0
       const rightRecommended = recommended && sameModel(right, recommended) ? -1 : 0
       return leftRecommended - rightRecommended || left.name.localeCompare(right.name)
@@ -222,9 +255,11 @@ function ModalView(props: {
 
   if (modal.type === 'login-integration') {
     const provider = modal.provider?.toLowerCase()
-    const integrations = snapshot.integrations.filter((item) =>
-      provider ? item.id.toLowerCase().includes(provider) || item.name.toLowerCase().includes(provider) : true,
-    )
+    const integrations = modal.platform
+      ? controller.integrationsForPlatform(modal.platform)
+      : snapshot.integrations.filter((item) =>
+          provider ? item.id.toLowerCase().includes(provider) || item.name.toLowerCase().includes(provider) : true,
+        )
     return (
       <ModalBox title="Connect provider (credentials stay in OpenCode)">
         <SelectInput
@@ -233,7 +268,9 @@ function ModalView(props: {
             { label: 'Cancel', value: '__cancel' },
           ]}
           onSelect={(item) => {
-            if (item.value === '__cancel') return props.setModal({ type: 'none' })
+            if (item.value === '__cancel') {
+              return props.setModal(modal.required ? { type: 'platform', required: true } : { type: 'none' })
+            }
             const integration = integrations.find((candidate) => candidate.id === item.value)
             if (integration) props.setModal({ type: 'login-method', integration })
           }}
@@ -421,7 +458,14 @@ async function openAction(
   setModal: (modal: Modal) => void,
   setMessages: React.Dispatch<React.SetStateAction<MessageItem[]>>,
 ) {
-  if (action.type === 'model') setModal({ type: 'model', role: action.role, required: false })
+  if (action.type === 'platform') setModal({ type: 'platform', required: false })
+  else if (action.type === 'model') {
+    const snapshot = controller.snapshot
+    if (!snapshot.platform) setModal({ type: 'platform', required: true })
+    else if (controller.modelsForPlatform(snapshot.platform).length === 0) {
+      setModal({ type: 'login-integration', platform: snapshot.platform, required: true })
+    } else setModal({ type: 'model', role: action.role, required: false })
+  }
   else if (action.type === 'login') setModal({ type: 'login-integration', ...(action.provider ? { provider: action.provider } : {}) })
   else if (action.type === 'confirm-clear') setModal(action)
   else {
@@ -506,6 +550,25 @@ function modelLabel(model?: ModelRef): string {
 
 function sameModel(left: ModelRef, right: ModelRef): boolean {
   return left.providerID === right.providerID && left.modelID === right.modelID && left.variant === right.variant
+}
+
+function nextOnboardingModal(controller: CuppetController, snapshot: ControllerSnapshot): Modal {
+  if (!snapshot.platform) return { type: 'platform', required: true }
+  if (!snapshot.primary) {
+    if (controller.modelsForPlatform(snapshot.platform).length > 0) {
+      return { type: 'model', role: 'primary', required: true }
+    }
+    if (controller.integrationsForPlatform(snapshot.platform).length > 0) {
+      return {
+        type: 'login-integration',
+        platform: snapshot.platform,
+        required: true,
+      }
+    }
+    return { type: 'platform', required: true }
+  }
+  if (!snapshot.secondary) return { type: 'model', role: 'secondary', required: true }
+  return { type: 'none' }
 }
 
 function nextPromptIndex(

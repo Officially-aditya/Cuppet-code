@@ -36,6 +36,12 @@ launcher once with `npm link --workspace=cuppet`. Typing `cupet` then launches
 Cuppet from any directory; `cuppet` remains available as the canonical command.
 The standard `cc` C compiler is never shadowed.
 
+On first launch, Cuppet asks for a platform before showing models. Choose
+Anthropic, OpenAI, Google (Gemini and Vertex AI), or OpenCode; if needed, the
+matching OpenCode authentication flow appears before the live model picker.
+The platform and model choices contain no credentials and are remembered.
+Run `/platform` to repeat this selection later.
+
 ## Architecture
 
 ```text

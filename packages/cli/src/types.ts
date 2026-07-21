@@ -4,6 +4,8 @@ export type ModelRef = {
   variant?: string | undefined
 }
 
+export type Platform = 'anthropic' | 'openai' | 'google' | 'opencode'
+
 export type ModelInfo = ModelRef & {
   name: string
   context: number

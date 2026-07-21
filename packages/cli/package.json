@@ -8,7 +8,8 @@
     "node": ">=22"
   },
   "bin": {
-    "cuppet": "dist/cli.js"
+    "cuppet": "dist/cli.js",
+    "cupet": "dist/cli.js"
   },
   "files": [
     "dist",

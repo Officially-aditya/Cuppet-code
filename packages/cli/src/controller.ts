@@ -84,10 +84,7 @@ export class CuppetController extends EventEmitter {
     this.#unsubscribeTst = this.#tst?.onNotification((notification) => {
       this.#handleTstNotification(notification)
     })
-    ;[this.#models, this.#integrations] = await Promise.all([
-      this.#gateway.listModels(),
-      this.#gateway.listIntegrations(),
-    ])
+    await this.#loadCatalog()
     const preferences = this.#preferences.value
     this.#primary = preferences.primary && this.#findModel(preferences.primary) ? preferences.primary : undefined
     this.#secondary = preferences.secondary && this.#findModel(preferences.secondary) ? preferences.secondary : undefined
@@ -158,10 +155,7 @@ export class CuppetController extends EventEmitter {
   }
 
   async refreshCatalog(): Promise<void> {
-    ;[this.#models, this.#integrations] = await Promise.all([
-      this.#gateway.listModels(),
-      this.#gateway.listIntegrations(),
-    ])
+    await this.#loadCatalog()
     this.#changed()
   }
 
@@ -423,6 +417,18 @@ export class CuppetController extends EventEmitter {
 
   async #ensureSession(): Promise<SessionInfo> {
     return this.#session ?? this.newSession()
+  }
+
+  async #loadCatalog(): Promise<void> {
+    const deadline = Date.now() + 5_000
+    do {
+      ;[this.#models, this.#integrations] = await Promise.all([
+        this.#gateway.listModels(),
+        this.#gateway.listIntegrations(),
+      ])
+      if (this.#models.length > 0 || this.#integrations.length > 0) return
+      await new Promise((resolve) => setTimeout(resolve, 150))
+    } while (Date.now() < deadline)
   }
 
   async #requireSession(): Promise<SessionInfo> {

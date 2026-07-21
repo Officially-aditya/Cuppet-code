@@ -31,6 +31,11 @@ Run `cuppet --doctor` for checksum, protocol, storage, provider, and graph
 diagnostics. Cuppet starts in visible OpenCode-only degraded mode if TST is not
 available, but it stops the agent loop when OpenCode itself cannot start.
 
+For a source checkout with a locally packaged runtime, install the development
+launcher once with `npm link --workspace=cuppet`. Typing `cupet` then launches
+Cuppet from any directory; `cuppet` remains available as the canonical command.
+The standard `cc` C compiler is never shadowed.
+
 ## Architecture
 
 ```text

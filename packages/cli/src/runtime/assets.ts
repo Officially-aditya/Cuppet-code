@@ -75,28 +75,84 @@ export async function resolveRuntimeAssets(): Promise<RuntimeAssets> {
     await checkPresence(assets)
     return assets
   } catch (error) {
-    diagnostics.push(`Runtime package unavailable or invalid: ${(error as Error).message}`)
+    const packageDiagnostic = `Runtime package unavailable or invalid: ${(error as Error).message}`
     const assets: RuntimeAssets = { source: 'development', diagnostics }
     await fillDevelopmentDefaults(assets)
     await checkPresence(assets)
+    if (!assets.opencode) diagnostics.unshift(packageDiagnostic)
     return assets
   }
 }
 
 async function fillDevelopmentDefaults(assets: RuntimeAssets): Promise<void> {
   const moduleDirectory = dirname(fileURLToPath(import.meta.url))
+  const repositoryRoot = await findRepositoryRoot(moduleDirectory)
+  const runtimeDirectory = runtimeDirectories[`${process.platform}-${process.arch}`]
+  const localRuntimeCandidate = repositoryRoot && runtimeDirectory
+    ? resolve(repositoryRoot, 'artifacts', runtimeDirectory)
+    : undefined
+  const localRuntime = localRuntimeCandidate && await verifyLocalRuntime(localRuntimeCandidate, assets.diagnostics)
+    ? localRuntimeCandidate
+    : undefined
   const candidates = {
+    opencode: [
+      ...(localRuntime ? [resolve(localRuntime, 'bin/opencode')] : []),
+    ],
     tst: [
       resolve(process.cwd(), 'target/debug/tst-daemon'),
-      resolve(moduleDirectory, '../../../../target/debug/tst-daemon'),
+      ...(localRuntime ? [resolve(localRuntime, 'bin/tst-daemon')] : []),
+      ...(repositoryRoot ? [resolve(repositoryRoot, 'target/debug/tst-daemon')] : []),
     ],
     plugin: [
       resolve(process.cwd(), 'packages/opencode-plugin/dist/index.js'),
-      resolve(moduleDirectory, '../../../opencode-plugin/dist/index.js'),
+      ...(localRuntime ? [resolve(localRuntime, 'plugin/index.js')] : []),
+      ...(repositoryRoot ? [resolve(repositoryRoot, 'packages/opencode-plugin/dist/index.js')] : []),
     ],
   }
+  if (!assets.opencode) assets.opencode = await firstExisting(candidates.opencode)
   if (!assets.tst) assets.tst = await firstExisting(candidates.tst)
   if (!assets.plugin) assets.plugin = await firstExisting(candidates.plugin)
+}
+
+const runtimeDirectories: Record<string, string> = {
+  'darwin-arm64': 'runtime-darwin-arm64',
+  'darwin-x64': 'runtime-darwin-x64',
+  'linux-arm64': 'runtime-linux-arm64-gnu',
+  'linux-x64': 'runtime-linux-x64-gnu',
+}
+
+async function verifyLocalRuntime(root: string, diagnostics: string[]): Promise<boolean> {
+  const manifestPath = resolve(root, 'manifest.json')
+  try {
+    await access(manifestPath, constants.R_OK)
+  } catch {
+    return false
+  }
+  try {
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as RuntimeManifest
+    validateManifest(manifest)
+    await verifyChecksums(root, manifest)
+    return true
+  } catch (error) {
+    diagnostics.push(`Local runtime artifact is invalid: ${(error as Error).message}`)
+    return false
+  }
+}
+
+async function findRepositoryRoot(start: string): Promise<string | undefined> {
+  let directory = start
+  for (let depth = 0; depth < 8; depth += 1) {
+    try {
+      const metadata = JSON.parse(await readFile(resolve(directory, 'package.json'), 'utf8')) as { name?: string }
+      if (metadata.name === 'cuppet-monorepo') return directory
+    } catch {
+      // Continue toward the filesystem root.
+    }
+    const parent = dirname(directory)
+    if (parent === directory) break
+    directory = parent
+  }
+  return undefined
 }
 
 async function checkPresence(assets: RuntimeAssets): Promise<void> {

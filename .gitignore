@@ -1,0 +1,14 @@
+node_modules/
+dist/
+target/
+.firecrawl/
+.DS_Store
+*.log
+coverage/
+artifacts/
+.env
+.env.*
+!.env.example
+packages/*/dist/
+crates/*/target/
+

@@ -98,12 +98,6 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
     }
   }, [controller, modal.type, snapshot.integrations.length, snapshot.models.length, snapshot.platform, snapshot.primary, snapshot.secondary])
   useEffect(() => {
-    stdout.write('\u001b[?1000h\u001b[?1006h')
-    return () => {
-      stdout.write('\u001b[?1000l\u001b[?1006l')
-    }
-  }, [stdout])
-  useEffect(() => {
     if (!notice) return
     const timer = setTimeout(() => setNotice(undefined), 5_000)
     return () => clearTimeout(timer)

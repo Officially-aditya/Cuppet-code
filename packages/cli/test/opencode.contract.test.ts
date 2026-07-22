@@ -23,12 +23,8 @@ test('pinned OpenCode binary exposes the expected v2 health and catalog contract
       binary: binary!,
       paths,
       logger,
-      ...(tst
-        ? {
-            plugin: resolve(import.meta.dirname, '../../opencode-plugin/dist/index.js'),
-            tst: { socket: tst.socket, token: tst.token },
-          }
-        : {}),
+      plugin: resolve(import.meta.dirname, '../../opencode-plugin/dist/index.js'),
+      ...(tst ? { tst: { socket: tst.socket, token: tst.token } } : {}),
     })
     const health = await runtime.client.v2.health.get({ throwOnError: true })
     assert.ok(health.data)
@@ -45,9 +41,28 @@ test('pinned OpenCode binary exposes the expected v2 health and catalog contract
     } | undefined)?.data ?? []
     const model = catalog.find((item) => item.enabled && item.status !== 'deprecated')
     assert.ok(model, 'the live OpenCode catalog should expose at least one enabled model')
+    const legacy = await runtime.client.provider.list({ directory: paths.projectRealpath })
+    const providerByID = new Map((legacy.data?.all ?? []).map((provider) => [provider.id, provider]))
+    const configurable = catalog.find((item) => {
+      const variants = providerByID.get(item.providerID)?.models[item.id]?.variants
+      return variants && Object.keys(variants).length > 0
+    })
+    assert.ok(configurable, 'the legacy catalog should advertise at least one configurable model')
+    assert.deepEqual(
+      new Set(configurable.variants.map((variant) => variant.id)),
+      new Set(Object.keys(providerByID.get(configurable.providerID)?.models[configurable.id]?.variants ?? {})),
+      'the v2 catalog should preserve every provider-advertised model variant',
+    )
     const integrations = await runtime.client.v2.integration.list({ location: { directory: paths.projectRealpath } })
     assert.equal(integrations.response.status, 200)
     const gateway = new OpenCodeGateway(runtime.client, paths.projectRealpath)
+    const openAI = ((integrations.data as { data?: Array<{ id: string; methods: Array<{ id?: string }> }> } | undefined)?.data ?? [])
+      .find((integration) => integration.id === 'openai')
+    const browserOAuth = openAI?.methods.find((method) => method.id === 'chatgpt-browser')
+    assert.ok(browserOAuth?.id, 'the stable OpenCode integration should advertise browser OAuth')
+    const oauth = await gateway.beginOAuth('openai', browserOAuth.id)
+    assert.equal(new URL(oauth.url).origin, 'https://auth.openai.com')
+    await gateway.cancelOAuth(oauth.attemptID)
     const gatewayModels = await gateway.listModels()
     const expectedSelections = catalog
       .filter((item) => item.enabled && item.status !== 'deprecated')

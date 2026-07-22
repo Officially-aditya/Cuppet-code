@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { readFile } from 'node:fs/promises'
 import { TstToolClient } from './rpc.js'
 
 type ToolContext = { sessionID: string }
@@ -33,4 +34,70 @@ export const CuppetMemoryPlugin = async () => ({
   },
 })
 
-export default CuppetMemoryPlugin
+type VariantBridge = {
+  schema: 1
+  models: Array<{
+    providerID: string
+    modelID: string
+    variants: Array<{ id: string; headers: Record<string, string>; body: Record<string, unknown> }>
+  }>
+}
+
+type CatalogDraft = {
+  model: {
+    update(
+      providerID: string,
+      modelID: string,
+      update: (model: { variants: VariantBridge['models'][number]['variants'] }) => void,
+    ): void
+  }
+}
+
+type PromisePluginContext = {
+  catalog: {
+    transform(update: (catalog: CatalogDraft) => Promise<void> | void): Promise<{ dispose(): Promise<void> }>
+    reload(): Promise<void>
+  }
+}
+
+const CuppetPlugin = {
+  id: 'cuppet',
+  server: CuppetMemoryPlugin,
+  async setup(context: PromisePluginContext) {
+    const path = process.env.CUPPET_OPENCODE_VARIANTS_PATH
+    if (!path) return
+    await context.catalog.transform(async (catalog) => {
+      const bridge = await readBridge(path)
+      if (!bridge) return
+      for (const entry of bridge.models) {
+        catalog.model.update(entry.providerID, entry.modelID, (model) => {
+          const existing = new Map(model.variants.map((variant) => [variant.id, variant]))
+          for (const variant of entry.variants) existing.set(variant.id, variant)
+          model.variants = [...existing.values()]
+        })
+      }
+    })
+    void reloadWhenReady(context, path)
+  },
+}
+
+export default CuppetPlugin
+
+async function reloadWhenReady(context: PromisePluginContext, path: string): Promise<void> {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    if (await readBridge(path)) {
+      await context.catalog.reload()
+      return
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+}
+
+async function readBridge(path: string): Promise<VariantBridge | undefined> {
+  try {
+    const value = JSON.parse(await readFile(path, 'utf8')) as VariantBridge
+    return value.schema === 1 && Array.isArray(value.models) ? value : undefined
+  } catch {
+    return undefined
+  }
+}

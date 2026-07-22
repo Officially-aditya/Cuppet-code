@@ -4,10 +4,13 @@ import { COMMANDS } from '../commands/dispatcher.js'
 
 type Props = {
   disabled?: boolean
+  height?: number
   onSubmit(value: string): void | Promise<void>
+  onScrollUp?(): void
+  onScrollDown?(): void
 }
 
-export function MultilineEditor({ disabled = false, onSubmit }: Props) {
+export function MultilineEditor({ disabled = false, height = 4, onSubmit, onScrollUp, onScrollDown }: Props) {
   const [value, setValue] = useState('')
   const [historyIndex, setHistoryIndex] = useState(-1)
   const history = useRef<string[]>([])
@@ -19,6 +22,53 @@ export function MultilineEditor({ disabled = false, onSubmit }: Props) {
   useInput(
     (input, key) => {
       if (key.ctrl && input === 'c') return
+      const isMouseInput =
+        input.startsWith('[<') ||
+        input.startsWith('\u001b[<') ||
+        input.startsWith('[M') ||
+        input.startsWith('\u001b[M') ||
+        /^\[<[0-9]+;/i.test(input)
+
+      if (isMouseInput) {
+        const button = parseInt(input.replace(/^[^\d]*/, ''), 10)
+        if (button === 64 || button === 96 || input.includes('64;')) {
+          onScrollUp?.()
+        } else if (button === 65 || button === 97 || input.includes('65;')) {
+          onScrollDown?.()
+        }
+        return
+      }
+
+      if (
+        key.pageUp ||
+        key.pageDown ||
+        input === '\u0015' ||
+        input === '\u0004' ||
+        input.includes('\u001b[5~') ||
+        input.includes('\u001b[6~') ||
+        input === '\u001b[1;2A' ||
+        input === '\u001b[1;2B' ||
+        input === '\u001b[1;5A' ||
+        input === '\u001b[1;5B'
+      ) {
+        if (
+          key.pageUp ||
+          input === '\u0015' ||
+          input.includes('\u001b[5~') ||
+          input === '\u001b[1;2A' ||
+          input === '\u001b[1;5A'
+        ) {
+          onScrollUp?.()
+        } else {
+          onScrollDown?.()
+        }
+        return
+      }
+      if (key.escape) {
+        setValue('')
+        setHistoryIndex(-1)
+        return
+      }
       if (key.return) {
         if (key.ctrl || key.shift) {
           setValue((current) => `${current}\n`)
@@ -66,20 +116,50 @@ export function MultilineEditor({ disabled = false, onSubmit }: Props) {
     { isActive: !disabled },
   )
 
+  const viewportHeight = Math.max(1, Math.floor(height))
   const lines = value.length > 0 ? value.split('\n') : ['']
-  return (
-    <Box flexDirection="column">
-      <Box borderStyle="single" borderColor="gray" paddingX={1} flexDirection="column">
-        {lines.map((line, index) => (
-          <Text key={`${index}:${line}`}>
-            <Text color="cyan" bold>{index === 0 ? '› ' : '  '}</Text>
-            {line || (index === 0 ? <Text dimColor>Type a request or /help…</Text> : '')}
-            {index === lines.length - 1 ? <Text inverse> </Text> : null}
-          </Text>
-        ))}
+  if (viewportHeight < 3) {
+    const line = lines.at(-1) ?? ''
+    return (
+      <Box height={viewportHeight} overflow="hidden">
+        <Text wrap="truncate-start">
+          <Text color="cyan" bold>› </Text>
+          {line || <Text dimColor>Type a request…</Text>}
+          <Text inverse> </Text>
+        </Text>
       </Box>
-      {suggestions.length > 0 && value !== suggestions[0] ? (
-        <Text dimColor>Tab: {suggestions.join('   ')}</Text>
+    )
+  }
+
+  const showSuggestions = suggestions.length > 0 && value !== suggestions[0] && viewportHeight >= 4
+  const inputHeight = viewportHeight - (showSuggestions ? 1 : 0)
+  const visibleLineCount = Math.max(1, inputHeight - 2)
+  const firstVisibleIndex = Math.max(0, lines.length - visibleLineCount)
+  const visibleLines = lines.slice(firstVisibleIndex)
+  return (
+    <Box flexDirection="column" height={viewportHeight} overflow="hidden">
+      <Box
+        borderStyle="single"
+        borderColor="gray"
+        paddingX={1}
+        flexDirection="column"
+        height={inputHeight}
+        overflow="hidden"
+      >
+        {visibleLines.map((line, visibleIndex) => {
+          const index = firstVisibleIndex + visibleIndex
+          const isLast = index === lines.length - 1
+          return (
+          <Text key={`${index}:${line}`} wrap={isLast ? 'truncate-start' : 'truncate-end'}>
+            <Text color="cyan" bold>{index === 0 ? '› ' : visibleIndex === 0 ? '… ' : '  '}</Text>
+            {line || (index === 0 ? <Text dimColor>Type a request or /help…</Text> : '')}
+            {isLast ? <Text inverse> </Text> : null}
+          </Text>
+          )
+        })}
+      </Box>
+      {showSuggestions ? (
+        <Text dimColor wrap="truncate-end">Tab: {suggestions.join('   ')}</Text>
       ) : null}
     </Box>
   )

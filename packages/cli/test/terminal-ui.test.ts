@@ -1,0 +1,121 @@
+import assert from 'node:assert/strict'
+import { PassThrough } from 'node:stream'
+import { test } from 'node:test'
+import { stripVTControlCharacters } from 'node:util'
+import React from 'react'
+import { render } from 'ink'
+import type { CommandDispatcher } from '../src/commands/dispatcher.js'
+import type { CuppetController } from '../src/controller.js'
+import { TerminalApp } from '../src/ui/TerminalApp.js'
+
+test('terminal UI stays inside the viewport and Esc closes a slash-command picker', async () => {
+  const stdin = terminalInput()
+  const stdout = terminalOutput(42, 10)
+  const chunks: string[] = []
+  stdout.on('data', (chunk: Buffer) => chunks.push(chunk.toString('utf8')))
+  const controller = fakeController()
+  const dispatcher = {
+    async dispatch(input: string) {
+      if (input === '/platform') return { handled: true, action: { type: 'platform' as const } }
+      return { handled: true }
+    },
+  } as CommandDispatcher
+  const app = render(React.createElement(TerminalApp, { controller, dispatcher }), {
+    stdin,
+    stdout,
+    debug: true,
+    patchConsole: false,
+    exitOnCtrlC: false,
+  })
+
+  try {
+    await settle()
+    assertFrameHeight(latestFrame(chunks), 10)
+
+    stdin.write('/platform')
+    await settle()
+    stdin.write('\r')
+    await settle()
+    assert.match(latestFrame(chunks), /Select platform/)
+    assertFrameHeight(latestFrame(chunks), 10)
+
+    stdin.write('\u001B')
+    await settle()
+    assert.doesNotMatch(latestFrame(chunks), /Select platform/)
+    assert.match(latestFrame(chunks), /Type a request/)
+
+    Object.defineProperty(stdout, 'rows', { configurable: true, value: 6, writable: true })
+    stdout.emit('resize')
+    await settle()
+    assertFrameHeight(latestFrame(chunks), 6)
+  } finally {
+    app.unmount()
+    stdin.destroy()
+    stdout.destroy()
+  }
+})
+
+function fakeController(): CuppetController {
+  const model = { providerID: 'openai', modelID: 'gpt-test' }
+  const snapshot = {
+    models: [],
+    integrations: [],
+    platform: 'openai' as const,
+    primary: model,
+    secondary: model,
+    foregroundUsage: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
+    foregroundCost: 0,
+    running: false,
+    activeTools: 0,
+    degraded: false,
+    stepCount: 0,
+  }
+  return {
+    snapshot,
+    onChange() { return () => undefined },
+    onAgentEvent() { return () => undefined },
+    modelsForPlatform() { return [] },
+    integrationsForPlatform() { return [] },
+    async denyPendingPermissions() { return 0 },
+    async replyPermission() {},
+    gateway: { async cancelOAuth() {} },
+  } as unknown as CuppetController
+}
+
+function terminalInput(): NodeJS.ReadStream {
+  const stream = new PassThrough() as PassThrough & NodeJS.ReadStream
+  Object.assign(stream, {
+    isTTY: true,
+    setRawMode() { return stream },
+    ref() { return stream },
+    unref() { return stream },
+  })
+  return stream
+}
+
+function terminalOutput(columns: number, rows: number): NodeJS.WriteStream {
+  const stream = new PassThrough() as PassThrough & NodeJS.WriteStream
+  Object.defineProperties(stream, {
+    columns: { configurable: true, value: columns, writable: true },
+    rows: { configurable: true, value: rows, writable: true },
+    isTTY: { configurable: true, value: true },
+  })
+  return stream
+}
+
+function latestFrame(chunks: string[]): string {
+  for (let index = chunks.length - 1; index >= 0; index -= 1) {
+    const frame = stripVTControlCharacters(chunks[index] ?? '')
+    if (frame.includes('CUPPET')) return frame
+  }
+  throw new Error(`No UI frame in chunks: ${JSON.stringify(chunks)}`)
+}
+
+function assertFrameHeight(frame: string, rows: number): void {
+  assert.ok(frame.length > 0, 'expected Ink to render a frame')
+  assert.ok(frame.split('\n').length <= rows, `rendered ${frame.split('\n').length} rows into a ${rows}-row terminal`)
+}
+
+async function settle(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 40))
+}

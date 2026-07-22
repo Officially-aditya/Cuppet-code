@@ -3,8 +3,8 @@
 Cuppet is an Ink terminal coding-agent supervisor backed by a pinned OpenCode
 server and a native Rust tiered-memory/code-graph daemon.
 
-The alpha pins OpenCode and `@opencode-ai/sdk` to **1.18.4** at revision
-`0317531906d3f3bb01cf33c16319870cfde9170c`. Provider credentials, tools,
+The alpha pins OpenCode and `@opencode-ai/sdk` to the stable **v1.18.4** release
+at revision `49c69c5ed3ccf706b61b3febb43c8aaff7f8325e`. Provider credentials, tools,
 sessions, model routing, diffs, permissions, compaction, and undo stay inside
 OpenCode. Cuppet stores only non-secret UI/model selections and verified
 memory records.
@@ -31,10 +31,12 @@ Run `cuppet --doctor` for checksum, protocol, storage, provider, and graph
 diagnostics. Cuppet starts in visible OpenCode-only degraded mode if TST is not
 available, but it stops the agent loop when OpenCode itself cannot start.
 
-For a source checkout with a locally packaged runtime, install the development
-launcher once with `npm link --workspace=cuppet`. Typing `cupet` then launches
-Cuppet from any directory; `cuppet` remains available as the canonical command.
-The standard `cc` C compiler is never shadowed.
+For a source checkout with a locally packaged runtime, run
+`npm run install:global`. The installer packs the runtime and CLI before
+installing them, so the global commands never symlink back into the checkout
+(which macOS may block when the repository is under `Downloads`). Typing
+`cupet` then launches Cuppet from any directory; `cuppet` remains available as
+the canonical command. The standard `cc` C compiler is never shadowed.
 
 On first launch, Cuppet asks for a platform before showing models. Choose
 Anthropic, OpenAI, Google (Gemini and Vertex AI), or OpenCode; if needed, the

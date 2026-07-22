@@ -55,7 +55,8 @@ async function main(): Promise<void> {
       binary: assets.opencode,
       paths,
       logger,
-      ...(tst && assets.plugin ? { plugin: assets.plugin, tst: { socket: tst.socket, token: tst.token } } : {}),
+      ...(assets.plugin ? { plugin: assets.plugin } : {}),
+      ...(tst ? { tst: { socket: tst.socket, token: tst.token } } : {}),
     })
     const gateway = new OpenCodeGateway(opencode.client, paths.projectRealpath)
     const preferences = new PreferenceStore(paths.preferences)

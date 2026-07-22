@@ -2,8 +2,10 @@ import type { CuppetController } from '../controller.js'
 
 export type CommandAction =
   | { type: 'platform' }
+  | { type: 'status' }
   | { type: 'login'; provider?: string }
   | { type: 'model'; role: 'primary' | 'secondary' }
+  | { type: 'effort'; role: 'primary' | 'secondary' }
   | { type: 'resume' }
   | { type: 'confirm-clear'; scope: 'session' | 'project' | 'global' }
 
@@ -41,6 +43,18 @@ export class CommandDispatcher {
         }
         return { handled: true, action: { type: 'model', role } }
       }
+      case 'effort': {
+        const possibleRole = arguments_[0]?.toLowerCase()
+        const role = possibleRole === 'primary' || possibleRole === 'secondary' ? possibleRole : 'primary'
+        const effort = role === possibleRole ? arguments_[1] : arguments_[0]
+        const expectedArguments = role === possibleRole ? 2 : 1
+        if (arguments_.length > expectedArguments) {
+          return { handled: true, message: 'Usage: /effort [primary|secondary] [level]' }
+        }
+        if (!effort) return { handled: true, action: { type: 'effort', role } }
+        const selected = await this.#controller.selectEffort(role, effort)
+        return { handled: true, message: `${capitalize(role)} effort set to ${selected}.` }
+      }
       case 'sessions':
         return { handled: true, action: { type: 'resume' } }
       case 'resume':
@@ -55,7 +69,7 @@ export class CommandDispatcher {
           message: `Created session ${(await this.#controller.newSession()).id}.`,
         }
       case 'status':
-        return { handled: true, message: JSON.stringify(await this.#controller.status(), null, 2) }
+        return { handled: true, action: { type: 'status' } }
       case 'memory':
         return this.#memory(arguments_)
       case 'compact':
@@ -132,6 +146,9 @@ export const COMMANDS = [
   '/login',
   '/model primary',
   '/model secondary',
+  '/effort',
+  '/effort primary',
+  '/effort secondary',
   '/sessions',
   '/new',
   '/resume',
@@ -152,6 +169,7 @@ const HELP = `Cuppet commands:
 /platform                        Choose Anthropic, OpenAI, Google, or OpenCode
 /login [provider]                 OpenCode-advertised key or OAuth login
 /model primary|secondary         Select a live authenticated model
+/effort [role] [level]           Select a supported model effort level
 /sessions, /new, /resume [id]    Manage project sessions
 /status, /memory                 Engine, usage, memory, graph, and queue status
 /compact                         Compact OpenCode and durable memory
@@ -169,4 +187,8 @@ function splitArguments(value: string): string[] {
     const first = item[0]
     return (first === '"' || first === "'") && item.at(-1) === first ? item.slice(1, -1) : item
   })
+}
+
+function capitalize(value: string): string {
+  return `${value[0]?.toUpperCase() ?? ''}${value.slice(1)}`
 }

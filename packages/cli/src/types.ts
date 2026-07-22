@@ -4,7 +4,7 @@ export type ModelRef = {
   variant?: string | undefined
 }
 
-export type Platform = 'anthropic' | 'openai' | 'google' | 'opencode'
+export type Platform = 'anthropic' | 'openai' | 'google' | 'opencode' | 'vertex'
 
 export type ModelInfo = ModelRef & {
   name: string
@@ -78,7 +78,7 @@ export type PermissionRequest = {
 export type AgentEvent =
   | { type: 'text-delta'; sessionID: string; text: string }
   | { type: 'reasoning-delta'; sessionID: string; text: string }
-  | { type: 'tool-start'; sessionID: string; callID: string; name: string }
+  | { type: 'tool-start'; sessionID: string; callID: string; name: string; input?: unknown }
   | { type: 'tool-progress'; sessionID: string; callID: string; message: string }
   | { type: 'tool-end'; sessionID: string; callID: string; success: boolean; outputPaths?: string[] }
   | { type: 'diff'; sessionID: string; diff: unknown[] }

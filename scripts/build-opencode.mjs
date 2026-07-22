@@ -3,7 +3,7 @@ import { copyFile, chmod, mkdir, readFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 
-const revision = '0317531906d3f3bb01cf33c16319870cfde9170c'
+const revision = '49c69c5ed3ccf706b61b3febb43c8aaff7f8325e'
 const version = '1.18.4'
 const sourceArgument = process.argv.find((argument) => argument.startsWith('--source='))
 const outputArgument = process.argv.find((argument) => argument.startsWith('--output='))

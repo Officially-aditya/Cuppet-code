@@ -1,8 +1,8 @@
 Cuppet
 Copyright 2026 Cuppet contributors
 
-This product bundles OpenCode 1.18.4 at revision
-0317531906d3f3bb01cf33c16319870cfde9170c. OpenCode is licensed under the MIT
+This product bundles the stable OpenCode v1.18.4 release at revision
+49c69c5ed3ccf706b61b3febb43c8aaff7f8325e. OpenCode is licensed under the MIT
 License. See THIRD_PARTY_NOTICES.md.
 
 The native tiered-memory implementation was independently rewritten from the

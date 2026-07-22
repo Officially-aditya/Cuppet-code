@@ -17,7 +17,7 @@ const configuration = targets[target]
 if (!configuration) throw new Error(`unsupported release target ${target}`)
 const [packageDirectory, platform, arch, libc] = configuration
 const opencodeSource = process.env.CUPPET_OPENCODE_BIN
-if (!opencodeSource) throw new Error('CUPPET_OPENCODE_BIN must point to the audited 1.18.4 binary')
+if (!opencodeSource) throw new Error('CUPPET_OPENCODE_BIN must point to OpenCode v1.18.4 at revision 49c69c5ed3ccf706b61b3febb43c8aaff7f8325e')
 
 const output = resolve('artifacts', packageDirectory)
 await mkdir(join(output, 'bin'), { recursive: true })
@@ -27,7 +27,10 @@ const files = {
   'bin/tst-daemon': resolve('target', target, 'release', 'tst-daemon'),
   'plugin/index.js': resolve('packages/opencode-plugin/dist/index.js'),
 }
-for (const [destination, source] of Object.entries(files)) await copyFile(source, join(output, destination))
+for (const [destination, source] of Object.entries(files)) {
+  const targetPath = join(output, destination)
+  if (resolve(source) !== resolve(targetPath)) await copyFile(source, targetPath)
+}
 await chmod(join(output, 'bin/opencode'), 0o755)
 await chmod(join(output, 'bin/tst-daemon'), 0o755)
 await chmod(join(output, 'plugin/index.js'), 0o644)

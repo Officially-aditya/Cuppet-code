@@ -19,7 +19,7 @@ for (const manifestPath of manifests) {
   if (
     manifest.opencodeVersion !== '1.18.4' ||
     manifest.sdkVersion !== '1.18.4' ||
-    manifest.opencodeRevision !== '0317531906d3f3bb01cf33c16319870cfde9170c'
+    manifest.opencodeRevision !== '49c69c5ed3ccf706b61b3febb43c8aaff7f8325e'
   ) {
     throw new Error(`version mismatch in ${manifestPath}`)
   }

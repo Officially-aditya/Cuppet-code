@@ -3,7 +3,7 @@ use ignore::gitignore::Gitignore;
 use ignore::WalkBuilder;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tree_sitter::{InputEdit, Language, Node, Parser, Point, Tree};
@@ -454,25 +454,64 @@ impl CodeGraph {
             .split_whitespace()
             .map(ToOwned::to_owned)
             .collect();
+
+        // Identify spatio-temporal active paths from query terms or known graph files
+        let mut active_paths = HashSet::new();
+        for term in &terms {
+            let clean = term.trim_matches(|c: char| !c.is_alphanumeric() && c != '/' && c != '.' && c != '_');
+            if clean.contains('/') || clean.contains('.') {
+                for file_path in self.files.keys() {
+                    let file_lower = file_path.to_lowercase();
+                    if file_lower == clean || file_lower.contains(clean) || clean.contains(&file_lower) {
+                        active_paths.insert(file_lower);
+                    }
+                }
+            }
+        }
+
+        // Collect 1-hop graph neighbor node IDs for spatio-temporal locality
+        let mut neighbor_node_ids = HashSet::new();
+        if !active_paths.is_empty() {
+            for edge in &self.edges {
+                if active_paths.contains(&edge.path.to_lowercase()) {
+                    neighbor_node_ids.insert(edge.from.clone());
+                    neighbor_node_ids.insert(edge.to.clone());
+                }
+            }
+        }
+
         let mut matches = Vec::new();
         for node in self.nodes.values() {
             let mut score = 0;
             let path = node.path.to_lowercase();
             let name = node.name.to_lowercase();
             let signature = node.signature.to_lowercase();
+
+            // Spatio-temporal locality boost
+            if active_paths.contains(&path) {
+                score += 50;
+            } else if neighbor_node_ids.contains(&node.id) {
+                score += 20;
+            }
+
             for term in &terms {
-                if name == *term {
+                let clean_term = term.trim_matches(|c: char| !c.is_alphanumeric() && c != '/' && c != '.' && c != '_');
+                if clean_term.is_empty() {
+                    continue;
+                }
+                if name == clean_term {
                     score += 20;
-                } else if name.contains(term) {
+                } else if name.contains(clean_term) {
                     score += 10;
                 }
-                if path.contains(term) {
+                if path.contains(clean_term) {
                     score += 6;
                 }
-                if signature.contains(term) {
+                if signature.contains(clean_term) {
                     score += 2;
                 }
             }
+
             if score > 0 {
                 matches.push(GraphQueryResult {
                     node: node.clone(),
@@ -480,6 +519,7 @@ impl CodeGraph {
                 });
             }
         }
+
         matches.sort_by(|left, right| {
             right
                 .score
@@ -700,6 +740,7 @@ fn language_for_path(path: &Path) -> Option<(Language, &'static str)> {
         "py" => Some((tree_sitter_python::LANGUAGE.into(), "python")),
         "go" => Some((tree_sitter_go::LANGUAGE.into(), "go")),
         "rs" => Some((tree_sitter_rust::LANGUAGE.into(), "rust")),
+        "dart" => Some((tree_sitter_dart_orchard::LANGUAGE.into(), "dart")),
         _ => None,
     }
 }
@@ -709,14 +750,23 @@ fn is_symbol_kind(kind: &str) -> bool {
         kind,
         "function_declaration"
             | "function_definition"
+            | "function_signature"
             | "function_item"
             | "method_definition"
             | "method_declaration"
+            | "method_signature"
+            | "getter_signature"
+            | "setter_signature"
             | "class_declaration"
             | "class_definition"
+            | "class_header"
+            | "declaration"
             | "interface_declaration"
             | "type_alias_declaration"
             | "enum_declaration"
+            | "mixin_declaration"
+            | "extension_declaration"
+            | "constructor_signature"
             | "struct_item"
             | "enum_item"
             | "trait_item"
@@ -733,6 +783,9 @@ fn is_import_kind(kind: &str) -> bool {
         kind,
         "import_statement"
             | "import_declaration"
+            | "import_or_export"
+            | "import_specification"
+            | "library_import"
             | "use_declaration"
             | "import_spec"
             | "import_from_statement"
@@ -956,14 +1009,15 @@ mod tests {
             ("main.py", "def pythonic():\n    return 1\n"),
             ("main.go", "package main\nfunc Gopher() int { return 1 }\n"),
             ("main.rs", "pub fn rusty() -> i32 { 1 }"),
+            ("main.dart", "class FlutterWidget {}"),
         ] {
             fs::write(temp.path().join(name), source).unwrap();
         }
         let mut graph = CodeGraph::new(temp.path()).unwrap();
         graph.build().unwrap();
-        assert_eq!(graph.stats().files, 6);
-        assert_eq!(graph.stats().modules, 6);
-        for symbol in ["typed", "View", "scripted", "pythonic", "Gopher", "rusty"] {
+        assert_eq!(graph.stats().files, 7);
+        assert_eq!(graph.stats().modules, 7);
+        for symbol in ["typed", "View", "scripted", "pythonic", "Gopher", "rusty", "FlutterWidget"] {
             assert!(!graph.query(symbol, 2).is_empty(), "missing {symbol}");
         }
     }

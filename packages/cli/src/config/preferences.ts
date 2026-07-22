@@ -12,7 +12,7 @@ const modelRef = z.object({
 
 const preferencesSchema = z.object({
   schema: z.literal(1),
-  platform: z.enum(['anthropic', 'openai', 'google', 'opencode']).optional(),
+  platform: z.enum(['anthropic', 'openai', 'google', 'opencode', 'vertex']).optional(),
   primary: modelRef.optional(),
   secondary: modelRef.optional(),
   backgroundPaused: z.boolean().default(false),

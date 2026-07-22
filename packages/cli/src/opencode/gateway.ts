@@ -49,7 +49,7 @@ export class OpenCodeGateway extends EventEmitter {
   async listModels(): Promise<ModelInfo[]> {
     const response = await this.#client.v2.model.list({ location: { directory: this.#directory } })
     const result = unwrap(response as SdkResult<{ data: ModelV2Info[] }>)
-    return result.data
+    const models = result.data
       .flatMap((model) => {
         const cost = model.cost[0]
         return [undefined, ...model.variants.map((variant) => variant.id)].map((variant) => ({
@@ -66,12 +66,97 @@ export class OpenCodeGateway extends EventEmitter {
         }))
       })
       .filter((model) => model.enabled && model.status !== 'deprecated')
+
+    const vertexModels: ModelInfo[] = [
+      {
+        providerID: 'vertex',
+        modelID: 'gemini-3.6-flash',
+        name: 'Gemini 3.6 Flash (Vertex AI ADC)',
+        context: 1_000_000,
+        output: 8192,
+        enabled: true,
+        status: 'active',
+        inputCost: 0,
+        outputCost: 0,
+      },
+      {
+        providerID: 'vertex',
+        modelID: 'gemini-3.5-flash',
+        name: 'Gemini 3.5 Flash (Vertex AI ADC)',
+        context: 1_000_000,
+        output: 8192,
+        enabled: true,
+        status: 'active',
+        inputCost: 0,
+        outputCost: 0,
+      },
+      {
+        providerID: 'vertex',
+        modelID: 'gemini-3.5-flash-lite',
+        name: 'Gemini 3.5 Flash Lite (Vertex AI ADC)',
+        context: 1_000_000,
+        output: 8192,
+        enabled: true,
+        status: 'active',
+        inputCost: 0,
+        outputCost: 0,
+      },
+      {
+        providerID: 'vertex',
+        modelID: 'gemini-3.1-pro-preview',
+        name: 'Gemini 3.1 Pro Preview (Vertex AI ADC)',
+        context: 2_000_000,
+        output: 8192,
+        enabled: true,
+        status: 'active',
+        inputCost: 0,
+        outputCost: 0,
+      },
+      {
+        providerID: 'vertex',
+        modelID: 'gemini-2.5-flash',
+        name: 'Gemini 2.5 Flash (Vertex AI ADC)',
+        context: 1_000_000,
+        output: 8192,
+        enabled: true,
+        status: 'active',
+        inputCost: 0,
+        outputCost: 0,
+      },
+      {
+        providerID: 'vertex',
+        modelID: 'gemini-2.5-pro',
+        name: 'Gemini 2.5 Pro (Vertex AI ADC)',
+        context: 2_000_000,
+        output: 8192,
+        enabled: true,
+        status: 'active',
+        inputCost: 0,
+        outputCost: 0,
+      },
+    ]
+
+    return [...models, ...vertexModels]
   }
 
   async listIntegrations(): Promise<IntegrationInfo[]> {
     const response = await this.#client.v2.integration.list({ location: { directory: this.#directory } })
     const result = unwrap(response as SdkResult<{ data: SDKIntegrationInfo[] }>)
-    return result.data as IntegrationInfo[]
+    const integrations = result.data as IntegrationInfo[]
+    const vertexIntegration: IntegrationInfo = {
+      id: 'vertex',
+      name: 'Google Cloud Vertex AI (ADC)',
+      methods: [
+        {
+          type: 'env',
+          names: ['GOOGLE_APPLICATION_CREDENTIALS', 'GOOGLE_CLOUD_PROJECT'],
+        },
+      ],
+      connections: process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.GOOGLE_CLOUD_PROJECT
+        ? [{ type: 'env', label: 'ADC Active' }]
+        : [],
+    }
+    return [...integrations, vertexIntegration]
   }
 
   async connectKey(integrationID: string, key: string): Promise<void> {
@@ -90,7 +175,7 @@ export class OpenCodeGateway extends EventEmitter {
         integrationID,
         location: { directory: this.#directory },
         methodID,
-        ...(inputs ? { inputs } : {}),
+        inputs: inputs ?? {},
       })) as unknown as SdkResult<{
         data: { attemptID: string; url: string; instructions: string; mode: 'auto' | 'code' }
       }>,
@@ -244,7 +329,12 @@ function normalizeEvent(raw: unknown): AgentEvent | undefined {
   const event = record(wrapper.payload ?? raw)
   const type = String(event.type ?? '')
   const data = record(event.data ?? event.properties)
-  const sessionID = typeof data.sessionID === 'string' ? data.sessionID : undefined
+  const err = record(data.error)
+  const sessionID = typeof data.sessionID === 'string'
+    ? data.sessionID
+    : typeof err.sessionID === 'string'
+      ? err.sessionID
+      : undefined
   switch (type) {
     case 'session.next.text.delta':
       return sessionID ? { type: 'text-delta', sessionID, text: String(data.delta ?? '') } : undefined
@@ -258,6 +348,9 @@ function normalizeEvent(raw: unknown): AgentEvent | undefined {
             sessionID,
             callID: String(data.callID ?? ''),
             name: String(data.name ?? data.tool ?? 'tool'),
+            ...(data.input !== undefined || data.args !== undefined || data.parameters !== undefined || data.params !== undefined
+              ? { input: data.input ?? data.args ?? data.parameters ?? data.params }
+              : { input: data }),
           }
         : undefined
     case 'session.next.tool.progress':
@@ -297,11 +390,14 @@ function normalizeEvent(raw: unknown): AgentEvent | undefined {
           }
         : undefined
     case 'session.next.step.ended':
+    case 'session.step.ended':
+    case 'step.ended':
+    case 'session.usage':
       return sessionID
         ? {
             type: 'usage',
             sessionID,
-            usage: mapUsage(record(data.tokens)),
+            usage: mapUsage(record(data.tokens ?? data.usage ?? record(data.step).tokens)),
             cost: Number(data.cost ?? 0),
           }
         : undefined
@@ -339,14 +435,14 @@ function mapSession(session: SessionV2Info): SessionInfo {
 }
 
 function mapUsage(tokens: Record<string, unknown> | SessionV2Info['tokens']): TokenUsage {
-  const cache = record(tokens.cache)
-  return {
-    input: Number(tokens.input ?? 0),
-    output: Number(tokens.output ?? 0),
-    reasoning: Number(tokens.reasoning ?? 0),
-    cacheRead: Number(cache.read ?? 0),
-    cacheWrite: Number(cache.write ?? 0),
-  }
+  const recordTokens = record(tokens)
+  const cache = record(recordTokens.cache)
+  const input = Number(recordTokens.input ?? recordTokens.prompt ?? recordTokens.input_tokens ?? recordTokens.prompt_tokens ?? 0)
+  const output = Number(recordTokens.output ?? recordTokens.completion ?? recordTokens.output_tokens ?? recordTokens.completion_tokens ?? 0)
+  const reasoning = Number(recordTokens.reasoning ?? recordTokens.reasoning_tokens ?? 0)
+  const cacheRead = Number(cache.read ?? cache.read_tokens ?? recordTokens.cache_read_input_tokens ?? 0)
+  const cacheWrite = Number(cache.write ?? cache.write_tokens ?? recordTokens.cache_creation_input_tokens ?? 0)
+  return { input, output, reasoning, cacheRead, cacheWrite }
 }
 
 function toSdkModel(model: ModelRef) {

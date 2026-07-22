@@ -7,19 +7,21 @@ export const PLATFORM_OPTIONS: ReadonlyArray<{
 }> = [
   { value: 'anthropic', label: 'Anthropic', description: 'Claude models' },
   { value: 'openai', label: 'OpenAI', description: 'OpenAI and Azure OpenAI models' },
-  { value: 'google', label: 'Google', description: 'Gemini and Vertex AI models' },
+  { value: 'google', label: 'Google', description: 'Gemini models' },
   { value: 'opencode', label: 'OpenCode', description: 'OpenCode-provided models' },
+  { value: 'vertex', label: 'Vertex AI', description: 'Google Cloud ADC & Vertex AI models' },
 ]
 
 const modelProviderIDs: Record<Platform, ReadonlySet<string>> = {
   anthropic: new Set(['anthropic']),
   openai: new Set(['openai', 'azure', 'azure-openai']),
-  google: new Set(['google', 'google-vertex', 'vertex', 'vertex-ai', 'vertexai']),
+  google: new Set(['google', 'google-vertex', 'vertex', 'vertex-ai', 'vertexai', 'gemini']),
   opencode: new Set(['opencode']),
+  vertex: new Set(['vertex', 'google-vertex', 'vertex-ai', 'vertexai', 'google']),
 }
 
 export function modelMatchesPlatform(model: Pick<ModelRef, 'providerID'>, platform: Platform): boolean {
-  return modelProviderIDs[platform].has(model.providerID.toLowerCase())
+  return modelProviderIDs[platform]?.has(model.providerID.toLowerCase()) ?? false
 }
 
 export function integrationMatchesPlatform(
@@ -30,7 +32,10 @@ export function integrationMatchesPlatform(
   if (platform === 'anthropic') return value.includes('anthropic')
   if (platform === 'openai') return value.includes('openai') || value.includes('azure')
   if (platform === 'google') {
-    return value.includes('google') || value.includes('gemini') || value.includes('vertex')
+    return value.includes('google') || value.includes('gemini')
+  }
+  if (platform === 'vertex') {
+    return value.includes('vertex') || value.includes('gcp') || value.includes('google')
   }
   return value.includes('opencode')
 }

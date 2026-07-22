@@ -2,8 +2,8 @@
 
 ## OpenCode
 
-OpenCode 1.18.4, pinned to revision
-`0317531906d3f3bb01cf33c16319870cfde9170c`, is distributed under the MIT
+OpenCode v1.18.4, pinned to stable release revision
+`49c69c5ed3ccf706b61b3febb43c8aaff7f8325e`, is distributed under the MIT
 License. Platform packages must include the upstream license next to the
 binary and record its SHA-256 in `manifest.json`.
 

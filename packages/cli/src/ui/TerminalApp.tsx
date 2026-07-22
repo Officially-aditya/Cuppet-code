@@ -495,8 +495,8 @@ function ModalView(props: {
     const integrations = modal.platform
       ? controller.integrationsForPlatform(modal.platform)
       : snapshot.integrations.filter((item) =>
-          provider ? item.id.toLowerCase().includes(provider) || item.name.toLowerCase().includes(provider) : true,
-        )
+        provider ? item.id.toLowerCase().includes(provider) || item.name.toLowerCase().includes(provider) : true,
+      )
     return (
       <ModalBox height={props.height} title="Connect provider (credentials stay in OpenCode)">
         <SelectInput

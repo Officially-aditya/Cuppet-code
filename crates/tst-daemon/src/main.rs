@@ -5,6 +5,7 @@ use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::env;
 use std::fs;
+use std::io::ErrorKind;
 #[cfg(unix)]
 use std::os::unix::fs::FileTypeExt;
 use std::path::{Path, PathBuf};
@@ -97,7 +98,9 @@ async fn run() -> Result<()> {
                 let events = events.clone();
                 tokio::spawn(async move {
                     if let Err(error) = serve_connection(stream, service, shutdown, token, events).await {
-                        eprintln!("tst-daemon connection: {error:#}");
+                        if !is_expected_disconnect(&error) {
+                            eprintln!("tst-daemon connection: {error:#}");
+                        }
                     }
                 });
             }
@@ -109,6 +112,17 @@ async fn run() -> Result<()> {
     drop(listener);
     let _ = fs::remove_file(&options.socket);
     Ok(())
+}
+
+fn is_expected_disconnect(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| {
+        cause.downcast_ref::<std::io::Error>().is_some_and(|io_error| {
+            matches!(
+                io_error.kind(),
+                ErrorKind::BrokenPipe | ErrorKind::ConnectionReset | ErrorKind::UnexpectedEof
+            )
+        })
+    })
 }
 
 impl Options {

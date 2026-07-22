@@ -33,8 +33,8 @@ export class TstClient extends EventEmitter {
     super()
     this.#socket = socket
     socket.on('data', (chunk: Buffer) => this.#consume(chunk))
-    socket.on('error', (error) => this.#failAll(error))
-    socket.on('close', () => this.#failAll(new Error('TST socket closed')))
+    socket.on('error', (error) => this.#disconnect(error))
+    socket.on('close', () => this.#disconnect(new Error('TST socket closed')))
   }
 
   static async connect(socketPath: string, token: string): Promise<TstClient> {
@@ -79,7 +79,17 @@ export class TstClient extends EventEmitter {
     return () => this.off('notification', listener)
   }
 
+  onDisconnect(listener: (error: Error) => void): () => void {
+    this.on('disconnect', listener)
+    return () => this.off('disconnect', listener)
+  }
+
+  get connected(): boolean {
+    return !this.#closed
+  }
+
   destroy(): void {
+    if (this.#closed) return
     this.#closed = true
     this.#socket.destroy()
     this.#failAll(new Error('TST client closed'))
@@ -118,5 +128,12 @@ export class TstClient extends EventEmitter {
   #failAll(error: Error): void {
     for (const pending of this.#pending.values()) pending.reject(error)
     this.#pending.clear()
+  }
+
+  #disconnect(error: Error): void {
+    if (this.#closed) return
+    this.#closed = true
+    this.#failAll(error)
+    this.emit('disconnect', error)
   }
 }

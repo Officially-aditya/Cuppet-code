@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { IntegrationInfo } from '../src/types.js'
-import { previousModal } from '../src/ui/modal.js'
+import { nextPermissionModal, previousModal } from '../src/ui/modal.js'
 import { renderMessageLines, viewportLayout, windowMessageLines } from '../src/ui/viewport.js'
-import { formatToolDetail } from '../src/ui/TerminalApp.js'
+import { diffLineColor, formatDiff, formatToolDetail } from '../src/ui/TerminalApp.js'
 
 test('Esc targets close command pickers and unwind nested authentication', () => {
   const integration = provider()
@@ -32,6 +32,21 @@ test('Esc targets close command pickers and unwind nested authentication', () =>
     role: 'primary',
     required: true,
   })
+  assert.deepEqual(previousModal({ type: 'vertex-setup', required: true }), {
+    type: 'platform',
+    required: true,
+  })
+})
+
+test('permission dismissal advances queued requests instead of abandoning them', () => {
+  const first = { id: 'first', sessionID: 'session', action: 'edit', resources: ['one.ts'] }
+  const second = { id: 'second', sessionID: 'session', action: 'bash', resources: ['npm test'] }
+  assert.deepEqual(nextPermissionModal({ type: 'permission', request: first, queue: [second] }), {
+    type: 'permission',
+    request: second,
+    queue: [],
+  })
+  assert.deepEqual(nextPermissionModal({ type: 'permission', request: second }), { type: 'none' })
 })
 
 test('viewport allocations never exceed the live terminal height', () => {
@@ -79,6 +94,26 @@ test('tool messages render single gear icon and include details', () => {
     { id: 'tool-1', sender: 'tool', text: 'write_file (frontend/build/app.apk) · completed' },
   ], 80)
   assert.equal(lines[0]?.text, '⚙ write_file (frontend/build/app.apk) · completed')
+})
+
+test('diff rendering keeps filenames visible and colors only actual tool diff lines', () => {
+  const rendered = formatDiff([{
+    file: 'src/example.ts',
+    before: 'const one = 1\nconst oldValue = 2\n',
+    after: 'const one = 1\nconst newValue = 3\n',
+    additions: 1,
+    deletions: 1,
+  }])
+  const lines = rendered.split('\n')
+
+  assert.equal(lines.at(-1), 'diff -- src/example.ts · +1 -1')
+  assert.ok(lines.includes('-const oldValue = 2'))
+  assert.ok(lines.includes('+const newValue = 3'))
+  assert.equal(diffLineColor('--- a/src/example.ts', 'tool'), 'cyan')
+  assert.equal(diffLineColor('+++ b/src/example.ts', 'tool'), 'cyan')
+  assert.equal(diffLineColor('-old code', 'tool'), 'red')
+  assert.equal(diffLineColor('+new code', 'tool'), 'green')
+  assert.equal(diffLineColor('- ordinary assistant bullet', 'assistant'), undefined)
 })
 
 function provider(): IntegrationInfo {

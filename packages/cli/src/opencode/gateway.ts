@@ -1,13 +1,17 @@
+import { randomUUID } from 'node:crypto'
 import { EventEmitter } from 'node:events'
 import type { createOpencodeClient } from '@opencode-ai/sdk/v2'
 import type {
   IntegrationInfo as SDKIntegrationInfo,
   ModelV2Info,
-  SessionV2Info,
+  Provider as LegacyProvider,
+  ProviderAuthMethod,
+  Session as LegacySession,
 } from '@opencode-ai/sdk/v2'
 import type {
   AgentEvent,
   IntegrationInfo,
+  IntegrationMethod,
   ModelInfo,
   ModelRef,
   SessionInfo,
@@ -17,10 +21,36 @@ import type {
 type Client = ReturnType<typeof createOpencodeClient>
 type SdkResult<T> = { data?: T; error?: unknown; response?: Response }
 
+type OAuthAttempt = {
+  providerID: string
+  method: number
+  status: 'pending' | 'complete' | 'failed' | 'cancelled'
+  message?: string
+  abort: AbortController
+}
+
+type StreamPart = {
+  sessionID: string
+  messageID: string
+  kind?: 'text' | 'reasoning'
+  text: string
+  emitted: number
+}
+
+/**
+ * OpenCode 1.18.4 exposes the complete live catalog through v2, but its new
+ * native runner only implements a subset of the provider adapters. The stable
+ * session API on the same server is the compatibility execution path used by
+ * OpenCode itself and supports Google, Vertex, Azure, Anthropic, and OpenAI.
+ */
 export class OpenCodeGateway extends EventEmitter {
   readonly #client: Client
   readonly #directory: string
   readonly #eventAbort = new AbortController()
+  readonly #normalizer = new OpenCodeEventNormalizer()
+  readonly #sessionModels = new Map<string, ModelRef>()
+  readonly #backgroundSessions = new Set<string>()
+  readonly #oauthAttempts = new Map<string, OAuthAttempt>()
   #eventTask?: Promise<void>
 
   constructor(client: Client, directory: string) {
@@ -37,6 +67,7 @@ export class OpenCodeGateway extends EventEmitter {
   }
 
   async close(): Promise<void> {
+    for (const attempt of this.#oauthAttempts.values()) attempt.abort.abort()
     this.#eventAbort.abort()
     await this.#eventTask?.catch(() => undefined)
   }
@@ -47,410 +78,839 @@ export class OpenCodeGateway extends EventEmitter {
   }
 
   async listModels(): Promise<ModelInfo[]> {
-    const response = await this.#client.v2.model.list({ location: { directory: this.#directory } })
-    const result = unwrap(response as SdkResult<{ data: ModelV2Info[] }>)
-    const models = result.data
-      .flatMap((model) => {
-        const cost = model.cost[0]
-        return [undefined, ...model.variants.map((variant) => variant.id)].map((variant) => ({
+    const [modernResponse, legacyResponse] = await Promise.all([
+      this.#client.v2.model.list({ location: { directory: this.#directory } }),
+      this.#client.provider.list({ directory: this.#directory }),
+    ])
+    const modern = unwrap(modernResponse as SdkResult<{ data: ModelV2Info[] }>).data
+    const legacy = unwrap(legacyResponse as SdkResult<{
+      all: LegacyProvider[]
+      connected: string[]
+    }>)
+    const connected = new Set(legacy.connected)
+    const providers = new Map(legacy.all.map((provider) => [provider.id, provider]))
+    const selections = new Map<string, ModelInfo>()
+
+    for (const model of modern) {
+      const executable = providers.get(model.providerID)?.models[model.id]
+      if (!executable || !connected.has(model.providerID)) continue
+      const cost = model.cost[0]
+      for (const variant of [undefined, ...model.variants.map((item) => item.id)]) {
+        const info: ModelInfo = {
           providerID: model.providerID,
           modelID: model.id,
           ...(variant ? { variant } : {}),
           name: `${model.name}${variant ? ` [${variant}]` : ''}`,
           context: model.limit.context,
           output: model.limit.output,
-          enabled: model.enabled,
+          enabled: true,
           status: model.status,
           inputCost: cost?.input ?? 0,
           outputCost: cost?.output ?? 0,
-        }))
-      })
-      .filter((model) => model.enabled && model.status !== 'deprecated')
+          capabilities: {
+            tools: model.capabilities.tools,
+            input: [...model.capabilities.input],
+            output: [...model.capabilities.output],
+          },
+        }
+        selections.set(modelKey(info), info)
+      }
+    }
 
-    const vertexModels: ModelInfo[] = [
-      {
-        providerID: 'vertex',
-        modelID: 'gemini-3.6-flash',
-        name: 'Gemini 3.6 Flash (Vertex AI ADC)',
-        context: 1_000_000,
-        output: 8192,
-        enabled: true,
-        status: 'active',
-        inputCost: 0,
-        outputCost: 0,
-      },
-      {
-        providerID: 'vertex',
-        modelID: 'gemini-3.5-flash',
-        name: 'Gemini 3.5 Flash (Vertex AI ADC)',
-        context: 1_000_000,
-        output: 8192,
-        enabled: true,
-        status: 'active',
-        inputCost: 0,
-        outputCost: 0,
-      },
-      {
-        providerID: 'vertex',
-        modelID: 'gemini-3.5-flash-lite',
-        name: 'Gemini 3.5 Flash Lite (Vertex AI ADC)',
-        context: 1_000_000,
-        output: 8192,
-        enabled: true,
-        status: 'active',
-        inputCost: 0,
-        outputCost: 0,
-      },
-      {
-        providerID: 'vertex',
-        modelID: 'gemini-3.1-pro-preview',
-        name: 'Gemini 3.1 Pro Preview (Vertex AI ADC)',
-        context: 2_000_000,
-        output: 8192,
-        enabled: true,
-        status: 'active',
-        inputCost: 0,
-        outputCost: 0,
-      },
-      {
-        providerID: 'vertex',
-        modelID: 'gemini-2.5-flash',
-        name: 'Gemini 2.5 Flash (Vertex AI ADC)',
-        context: 1_000_000,
-        output: 8192,
-        enabled: true,
-        status: 'active',
-        inputCost: 0,
-        outputCost: 0,
-      },
-      {
-        providerID: 'vertex',
-        modelID: 'gemini-2.5-pro',
-        name: 'Gemini 2.5 Pro (Vertex AI ADC)',
-        context: 2_000_000,
-        output: 8192,
-        enabled: true,
-        status: 'active',
-        inputCost: 0,
-        outputCost: 0,
-      },
-    ]
+    // Do not lose an executable provider model if the v2 projection is behind
+    // the provider catalog. This remains live OpenCode data, not a hard-coded
+    // Cuppet model list.
+    for (const provider of legacy.all) {
+      if (!connected.has(provider.id)) continue
+      for (const model of Object.values(provider.models)) {
+        for (const variant of [undefined, ...Object.keys(model.variants ?? {})]) {
+          const key = modelKey({ providerID: provider.id, modelID: model.id, ...(variant ? { variant } : {}) })
+          if (selections.has(key)) continue
+          selections.set(key, {
+            providerID: provider.id,
+            modelID: model.id,
+            ...(variant ? { variant } : {}),
+            name: `${model.name}${variant ? ` [${variant}]` : ''}`,
+            context: model.limit.context,
+            output: model.limit.output,
+            enabled: true,
+            status: model.status,
+            inputCost: model.cost.input,
+            outputCost: model.cost.output,
+            capabilities: {
+              tools: model.capabilities.toolcall,
+              input: enabledModalities(model.capabilities.input),
+              output: enabledModalities(model.capabilities.output),
+            },
+          })
+        }
+      }
+    }
 
-    return [...models, ...vertexModels]
+    return [...selections.values()].filter((model) => model.status !== 'deprecated')
   }
 
   async listIntegrations(): Promise<IntegrationInfo[]> {
-    const response = await this.#client.v2.integration.list({ location: { directory: this.#directory } })
-    const result = unwrap(response as SdkResult<{ data: SDKIntegrationInfo[] }>)
-    const integrations = result.data as IntegrationInfo[]
-    const vertexIntegration: IntegrationInfo = {
-      id: 'vertex',
-      name: 'Google Cloud Vertex AI (ADC)',
-      methods: [
-        {
-          type: 'env',
-          names: ['GOOGLE_APPLICATION_CREDENTIALS', 'GOOGLE_CLOUD_PROJECT'],
-        },
-      ],
-      connections: process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.GOOGLE_CLOUD_PROJECT
-        ? [{ type: 'env', label: 'ADC Active' }]
-        : [],
+    const [modernResult, providerResult, authResult] = await Promise.all([
+      this.#client.v2.integration.list({ location: { directory: this.#directory } }),
+      this.#client.provider.list({ directory: this.#directory }),
+      this.#client.provider.auth({ directory: this.#directory }),
+    ])
+    const modern = unwrap(modernResult as SdkResult<{ data: SDKIntegrationInfo[] }>).data
+    const providers = unwrap(providerResult as SdkResult<{
+      all: LegacyProvider[]
+      connected: string[]
+    }>)
+    const auth = unwrap(authResult as SdkResult<Record<string, ProviderAuthMethod[]>>)
+    const connected = new Set(providers.connected)
+    const byID = new Map<string, IntegrationInfo>()
+
+    for (const integration of modern) {
+      byID.set(integration.id, {
+        id: integration.id,
+        name: integration.name,
+        // OAuth must persist into the stable provider engine. Unsupported v2-
+        // only OAuth methods are intentionally not advertised.
+        methods: integration.methods.filter((method) => method.type !== 'oauth') as IntegrationMethod[],
+        connections: [...integration.connections],
+      })
     }
-    return [...integrations, vertexIntegration]
+
+    for (const provider of providers.all) {
+      const current = byID.get(provider.id) ?? {
+        id: provider.id,
+        name: provider.name,
+        methods: [],
+        connections: [],
+      }
+      const legacyMethods = auth[provider.id] ?? []
+      const apiMethods = legacyMethods
+        .map((method, index) => ({ method, index }))
+        .filter(({ method }) => method.type === 'api')
+        .map(({ method, index }) => ({
+          id: `legacy:${index}`,
+          type: 'key' as const,
+          label: method.label,
+          ...(method.prompts ? { prompts: method.prompts } : {}),
+        }))
+      const oauthMethods = legacyMethods
+        .map((method, index) => ({ method, index }))
+        .filter(({ method }) => method.type === 'oauth')
+        .map(({ method, index }) => ({
+          id: `legacy:${index}`,
+          type: 'oauth' as const,
+          label: method.label,
+          ...(method.prompts ? { prompts: method.prompts } : {}),
+        }))
+      const existing = apiMethods.length > 0
+        ? current.methods.filter((method) => method.type !== 'key')
+        : [...current.methods]
+      const envNames = vertexEnvironmentNames(provider.id, provider.env)
+      if (envNames.length > 0 && !existing.some((method) => method.type === 'env')) {
+        existing.push({ type: 'env', names: envNames })
+      }
+      current.methods = dedupeMethods([...oauthMethods, ...apiMethods, ...existing])
+      if (connected.has(provider.id) && !current.connections.some((connection) => connection.id === 'legacy')) {
+        current.connections.push({ type: 'provider', id: 'legacy', label: 'Connected through OpenCode' })
+      }
+      byID.set(provider.id, current)
+    }
+
+    return [...byID.values()]
   }
 
-  async connectKey(integrationID: string, key: string): Promise<void> {
+  async connectKey(integrationID: string, key: string, metadata?: Record<string, string>): Promise<void> {
     ensureSuccess(
-      (await this.#client.v2.integration.connect.key({
-        integrationID,
-        location: { directory: this.#directory },
-        key,
+      (await this.#client.auth.set({
+        providerID: integrationID,
+        auth: { type: 'api', key, ...(metadata && Object.keys(metadata).length > 0 ? { metadata } : {}) },
       })) as SdkResult<unknown>,
     )
+    // Keep the v2 catalog connection projection in sync when it supports this
+    // integration. The stable auth store above is the execution source of truth.
+    await this.#client.v2.integration.connect.key({
+      integrationID,
+      location: { directory: this.#directory },
+      key,
+    }).catch(() => undefined)
+    await this.#reloadProviderState()
   }
 
   async beginOAuth(integrationID: string, methodID: string, inputs?: Record<string, string>) {
-    return unwrap(
-      (await this.#client.v2.integration.connect.oauth({
-        integrationID,
-        location: { directory: this.#directory },
-        methodID,
+    const method = legacyMethodIndex(methodID)
+    const result = unwrap(
+      (await this.#client.provider.oauth.authorize({
+        providerID: integrationID,
+        directory: this.#directory,
+        method,
         inputs: inputs ?? {},
-      })) as unknown as SdkResult<{
-        data: { attemptID: string; url: string; instructions: string; mode: 'auto' | 'code' }
-      }>,
-    ).data
+      })) as SdkResult<{ url: string; instructions: string; method: 'auto' | 'code' }>,
+    )
+    const attemptID = randomUUID()
+    const attempt: OAuthAttempt = {
+      providerID: integrationID,
+      method,
+      status: 'pending',
+      abort: new AbortController(),
+    }
+    this.#oauthAttempts.set(attemptID, attempt)
+    this.#trimOAuthAttempts()
+    if (result.method === 'auto') void this.#finishOAuth(attemptID)
+    return {
+      attemptID,
+      url: result.url,
+      instructions: result.instructions,
+      mode: result.method,
+    }
   }
 
   async completeOAuth(attemptID: string, code: string): Promise<void> {
-    ensureSuccess(
-      (await this.#client.v2.integration.attempt.complete({
-        attemptID,
-        location: { directory: this.#directory },
-        code,
-      })) as SdkResult<unknown>,
-    )
+    const attempt = this.#requireOAuthAttempt(attemptID)
+    await this.#finishOAuth(attemptID, code)
+    if (attempt.status !== 'complete') throw new Error(attempt.message ?? 'OAuth authorization failed')
   }
 
   async oauthStatus(attemptID: string): Promise<{ status: string; message?: string }> {
-    return unwrap(
-      (await this.#client.v2.integration.attempt.status({
-        attemptID,
-        location: { directory: this.#directory },
-      })) as unknown as SdkResult<{ data: { status: string; message?: string } }>,
-    ).data
+    const attempt = this.#requireOAuthAttempt(attemptID)
+    return { status: attempt.status, ...(attempt.message ? { message: attempt.message } : {}) }
   }
 
   async cancelOAuth(attemptID: string): Promise<void> {
-    ensureSuccess(
-      (await this.#client.v2.integration.attempt.cancel({
-        attemptID,
-        location: { directory: this.#directory },
-      })) as SdkResult<unknown>,
-    )
+    const attempt = this.#oauthAttempts.get(attemptID)
+    if (!attempt || attempt.status !== 'pending') return
+    attempt.status = 'cancelled'
+    attempt.abort.abort()
   }
 
   async listSessions(): Promise<SessionInfo[]> {
-    const response = await this.#client.v2.session.list({
-      directory: this.#directory,
-      order: 'desc',
-      limit: 100,
-    })
-    const result = unwrap(response as SdkResult<{ data: SessionV2Info[] }>)
-    return result.data.map(mapSession)
+    const result = unwrap(
+      (await this.#client.session.list({
+        directory: this.#directory,
+        scope: 'project',
+        limit: 100,
+      })) as SdkResult<LegacySession[]>,
+    )
+    return result.map((session) => this.#mapSession(session))
   }
 
   async createSession(model: ModelRef, background = false): Promise<SessionInfo> {
     const result = unwrap(
-      (await this.#client.v2.session.create({
+      (await this.#client.session.create({
+        directory: this.#directory,
         agent: background ? 'cuppet-background' : 'cuppet',
-        model: toSdkModel(model),
-        location: { directory: this.#directory },
-      })) as unknown as SdkResult<{ data: SessionV2Info }>,
+        model: toSessionModel(model),
+        permission: background ? backgroundPermissions() : foregroundPermissions(),
+      })) as SdkResult<LegacySession>,
     )
-    return mapSession(result.data)
+    this.#sessionModels.set(result.id, { ...model })
+    if (background) this.#backgroundSessions.add(result.id)
+    return this.#mapSession(result)
   }
 
   async getSession(sessionID: string): Promise<SessionInfo> {
     const result = unwrap(
-      (await this.#client.v2.session.get({ sessionID })) as unknown as SdkResult<{ data: SessionV2Info }>,
+      (await this.#client.session.get({
+        sessionID,
+        directory: this.#directory,
+      })) as SdkResult<LegacySession>,
     )
-    return mapSession(result.data)
+    if (!this.#sessionModels.has(sessionID) && result.model) {
+      this.#sessionModels.set(sessionID, {
+        providerID: result.model.providerID,
+        modelID: result.model.id,
+        ...(result.model.variant ? { variant: result.model.variant } : {}),
+      })
+    }
+    return this.#mapSession(result)
   }
 
   async switchModel(sessionID: string, model: ModelRef): Promise<void> {
-    ensureSuccess(
-      (await this.#client.v2.session.switchModel({ sessionID, model: toSdkModel(model) })) as SdkResult<unknown>,
-    )
+    // Stable sessions persist the selected model on the next user message.
+    // Keeping it here makes /model immediate without restarting the server.
+    this.#sessionModels.set(sessionID, { ...model })
   }
 
-  async prompt(sessionID: string, text: string, delivery: 'queue' | 'steer' = 'queue'): Promise<void> {
+  async prompt(sessionID: string, text: string, _delivery: 'queue' | 'steer' = 'queue'): Promise<void> {
+    const model = await this.#modelForSession(sessionID)
     ensureSuccess(
-      (await this.#client.v2.session.prompt({
+      (await this.#client.session.promptAsync({
         sessionID,
-        prompt: { text },
-        delivery,
-        resume: true,
+        directory: this.#directory,
+        model: { providerID: model.providerID, modelID: model.modelID },
+        ...(model.variant ? { variant: model.variant } : {}),
+        agent: this.#backgroundSessions.has(sessionID) ? 'cuppet-background' : 'cuppet',
+        parts: [{ type: 'text', text }],
       })) as SdkResult<unknown>,
     )
   }
 
   async wait(sessionID: string): Promise<void> {
-    ensureSuccess((await this.#client.v2.session.wait({ sessionID })) as SdkResult<unknown>)
+    // prompt_async starts its fiber before returning, but allow a short grace
+    // window so an immediate idle observation cannot race session startup.
+    const started = Date.now()
+    let observedBusy = false
+    let idleObservations = 0
+    while (Date.now() - started < 30 * 60_000) {
+      const statuses = unwrap(
+        (await this.#client.session.status({ directory: this.#directory })) as SdkResult<
+          Record<string, { type: 'idle' | 'busy' | 'retry' }>
+        >,
+      )
+      const status = statuses[sessionID]
+      if (status?.type === 'busy' || status?.type === 'retry') {
+        observedBusy = true
+        idleObservations = 0
+      } else {
+        idleObservations += 1
+        if (observedBusy || (Date.now() - started >= 250 && idleObservations >= 3)) return
+      }
+      await delay(50)
+    }
+    throw new Error(`OpenCode session ${sessionID} did not become idle within 30 minutes`)
   }
 
   async messages(sessionID: string): Promise<unknown[]> {
-    const result = unwrap(
-      (await this.#client.v2.session.messages({ sessionID, order: 'asc', limit: 200 })) as SdkResult<{
-        data: unknown[]
-      }>,
+    return unwrap(
+      (await this.#client.session.messages({
+        sessionID,
+        directory: this.#directory,
+        limit: 200,
+      })) as SdkResult<unknown[]>,
     )
-    return result.data
   }
 
   async interrupt(sessionID: string): Promise<void> {
-    ensureSuccess((await this.#client.v2.session.interrupt({ sessionID })) as SdkResult<unknown>)
+    ensureSuccess(
+      (await this.#client.session.abort({ sessionID, directory: this.#directory })) as SdkResult<unknown>,
+    )
   }
 
   async compact(sessionID: string): Promise<void> {
-    ensureSuccess((await this.#client.v2.session.compact({ sessionID })) as SdkResult<unknown>)
+    const model = await this.#modelForSession(sessionID)
+    this.emit('event', { type: 'compaction', sessionID, phase: 'started' } satisfies AgentEvent)
+    ensureSuccess(
+      (await this.#client.session.summarize({
+        sessionID,
+        directory: this.#directory,
+        providerID: model.providerID,
+        modelID: model.modelID,
+        auto: false,
+      })) as SdkResult<unknown>,
+    )
   }
 
   async undo(sessionID: string): Promise<void> {
+    const messages = await this.messages(sessionID)
+    const user = messages
+      .map((item) => record(item).info)
+      .map(record)
+      .filter((info) => info.role === 'user' && typeof info.id === 'string')
+      .sort((left, right) => Number(record(right.time).created ?? 0) - Number(record(left.time).created ?? 0))[0]
+    if (!user?.id) throw new Error('No user change boundary is available to undo')
     ensureSuccess(
-      (await this.#client.v2.session.revert.stage({ sessionID, files: true })) as SdkResult<unknown>,
+      (await this.#client.session.revert({
+        sessionID,
+        directory: this.#directory,
+        messageID: String(user.id),
+      })) as SdkResult<unknown>,
     )
-    ensureSuccess((await this.#client.v2.session.revert.commit({ sessionID })) as SdkResult<unknown>)
   }
 
   async replyPermission(
-    sessionID: string,
+    _sessionID: string,
     requestID: string,
     reply: 'once' | 'always' | 'reject',
   ): Promise<void> {
     ensureSuccess(
-      (await this.#client.v2.session.permission.reply({ sessionID, requestID, reply })) as SdkResult<unknown>,
+      (await this.#client.permission.reply({
+        requestID,
+        directory: this.#directory,
+        reply,
+      })) as SdkResult<unknown>,
     )
   }
 
   async denyPendingPermissions(sessionID: string): Promise<number> {
     const pending = unwrap(
-      (await this.#client.v2.session.permission.list({ sessionID })) as unknown as SdkResult<{
-        data: Array<{ id: string }>
-      }>,
-    ).data
-    for (const request of pending) {
-      await this.replyPermission(sessionID, request.id, 'reject')
-    }
+      (await this.#client.permission.list({ directory: this.#directory })) as SdkResult<
+        Array<{ id: string; sessionID: string }>
+      >,
+    ).filter((request) => request.sessionID === sessionID)
+    for (const request of pending) await this.replyPermission(sessionID, request.id, 'reject')
     return pending.length
   }
 
   async #consumeEvents(): Promise<void> {
     while (!this.#eventAbort.signal.aborted) {
       try {
-        const events = await this.#client.v2.event.subscribe({ signal: this.#eventAbort.signal })
+        const events = await this.#client.event.subscribe(
+          { directory: this.#directory },
+          { signal: this.#eventAbort.signal },
+        )
         for await (const raw of events.stream) {
           if (this.#eventAbort.signal.aborted) return
-          const event = normalizeEvent(raw)
-          if (event) this.emit('event', event)
+          for (const event of this.#normalizer.normalize(raw)) this.emit('event', event)
         }
       } catch (error) {
         if (this.#eventAbort.signal.aborted) return
         this.emit('event', { type: 'error', message: `SSE reconnect: ${message(error)}` } satisfies AgentEvent)
-        await new Promise((resolve) => setTimeout(resolve, 500))
+        await delay(500)
       }
     }
   }
 
-}
-
-function normalizeEvent(raw: unknown): AgentEvent | undefined {
-  const wrapper = record(raw)
-  const event = record(wrapper.payload ?? raw)
-  const type = String(event.type ?? '')
-  const data = record(event.data ?? event.properties)
-  const err = record(data.error)
-  const sessionID = typeof data.sessionID === 'string'
-    ? data.sessionID
-    : typeof err.sessionID === 'string'
-      ? err.sessionID
-      : undefined
-  switch (type) {
-    case 'session.next.text.delta':
-      return sessionID ? { type: 'text-delta', sessionID, text: String(data.delta ?? '') } : undefined
-    case 'session.next.reasoning.delta':
-      return sessionID ? { type: 'reasoning-delta', sessionID, text: String(data.delta ?? '') } : undefined
-    case 'session.next.tool.called':
-    case 'session.next.tool.input.started':
-      return sessionID
-        ? {
-            type: 'tool-start',
-            sessionID,
-            callID: String(data.callID ?? ''),
-            name: String(data.name ?? data.tool ?? 'tool'),
-            ...(data.input !== undefined || data.args !== undefined || data.parameters !== undefined || data.params !== undefined
-              ? { input: data.input ?? data.args ?? data.parameters ?? data.params }
-              : { input: data }),
-          }
-        : undefined
-    case 'session.next.tool.progress':
-      return sessionID
-        ? {
-            type: 'tool-progress',
-            sessionID,
-            callID: String(data.callID ?? ''),
-            message: String(data.message ?? data.title ?? 'working'),
-          }
-        : undefined
-    case 'session.next.tool.success':
-    case 'session.next.tool.failed':
-      return sessionID
-        ? {
-            type: 'tool-end',
-            sessionID,
-            callID: String(data.callID ?? ''),
-            success: type.endsWith('success'),
-            ...(Array.isArray(data.outputPaths) ? { outputPaths: data.outputPaths.map(String) } : {}),
-          }
-        : undefined
-    case 'session.diff':
-      return sessionID && Array.isArray(data.diff) ? { type: 'diff', sessionID, diff: data.diff } : undefined
-    case 'permission.v2.asked':
-      return typeof data.id === 'string' && sessionID
-        ? {
-            type: 'permission',
-            request: {
-              id: data.id,
-              sessionID,
-              action: String(data.action ?? 'unknown'),
-              resources: Array.isArray(data.resources) ? data.resources.map(String) : [],
-              ...(Array.isArray(data.save) ? { save: data.save.map(String) } : {}),
-              ...(recordOrUndefined(data.metadata) ? { metadata: record(data.metadata) } : {}),
-            },
-          }
-        : undefined
-    case 'session.next.step.ended':
-    case 'session.step.ended':
-    case 'step.ended':
-    case 'session.usage':
-      return sessionID
-        ? {
-            type: 'usage',
-            sessionID,
-            usage: mapUsage(record(data.tokens ?? data.usage ?? record(data.step).tokens)),
-            cost: Number(data.cost ?? 0),
-          }
-        : undefined
-    case 'session.next.compaction.started':
-      return sessionID ? { type: 'compaction', sessionID, phase: 'started' } : undefined
-    case 'session.next.compaction.ended':
-      return sessionID ? { type: 'compaction', sessionID, phase: 'ended' } : undefined
-    case 'session.idle':
-      return sessionID ? { type: 'idle', sessionID } : undefined
-    case 'session.error':
-      return { type: 'error', ...(sessionID ? { sessionID } : {}), message: message(data.error) }
-    default:
-      return undefined
-  }
-}
-
-function mapSession(session: SessionV2Info): SessionInfo {
-  return {
-    id: session.id,
-    title: session.title,
-    ...(session.agent ? { agent: session.agent } : {}),
-    ...(session.model
-      ? {
-          model: {
-            providerID: session.model.providerID,
-            modelID: session.model.id,
-            ...(session.model.variant ? { variant: session.model.variant } : {}),
+  async #finishOAuth(attemptID: string, code?: string): Promise<void> {
+    const attempt = this.#requireOAuthAttempt(attemptID)
+    if (attempt.status !== 'pending') return
+    try {
+      ensureSuccess(
+        (await this.#client.provider.oauth.callback(
+          {
+            providerID: attempt.providerID,
+            directory: this.#directory,
+            method: attempt.method,
+            ...(code ? { code } : {}),
           },
-        }
-      : {}),
-    cost: session.cost,
-    tokens: mapUsage(session.tokens),
-    updated: session.time.updated,
+          { signal: attempt.abort.signal },
+        )) as SdkResult<unknown>,
+      )
+      if (attempt.abort.signal.aborted) return
+      await this.#reloadProviderState()
+      attempt.status = 'complete'
+    } catch (error) {
+      if (attempt.abort.signal.aborted) return
+      attempt.status = 'failed'
+      attempt.message = message(error)
+    }
+  }
+
+  #requireOAuthAttempt(attemptID: string): OAuthAttempt {
+    const attempt = this.#oauthAttempts.get(attemptID)
+    if (!attempt) throw new Error('OAuth attempt is unknown or expired')
+    return attempt
+  }
+
+  #trimOAuthAttempts(): void {
+    while (this.#oauthAttempts.size > 20) {
+      const oldest = this.#oauthAttempts.keys().next().value as string | undefined
+      if (!oldest) return
+      this.#oauthAttempts.get(oldest)?.abort.abort()
+      this.#oauthAttempts.delete(oldest)
+    }
+  }
+
+  async #reloadProviderState(): Promise<void> {
+    ensureSuccess((await this.#client.instance.dispose({ directory: this.#directory })) as SdkResult<unknown>)
+  }
+
+  async #modelForSession(sessionID: string): Promise<ModelRef> {
+    const known = this.#sessionModels.get(sessionID)
+    if (known) return known
+    const session = await this.getSession(sessionID)
+    if (!session.model) throw new Error(`OpenCode session ${sessionID} has no selected model`)
+    return session.model
+  }
+
+  #mapSession(session: LegacySession): SessionInfo {
+    const selected = this.#sessionModels.get(session.id)
+    return {
+      id: session.id,
+      title: session.title,
+      ...(session.agent ? { agent: session.agent } : {}),
+      ...(selected
+        ? { model: { ...selected } }
+        : session.model
+          ? {
+              model: {
+                providerID: session.model.providerID,
+                modelID: session.model.id,
+                ...(session.model.variant ? { variant: session.model.variant } : {}),
+              },
+            }
+          : {}),
+      cost: session.cost ?? 0,
+      tokens: mapUsage(session.tokens ?? {}),
+      updated: session.time.updated,
+    }
   }
 }
 
-function mapUsage(tokens: Record<string, unknown> | SessionV2Info['tokens']): TokenUsage {
-  const recordTokens = record(tokens)
-  const cache = record(recordTokens.cache)
-  const input = Number(recordTokens.input ?? recordTokens.prompt ?? recordTokens.input_tokens ?? recordTokens.prompt_tokens ?? 0)
-  const output = Number(recordTokens.output ?? recordTokens.completion ?? recordTokens.output_tokens ?? recordTokens.completion_tokens ?? 0)
-  const reasoning = Number(recordTokens.reasoning ?? recordTokens.reasoning_tokens ?? 0)
-  const cacheRead = Number(cache.read ?? cache.read_tokens ?? recordTokens.cache_read_input_tokens ?? 0)
-  const cacheWrite = Number(cache.write ?? cache.write_tokens ?? recordTokens.cache_creation_input_tokens ?? 0)
-  return { input, output, reasoning, cacheRead, cacheWrite }
+export class OpenCodeEventNormalizer {
+  readonly #messageRoles = new Map<string, string>()
+  readonly #messageSessions = new Map<string, string>()
+  readonly #parts = new Map<string, StreamPart>()
+  readonly #toolStates = new Map<string, string>()
+  readonly #toolTitles = new Map<string, string>()
+  readonly #toolSessions = new Map<string, string>()
+
+  normalize(raw: unknown): AgentEvent[] {
+    const wrapper = record(raw)
+    const event = record(wrapper.payload ?? raw)
+    const type = String(event.type ?? '')
+    const data = record(event.data ?? event.properties)
+    const err = record(data.error)
+    const sessionID = typeof data.sessionID === 'string'
+      ? data.sessionID
+      : typeof err.sessionID === 'string'
+        ? err.sessionID
+        : undefined
+
+    switch (type) {
+      case 'message.updated':
+        return this.#messageUpdated(data)
+      case 'message.part.delta':
+        return this.#partDelta(data)
+      case 'message.part.updated':
+        return this.#partUpdated(data)
+      case 'message.part.removed':
+        if (typeof data.partID === 'string') this.#clearPart(data.partID)
+        return []
+      case 'session.next.text.delta':
+        return sessionID ? [{ type: 'text-delta', sessionID, text: String(data.delta ?? '') }] : []
+      case 'session.next.reasoning.delta':
+        return sessionID ? [{ type: 'reasoning-delta', sessionID, text: String(data.delta ?? '') }] : []
+      case 'session.next.tool.input.started':
+        return sessionID
+          ? [{ type: 'tool-start', sessionID, callID: String(data.callID ?? ''), name: String(data.name ?? 'tool') }]
+          : []
+      case 'session.next.tool.called':
+        return sessionID
+          ? [{
+              type: 'tool-start',
+              sessionID,
+              callID: String(data.callID ?? ''),
+              name: String(data.tool ?? data.name ?? 'tool'),
+              ...(data.input !== undefined ? { input: data.input } : {}),
+            }]
+          : []
+      case 'session.next.tool.progress': {
+        const structured = record(data.structured)
+        const content = Array.isArray(data.content) ? data.content : []
+        const contentText = content
+          .map((item) => record(item).text)
+          .find((item): item is string => typeof item === 'string' && item.length > 0)
+        return sessionID
+          ? [{
+              type: 'tool-progress',
+              sessionID,
+              callID: String(data.callID ?? ''),
+              message: String(structured.title ?? structured.message ?? contentText ?? 'working'),
+            }]
+          : []
+      }
+      case 'session.next.tool.success':
+      case 'session.next.tool.failed':
+        return sessionID
+          ? [{
+              type: 'tool-end',
+              sessionID,
+              callID: String(data.callID ?? ''),
+              success: type.endsWith('success'),
+              ...(Array.isArray(data.outputPaths) ? { outputPaths: data.outputPaths.map(String) } : {}),
+            }]
+          : []
+      case 'session.diff':
+        return sessionID && Array.isArray(data.diff) ? [{ type: 'diff', sessionID, diff: data.diff }] : []
+      case 'permission.v2.asked':
+        return typeof data.id === 'string' && sessionID
+          ? [{
+              type: 'permission',
+              request: {
+                id: data.id,
+                sessionID,
+                action: String(data.action ?? 'unknown'),
+                resources: Array.isArray(data.resources) ? data.resources.map(String) : [],
+                ...(Array.isArray(data.save) ? { save: data.save.map(String) } : {}),
+                ...(recordOrUndefined(data.metadata) ? { metadata: record(data.metadata) } : {}),
+              },
+            }]
+          : []
+      case 'permission.asked':
+        return typeof data.id === 'string' && sessionID
+          ? [{
+              type: 'permission',
+              request: {
+                id: data.id,
+                sessionID,
+                action: String(data.permission ?? 'unknown'),
+                resources: Array.isArray(data.patterns) ? data.patterns.map(String) : [],
+                ...(Array.isArray(data.always) ? { save: data.always.map(String) } : {}),
+                ...(recordOrUndefined(data.metadata) ? { metadata: record(data.metadata) } : {}),
+              },
+            }]
+          : []
+      case 'session.next.step.ended':
+      case 'session.step.ended':
+      case 'step.ended':
+      case 'session.usage':
+        return sessionID
+          ? [{
+              type: 'usage',
+              sessionID,
+              usage: mapUsage(record(data.tokens ?? data.usage ?? record(data.step).tokens)),
+              cost: Number(data.cost ?? 0),
+            }]
+          : []
+      case 'session.next.compaction.started':
+        return sessionID ? [{ type: 'compaction', sessionID, phase: 'started' }] : []
+      case 'session.next.compaction.ended':
+      case 'session.compacted':
+        return sessionID ? [{ type: 'compaction', sessionID, phase: 'ended' }] : []
+      case 'session.idle':
+        if (sessionID) this.#clearSession(sessionID)
+        return sessionID ? [{ type: 'idle', sessionID }] : []
+      case 'session.error':
+        return [{ type: 'error', ...(sessionID ? { sessionID } : {}), message: message(data.error) }]
+      default:
+        return []
+    }
+  }
+
+  #messageUpdated(data: Record<string, unknown>): AgentEvent[] {
+    const info = record(data.info)
+    if (typeof info.id !== 'string' || typeof info.role !== 'string') return []
+    this.#messageRoles.set(info.id, info.role)
+    if (typeof info.sessionID === 'string') this.#messageSessions.set(info.id, info.sessionID)
+    const events: AgentEvent[] = []
+    for (const part of this.#parts.values()) {
+      if (part.messageID === info.id) events.push(...this.#flushPart(part))
+    }
+    return events
+  }
+
+  #partDelta(data: Record<string, unknown>): AgentEvent[] {
+    if (data.field !== 'text' || typeof data.delta !== 'string') return []
+    if (typeof data.partID !== 'string' || typeof data.messageID !== 'string' || typeof data.sessionID !== 'string') return []
+    const part = this.#parts.get(data.partID) ?? {
+      sessionID: data.sessionID,
+      messageID: data.messageID,
+      text: '',
+      emitted: 0,
+    }
+    part.text += data.delta
+    this.#parts.set(data.partID, part)
+    this.#messageSessions.set(data.messageID, data.sessionID)
+    return this.#flushPart(part)
+  }
+
+  #partUpdated(data: Record<string, unknown>): AgentEvent[] {
+    const part = record(data.part)
+    const sessionID = typeof part.sessionID === 'string' ? part.sessionID : typeof data.sessionID === 'string' ? data.sessionID : undefined
+    const partID = typeof part.id === 'string' ? part.id : undefined
+    const messageID = typeof part.messageID === 'string' ? part.messageID : undefined
+    if (!sessionID || !partID || !messageID) return []
+    this.#messageSessions.set(messageID, sessionID)
+    if (part.type === 'text' || part.type === 'reasoning') {
+      const stream = this.#parts.get(partID) ?? { sessionID, messageID, text: '', emitted: 0 }
+      stream.sessionID = sessionID
+      stream.messageID = messageID
+      stream.kind = part.type
+      if (typeof part.text === 'string') stream.text = part.text
+      this.#parts.set(partID, stream)
+      return this.#flushPart(stream)
+    }
+    if (part.type === 'tool') return this.#toolUpdated(sessionID, partID, part)
+    if (part.type === 'step-finish') {
+      return [{
+        type: 'usage',
+        sessionID,
+        usage: mapUsage(record(part.tokens)),
+        cost: Number(part.cost ?? 0),
+      }]
+    }
+    return []
+  }
+
+  #flushPart(part: StreamPart): AgentEvent[] {
+    const role = this.#messageRoles.get(part.messageID)
+    if (!role || !part.kind) return []
+    if (role !== 'assistant') {
+      part.emitted = part.text.length
+      return []
+    }
+    const delta = part.text.slice(part.emitted)
+    part.emitted = part.text.length
+    if (!delta) return []
+    return [{
+      type: part.kind === 'text' ? 'text-delta' : 'reasoning-delta',
+      sessionID: part.sessionID,
+      text: delta,
+    }]
+  }
+
+  #toolUpdated(sessionID: string, partID: string, part: Record<string, unknown>): AgentEvent[] {
+    const state = record(part.state)
+    const status = String(state.status ?? '')
+    const previous = this.#toolStates.get(partID)
+    const callID = String(part.callID ?? partID)
+    const name = String(part.tool ?? 'tool')
+    const events: AgentEvent[] = []
+    this.#toolSessions.set(partID, sessionID)
+    const started = previous === 'running' || previous === 'completed' || previous === 'error'
+    if ((status === 'running' || status === 'completed' || status === 'error') && !started) {
+      events.push({
+        type: 'tool-start',
+        sessionID,
+        callID,
+        name,
+        ...(state.input !== undefined ? { input: state.input } : {}),
+      })
+    }
+    const title = typeof state.title === 'string' ? state.title : undefined
+    if (status === 'running' && title && title !== this.#toolTitles.get(partID)) {
+      events.push({ type: 'tool-progress', sessionID, callID, message: title })
+      this.#toolTitles.set(partID, title)
+    }
+    if ((status === 'completed' || status === 'error') && previous !== 'completed' && previous !== 'error') {
+      events.push({
+        type: 'tool-end',
+        sessionID,
+        callID,
+        success: status === 'completed',
+        ...(() => {
+          const outputPaths = extractOutputPaths(part)
+          return outputPaths.length > 0 ? { outputPaths } : {}
+        })(),
+      })
+    }
+    this.#toolStates.set(partID, status)
+    return events
+  }
+
+  #clearSession(sessionID: string): void {
+    for (const [id, part] of this.#parts) {
+      if (part.sessionID === sessionID) this.#parts.delete(id)
+    }
+    for (const [id, owner] of this.#messageSessions) {
+      if (owner !== sessionID) continue
+      this.#messageSessions.delete(id)
+      this.#messageRoles.delete(id)
+    }
+    for (const [id, owner] of this.#toolSessions) {
+      if (owner !== sessionID) continue
+      this.#toolSessions.delete(id)
+      this.#toolStates.delete(id)
+      this.#toolTitles.delete(id)
+    }
+  }
+
+  #clearPart(partID: string): void {
+    this.#parts.delete(partID)
+    this.#toolSessions.delete(partID)
+    this.#toolStates.delete(partID)
+    this.#toolTitles.delete(partID)
+  }
 }
 
-function toSdkModel(model: ModelRef) {
+function foregroundPermissions() {
+  return [
+    { permission: '*', pattern: '*', action: 'ask' as const },
+    { permission: 'read', pattern: '*', action: 'allow' as const },
+    { permission: 'read', pattern: '*.env', action: 'ask' as const },
+    { permission: 'read', pattern: '*.env.*', action: 'ask' as const },
+    { permission: 'read', pattern: '**/.env', action: 'ask' as const },
+    { permission: 'read', pattern: '**/.env.*', action: 'ask' as const },
+    { permission: 'read', pattern: '**/*credentials*', action: 'ask' as const },
+    { permission: 'read', pattern: '**/*.pem', action: 'ask' as const },
+    { permission: 'read', pattern: '**/*.key', action: 'ask' as const },
+    { permission: 'read', pattern: '*.env.example', action: 'allow' as const },
+    { permission: 'read', pattern: '**/.env.example', action: 'allow' as const },
+    { permission: 'read', pattern: '**/.claude.json', action: 'deny' as const },
+    { permission: 'read', pattern: '**/.cuppet/credentials.json', action: 'deny' as const },
+    { permission: 'read', pattern: '**/.cuppet/ltm-trie.json', action: 'deny' as const },
+    { permission: 'glob', pattern: '*', action: 'allow' as const },
+    { permission: 'grep', pattern: '*', action: 'allow' as const },
+    { permission: 'lsp', pattern: '*', action: 'allow' as const },
+    { permission: 'question', pattern: '*', action: 'allow' as const },
+    { permission: 'cuppet_memory_search', pattern: '*', action: 'allow' as const },
+    { permission: 'edit', pattern: '*', action: 'ask' as const },
+    { permission: 'edit', pattern: '**/.claude.json', action: 'deny' as const },
+    { permission: 'edit', pattern: '**/.cuppet/credentials.json', action: 'deny' as const },
+    { permission: 'edit', pattern: '**/.cuppet/ltm-trie.json', action: 'deny' as const },
+    { permission: 'bash', pattern: '*', action: 'ask' as const },
+    { permission: 'external_directory', pattern: '*', action: 'ask' as const },
+    { permission: 'webfetch', pattern: '*', action: 'ask' as const },
+    { permission: 'websearch', pattern: '*', action: 'ask' as const },
+    { permission: 'task', pattern: '*', action: 'ask' as const },
+  ]
+}
+
+function backgroundPermissions() {
+  return [{ permission: '*', pattern: '*', action: 'deny' as const }]
+}
+
+function enabledModalities(modalities: Record<string, boolean>): string[] {
+  return Object.entries(modalities).filter(([, enabled]) => enabled).map(([name]) => name)
+}
+
+function vertexEnvironmentNames(providerID: string, names: string[]): string[] {
+  if (providerID !== 'google-vertex' && providerID !== 'google-vertex-anthropic') return [...names]
+  return [...new Set([
+    'GOOGLE_APPLICATION_CREDENTIALS',
+    'GOOGLE_CLOUD_PROJECT',
+    'GOOGLE_VERTEX_PROJECT',
+    'GOOGLE_VERTEX_LOCATION',
+    ...names,
+  ])]
+}
+
+function dedupeMethods(methods: IntegrationMethod[]): IntegrationMethod[] {
+  const seen = new Set<string>()
+  return methods.filter((method) => {
+    const key = method.type === 'env'
+      ? `env:${[...method.names].sort().join(',')}`
+      : `${method.type}:${method.id ?? ''}:${method.label ?? ''}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function legacyMethodIndex(methodID: string): number {
+  const match = /^legacy:(\d+)$/.exec(methodID)
+  if (!match) throw new Error('This OAuth method is not supported by the OpenCode provider engine')
+  return Number(match[1])
+}
+
+function toSessionModel(model: ModelRef) {
   return {
     id: model.modelID,
     providerID: model.providerID,
     ...(model.variant ? { variant: model.variant } : {}),
   }
+}
+
+function modelKey(model: ModelRef): string {
+  return `${model.providerID}\u0000${model.modelID}\u0000${model.variant ?? ''}`
+}
+
+function mapUsage(tokens: Record<string, unknown>): TokenUsage {
+  const cache = record(tokens.cache)
+  const input = Number(tokens.input ?? tokens.prompt ?? tokens.input_tokens ?? tokens.prompt_tokens ?? 0)
+  const output = Number(tokens.output ?? tokens.completion ?? tokens.output_tokens ?? tokens.completion_tokens ?? 0)
+  const reasoning = Number(tokens.reasoning ?? tokens.reasoning_tokens ?? 0)
+  const cacheRead = Number(cache.read ?? cache.read_tokens ?? tokens.cache_read_input_tokens ?? 0)
+  const cacheWrite = Number(cache.write ?? cache.write_tokens ?? tokens.cache_creation_input_tokens ?? 0)
+  return { input, output, reasoning, cacheRead, cacheWrite }
+}
+
+function extractOutputPaths(part: Record<string, unknown>): string[] {
+  const found: string[] = []
+  const visit = (value: unknown, key = '') => {
+    if (typeof value === 'string') {
+      if (/(?:path|file|filename|files)$/i.test(key) && value.length > 0 && value.length < 4_096) found.push(value)
+      return
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, key)
+      return
+    }
+    if (!value || typeof value !== 'object') return
+    for (const [nextKey, item] of Object.entries(value as Record<string, unknown>)) visit(item, nextKey)
+  }
+  visit(part.state)
+  visit(part.metadata)
+  return [...new Set(found)].slice(0, 50)
 }
 
 function unwrap<T>(result: SdkResult<T>): T {
@@ -483,4 +943,8 @@ function message(error: unknown): string {
   const value = record(error)
   const data = record(value.data)
   return String(data.message ?? value.message ?? value.name ?? 'Unknown OpenCode error')
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds))
 }

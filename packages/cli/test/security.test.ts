@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { foregroundPermissions } from '../src/opencode/server.js'
 import { redact } from '../src/runtime/logger.js'
 
 test('runtime source contains no legacy credential import path', async () => {
@@ -22,6 +23,23 @@ test('OpenCode permissions permanently deny legacy credential records', async ()
   for (const path of ['**/.claude.json', '**/.cuppet/credentials.json', '**/.cuppet/ltm-trie.json']) {
     assert.ok(server.includes(`'${path}': 'deny'`), `${path} must stay denied`)
   }
+})
+
+test('OpenCode permissions use real actions and ordered sensitive resource rules', () => {
+  const permissions = foregroundPermissions()
+  const read = permissions.read as Record<string, string>
+  const edit = permissions.edit as Record<string, string>
+
+  assert.equal(read['*'], 'allow')
+  assert.equal(read['**/.env'], 'ask')
+  assert.equal(read['**/.env.example'], 'allow')
+  assert.equal(read['**/.claude.json'], 'deny')
+  assert.equal(read['**/.cuppet/credentials.json'], 'deny')
+  assert.equal(edit['*'], 'ask')
+  assert.equal(edit['**/.claude.json'], 'deny')
+  assert.equal('read_file' in permissions, false)
+  assert.equal('write_file' in permissions, false)
+  assert.equal(permissions.bash, 'ask')
 })
 
 test('local diagnostics redact common bearer tokens', () => {

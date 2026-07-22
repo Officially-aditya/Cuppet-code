@@ -495,7 +495,8 @@ impl CodeGraph {
             }
 
             for term in &terms {
-                let clean_term = term.trim_matches(|c: char| !c.is_alphanumeric() && c != '/' && c != '.' && c != '_');
+                let clean_term =
+                    term.trim_matches(|c: char| !c.is_alphanumeric() && c != '/' && c != '.' && c != '_');
                 if clean_term.is_empty() {
                     continue;
                 }
@@ -1017,7 +1018,15 @@ mod tests {
         graph.build().unwrap();
         assert_eq!(graph.stats().files, 7);
         assert_eq!(graph.stats().modules, 7);
-        for symbol in ["typed", "View", "scripted", "pythonic", "Gopher", "rusty", "FlutterWidget"] {
+        for symbol in [
+            "typed",
+            "View",
+            "scripted",
+            "pythonic",
+            "Gopher",
+            "rusty",
+            "FlutterWidget",
+        ] {
             assert!(!graph.query(symbol, 2).is_empty(), "missing {symbol}");
         }
     }

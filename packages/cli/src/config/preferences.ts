@@ -15,6 +15,7 @@ const preferencesSchema = z.object({
   platform: z.enum(['anthropic', 'openai', 'google', 'opencode', 'vertex']).optional(),
   primary: modelRef.optional(),
   secondary: modelRef.optional(),
+  vertexProject: z.string().min(1).optional(),
   backgroundPaused: z.boolean().default(false),
   lastSessionByProject: z.record(z.string(), z.string()).default({}),
 })
@@ -24,6 +25,7 @@ export type Preferences = {
   platform?: Platform | undefined
   primary?: ModelRef | undefined
   secondary?: ModelRef | undefined
+  vertexProject?: string | undefined
   backgroundPaused: boolean
   lastSessionByProject: Record<string, string>
 }

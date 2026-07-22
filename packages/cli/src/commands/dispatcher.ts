@@ -166,7 +166,7 @@ export const COMMANDS = [
 ]
 
 const HELP = `Cuppet commands:
-/platform                        Choose Anthropic, OpenAI, Google, or OpenCode
+/platform                        Choose Anthropic, OpenAI, Google, Vertex AI, or OpenCode
 /login [provider]                 OpenCode-advertised key or OAuth login
 /model primary|secondary         Select a live authenticated model
 /effort [role] [level]           Select a supported model effort level

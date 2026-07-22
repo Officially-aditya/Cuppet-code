@@ -7,7 +7,7 @@ import type { ControllerSnapshot, CuppetController } from '../controller.js'
 import { PLATFORM_OPTIONS, platformLabel } from '../platforms.js'
 import type { AgentEvent, IntegrationInfo, IntegrationMethod, MessageItem, ModelRef, Platform, SessionInfo, TokenUsage } from '../types.js'
 import { MultilineEditor } from './MultilineEditor.js'
-import { previousModal, type Modal } from './modal.js'
+import { nextPermissionModal, previousModal, type Modal } from './modal.js'
 import { renderMessageLines, viewportLayout, windowMessageLines, type MessageLine } from './viewport.js'
 
 type Props = {
@@ -25,6 +25,11 @@ const initialSnapshot: ControllerSnapshot = {
   activeTools: 0,
   degraded: true,
   stepCount: 0,
+  vertex: {
+    adc: { available: false, source: 'none', explicitUnavailable: false },
+    project: { configured: false, source: 'provider-adc' },
+    location: { value: 'global', source: 'cuppet-default' },
+  },
 }
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
@@ -38,7 +43,7 @@ function useSpinner(active: boolean): string {
     }
     const timer = setInterval(() => {
       setFrame((current) => (current + 1) % SPINNER_FRAMES.length)
-    }, 80)
+    }, 150)
     return () => clearInterval(timer)
   }, [active])
   return SPINNER_FRAMES[frame] ?? '⠋'
@@ -156,7 +161,11 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
       const current = modal
       setCredential('')
       setOAuthCode('')
-      setModal(previousModal(current))
+      if (current.type === 'permission') {
+        setModal(nextPermissionModal(current))
+      } else {
+        setModal(previousModal(current))
+      }
       if (current.type === 'oauth-wait') {
         void controller.gateway
           .cancelOAuth(current.attemptID)
@@ -431,9 +440,40 @@ function ModalView(props: {
     )
   }
 
+  if (modal.type === 'vertex-setup') {
+    const adc = snapshot.vertex.adc
+    const project = snapshot.vertex.project
+    const location = snapshot.vertex.location
+    return (
+      <ModalBox height={props.height} title="Vertex AI ADC setup">
+        <Text color={adc.available ? 'green' : 'yellow'}>
+          ADC: {adc.available ? `detected (${adc.source})` : 'not detected'}
+        </Text>
+        <Text wrap="truncate-end">
+          Project: {project.configured ? `configured via ${project.source}` : 'resolved by Google ADC'}
+        </Text>
+        <Text wrap="truncate-end">Location: {location.value} ({location.source})</Text>
+        {adc.explicitUnavailable ? (
+          <Text color="red">GOOGLE_APPLICATION_CREDENTIALS points to an unreadable file.</Text>
+        ) : null}
+        {!adc.available ? (
+          <>
+            <Text>Run: gcloud auth application-default login</Text>
+            <Text>Optional: export GOOGLE_CLOUD_PROJECT=&lt;project-id&gt;</Text>
+            <Text>Optional override: export GOOGLE_VERTEX_LOCATION=&lt;region&gt;</Text>
+            <Text dimColor>Restart Cuppet after creating ADC.</Text>
+          </>
+        ) : (
+          <Text color="yellow">ADC was detected, but OpenCode exposed no compatible Vertex models. Run /doctor for provider details.</Text>
+        )}
+        <Text dimColor>Esc returns to the previous screen.</Text>
+      </ModalBox>
+    )
+  }
+
   if (modal.type === 'model') {
     const recommended = modal.role === 'secondary' ? controller.recommendedSecondary() : undefined
-    const models = controller.modelsForPlatform(snapshot.platform).sort((left, right) => {
+    const models = controller.modelsForPlatform(snapshot.platform, modal.role).sort((left, right) => {
       const leftRecommended = recommended && sameModel(left, recommended) ? -1 : 0
       const rightRecommended = recommended && sameModel(right, recommended) ? -1 : 0
       return leftRecommended - rightRecommended || left.name.localeCompare(right.name)
@@ -523,7 +563,19 @@ function ModalView(props: {
           onSelect={(item) => {
             const method = modal.integration.methods[Number(item.value)]
             if (!method) return
-            if (method.type === 'key') props.setModal({ type: 'login-key', integration: modal.integration })
+            if (method.type === 'key') {
+              const prompts = method.prompts ?? []
+              const firstPrompt = nextPromptIndex(prompts, 0, {})
+              if (firstPrompt >= 0) {
+                props.setModal({
+                  type: 'key-prompt',
+                  integration: modal.integration,
+                  method,
+                  index: firstPrompt,
+                  inputs: {},
+                })
+              } else props.setModal({ type: 'login-key', integration: modal.integration, method })
+            }
             else if (method.type === 'env') {
               props.setNotice(`Environment method: set ${method.names.join(' or ')} before launch.`)
               props.setModal({ type: 'none' })
@@ -551,7 +603,7 @@ function ModalView(props: {
           onSubmit={(value) => {
             props.setCredential('')
             void controller.gateway
-              .connectKey(modal.integration.id, value)
+              .connectKey(modal.integration.id, value, modal.metadata)
               .then(() => controller.refreshCatalog())
               .then(() => {
                 props.setNotice(`${modal.integration.name} connected; model catalog refreshed.`)
@@ -560,6 +612,48 @@ function ModalView(props: {
               .catch((error) => addMessage(props.setMessages, 'system', `Login failed: ${error.message}`))
           }}
         />
+      </ModalBox>
+    )
+  }
+
+  if (modal.type === 'key-prompt') {
+    const prompt = modal.method.prompts?.[modal.index]
+    if (!prompt) {
+      props.setModal({
+        type: 'login-key',
+        integration: modal.integration,
+        method: modal.method,
+        metadata: modal.inputs,
+      })
+      return null
+    }
+    const advance = (value: string) => {
+      const inputs = { ...modal.inputs, [prompt.key]: value }
+      const next = nextPromptIndex(modal.method.prompts ?? [], modal.index + 1, inputs)
+      if (next < 0) {
+        props.setModal({
+          type: 'login-key',
+          integration: modal.integration,
+          method: modal.method,
+          metadata: inputs,
+        })
+      } else props.setModal({ ...modal, index: next, inputs })
+    }
+    return (
+      <ModalBox height={props.height} title={prompt.message}>
+        {prompt.type === 'select' ? (
+          <SelectInput
+            limit={listLimit}
+            items={prompt.options.map((item) => ({ label: item.label, value: item.value }))}
+            onSelect={(item) => advance(item.value)}
+          />
+        ) : (
+          <TextInput
+            value={props.oauthCode}
+            onChange={props.setOAuthCode}
+            onSubmit={(value) => { props.setOAuthCode(''); advance(value) }}
+          />
+        )}
       </ModalBox>
     )
   }
@@ -641,7 +735,8 @@ function ModalView(props: {
             { label: 'Deny', value: 'reject' },
           ]}
           onSelect={(item) => {
-            void controller.replyPermission(modal.request, item.value as 'once' | 'always' | 'reject').finally(() => props.setModal({ type: 'none' }))
+            const nextModal = nextPermissionModal(modal)
+            void controller.replyPermission(modal.request, item.value as 'once' | 'always' | 'reject').finally(() => props.setModal(nextModal))
           }}
         />
       </ModalBox>
@@ -694,19 +789,14 @@ function ModalBox({ title, height, children }: { title: string; height: number; 
   )
 }
 
-function Message({ item }: { item: MessageLine }) {
+const Message = React.memo(function Message({ item }: { item: MessageLine }) {
   return renderMarkdownLine(item.text, item.sender)
-}
+})
 
 function renderMarkdownLine(text: string, sender: MessageItem['sender']) {
-  if (text.startsWith('+')) {
-    return <Text color="green" wrap="truncate-end">{text}</Text>
-  }
-  if (text.startsWith('-')) {
-    return <Text color="red" wrap="truncate-end">{text}</Text>
-  }
-  if (text.startsWith('@@') || text.startsWith('diff ')) {
-    return <Text color="cyan" bold wrap="truncate-end">{text}</Text>
+  const diffColor = diffLineColor(text, sender)
+  if (diffColor) {
+    return <Text color={diffColor} bold={diffColor === 'cyan'} wrap="truncate-end">{text}</Text>
   }
 
   const headerMatch = /^(#{1,6})\s+(.*)$/.exec(text)
@@ -802,8 +892,12 @@ async function openAction(
   else if (action.type === 'model') {
     const snapshot = controller.snapshot
     if (!snapshot.platform) setModal({ type: 'platform', required: true })
-    else if (controller.modelsForPlatform(snapshot.platform).length === 0) {
-      setModal({ type: 'login-integration', platform: snapshot.platform, required: true })
+    else if (controller.modelsForPlatform(snapshot.platform, action.role).length === 0) {
+      if (snapshot.platform === 'vertex' && controller.integrationsForPlatform('vertex').length === 0) {
+        setModal({ type: 'vertex-setup', required: false })
+      } else {
+        setModal({ type: 'login-integration', platform: snapshot.platform, required: true })
+      }
     } else setModal({ type: 'model', role: action.role, required: false })
   }
   else if (action.type === 'effort') {
@@ -818,7 +912,14 @@ async function openAction(
       addMessage(setMessages, 'system', `Effort error: ${(error as Error).message}`)
     }
   }
-  else if (action.type === 'login') setModal({ type: 'login-integration', ...(action.provider ? { provider: action.provider } : {}) })
+  else if (action.type === 'login') {
+    const provider = action.provider?.toLowerCase()
+    if ((provider === 'vertex' || provider === 'google-vertex') && controller.integrationsForPlatform('vertex').length === 0) {
+      setModal({ type: 'vertex-setup', required: false })
+    } else {
+      setModal({ type: 'login-integration', ...(action.provider ? { provider: action.provider } : {}) })
+    }
+  }
   else if (action.type === 'confirm-clear') setModal(action)
   else {
     try {
@@ -920,21 +1021,25 @@ export function formatToolDetail(name: string, input: unknown): string | undefin
 function handleAgentEvent(
   event: AgentEvent,
   setMessages: React.Dispatch<React.SetStateAction<MessageItem[]>>,
-  setModal: (modal: Modal) => void,
+  setModal: React.Dispatch<React.SetStateAction<Modal>>,
   setNotice: (notice: string | undefined) => void,
 ) {
+  if (event.type !== 'text-delta' && event.type !== 'reasoning-delta') {
+    flushStreamBuffers(setMessages)
+  }
   if (event.type === 'text-delta') {
     removeMessage(setMessages, `thinking:${event.sessionID}`)
     appendStream(setMessages, 'assistant', `assistant:${event.sessionID}:${activeTurnSegment}`, event.text)
   } else if (event.type === 'reasoning-delta') {
-    updateMessage(setMessages, `thinking:${event.sessionID}`, 'Thinking…')
-  } else if (event.type === 'tool-start') {
     removeMessage(setMessages, `thinking:${event.sessionID}`)
-    activeTurnSegment += 1
-    const detail = formatToolDetail(event.name, event.input)
-    activeToolInfos.set(event.callID, { name: event.name, detail })
-    const label = detail ? `${event.name} (${detail})` : event.name
-    addMessage(setMessages, 'tool', label, `tool:${event.callID}`)
+  } else if (event.type === 'tool-start') {
+    const existing = activeToolInfos.get(event.callID)
+    const detail = formatToolDetail(event.name, event.input) ?? existing?.detail
+    const name = event.name === 'tool' && existing ? existing.name : event.name
+    activeToolInfos.set(event.callID, { name, ...(detail ? { detail } : {}) })
+    const base = detail ? `${name} (${detail})` : name
+    if (existing) updateMessage(setMessages, `tool:${event.callID}`, base)
+    else addMessage(setMessages, 'tool', base, `tool:${event.callID}`)
   } else if (event.type === 'tool-progress') {
     const info = activeToolInfos.get(event.callID)
     const base = info ? (info.detail ? `${info.name} (${info.detail})` : info.name) : 'tool'
@@ -947,11 +1052,22 @@ function handleAgentEvent(
     }
     const base = info ? (detail ? `${info.name} (${detail})` : info.name) : 'tool'
     updateMessage(setMessages, `tool:${event.callID}`, `${base} · ${event.success ? 'completed' : 'failed'}`)
+    activeToolInfos.delete(event.callID)
     activeTurnSegment += 1
   } else if (event.type === 'idle') {
     removeMessage(setMessages, `thinking:${event.sessionID}`)
   } else if (event.type === 'diff') addMessage(setMessages, 'tool', formatDiff(event.diff))
-  else if (event.type === 'permission') setModal({ type: 'permission', request: event.request })
+  else if (event.type === 'permission') {
+    setModal((prev) => {
+      if (prev.type === 'permission') {
+        const queue = prev.queue ?? []
+        const pending = [prev.request, ...queue]
+        if (pending.some((request) => request.id === event.request.id)) return prev
+        return { type: 'permission', request: prev.request, queue: [...queue, event.request] }
+      }
+      return { type: 'permission', request: event.request }
+    })
+  }
   else if (event.type === 'compaction') setNotice(`Conversation compaction ${event.phase}.`)
   else if (event.type === 'error') addMessage(setMessages, 'system', `OpenCode: ${event.message}`)
   else if (event.type === 'step-limit') setModal({ type: 'step-limit', sessionID: event.sessionID })
@@ -964,6 +1080,9 @@ function handleAgentEvent(
     else if (event.method === 'health') {
       const health = event.params as { recovery_warnings?: unknown[] }
       if (health.recovery_warnings?.length) setNotice('TST recovered storage with warnings; run /status.')
+    } else if (event.method === 'health.degraded') {
+      const detail = event.params as { message?: string }
+      setNotice(`TST unavailable — OpenCode-only mode${detail.message ? `: ${detail.message}` : ''}`)
     }
   }
 }
@@ -996,17 +1115,48 @@ function addMessage(
   setMessages((current) => [...current, { id, sender, text }])
 }
 
+const streamBuffers = new Map<string, { sender: MessageItem['sender']; text: string }>()
+let streamFlushTimer: NodeJS.Timeout | undefined
+
+function flushStreamBuffers(setMessages: React.Dispatch<React.SetStateAction<MessageItem[]>>) {
+  if (streamFlushTimer) {
+    clearTimeout(streamFlushTimer)
+    streamFlushTimer = undefined
+  }
+  if (streamBuffers.size === 0) return
+  const entries = Array.from(streamBuffers.entries())
+  streamBuffers.clear()
+
+  setMessages((current) => {
+    let updated = current
+    for (const [id, { sender, text }] of entries) {
+      const index = updated.findIndex((item) => item.id === id)
+      if (index < 0) {
+        updated = [...updated, { id, sender, text }]
+      } else {
+        const item = updated[index]!
+        updated = updated.map((it, idx) => (idx === index ? { ...it, text: `${item.text}${text}` } : it))
+      }
+    }
+    return updated
+  })
+}
+
 function appendStream(
   setMessages: React.Dispatch<React.SetStateAction<MessageItem[]>>,
   sender: MessageItem['sender'],
   id: string,
   delta: string,
 ) {
-  setMessages((current) => {
-    const index = current.findIndex((item) => item.id === id)
-    if (index < 0) return [...current, { id, sender, text: delta }]
-    return current.map((item, itemIndex) => itemIndex === index ? { ...item, text: `${item.text}${delta}` } : item)
-  })
+  const existing = streamBuffers.get(id)
+  if (existing) {
+    existing.text += delta
+  } else {
+    streamBuffers.set(id, { sender, text: delta })
+  }
+  if (!streamFlushTimer) {
+    streamFlushTimer = setTimeout(() => flushStreamBuffers(setMessages), 50)
+  }
 }
 
 function modelLabel(model?: ModelRef): string {
@@ -1021,7 +1171,7 @@ function sameModel(left: ModelRef, right: ModelRef): boolean {
   return left.providerID === right.providerID && left.modelID === right.modelID && left.variant === right.variant
 }
 
-function formatDiff(diffData: unknown): string {
+export function formatDiff(diffData: unknown): string {
   if (typeof diffData === 'string') {
     return formatDiffString(diffData)
   }
@@ -1031,9 +1181,19 @@ function formatDiff(diffData: unknown): string {
   const lines: string[] = []
   for (const item of diffData) {
     if (!item || typeof item !== 'object') continue
-    const file = String((item as { path?: string; file?: string }).path ?? (item as { file?: string }).file ?? 'file')
-    lines.push(`diff a/${file} b/${file}`)
-    const chunks = (item as { chunks?: unknown[]; hunks?: unknown[] }).chunks ?? (item as { hunks?: unknown[] }).hunks
+    const entry = item as {
+      path?: string
+      file?: string
+      before?: string
+      after?: string
+      additions?: number
+      deletions?: number
+      chunks?: unknown[]
+      hunks?: unknown[]
+    }
+    const file = String(entry.path ?? entry.file ?? 'file')
+    lines.push(`diff -- ${file}`)
+    const chunks = entry.chunks ?? entry.hunks
     if (Array.isArray(chunks)) {
       for (const chunk of chunks) {
         const header = String((chunk as { header?: string }).header ?? '@@')
@@ -1045,9 +1205,57 @@ function formatDiff(diffData: unknown): string {
           }
         }
       }
+    } else if (typeof entry.before === 'string' && typeof entry.after === 'string') {
+      lines.push(...changedLinePreview(entry.before, entry.after))
     }
+    const additions = Number.isFinite(entry.additions) ? Math.max(0, Number(entry.additions)) : countPrefixed(lines, '+')
+    const deletions = Number.isFinite(entry.deletions) ? Math.max(0, Number(entry.deletions)) : countPrefixed(lines, '-')
+    // Keep the target visible at the bottom of a short viewport after the preview scrolls.
+    lines.push(`diff -- ${file} · +${additions} -${deletions}`)
   }
   return lines.join('\n')
+}
+
+export function diffLineColor(
+  text: string,
+  sender: MessageItem['sender'],
+): 'cyan' | 'green' | 'red' | undefined {
+  if (sender !== 'tool') return undefined
+  if (text.startsWith('diff ') || text.startsWith('@@') || text.startsWith('+++ ') || text.startsWith('--- ')) return 'cyan'
+  if (text.startsWith('+')) return 'green'
+  if (text.startsWith('-')) return 'red'
+  return undefined
+}
+
+function changedLinePreview(before: string, after: string): string[] {
+  const oldLines = before.split('\n')
+  const newLines = after.split('\n')
+  let prefix = 0
+  while (prefix < oldLines.length && prefix < newLines.length && oldLines[prefix] === newLines[prefix]) prefix += 1
+  let suffix = 0
+  while (
+    suffix < oldLines.length - prefix &&
+    suffix < newLines.length - prefix &&
+    oldLines[oldLines.length - 1 - suffix] === newLines[newLines.length - 1 - suffix]
+  ) suffix += 1
+
+  const removed = oldLines.slice(prefix, oldLines.length - suffix)
+  const added = newLines.slice(prefix, newLines.length - suffix)
+  return [
+    ...previewLines(removed, '-'),
+    ...previewLines(added, '+'),
+  ]
+}
+
+function previewLines(lines: string[], prefix: '+' | '-'): string[] {
+  const limit = 3
+  const preview = lines.slice(0, limit).map((line) => `${prefix}${line}`)
+  if (lines.length > limit) preview.push(`${prefix}… ${lines.length - limit} more line(s)`)
+  return preview
+}
+
+function countPrefixed(lines: string[], prefix: '+' | '-'): number {
+  return lines.filter((line) => line.startsWith(prefix) && !line.startsWith(`${prefix}${prefix}${prefix} `)).length
 }
 
 function formatDiffString(diffText: string): string {
@@ -1091,7 +1299,7 @@ function renderScrollbar(total: number, height: number, offset: number): string[
 function nextOnboardingModal(controller: CuppetController, snapshot: ControllerSnapshot): Modal {
   if (!snapshot.platform) return { type: 'platform', required: true }
   if (!snapshot.primary) {
-    if (controller.modelsForPlatform(snapshot.platform).length > 0) {
+    if (controller.modelsForPlatform(snapshot.platform, 'primary').length > 0) {
       return { type: 'model', role: 'primary', required: true }
     }
     if (controller.integrationsForPlatform(snapshot.platform).length > 0) {
@@ -1101,9 +1309,17 @@ function nextOnboardingModal(controller: CuppetController, snapshot: ControllerS
         required: true,
       }
     }
+    if (snapshot.platform === 'vertex') return { type: 'vertex-setup', required: true }
     return { type: 'platform', required: true }
   }
-  if (!snapshot.secondary) return { type: 'model', role: 'secondary', required: true }
+  if (!snapshot.secondary) {
+    if (controller.modelsForPlatform(snapshot.platform, 'secondary').length > 0) {
+      return { type: 'model', role: 'secondary', required: true }
+    }
+    return snapshot.platform === 'vertex'
+      ? { type: 'vertex-setup', required: true }
+      : { type: 'platform', required: true }
+  }
   return { type: 'none' }
 }
 

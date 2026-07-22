@@ -44,6 +44,8 @@ async function main(): Promise<void> {
   let opencode: OpenCodeRuntime | undefined
   let controller: CuppetController | undefined
   try {
+    const preferences = new PreferenceStore(paths.preferences)
+    await preferences.load()
     if (assets.tst) {
       try {
         tst = await startTstDaemon(assets.tst, paths, logger)
@@ -57,16 +59,16 @@ async function main(): Promise<void> {
       logger,
       ...(assets.plugin ? { plugin: assets.plugin } : {}),
       ...(tst ? { tst: { socket: tst.socket, token: tst.token } } : {}),
+      ...(preferences.value.vertexProject ? { vertexProject: preferences.value.vertexProject } : {}),
     })
     const gateway = new OpenCodeGateway(opencode.client, paths.projectRealpath)
-    const preferences = new PreferenceStore(paths.preferences)
-    await preferences.load()
     controller = new CuppetController({
       gateway,
       ...(tst ? { tst: tst.client } : {}),
       preferences,
       paths,
       assets,
+      vertex: opencode.vertex,
       interactive: !arguments_.prompt,
     })
     await controller.initialize()

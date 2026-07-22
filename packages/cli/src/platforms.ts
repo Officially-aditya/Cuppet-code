@@ -7,17 +7,17 @@ export const PLATFORM_OPTIONS: ReadonlyArray<{
 }> = [
   { value: 'anthropic', label: 'Anthropic', description: 'Claude models' },
   { value: 'openai', label: 'OpenAI', description: 'OpenAI and Azure OpenAI models' },
-  { value: 'google', label: 'Google', description: 'Gemini models' },
+  { value: 'google', label: 'Google', description: 'Gemini API models' },
   { value: 'opencode', label: 'OpenCode', description: 'OpenCode-provided models' },
-  { value: 'vertex', label: 'Vertex AI', description: 'Google Cloud ADC & Vertex AI models' },
+  { value: 'vertex', label: 'Vertex AI', description: 'Google Cloud ADC models' },
 ]
 
 const modelProviderIDs: Record<Platform, ReadonlySet<string>> = {
   anthropic: new Set(['anthropic']),
   openai: new Set(['openai', 'azure', 'azure-openai']),
-  google: new Set(['google', 'google-vertex', 'vertex', 'vertex-ai', 'vertexai', 'gemini']),
+  google: new Set(['google']),
   opencode: new Set(['opencode']),
-  vertex: new Set(['vertex', 'google-vertex', 'vertex-ai', 'vertexai', 'google']),
+  vertex: new Set(['google-vertex', 'google-vertex-anthropic']),
 }
 
 export function modelMatchesPlatform(model: Pick<ModelRef, 'providerID'>, platform: Platform): boolean {
@@ -28,16 +28,12 @@ export function integrationMatchesPlatform(
   integration: Pick<IntegrationInfo, 'id' | 'name'>,
   platform: Platform,
 ): boolean {
-  const value = `${integration.id} ${integration.name}`.toLowerCase()
-  if (platform === 'anthropic') return value.includes('anthropic')
-  if (platform === 'openai') return value.includes('openai') || value.includes('azure')
-  if (platform === 'google') {
-    return value.includes('google') || value.includes('gemini')
-  }
-  if (platform === 'vertex') {
-    return value.includes('vertex') || value.includes('gcp') || value.includes('google')
-  }
-  return value.includes('opencode')
+  const id = integration.id.toLowerCase()
+  if (platform === 'anthropic') return id === 'anthropic'
+  if (platform === 'openai') return id === 'openai' || id === 'azure' || id === 'azure-openai'
+  if (platform === 'google') return id === 'google'
+  if (platform === 'vertex') return id === 'google-vertex' || id === 'google-vertex-anthropic'
+  return id === 'opencode'
 }
 
 export function platformLabel(platform: Platform): string {

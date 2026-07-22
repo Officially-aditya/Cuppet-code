@@ -5,9 +5,12 @@ import { join } from 'node:path'
 
 export type RuntimePaths = Awaited<ReturnType<typeof createRuntimePaths>>
 
-export async function createRuntimePaths(projectDirectory: string) {
+export async function createRuntimePaths(
+  projectDirectory: string,
+  baseDirectory = join(homedir(), '.cuppet', 'v2'),
+) {
   const projectRealpath = await realpath(projectDirectory)
-  const base = join(homedir(), '.cuppet', 'v2')
+  const base = baseDirectory
   const projectID = createHash('sha256').update(projectRealpath).digest('hex')
   const launchID = `${process.pid}-${randomBytes(8).toString('hex')}`
   const runtime = join(base, 'run', launchID)
@@ -25,6 +28,7 @@ export async function createRuntimePaths(projectDirectory: string) {
       config: join(base, 'opencode', 'config'),
       data: join(base, 'opencode', 'data'),
       cache: join(base, 'opencode', 'cache'),
+      state: join(base, 'opencode', 'state'),
     },
   }
   const privateDirectories = [
@@ -36,6 +40,7 @@ export async function createRuntimePaths(projectDirectory: string) {
     paths.opencode.config,
     paths.opencode.data,
     paths.opencode.cache,
+    paths.opencode.state,
   ]
   await Promise.all(privateDirectories.map((directory) => mkdir(directory, { recursive: true, mode: 0o700 })))
   await Promise.all(privateDirectories.map((directory) => chmod(directory, 0o700)))

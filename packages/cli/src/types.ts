@@ -14,30 +14,36 @@ export type ModelInfo = ModelRef & {
   status: 'alpha' | 'beta' | 'deprecated' | 'active'
   inputCost: number
   outputCost: number
+  capabilities: {
+    tools: boolean
+    input: string[]
+    output: string[]
+  }
 }
 
+export type IntegrationPrompt =
+  | {
+      type: 'text'
+      key: string
+      message: string
+      placeholder?: string
+      when?: { key: string; op: 'eq' | 'neq'; value: string }
+    }
+  | {
+      type: 'select'
+      key: string
+      message: string
+      options: Array<{ label: string; value: string; hint?: string }>
+      when?: { key: string; op: 'eq' | 'neq'; value: string }
+    }
+
 export type IntegrationMethod =
-  | { id?: string; type: 'key'; label?: string }
+  | { id?: string; type: 'key'; label?: string; prompts?: IntegrationPrompt[] }
   | {
       id: string
       type: 'oauth'
       label: string
-      prompts?: Array<
-        | {
-            type: 'text'
-            key: string
-            message: string
-            placeholder?: string
-            when?: { key: string; op: 'eq' | 'neq'; value: string }
-          }
-        | {
-            type: 'select'
-            key: string
-            message: string
-            options: Array<{ label: string; value: string; hint?: string }>
-            when?: { key: string; op: 'eq' | 'neq'; value: string }
-          }
-      >
+      prompts?: IntegrationPrompt[]
     }
   | { id?: string; type: 'env'; names: string[] }
 

@@ -75,6 +75,7 @@ function model(variant?: string): ModelInfo {
     status: 'active',
     inputCost: 1,
     outputCost: 1,
+    capabilities: { tools: true, input: ['text'], output: ['text'] },
   }
 }
 

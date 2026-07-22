@@ -39,16 +39,23 @@ installing them, so the global commands never symlink back into the checkout
 the canonical command. The standard `cc` C compiler is never shadowed.
 
 On first launch, Cuppet asks for a platform before showing models. Choose
-Anthropic, OpenAI, Google (Gemini and Vertex AI), or OpenCode; if needed, the
-matching OpenCode authentication flow appears before the live model picker.
-The platform and model choices contain no credentials and are remembered.
-Run `/platform` to repeat this selection later.
+Anthropic, OpenAI, Google (Gemini API), Vertex AI (Google Cloud ADC), or
+OpenCode; if needed, the matching OpenCode authentication flow appears before
+the live model picker. Vertex detects either `GOOGLE_APPLICATION_CREDENTIALS`
+or standard gcloud application-default credentials. When neither is present,
+run `gcloud auth application-default login`, set `GOOGLE_CLOUD_PROJECT` (or
+`GOOGLE_VERTEX_PROJECT`), and restart Cuppet. Cuppet passes
+`GOOGLE_VERTEX_LOCATION=global` by default; `GOOGLE_VERTEX_LOCATION` or
+`GOOGLE_CLOUD_LOCATION` can override it. Provider connections coexist: `/platform` filters the model picker;
+it does not disconnect other providers. The platform and model choices contain
+no credentials and are remembered. Run `/platform` to repeat this selection
+later.
 
 ## Architecture
 
 ```text
 Ink UI + Cuppet supervisor
-  ├─ OpenCode 1.18.4 + SDK v2/SSE
+  ├─ OpenCode 1.18.4 + SDK catalog/auth/session APIs + SSE
   │  └─ sessions, tools, permissions, models, diffs, auth, undo
   └─ tst-daemon (framed JSON-RPC 2.0 over a private Unix socket)
      └─ session STM, verified project/global LTM, Tree-sitter graph, WAL
@@ -56,8 +63,14 @@ Ink UI + Cuppet supervisor
 
 Project stores live at `~/.cuppet/v2/projects/<sha256(realpath)>`. Runtime
 sockets use a mode-0700 launch directory and mode-0600 socket. OpenCode is
-given isolated XDG config/data/cache directories below
+given isolated XDG config/data/cache/state directories below
 `~/.cuppet/v2/opencode`; Cuppet never parses its credential records.
+
+Cuppet uses OpenCode's v2 APIs for the live catalog and agent registration and
+the same bundled server's stable session/provider API for turns. This preserves
+the mature Google Vertex, Azure, Gemini, Anthropic, and OpenAI adapters while
+OpenCode's v2 runner supports a smaller adapter set. No provider SDK or
+credential store is implemented in Cuppet.
 
 ## Alpha limits
 

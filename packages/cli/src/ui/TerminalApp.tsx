@@ -6,6 +6,7 @@ import type { CommandAction, CommandDispatcher } from '../commands/dispatcher.js
 import type { ControllerSnapshot, CuppetController } from '../controller.js'
 import { PLATFORM_OPTIONS, platformLabel } from '../platforms.js'
 import type { AgentEvent, IntegrationInfo, IntegrationMethod, MessageItem, ModelRef, Platform, SessionInfo, TokenUsage } from '../types.js'
+import { totalTokenUsage } from '../usage.js'
 import { MultilineEditor } from './MultilineEditor.js'
 import { nextPermissionModal, previousModal, type Modal } from './modal.js'
 import { renderMessageLines, viewportLayout, windowMessageLines, type MessageLine } from './viewport.js'
@@ -217,12 +218,7 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
     }
   })
 
-  const tokenCount =
-    snapshot.foregroundUsage.input +
-    snapshot.foregroundUsage.output +
-    snapshot.foregroundUsage.reasoning +
-    snapshot.foregroundUsage.cacheRead +
-    snapshot.foregroundUsage.cacheWrite
+  const tokenCount = totalTokenUsage(snapshot.foregroundUsage)
   const spinner = useSpinner(snapshot.running)
 
   const submit = async (value: string) => {
@@ -355,7 +351,7 @@ function ModalView(props: {
     const session = data.session as SessionInfo | undefined
     const foreground = data.foreground as { usage?: TokenUsage; cost?: number; running?: boolean; steps?: number } | undefined
     const usage = foreground?.usage ?? { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
-    const totalTokens = usage.input + usage.output + usage.reasoning + usage.cacheRead + usage.cacheWrite
+    const totalTokens = totalTokenUsage(usage)
     const tst = data.tst as { graph?: { files?: number; symbols?: number }; mode?: string } | undefined
 
     return (
@@ -370,11 +366,11 @@ function ModalView(props: {
           </Text>
           <Text wrap="truncate-end">
             <Text color="green" bold>Token Usage: </Text>
-            Input: {usage.input.toLocaleString()} │ Output: {usage.output.toLocaleString()} │ Thinking: {usage.reasoning.toLocaleString()}
+            Total: {totalTokens.toLocaleString()} │ Input: {usage.input.toLocaleString()} │ Output: {usage.output.toLocaleString()} │ Thinking: {usage.reasoning.toLocaleString()}
           </Text>
           <Text wrap="truncate-end">
             <Text color="green" bold>Cache: </Text>
-            Read: {usage.cacheRead.toLocaleString()} │ Write: {usage.cacheWrite.toLocaleString()} │ Total: {totalTokens.toLocaleString()}
+            Read: {usage.cacheRead.toLocaleString()} │ Write: {usage.cacheWrite.toLocaleString()}
           </Text>
           {tst?.graph ? (
             <Text wrap="truncate-end">

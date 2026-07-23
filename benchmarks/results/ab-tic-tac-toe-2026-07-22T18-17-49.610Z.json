@@ -1,0 +1,270 @@
+{
+  "schema": 2,
+  "createdAt": "2026-07-22T18:17:49.609Z",
+  "project": "/Users/addy/Downloads/cuppet",
+  "task": "Create a complete TypeScript Tic-Tac-Toe game with engine, AI, CLI, tests, and scripts.",
+  "model": {
+    "providerID": "google-vertex",
+    "modelID": "gemini-flash-latest"
+  },
+  "kernel": {
+    "name": "official OpenCode",
+    "version": "1.18.4"
+  },
+  "design": "paired fresh repository copies; identical task/model/tools/permissions; Cuppet adds bounded TST context; arm order alternates; mutations are isolated per trial",
+  "repeats": 1,
+  "summary": {
+    "opencode": {
+      "trials": 1,
+      "successes": 0,
+      "completionRate": 0,
+      "meanAcceptanceScore": 0,
+      "medianLatencyMs": 11423,
+      "medianUncachedInputTokens": 6538,
+      "medianTotalModelTokens": 7423,
+      "medianCost": 0.0207345,
+      "totalCost": 0.0207345,
+      "meanToolCalls": 2,
+      "meanPermissionRequests": 1,
+      "medianContextTokens": 0,
+      "costPerAcceptancePoint": 0,
+      "uncachedTokensPerAcceptancePoint": 0
+    },
+    "cuppet": {
+      "trials": 1,
+      "successes": 0,
+      "completionRate": 0,
+      "meanAcceptanceScore": 0,
+      "medianLatencyMs": 26557,
+      "medianUncachedInputTokens": 24903,
+      "medianTotalModelTokens": 26520,
+      "medianCost": 0.0577317,
+      "totalCost": 0.0577317,
+      "meanToolCalls": 5,
+      "meanPermissionRequests": 2,
+      "medianContextTokens": 1226,
+      "costPerAcceptancePoint": 0,
+      "uncachedTokensPerAcceptancePoint": 0
+    },
+    "comparison": {
+      "completionRateDelta": 0,
+      "acceptanceScoreDelta": 0,
+      "latencyReduction": -1.3248708745513438,
+      "costReduction": -1.784330463719887,
+      "totalCostDelta": 0.036997199999999994,
+      "uncachedInputReduction": -2.8089629856225145,
+      "totalModelTokenReduction": -2.5726795096322244,
+      "costPerAcceptancePointReduction": 0
+    }
+  },
+  "trials": [
+    {
+      "repeat": 1,
+      "arm": "opencode",
+      "workspace": "/private/tmp/cuppet-tictactoe-ab-wEF5yI/opencode-1",
+      "sessionID": "ses_074f45961ffeoWk84qM7yb3X5S",
+      "success": false,
+      "acceptanceScore": 0,
+      "contextTokens": 0,
+      "durationMs": 11423,
+      "usage": {
+        "input": 6538,
+        "output": 25,
+        "reasoning": 860,
+        "cacheRead": 19750,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 6538,
+      "totalModelTokens": 7423,
+      "cost": 0.0207345,
+      "toolCalls": 2,
+      "permissionRequests": 1,
+      "rejectedPermissions": 1,
+      "permissionActions": [
+        {
+          "action": "external_directory",
+          "resources": [
+            "/*"
+          ]
+        }
+      ],
+      "answer": "",
+      "evaluation": {
+        "acceptanceScore": 0,
+        "passedChecks": 0,
+        "totalChecks": 9,
+        "success": false,
+        "checks": {
+          "engineSource": {
+            "passed": false,
+            "detail": "src/game.ts or src/game.js is missing"
+          },
+          "cliSource": {
+            "passed": false,
+            "detail": "src/cli.ts or src/cli.js is missing"
+          },
+          "testsSource": {
+            "passed": false,
+            "detail": "game tests are missing"
+          },
+          "npmScripts": {
+            "passed": false,
+            "detail": "one or more game scripts are missing"
+          },
+          "engineSignals": {
+            "passed": false,
+            "detail": "engine source contains the required state/move signals"
+          },
+          "hiddenContract": {
+            "passed": false,
+            "detail": "hidden contract skipped because the engine source is missing"
+          },
+          "targetedTests": {
+            "passed": false,
+            "detail": "failed (game:test script is missing)"
+          },
+          "typecheck": {
+            "passed": false,
+            "detail": "failed (game:typecheck script is missing)"
+          },
+          "cliSmoke": {
+            "passed": false,
+            "detail": "failed (game:play script is missing)"
+          }
+        },
+        "targetedTest": {
+          "passed": false,
+          "code": "missing",
+          "durationMs": 0,
+          "stdout": "",
+          "stderr": "game:test script is missing"
+        },
+        "typecheck": {
+          "passed": false,
+          "code": "missing",
+          "durationMs": 0,
+          "stdout": "",
+          "stderr": "game:typecheck script is missing"
+        },
+        "cliSmoke": {
+          "passed": false,
+          "code": "missing",
+          "durationMs": 0,
+          "stdout": "",
+          "stderr": "game:play script is missing"
+        },
+        "hiddenContract": {
+          "passed": false,
+          "detail": "hidden contract skipped because the engine source is missing"
+        }
+      }
+    },
+    {
+      "repeat": 1,
+      "arm": "cuppet",
+      "workspace": "/private/tmp/cuppet-tictactoe-ab-wEF5yI/cuppet-1",
+      "sessionID": "ses_074f411c2ffeKHwRo5ZxI7xJdJ",
+      "success": false,
+      "acceptanceScore": 0,
+      "contextTokens": 1226,
+      "durationMs": 26557,
+      "usage": {
+        "input": 24903,
+        "output": 741,
+        "reasoning": 876,
+        "cacheRead": 38828,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 24903,
+      "totalModelTokens": 26520,
+      "cost": 0.0577317,
+      "toolCalls": 5,
+      "permissionRequests": 2,
+      "rejectedPermissions": 2,
+      "permissionActions": [
+        {
+          "action": "external_directory",
+          "resources": [
+            "/*"
+          ]
+        },
+        {
+          "action": "external_directory",
+          "resources": [
+            "/*"
+          ]
+        }
+      ],
+      "answer": "",
+      "evaluation": {
+        "acceptanceScore": 0,
+        "passedChecks": 0,
+        "totalChecks": 9,
+        "success": false,
+        "checks": {
+          "engineSource": {
+            "passed": false,
+            "detail": "src/game.ts or src/game.js is missing"
+          },
+          "cliSource": {
+            "passed": false,
+            "detail": "src/cli.ts or src/cli.js is missing"
+          },
+          "testsSource": {
+            "passed": false,
+            "detail": "game tests are missing"
+          },
+          "npmScripts": {
+            "passed": false,
+            "detail": "one or more game scripts are missing"
+          },
+          "engineSignals": {
+            "passed": false,
+            "detail": "engine source contains the required state/move signals"
+          },
+          "hiddenContract": {
+            "passed": false,
+            "detail": "hidden contract skipped because the engine source is missing"
+          },
+          "targetedTests": {
+            "passed": false,
+            "detail": "failed (game:test script is missing)"
+          },
+          "typecheck": {
+            "passed": false,
+            "detail": "failed (game:typecheck script is missing)"
+          },
+          "cliSmoke": {
+            "passed": false,
+            "detail": "failed (game:play script is missing)"
+          }
+        },
+        "targetedTest": {
+          "passed": false,
+          "code": "missing",
+          "durationMs": 0,
+          "stdout": "",
+          "stderr": "game:test script is missing"
+        },
+        "typecheck": {
+          "passed": false,
+          "code": "missing",
+          "durationMs": 0,
+          "stdout": "",
+          "stderr": "game:typecheck script is missing"
+        },
+        "cliSmoke": {
+          "passed": false,
+          "code": "missing",
+          "durationMs": 0,
+          "stdout": "",
+          "stderr": "game:play script is missing"
+        },
+        "hiddenContract": {
+          "passed": false,
+          "detail": "hidden contract skipped because the engine source is missing"
+        }
+      }
+    }
+  ]
+}

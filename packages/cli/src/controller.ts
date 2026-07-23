@@ -20,6 +20,7 @@ import type {
   TokenUsage,
 } from './types.js'
 import { buildCuppetContext } from './tst/context.js'
+import { totalTokenUsage } from './usage.js'
 import type { TstClient } from './tst/client.js'
 import type { TstNotification } from './tst/client.js'
 
@@ -701,8 +702,8 @@ export class CuppetController extends EventEmitter {
   }
 
   #syncUsage(session: SessionInfo): void {
-    const sessionTotal = session.tokens.input + session.tokens.output + session.tokens.reasoning + session.tokens.cacheRead + session.tokens.cacheWrite
-    const currentTotal = this.#usage.input + this.#usage.output + this.#usage.reasoning + this.#usage.cacheRead + this.#usage.cacheWrite
+    const sessionTotal = totalTokenUsage(session.tokens)
+    const currentTotal = totalTokenUsage(this.#usage)
     if (sessionTotal >= currentTotal && sessionTotal > 0) {
       this.#usage = { ...session.tokens }
       this.#cost = session.cost

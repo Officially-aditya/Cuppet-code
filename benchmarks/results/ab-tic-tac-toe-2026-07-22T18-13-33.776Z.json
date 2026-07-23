@@ -1,0 +1,297 @@
+{
+  "schema": 2,
+  "createdAt": "2026-07-22T18:13:33.775Z",
+  "project": "/Users/addy/Downloads/cuppet",
+  "task": "Create a complete TypeScript Tic-Tac-Toe game with engine, AI, CLI, tests, and scripts.",
+  "model": {
+    "providerID": "google-vertex",
+    "modelID": "gemini-flash-latest"
+  },
+  "kernel": {
+    "name": "official OpenCode",
+    "version": "1.18.4"
+  },
+  "design": "paired fresh repository copies; identical task/model/tools/permissions; Cuppet adds bounded TST context; arm order alternates; mutations are isolated per trial",
+  "repeats": 1,
+  "summary": {
+    "opencode": {
+      "trials": 1,
+      "successes": 0,
+      "completionRate": 0,
+      "meanAcceptanceScore": 0.8888888888888888,
+      "medianLatencyMs": 365913,
+      "medianUncachedInputTokens": 98688,
+      "medianTotalModelTokens": 131883,
+      "medianCost": 0.6880003499999998,
+      "totalCost": 0.6880003499999998,
+      "meanToolCalls": 54,
+      "meanPermissionRequests": 44,
+      "medianContextTokens": 0,
+      "costPerAcceptancePoint": 0.7740003937499998,
+      "uncachedTokensPerAcceptancePoint": 111024
+    },
+    "cuppet": {
+      "trials": 1,
+      "successes": 0,
+      "completionRate": 0,
+      "meanAcceptanceScore": 0,
+      "medianLatencyMs": 13905,
+      "medianUncachedInputTokens": 11267,
+      "medianTotalModelTokens": 12247,
+      "medianCost": 0.029016599999999997,
+      "totalCost": 0.029016599999999997,
+      "meanToolCalls": 2,
+      "meanPermissionRequests": 1,
+      "medianContextTokens": 1226,
+      "costPerAcceptancePoint": 0,
+      "uncachedTokensPerAcceptancePoint": 0
+    },
+    "comparison": {
+      "completionRateDelta": 0,
+      "acceptanceScoreDelta": -0.8888888888888888,
+      "latencyReduction": 0.9619991637356421,
+      "costReduction": 0.9578247307577679,
+      "totalCostDelta": -0.6589837499999999,
+      "uncachedInputReduction": 0.885832117380026,
+      "totalModelTokenReduction": 0.9071373869262908,
+      "costPerAcceptancePointReduction": 1
+    }
+  },
+  "trials": [
+    {
+      "repeat": 1,
+      "arm": "opencode",
+      "workspace": "/private/tmp/cuppet-tictactoe-ab-I3dW6c/opencode-1",
+      "sessionID": "ses_074fd96caffeim7Xf95zP48776",
+      "success": false,
+      "acceptanceScore": 0.8888888888888888,
+      "contextTokens": 0,
+      "durationMs": 365913,
+      "usage": {
+        "input": 98688,
+        "output": 9633,
+        "reasoning": 23562,
+        "cacheRead": 1608089,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 98688,
+      "totalModelTokens": 131883,
+      "cost": 0.6880003499999998,
+      "toolCalls": 54,
+      "permissionRequests": 44,
+      "rejectedPermissions": 0,
+      "permissionActions": [
+        "bash",
+        "bash",
+        "bash",
+        "edit",
+        "edit",
+        "edit",
+        "edit",
+        "edit",
+        "bash",
+        "edit",
+        "bash",
+        "edit",
+        "bash",
+        "edit",
+        "edit",
+        "bash",
+        "edit",
+        "edit",
+        "bash",
+        "edit",
+        "bash",
+        "edit",
+        "edit",
+        "bash",
+        "bash",
+        "edit",
+        "edit",
+        "bash",
+        "edit",
+        "edit",
+        "edit",
+        "bash",
+        "edit",
+        "bash",
+        "edit",
+        "bash",
+        "edit",
+        "bash",
+        "edit",
+        "edit",
+        "edit",
+        "edit",
+        "edit",
+        "bash"
+      ],
+      "answer": "The complete, playable Tic-Tac-Toe game has been implemented under `games/tic-tac-toe/` using TypeScript, a perfect Minimax AI, and a terminal CLI.\n\n### Changed Files\n\n1.  `package.json`\n2.  `games/tic-tac-toe/tsconfig.json` (New)\n3.  `games/tic-tac-toe/src/game.ts` (New, contains core game logic)\n4.  `games/tic-tac-toe/src/ai.ts` (New, contains perfect Minimax AI)\n5.  `games/tic-tac-toe/src/cli.ts` (New, contains terminal interface)\n6.  `games/tic-tac-toe/test/game.test.ts` (New, contains focused unit tests)\n\n### Verification\n\nThe following commands were run to verify the implementation:\n\n#### 1. Test Verification (`npm run game:test`)\nThe tests were run and passed, confirming legal/illegal moves, win conditions, draw detection, and the perfect AI strategy (immediate wins, blocking, and fork creation/prevention).\n\n```bash\nnpm run game:test\n```\n**Result:**\n```\n> cuppet-monorepo@0.2.0-alpha.1 game:test\n> node --import tsx --test games/tic-tac-toe/test/game.test.ts\n\nTAP version 13\n# Subtest: Game Engine: Initialization and basic move\nok 1 - Game Engine: Initialization and basic move\n# Subtest: Game Engine: All win conditions (Rows, Columns, Diagonals)\nok 2 - Game Engine: All win conditions (Rows, Columns, Diagonals)\n# Subtest: Game Engine: Draw detection\nok 3 - Game Engine: Draw detection\n# Subtest: AI: Immediate Win\nok 4 - AI: Immediate Win\n# Subtest: AI: Immediate Block\nok 5 - AI: Immediate Block\n# Subtest: AI: Perfect Strategy (Fork prevention/creation)\nok 6 - AI: Perfect Strategy (Fork prevention/creation)\n# Subtest: AI: Should lead to a draw if possible against perfect play\nok 7 - AI: Should lead to a draw if possible against perfect play\n1..7\n# tests 7\n# suites 0\n# pass 7\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 537.379625\n```\n\n#### 2. Type Check Verification (`npm run game:typecheck`)\nThe type check was run against the new `tsconfig.json` and passed cleanly, confirming adherence to the existing TypeScript conventions.\n\n```bash\nnpm run game:typecheck\n```\n**Result:**\n```\n> cuppet-monorepo@0.2.0-alpha.1 game:typecheck\n> tsc -p games/tic-tac-toe/tsconfig.json\n```\n\n#### 3. Play Script (`npm run game:play`)\nThe game is now ready to play via the CLI:\n```bash\nnpm run game:play\n```",
+      "evaluation": {
+        "acceptanceScore": 0.8888888888888888,
+        "passedChecks": 8,
+        "totalChecks": 9,
+        "success": false,
+        "checks": {
+          "engineSource": {
+            "passed": true,
+            "detail": "game engine file exists"
+          },
+          "cliSource": {
+            "passed": true,
+            "detail": "CLI file exists"
+          },
+          "testsSource": {
+            "passed": true,
+            "detail": "focused tests exist"
+          },
+          "npmScripts": {
+            "passed": true,
+            "detail": "all three game scripts exist"
+          },
+          "engineSignals": {
+            "passed": true,
+            "detail": "engine source contains the required state/move signals"
+          },
+          "hiddenContract": {
+            "passed": false,
+            "detail": "required engine/AI exports are missing"
+          },
+          "targetedTests": {
+            "passed": true,
+            "detail": "passed in 1066 ms"
+          },
+          "typecheck": {
+            "passed": true,
+            "detail": "passed in 1174 ms"
+          },
+          "cliSmoke": {
+            "passed": true,
+            "detail": "passed in 828 ms"
+          }
+        },
+        "targetedTest": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 1066,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 game:test\n> node --import tsx --test games/tic-tac-toe/test/game.test.ts\n\nTAP version 13\n# Subtest: Game Engine: Initialization and basic move\nok 1 - Game Engine: Initialization and basic move\n  ---\n  duration_ms: 0.773959\n  type: 'test'\n  ...\n# Subtest: Game Engine: All win conditions (Rows, Columns, Diagonals)\nok 2 - Game Engine: All win conditions (Rows, Columns, Diagonals)\n  ---\n  duration_ms: 0.810166\n  type: 'test'\n  ...\n# Subtest: Game Engine: Draw detection\nok 3 - Game Engine: Draw detection\n  ---\n  duration_ms: 0.096291\n  type: 'test'\n  ...\n# Subtest: AI: Immediate Win\nok 4 - AI: Immediate Win\n  ---\n  duration_ms: 0.66975\n  type: 'test'\n  ...\n# Subtest: AI: Immediate Block\nok 5 - AI: Immediate Block\n  ---\n  duration_ms: 1.380542\n  type: 'test'\n  ...\n# Subtest: AI: Perfect Strategy (Fork prevention/creation)\nok 6 - AI: Perfect Strategy (Fork prevention/creation)\n  ---\n  duration_ms: 138.669209\n  type: 'test'\n  ...\n# Subtest: AI: Should lead to a draw if possible against perfect play\nok 7 - AI: Should lead to a draw if possible against perfect play\n  ---\n  duration_ms: 0.263084\n  type: 'test'\n  ...\n1..7\n# tests 7\n# suites 0\n# pass 7\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 537.821125\n",
+          "stderr": ""
+        },
+        "typecheck": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 1174,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 game:typecheck\n> tsc -p games/tic-tac-toe/tsconfig.json\n\n",
+          "stderr": ""
+        },
+        "cliSmoke": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 828,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 game:play\n> tsx games/tic-tac-toe/src/cli.ts --help\n\n\nTic-Tac-Toe CLI\n\nUsage: npm run game:play\n\nCommands:\n  1-9   : Make a move in the corresponding square.\n  q/quit: Quit the game.\n  h/help: Show this help message.\n\n",
+          "stderr": ""
+        },
+        "hiddenContract": {
+          "passed": false,
+          "detail": "required engine/AI exports are missing"
+        }
+      }
+    },
+    {
+      "repeat": 1,
+      "arm": "cuppet",
+      "workspace": "/private/tmp/cuppet-tictactoe-ab-I3dW6c/cuppet-1",
+      "sessionID": "ses_074f7c795ffeTZc6XkzruKFpvq",
+      "success": false,
+      "acceptanceScore": 0,
+      "contextTokens": 1226,
+      "durationMs": 13905,
+      "usage": {
+        "input": 11267,
+        "output": 23,
+        "reasoning": 957,
+        "cacheRead": 21974,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 11267,
+      "totalModelTokens": 12247,
+      "cost": 0.029016599999999997,
+      "toolCalls": 2,
+      "permissionRequests": 1,
+      "rejectedPermissions": 1,
+      "permissionActions": [
+        "external_directory"
+      ],
+      "answer": "",
+      "evaluation": {
+        "acceptanceScore": 0,
+        "passedChecks": 0,
+        "totalChecks": 9,
+        "success": false,
+        "checks": {
+          "engineSource": {
+            "passed": false,
+            "detail": "src/game.ts or src/game.js is missing"
+          },
+          "cliSource": {
+            "passed": false,
+            "detail": "src/cli.ts or src/cli.js is missing"
+          },
+          "testsSource": {
+            "passed": false,
+            "detail": "game tests are missing"
+          },
+          "npmScripts": {
+            "passed": false,
+            "detail": "one or more game scripts are missing"
+          },
+          "engineSignals": {
+            "passed": false,
+            "detail": "engine source contains the required state/move signals"
+          },
+          "hiddenContract": {
+            "passed": false,
+            "detail": "hidden contract skipped because the engine source is missing"
+          },
+          "targetedTests": {
+            "passed": false,
+            "detail": "failed (game:test script is missing)"
+          },
+          "typecheck": {
+            "passed": false,
+            "detail": "failed (game:typecheck script is missing)"
+          },
+          "cliSmoke": {
+            "passed": false,
+            "detail": "failed (game:play script is missing)"
+          }
+        },
+        "targetedTest": {
+          "passed": false,
+          "code": "missing",
+          "durationMs": 0,
+          "stdout": "",
+          "stderr": "game:test script is missing"
+        },
+        "typecheck": {
+          "passed": false,
+          "code": "missing",
+          "durationMs": 0,
+          "stdout": "",
+          "stderr": "game:typecheck script is missing"
+        },
+        "cliSmoke": {
+          "passed": false,
+          "code": "missing",
+          "durationMs": 0,
+          "stdout": "",
+          "stderr": "game:play script is missing"
+        },
+        "hiddenContract": {
+          "passed": false,
+          "detail": "hidden contract skipped because the engine source is missing"
+        }
+      }
+    }
+  ]
+}

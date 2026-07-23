@@ -1,0 +1,83 @@
+{
+  "schema": 1,
+  "createdAt": "2026-07-22T17:35:05.344Z",
+  "project": "/Users/addy/Downloads/cuppet",
+  "opencodeVersion": "1.18.4",
+  "model": {
+    "providerID": "google-vertex",
+    "modelID": "gemini-flash-latest"
+  },
+  "design": "paired fresh sessions; shared OpenCode server/kernel; identical read-only tools and permissions; alternating arm order",
+  "summary": {
+    "opencode": {
+      "trials": 1,
+      "successes": 1,
+      "completionRate": 1,
+      "medianUncachedInputTokens": 27490,
+      "medianDurationMs": 12445,
+      "totalCost": 0.048452999999999996,
+      "medianInjectedContextTokens": 0
+    },
+    "cuppet": {
+      "trials": 1,
+      "successes": 1,
+      "completionRate": 1,
+      "medianUncachedInputTokens": 10918,
+      "medianDurationMs": 12536,
+      "totalCost": 0.02961585,
+      "medianInjectedContextTokens": 1217
+    },
+    "comparison": {
+      "uncachedInputReduction": 0.602837395416515,
+      "completionRateDelta": 0,
+      "medianLatencyDeltaMs": 91,
+      "totalCostDelta": -0.018837149999999997
+    }
+  },
+  "trials": [
+    {
+      "task": "vertex-runtime",
+      "arm": "opencode",
+      "sessionID": "ses_0751b2b43ffejZOWHvMKp8EcLV",
+      "success": true,
+      "expected": [
+        "packages/cli/src/opencode/server.ts",
+        "resolveVertexEnvironment"
+      ],
+      "answer": "packages/cli/src/opencode/server.ts :: resolveVertexEnvironment",
+      "durationMs": 12445,
+      "contextTokens": 0,
+      "usage": {
+        "input": 27490,
+        "output": 48,
+        "reasoning": 754,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 27490,
+      "cost": 0.048452999999999996
+    },
+    {
+      "task": "vertex-runtime",
+      "arm": "cuppet",
+      "sessionID": "ses_0751afa9cffeiEXkEgSRomBSpU",
+      "success": true,
+      "expected": [
+        "packages/cli/src/opencode/server.ts",
+        "resolveVertexEnvironment"
+      ],
+      "answer": "packages/cli/src/opencode/server.ts :: resolveVertexEnvironment",
+      "durationMs": 12536,
+      "contextTokens": 1217,
+      "usage": {
+        "input": 10918,
+        "output": 34,
+        "reasoning": 1034,
+        "cacheRead": 24179,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 10918,
+      "cost": 0.02961585
+    }
+  ]
+}

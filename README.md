@@ -72,6 +72,109 @@ the mature Google Vertex, Azure, Gemini, Anthropic, and OpenAI adapters while
 OpenCode's v2 runner supports a smaller adapter set. No provider SDK or
 credential store is implemented in Cuppet.
 
+## OpenCode vs Cuppet coding benchmark
+
+The repository includes a tool-driven A/B benchmark for comparing the official
+OpenCode kernel with Cuppet on a small but complete software-building task. The
+goal was to measure efficiency without hand-building the task in the benchmark
+runner: both agents were asked to create Tic-Tac-Toe from scratch, including
+the engine, AI, CLI, tests, and project scripts.
+
+### Benchmark design
+
+- Baseline A was an OpenCode 1.18.4 session with the original task prompt.
+- Candidate B was a Cuppet session with the same prompt plus bounded TST
+  retrieval context.
+- Both arms used `google-vertex/gemini-flash-latest`, fresh isolated copies of
+  the repository, alternating arm order, and the same local tool permissions.
+- Agents had to read and search before editing, then use edits/writes and local
+  shell validation. Network access and unrelated-project changes were not part
+  of the task.
+- The run contained three paired repeats. Latency was measured from prompt
+  submission through session completion, excluding repository clone and graph
+  indexing. Cost and token counts came from the OpenCode session records;
+  `tokens.input` is reported as uncached input.
+
+The task required:
+
+- A pure TypeScript engine exporting `createGame`, `makeMove`,
+  `availableMoves`, and `getWinner`.
+- Legal and illegal move handling, win detection in every direction, draw
+  detection, immutable/post-game behavior, and move-count state.
+- An AI that wins immediately when possible, blocks immediate losses, and uses
+  a perfect/minimax strategy.
+- A terminal CLI with readable board rendering, input validation, quit/help
+  commands, and `--help` behavior that does not wait for stdin.
+- Focused tests plus root `game:test`, `game:typecheck`, and `game:play`
+  scripts.
+
+Each trial received nine acceptance checks: engine source, CLI source, test
+source, npm scripts, engine signals, a hidden behavior contract, focused test
+execution, TypeScript typecheck, and CLI `--help` smoke testing. A trial is
+considered successful only when all checks pass and the agent session reports no
+error.
+
+### Results
+
+| Metric | OpenCode | Cuppet | Cuppet vs OpenCode |
+|---|---:|---:|---:|
+| Successful trials | 2/3 (66.7%) | 2/3 (66.7%) | no change |
+| Mean acceptance score | 96.3% | 92.6% | -3.7 percentage points |
+| Median latency | 166,458 ms | 43,881 ms | 73.6% lower |
+| Median uncached input | 68,265 tokens | 36,963 tokens | 45.9% lower |
+| Median total model tokens | 91,047 | 39,332 | 56.8% lower |
+| Median session cost | $0.368076 | $0.085621 | 76.7% lower |
+| Total cost across three trials | $1.775203 | $0.780667 | $0.994536 lower |
+| Cost per acceptance point | $0.614493 | $0.281040 | 54.3% lower |
+| Mean tool calls | 29.0 | 18.3 | 36.8% fewer |
+| Median injected context | 0 | 1,236 tokens | Cuppet retrieval overhead |
+
+The result is clear for this task: Cuppet used substantially less time, model
+context, tool activity, and money while achieving the same 2/3 full-trial
+completion rate. The tradeoff was a 3.7-point lower mean acceptance score. One
+OpenCode trial missed the hidden contract; one Cuppet trial missed the hidden
+contract and focused tests. The other four trials passed every acceptance check.
+
+This is evidence of a strong efficiency advantage on this workload, not a
+general performance claim. The sample is three repeats of one task, one model,
+one provider, and one repository state. More tasks, models, providers, and
+repeated runs are needed for confidence intervals or a product-wide claim.
+
+### Reproduce the benchmark
+
+Run the same three-repeat comparison with:
+
+```sh
+CUPPET_TTT_REPEATS=3 \
+CUPPET_TTT_ALLOW_EXTERNAL=1 \
+npm run eval:ab:tic-tac-toe
+```
+
+`CUPPET_TTT_ALLOW_EXTERNAL=1` permits the explicit external-directory
+permission required by some OpenCode discovery steps; review that permission
+before enabling it. Other controls include `CUPPET_AB_MODEL` for model
+selection, `CUPPET_TTT_KEEP_WORKSPACES=1` to retain trial copies, and
+`CUPPET_TTT_REPEATS=1..5` to change the number of pairs. The executable harness
+is [`scripts/ab-tictactoe.ts`](scripts/ab-tictactoe.ts), and the benchmark
+method notes are in [`benchmarks/README.md`](benchmarks/README.md).
+
+### Benchmark artifacts and local validation
+
+The generated game artifact is available at
+[`games/tic-tac-toe/`](games/tic-tac-toe/). The latest machine-readable report
+is [`ab-tic-tac-toe-2026-07-22T19-06-37.222Z.json`](benchmarks/results/ab-tic-tac-toe-2026-07-22T19-06-37.222Z.json),
+with the readable summary in
+[`ab-tic-tac-toe-2026-07-22T19-06-37.222Z.md`](benchmarks/results/ab-tic-tac-toe-2026-07-22T19-06-37.222Z.md).
+
+The generated implementation passes the focused checks:
+
+```sh
+npm run game:test
+npm run game:typecheck
+npm run game:play -- --help
+printf 'q\n' | npm run game:play
+```
+
 ## Alpha limits
 
 Windows, musl, remote daemons, cloud memory sync, vector databases, and

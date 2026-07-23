@@ -1,0 +1,262 @@
+{
+  "schema": 1,
+  "createdAt": "2026-07-22T17:39:35.290Z",
+  "project": "/Users/addy/Downloads/cuppet",
+  "opencodeVersion": "1.18.4",
+  "model": {
+    "providerID": "google-vertex",
+    "modelID": "gemini-flash-latest"
+  },
+  "design": "paired fresh sessions; shared OpenCode server/kernel; identical read-only tools and permissions; alternating arm order",
+  "summary": {
+    "opencode": {
+      "trials": 5,
+      "successes": 4,
+      "completionRate": 0.8,
+      "medianUncachedInputTokensPerSuccess": 13293.5,
+      "medianDurationMsPerSuccess": 31732,
+      "medianCostPerSuccess": 0.0479064,
+      "totalCost": 0.2517798,
+      "medianInjectedContextTokens": 0
+    },
+    "cuppet": {
+      "trials": 5,
+      "successes": 5,
+      "completionRate": 1,
+      "medianUncachedInputTokensPerSuccess": 8019,
+      "medianDurationMsPerSuccess": 15661,
+      "medianCostPerSuccess": 0.026478299999999996,
+      "totalCost": 0.15097575,
+      "medianInjectedContextTokens": 1220
+    },
+    "comparison": {
+      "uncachedInputReduction": 0.3967728589160116,
+      "completionRateDelta": 0.19999999999999996,
+      "medianLatencyDeltaMsPerSuccess": -16071,
+      "medianCostDeltaPerSuccess": -0.021428100000000003,
+      "totalCostDelta": -0.10080405
+    }
+  },
+  "trials": [
+    {
+      "task": "vertex-runtime",
+      "arm": "opencode",
+      "sessionID": "ses_0751a73b5ffesElHzjwj6qI8X8",
+      "success": false,
+      "expected": [
+        "packages/cli/src/opencode/server.ts",
+        "resolveVertexEnvironment"
+      ],
+      "answer": "",
+      "durationMs": 9181,
+      "contextTokens": 0,
+      "usage": {
+        "input": 22,
+        "output": 0,
+        "reasoning": 971,
+        "cacheRead": 12450,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 22,
+      "cost": 0.0106395
+    },
+    {
+      "task": "vertex-runtime",
+      "arm": "cuppet",
+      "sessionID": "ses_0751a4fcfffeNbqRjZW5Sltwfs",
+      "success": true,
+      "expected": [
+        "packages/cli/src/opencode/server.ts",
+        "resolveVertexEnvironment"
+      ],
+      "answer": "packages/cli/src/opencode/server.ts :: resolveVertexEnvironment",
+      "durationMs": 12856,
+      "contextTokens": 1220,
+      "usage": {
+        "input": 8019,
+        "output": 34,
+        "reasoning": 1120,
+        "cacheRead": 27092,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 8019,
+      "cost": 0.026478299999999996
+    },
+    {
+      "task": "context-builder",
+      "arm": "cuppet",
+      "sessionID": "ses_0751a1d6dffePs0GyFAtge057S",
+      "success": true,
+      "expected": [
+        "packages/cli/src/tst/context.ts",
+        "buildCuppetContext"
+      ],
+      "answer": "packages/cli/src/tst/context.ts :: buildCuppetContext",
+      "durationMs": 16051,
+      "contextTokens": 1255,
+      "usage": {
+        "input": 9105,
+        "output": 47,
+        "reasoning": 638,
+        "cacheRead": 38497,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 9105,
+      "cost": 0.02559705
+    },
+    {
+      "task": "context-builder",
+      "arm": "opencode",
+      "sessionID": "ses_07519de9cffePBYoa278uzH27c",
+      "success": true,
+      "expected": [
+        "packages/cli/src/tst/context.ts",
+        "buildCuppetContext"
+      ],
+      "answer": "packages/cli/src/tst/context.ts :: buildCuppetContext",
+      "durationMs": 14908,
+      "contextTokens": 0,
+      "usage": {
+        "input": 5032,
+        "output": 57,
+        "reasoning": 441,
+        "cacheRead": 35557,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 5032,
+      "cost": 0.01736355
+    },
+    {
+      "task": "graph-budget",
+      "arm": "opencode",
+      "sessionID": "ses_07519a45bffeOVvdQ0SOK0rrr8",
+      "success": true,
+      "expected": [
+        "crates/tst-core/src/service.rs",
+        "query"
+      ],
+      "answer": "/Users/addy/Downloads/cuppet/crates/tst-core/src/service.rs :: query",
+      "durationMs": 14041,
+      "contextTokens": 0,
+      "usage": {
+        "input": 3515,
+        "output": 74,
+        "reasoning": 482,
+        "cacheRead": 35303,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 3515,
+      "cost": 0.015571950000000001
+    },
+    {
+      "task": "graph-budget",
+      "arm": "cuppet",
+      "sessionID": "ses_075196d7effe0Zmu30zyy8c2Q7",
+      "success": true,
+      "expected": [
+        "crates/tst-core/src/service.rs",
+        "query"
+      ],
+      "answer": "crates/tst-core/src/service.rs :: query",
+      "durationMs": 15661,
+      "contextTokens": 1258,
+      "usage": {
+        "input": 6225,
+        "output": 65,
+        "reasoning": 626,
+        "cacheRead": 39258,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 6225,
+      "cost": 0.0214452
+    },
+    {
+      "task": "diff-colors",
+      "arm": "cuppet",
+      "sessionID": "ses_075193029ffeiGOk14OOTQ2vC1",
+      "success": true,
+      "expected": [
+        "packages/cli/src/ui/TerminalApp.tsx",
+        "diffLineColor"
+      ],
+      "answer": "packages/cli/src/ui/TerminalApp.tsx :: diffLineColor",
+      "durationMs": 11559,
+      "contextTokens": 1184,
+      "usage": {
+        "input": 22219,
+        "output": 34,
+        "reasoning": 727,
+        "cacheRead": 27513,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 22219,
+      "cost": 0.04430445
+    },
+    {
+      "task": "diff-colors",
+      "arm": "opencode",
+      "sessionID": "ses_0751902ddffeVM0xS05g3TzoE0",
+      "success": true,
+      "expected": [
+        "packages/cli/src/ui/TerminalApp.tsx",
+        "diffLineColor"
+      ],
+      "answer": "packages/cli/src/ui/TerminalApp.tsx :: diffLineColor",
+      "durationMs": 80773,
+      "contextTokens": 0,
+      "usage": {
+        "input": 41301,
+        "output": 252,
+        "reasoning": 3272,
+        "cacheRead": 240587,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 41301,
+      "cost": 0.12975554999999997
+    },
+    {
+      "task": "token-total",
+      "arm": "opencode",
+      "sessionID": "ses_07517c74fffepjF0AkGFOJrqat",
+      "success": true,
+      "expected": [
+        "packages/cli/src/usage.ts",
+        "totalTokenUsage"
+      ],
+      "answer": "packages/cli/src/usage.ts :: totalTokenUsage",
+      "durationMs": 48556,
+      "contextTokens": 0,
+      "usage": {
+        "input": 21555,
+        "output": 279,
+        "reasoning": 2343,
+        "cacheRead": 150125,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 21555,
+      "cost": 0.07844925
+    },
+    {
+      "task": "token-total",
+      "arm": "cuppet",
+      "sessionID": "ses_075170998fferJGL3jasNDg8mk",
+      "success": true,
+      "expected": [
+        "packages/cli/src/usage.ts",
+        "totalTokenUsage"
+      ],
+      "answer": "packages/cli/src/usage.ts :: totalTokenUsage",
+      "durationMs": 24174,
+      "contextTokens": 1217,
+      "usage": {
+        "input": 7491,
+        "output": 113,
+        "reasoning": 1150,
+        "cacheRead": 70315,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 7491,
+      "cost": 0.03315075
+    }
+  ]
+}

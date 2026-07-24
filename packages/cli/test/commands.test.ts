@@ -45,3 +45,36 @@ test('/effort sets an advertised level directly', async () => {
     message: 'Usage: /effort [primary|secondary] [level]',
   })
 })
+
+test('/plan command toggles plan mode', async () => {
+  let planState = false
+  const controller = {
+    togglePlanMode(enable?: boolean) {
+      planState = enable ?? !planState
+      return planState
+    },
+  } as unknown as CuppetController
+  const dispatcher = new CommandDispatcher(controller)
+
+  assert.deepEqual(await dispatcher.dispatch('/plan'), {
+    handled: true,
+    message: 'Plan mode enabled (submitting full code graph for requirement extraction & goal establishment).',
+  })
+  assert.equal(planState, true)
+
+  assert.deepEqual(await dispatcher.dispatch('/plan off'), {
+    handled: true,
+    message: 'Plan mode disabled.',
+  })
+  assert.equal(planState, false)
+
+  assert.deepEqual(await dispatcher.dispatch('/plan on'), {
+    handled: true,
+    message: 'Plan mode enabled (submitting full code graph for requirement extraction & goal establishment).',
+  })
+  assert.equal(planState, true)
+
+  assert.ok(COMMANDS.includes('/plan'))
+  assert.ok(COMMANDS.includes('/plan on'))
+  assert.ok(COMMANDS.includes('/plan off'))
+})

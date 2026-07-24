@@ -54,6 +54,7 @@ test('pinned OpenCode binary exposes the v2 catalog and stable cross-provider ex
       paths,
       logger,
       plugin: resolve(import.meta.dirname, '../../opencode-plugin/dist/index.js'),
+      graphNativeProfile: true,
       ...(tst ? { tst: { socket: tst.socket, token: tst.token } } : {}),
     })
     const health = await runtime.client.v2.health.get({ throwOnError: true })
@@ -92,11 +93,6 @@ test('pinned OpenCode binary exposes the v2 catalog and stable cross-provider ex
       return variants && Object.keys(variants).length > 0
     })
     assert.ok(configurable, 'the legacy catalog should advertise at least one configurable model')
-    assert.deepEqual(
-      new Set(configurable.variants.map((variant) => variant.id)),
-      new Set(Object.keys(providerByID.get(configurable.providerID)?.models[configurable.id]?.variants ?? {})),
-      'the v2 catalog should preserve every provider-advertised model variant',
-    )
     gateway = new OpenCodeGateway(runtime.client, paths.projectRealpath)
     const integrations = await gateway.listIntegrations()
     const openAI = integrations.find((integration) => integration.id === 'openai')
@@ -165,7 +161,7 @@ test('pinned OpenCode binary exposes the v2 catalog and stable cross-provider ex
       (candidate) => candidate.providerID === 'cuppet-contract' && candidate.modelID === 'contract-model',
     )
     assert.ok(contractModel, 'custom OpenAI-compatible providers must remain executable through the stable engine')
-    const toolSession = await gateway.createSession(contractModel)
+    const toolSession = await gateway.createSession(contractModel, false, false, false, true)
     const observed: AgentEvent[] = []
     let permissionFailure: Error | undefined
     const unsubscribe = gateway.onEvent((event) => {
@@ -204,6 +200,22 @@ test('pinned OpenCode binary exposes the v2 catalog and stable cross-provider ex
       .map((event) => event.name)
     assert.ok(tools.includes('read'))
     assert.ok(tools.includes('write'))
+    const toolPayload = [...fakeModel.requests]
+      .reverse()
+      .find((request) => Array.isArray(request.tools) && (request.tools as string[]).includes('cuppet_graph_search'))
+    assert.ok(toolPayload, 'the fake provider should receive the graph-native tool payload')
+    const exposedTools = toolPayload.tools as string[]
+    for (const legacyTool of ['glob', 'grep', 'lsp', 'webfetch', 'websearch', 'task']) {
+      assert.equal(exposedTools.includes(legacyTool), false, `${legacyTool} must be hidden from graph-native agents`)
+    }
+    for (const graphTool of ['cuppet_workspace_info', 'cuppet_graph_tree', 'cuppet_graph_search', 'cuppet_graph_trace']) {
+      assert.equal(exposedTools.includes(graphTool), true, `${graphTool} must be exposed to graph-native agents`)
+    }
+    assert.deepEqual(
+      new Set(configurable.variants.map((variant) => variant.id)),
+      new Set(Object.keys(providerByID.get(configurable.providerID)?.models[configurable.id]?.variants ?? {})),
+      'the v2 catalog should preserve every provider-advertised model variant',
+    )
     assert.match(
       observed
         .filter((event): event is Extract<AgentEvent, { type: 'text-delta' }> => event.type === 'text-delta')
@@ -219,6 +231,10 @@ test('pinned OpenCode binary exposes the v2 catalog and stable cross-provider ex
     if (tst) {
       const toolIDs = await runtime.client.tool.ids({ directory: paths.projectRealpath })
       assert.ok(toolIDs.data?.includes('cuppet_memory_search'))
+      assert.ok(toolIDs.data?.includes('cuppet_workspace_info'))
+      assert.ok(toolIDs.data?.includes('cuppet_graph_tree'))
+      assert.ok(toolIDs.data?.includes('cuppet_graph_search'))
+      assert.ok(toolIDs.data?.includes('cuppet_graph_trace'))
     }
   } finally {
     await gateway?.close()

@@ -77,3 +77,38 @@ test('a large STM cannot crowd verified LTM and graph out of their allocations',
   assert.match(result.prompt, /graphMarker/)
   assert.ok(result.contextTokens <= 300)
 })
+
+test('plan mode context includes full workspace map and goal establishment instructions', async () => {
+  const client = {
+    async call(method: string) {
+      if (method === 'graph.list') {
+        return {
+          total: 3,
+          paths: ['src/main.ts', 'src/utils.ts', 'src/types.ts'],
+        }
+      }
+      return {
+        stm: [{ id: 's1', key: 'goal', value: 'Build auth', provenance: 'explicit_user' }],
+        ltm: [],
+        graph: [
+          {
+            score: 10,
+            node: {
+              path: 'src/main.ts',
+              name: 'server',
+              symbol_kind: 'class',
+              signature: 'class Server',
+              content_hash: 'hash1',
+            },
+          },
+        ],
+      }
+    },
+  } as unknown as TstClient
+  const result = await buildCuppetContext(client, 'session', 'Plan feature', 2_000, [], '', process.cwd(), true)
+  assert.match(result.prompt, /CUPPET_PLAN_MODE_CONTEXT/)
+  assert.match(result.prompt, /PLAN MODE IS ACTIVE/)
+  assert.match(result.prompt, /FULL CODE GRAPH WORKSPACE FILE MAP/)
+  assert.match(result.prompt, /src\/main\.ts/)
+  assert.match(result.prompt, /Create a dedicated TODO list for the establishment of the goal/)
+})

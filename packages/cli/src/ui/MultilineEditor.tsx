@@ -5,12 +5,30 @@ import { COMMANDS } from '../commands/dispatcher.js'
 type Props = {
   disabled?: boolean
   height?: number
+  scrollOffset?: number
+  planMode?: boolean
   onSubmit(value: string): void | Promise<void>
   onScrollUp?(): void
   onScrollDown?(): void
+  onScrollTop?(): void
+  onScrollBottom?(): void
+  onScrollLineUp?(): void
+  onScrollLineDown?(): void
 }
 
-export function MultilineEditor({ disabled = false, height = 4, onSubmit, onScrollUp, onScrollDown }: Props) {
+export function MultilineEditor({
+  disabled = false,
+  height = 4,
+  scrollOffset = 0,
+  planMode = false,
+  onSubmit,
+  onScrollUp,
+  onScrollDown,
+  onScrollTop,
+  onScrollBottom,
+  onScrollLineUp,
+  onScrollLineDown,
+}: Props) {
   const [value, setValue] = useState('')
   const [historyIndex, setHistoryIndex] = useState(-1)
   const history = useRef<string[]>([])
@@ -39,31 +57,51 @@ export function MultilineEditor({ disabled = false, height = 4, onSubmit, onScro
         return
       }
 
-      if (
-        key.pageUp ||
-        key.pageDown ||
-        input === '\u0015' ||
-        input === '\u0004' ||
-        input.includes('\u001b[5~') ||
-        input.includes('\u001b[6~') ||
-        input === '\u001b[1;2A' ||
-        input === '\u001b[1;2B' ||
-        input === '\u001b[1;5A' ||
-        input === '\u001b[1;5B'
-      ) {
-        if (
-          key.pageUp ||
-          input === '\u0015' ||
-          input.includes('\u001b[5~') ||
-          input === '\u001b[1;2A' ||
-          input === '\u001b[1;5A'
-        ) {
-          onScrollUp?.()
-        } else {
-          onScrollDown?.()
-        }
+      const keyRecord = key as { home?: boolean; end?: boolean }
+      const isHome = keyRecord.home || input === '\u001b[H' || input.includes('\u001b[1~') || input.includes('\u001b[H') || input === '\u001b[1;5H'
+      const isEnd = keyRecord.end || input === '\u001b[F' || input.includes('\u001b[4~') || input.includes('\u001b[F') || input === '\u001b[1;5F'
+      if (isHome) {
+        onScrollTop?.()
         return
       }
+      if (isEnd) {
+        onScrollBottom?.()
+        return
+      }
+
+      const isPageUp = key.pageUp || input === '\u0015' || input.includes('\u001b[5~')
+      const isPageDown = key.pageDown || input === '\u0004' || input.includes('\u001b[6~')
+      if (isPageUp) {
+        onScrollUp?.()
+        return
+      }
+      if (isPageDown) {
+        onScrollDown?.()
+        return
+      }
+
+      const isModifierUp = ((key.ctrl || key.shift || key.meta) && key.upArrow) || input === '\u001b[1;2A' || input === '\u001b[1;5A' || input === '\u001b[1;3A'
+      const isModifierDown = ((key.ctrl || key.shift || key.meta) && key.downArrow) || input === '\u001b[1;2B' || input === '\u001b[1;5B' || input === '\u001b[1;3B'
+      if (isModifierUp) {
+        onScrollLineUp?.()
+        return
+      }
+      if (isModifierDown) {
+        onScrollLineDown?.()
+        return
+      }
+
+      if (scrollOffset > 0) {
+        if (key.upArrow) {
+          onScrollLineUp?.()
+          return
+        }
+        if (key.downArrow) {
+          onScrollLineDown?.()
+          return
+        }
+      }
+
       if (key.escape) {
         setValue('')
         setHistoryIndex(-1)
@@ -95,6 +133,8 @@ export function MultilineEditor({ disabled = false, height = 4, onSubmit, onScro
         if (next >= 0) {
           setHistoryIndex(next)
           setValue(history.current[history.current.length - 1 - next] ?? '')
+        } else if (value === '') {
+          onScrollLineUp?.()
         }
         return
       }
@@ -109,7 +149,6 @@ export function MultilineEditor({ disabled = false, height = 4, onSubmit, onScro
         return
       }
       if (input) {
-        // Ink delivers bracketed paste as one input chunk; preserve embedded newlines.
         setValue((current) => `${current}${input.replace(/\r\n/g, '\n')}`)
       }
     },
@@ -118,12 +157,13 @@ export function MultilineEditor({ disabled = false, height = 4, onSubmit, onScro
 
   const viewportHeight = Math.max(1, Math.floor(height))
   const lines = value.length > 0 ? value.split('\n') : ['']
+  const promptChar = planMode ? 'plan› ' : '› '
   if (viewportHeight < 3) {
     const line = lines.at(-1) ?? ''
     return (
       <Box height={viewportHeight} overflow="hidden">
         <Text wrap="truncate-start">
-          <Text color="cyan" bold>› </Text>
+          <Text color={planMode ? 'yellow' : 'cyan'} bold>{promptChar}</Text>
           {line || <Text dimColor>Type a request…</Text>}
           <Text inverse> </Text>
         </Text>
@@ -140,7 +180,7 @@ export function MultilineEditor({ disabled = false, height = 4, onSubmit, onScro
     <Box flexDirection="column" height={viewportHeight} overflow="hidden">
       <Box
         borderStyle="single"
-        borderColor="gray"
+        borderColor={planMode ? 'yellow' : 'gray'}
         paddingX={1}
         flexDirection="column"
         height={inputHeight}
@@ -151,7 +191,7 @@ export function MultilineEditor({ disabled = false, height = 4, onSubmit, onScro
           const isLast = index === lines.length - 1
           return (
           <Text key={`${index}:${line}`} wrap={isLast ? 'truncate-start' : 'truncate-end'}>
-            <Text color="cyan" bold>{index === 0 ? '› ' : visibleIndex === 0 ? '… ' : '  '}</Text>
+            <Text color={planMode ? 'yellow' : 'cyan'} bold>{index === 0 ? promptChar : visibleIndex === 0 ? '… ' : '  '}</Text>
             {line || (index === 0 ? <Text dimColor>Type a request or /help…</Text> : '')}
             {isLast ? <Text inverse> </Text> : null}
           </Text>

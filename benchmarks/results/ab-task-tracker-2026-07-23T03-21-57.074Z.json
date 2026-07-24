@@ -1,0 +1,2236 @@
+{
+  "schema": 1,
+  "createdAt": "2026-07-23T03:21:57.073Z",
+  "project": "/Users/addy/Downloads/cuppet",
+  "task": "Rename Task.dueDate to deadline, add past-deadline validation, and fix the CLI → API → store deadline-loss bug.",
+  "model": {
+    "providerID": "google-vertex",
+    "modelID": "gemini-flash-latest"
+  },
+  "kernel": {
+    "name": "official OpenCode",
+    "version": "1.18.4"
+  },
+  "design": "paired fresh repository copies; identical task/model/tools/permissions; Cuppet adds bounded TST context; arm order alternates; hidden suite is generated outside trial workspaces; mutations are isolated per trial",
+  "repeats": 5,
+  "permissions": {
+    "allowExternalDirectory": true,
+    "rejectedPermissions": 0
+  },
+  "summary": {
+    "opencode": {
+      "trials": 5,
+      "successes": 5,
+      "completionRate": 1,
+      "meanAcceptanceScore": 1,
+      "medianLatencyMs": 200233,
+      "medianUncachedInputTokens": 58334,
+      "medianTotalModelTokens": 72189,
+      "medianCost": 0.2870872499999999,
+      "totalCost": 1.38543225,
+      "meanToolCalls": 34.6,
+      "meanPermissionRequests": 21,
+      "rejectedPermissions": 0,
+      "medianContextTokens": 0,
+      "costPerAcceptancePoint": 0.27708645,
+      "hop1OrLess": 1,
+      "hop2": 1,
+      "regression": 1
+    },
+    "cuppet": {
+      "trials": 5,
+      "successes": 2,
+      "completionRate": 0.4,
+      "meanAcceptanceScore": 0.725,
+      "medianLatencyMs": 62443,
+      "medianUncachedInputTokens": 26442,
+      "medianTotalModelTokens": 30523,
+      "medianCost": 0.09057975,
+      "totalCost": 0.89800725,
+      "meanToolCalls": 21,
+      "meanPermissionRequests": 11.6,
+      "rejectedPermissions": 0,
+      "medianContextTokens": 1260,
+      "costPerAcceptancePoint": 0.24772613793103448,
+      "hop1OrLess": 0.5,
+      "hop2": 0.4,
+      "regression": 0.8
+    },
+    "comparison": {
+      "completionRateDelta": -0.6,
+      "acceptanceScoreDelta": -0.275,
+      "latencyReduction": 0.6881483072220863,
+      "costReduction": 0.6844870331232055,
+      "totalCostDelta": -0.487425,
+      "uncachedInputReduction": 0.5467137518428361,
+      "totalModelTokenReduction": 0.5771793486542272,
+      "costPerAcceptancePointReduction": 0.10596083665933682,
+      "hop1OrLessDelta": -0.5,
+      "hop2Delta": -0.6,
+      "regressionDelta": -0.19999999999999996
+    }
+  },
+  "trials": [
+    {
+      "repeat": 1,
+      "arm": "opencode",
+      "workspace": "<removed after evaluation>",
+      "sessionID": "ses_0731942f6ffeYeCP0rxHEQ6m6t",
+      "success": true,
+      "acceptanceScore": 1,
+      "contextTokens": 0,
+      "durationMs": 200233,
+      "usage": {
+        "input": 54646,
+        "output": 2686,
+        "reasoning": 6974,
+        "cacheRead": 787855,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 54646,
+      "totalModelTokens": 64306,
+      "cost": 0.2870872499999999,
+      "toolCalls": 41,
+      "permissionRequests": 26,
+      "rejectedPermissions": 0,
+      "permissionActions": [
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-1/games/task-tracker/src/core/task.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-1/games/task-tracker/src/core/task.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-1/games/task-tracker/src/core/task.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-1/games/task-tracker/src/core/taskFactory.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-1/games/task-tracker/src/store/taskStore.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-1/games/task-tracker/src/store/taskStore.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-1/games/task-tracker/src/store/taskStore.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-1/games/task-tracker/src/store/taskStore.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-1/games/task-tracker/src/cli/parser.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-1/games/task-tracker/src/cli/parser.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-1/games/task-tracker/src/cli/parser.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-1/games/task-tracker/src/cli/commands.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-1/games/task-tracker/src/format/compact.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-1/games/task-tracker/src/format/display.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-1/games/task-tracker/test/fixtures.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-1/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-1/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-1/games/task-tracker/test/fixtures.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-1/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-1/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-1/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-1/games/task-tracker/src/cli/main.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        }
+      ],
+      "answer": "The refactoring is complete. The field `Task.dueDate` has been successfully renamed to `Task.deadline` across the entire codebase, the validation logic has been updated, and the CLI bug has been fixed.\n\n### Validation Results\n\n| Command | Status | Output |\n| :--- | :--- | :--- |\n| `npm run task-tracker:test` | **Passed** | All 6 tests passed, including the new validation test for past deadlines. |\n| `npm run task-tracker:typecheck` | **Passed** | No type errors found. |\n| `npm run task-tracker:run -- --help` | **Correct** | The usage text now shows `--deadline YYYY-MM-DD`. |\n\n### Files Changed\n\nThe following files were modified to implement the changes:\n\n1.  `games/task-tracker/src/core/task.ts` (Updated type definitions and new validation logic for past deadlines)\n2.  `games/task-tracker/src/core/taskFactory.ts` (Updated to use `deadline`)\n3.  `games/task-tracker/src/store/taskStore.ts` (Fixed the bug that silently dropped the date field and updated `updateTask` signature)\n4.  `games/task-tracker/src/cli/parser.ts` (Changed CLI option from `--due-date` to `--deadline` in parsing logic and usage error)\n5.  `games/task-tracker/src/cli/commands.ts` (Updated to pass `deadline` to the API handler)\n6.  `games/task-tracker/src/cli/main.ts` (Updated CLI help text)\n7.  `games/task-tracker/src/format/compact.ts` (Updated to use `deadline`)\n8.  `games/task-tracker/src/format/display.ts` (Updated to use `deadline`)\n9.  `games/task-tracker/test/fixtures.ts` (Added `pastDate` and updated `taskInput` to use `deadline`)\n10. `games/task-tracker/test/task-tracker.test.ts` (Updated imports, test names, data keys, and added a test for past-dated deadlines)",
+      "evaluation": {
+        "acceptanceScore": 1,
+        "passedChecks": 8,
+        "totalChecks": 8,
+        "success": true,
+        "checks": {
+          "fixtureShape": {
+            "passed": true,
+            "detail": "all seeded cross-file fixture files remain present"
+          },
+          "npmScripts": {
+            "passed": true,
+            "detail": "all task-tracker scripts exist"
+          },
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and no dueDate token remains"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines rejected and future deadlines accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → store paths preserve deadline"
+          },
+          "targetedTests": {
+            "passed": true,
+            "detail": "passed in 721 ms"
+          },
+          "typecheck": {
+            "passed": true,
+            "detail": "passed in 1109 ms"
+          },
+          "cliSmoke": {
+            "passed": true,
+            "detail": "passed in 721 ms"
+          }
+        },
+        "hopScores": {
+          "hop1OrLess": {
+            "passed": 2,
+            "total": 2,
+            "score": 1
+          },
+          "hop2": {
+            "passed": 1,
+            "total": 1,
+            "score": 1
+          },
+          "regression": {
+            "passed": 3,
+            "total": 3,
+            "score": 1
+          }
+        },
+        "hidden": {
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and no dueDate token remains"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines rejected and future deadlines accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → store paths preserve deadline"
+          }
+        },
+        "targetedTest": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 721,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:test\n> node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n[PASS] validate accepts a well-formed future deadline\n[PASS] validate rejects malformed deadlines\n[PASS] validate rejects past-dated deadlines\n[PASS] store supports create, read, update, and delete\n[PASS] API handlers create and list tasks\n[PASS] CLI parser and command formatter work together\n",
+          "stderr": ""
+        },
+        "typecheck": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 1109,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\n",
+          "stderr": ""
+        },
+        "cliSmoke": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 721,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\nTask Tracker CLI\n\nUsage:\n  task-tracker add <title> [--deadline YYYY-MM-DD]\n  task-tracker list\n  task-tracker show <id>\n  task-tracker done <id>\n\n",
+          "stderr": ""
+        }
+      }
+    },
+    {
+      "repeat": 1,
+      "arm": "cuppet",
+      "workspace": "<removed after evaluation>",
+      "sessionID": "ses_073161ccaffe0lPckc9ujkqEAK",
+      "success": true,
+      "acceptanceScore": 1,
+      "contextTokens": 1260,
+      "durationMs": 229365,
+      "usage": {
+        "input": 68112,
+        "output": 2433,
+        "reasoning": 8525,
+        "cacheRead": 862820,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 68112,
+      "totalModelTokens": 79070,
+      "cost": 0.33021300000000003,
+      "toolCalls": 40,
+      "permissionRequests": 24,
+      "rejectedPermissions": 0,
+      "permissionActions": [
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-1/games/task-tracker/src/core/task.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-1/games/task-tracker/src/core/task.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-1/games/task-tracker/src/core/taskFactory.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-1/games/task-tracker/src/store/taskStore.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-1/games/task-tracker/src/store/taskStore.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-1/games/task-tracker/src/cli/parser.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-1/games/task-tracker/src/cli/parser.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-1/games/task-tracker/src/cli/parser.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-1/games/task-tracker/src/cli/commands.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-1/games/task-tracker/src/format/display.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-1/games/task-tracker/src/format/compact.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-1/games/task-tracker/test/fixtures.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-1/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-1/games/task-tracker/src/cli/main.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-1/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-1/games/task-tracker/test/fixtures.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-1/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-1/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        }
+      ],
+      "answer": "The field `Task.dueDate` has been renamed to `Task.deadline` across the `games/task-tracker/` project, the validation logic has been updated to reject past deadlines, and the store bug causing the deadline to be silently dropped has been fixed.\n\nAll verification steps passed: `task-tracker:typecheck` passed, `task-tracker:run -- --help` shows the correct option name, and all tests including the newly added one for past deadlines passed.\n\n**Changed Files:**\n\n1.  `games/task-tracker/src/core/task.ts`: Renamed `dueDate` to `deadline` and updated `validate()` to check for malformed dates and reject past dates.\n2.  `games/task-tracker/src/core/taskFactory.ts`: Renamed `dueDate` to `deadline`.\n3.  `games/task-tracker/src/store/taskStore.ts`: Renamed `dueDate` to `deadline` and fixed the store bug by ensuring `deadline` is preserved when adding a task.\n4.  `games/task-tracker/src/cli/parser.ts`: Renamed `dueDate` to `deadline` and updated the CLI option from `--due-date` to `--deadline` (including help text).\n5.  `games/task-tracker/src/cli/commands.ts`: Renamed `dueDate` to `deadline`.\n6.  `games/task-tracker/src/cli/main.ts`: Updated the help message to use `--deadline`.\n7.  `games/task-tracker/src/format/display.ts`: Renamed `dueDate` to `deadline`.\n8.  `games/task-tracker/src/format/compact.ts`: Renamed `dueDate` to `deadline`.\n9.  `games/task-tracker/test/fixtures.ts`: Renamed `dueDate` to `deadline` and added `pastDate` constant.\n10. `games/task-tracker/test/task-tracker.test.ts`: Renamed `dueDate` to `deadline`, updated CLI test to use `--deadline`, and added a test to verify past-dated deadlines are rejected.\n\n**Validation Results:**\n\n| Command | Result |\n| :--- | :--- |\n| `npm run task-tracker:typecheck` | Passed |\n| `npm run task-tracker:run -- --help` | Shows `[--deadline YYYY-MM-DD]` |\n| `npm run task-tracker:test` | All 6 tests passed |",
+      "evaluation": {
+        "acceptanceScore": 1,
+        "passedChecks": 8,
+        "totalChecks": 8,
+        "success": true,
+        "checks": {
+          "fixtureShape": {
+            "passed": true,
+            "detail": "all seeded cross-file fixture files remain present"
+          },
+          "npmScripts": {
+            "passed": true,
+            "detail": "all task-tracker scripts exist"
+          },
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and no dueDate token remains"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines rejected and future deadlines accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → store paths preserve deadline"
+          },
+          "targetedTests": {
+            "passed": true,
+            "detail": "passed in 785 ms"
+          },
+          "typecheck": {
+            "passed": true,
+            "detail": "passed in 1144 ms"
+          },
+          "cliSmoke": {
+            "passed": true,
+            "detail": "passed in 715 ms"
+          }
+        },
+        "hopScores": {
+          "hop1OrLess": {
+            "passed": 2,
+            "total": 2,
+            "score": 1
+          },
+          "hop2": {
+            "passed": 1,
+            "total": 1,
+            "score": 1
+          },
+          "regression": {
+            "passed": 3,
+            "total": 3,
+            "score": 1
+          }
+        },
+        "hidden": {
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and no dueDate token remains"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines rejected and future deadlines accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → store paths preserve deadline"
+          }
+        },
+        "targetedTest": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 785,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:test\n> node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n[PASS] validate accepts a well-formed future due date\n[PASS] validate rejects malformed dates\n[PASS] validate rejects past-dated deadlines\n[PASS] store supports create, read, update, and delete\n[PASS] API handlers create and list tasks\n[PASS] CLI parser and command formatter work together\n",
+          "stderr": ""
+        },
+        "typecheck": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 1144,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\n",
+          "stderr": ""
+        },
+        "cliSmoke": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 715,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\nTask Tracker CLI\n\nUsage:\n  task-tracker add <title> [--deadline YYYY-MM-DD]\n  task-tracker list\n  task-tracker show <id>\n  task-tracker done <id>\n\n",
+          "stderr": ""
+        }
+      }
+    },
+    {
+      "repeat": 2,
+      "arm": "cuppet",
+      "workspace": "<removed after evaluation>",
+      "sessionID": "ses_073124c6bffeRRi365NR1tiIHM",
+      "success": false,
+      "acceptanceScore": 0.625,
+      "contextTokens": 1260,
+      "durationMs": 27265,
+      "usage": {
+        "input": 17753,
+        "output": 309,
+        "reasoning": 2064,
+        "cacheRead": 31171,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 17753,
+      "totalModelTokens": 20126,
+      "cost": 0.05266214999999999,
+      "toolCalls": 2,
+      "permissionRequests": 0,
+      "rejectedPermissions": 0,
+      "permissionActions": [],
+      "answer": "I will work on the Task Tracker fixture in `games/task-tracker/`.\n\n**Plan:**\n1.  **Search:** Use `grep` to find all occurrences of `dueDate` within `games/task-tracker/`.\n2.  **Refactor (Task 1):** Rename `Task.dueDate` to `Task.deadline` across all affected files (types, factory, store, API, CLI, tests).\n3.  **Validation (Task 2):** Implement past-date rejection in `validate()` function.\n4.  **Bug Fix (Task 3):** Correctly pass the `deadline` from CLI to the store via API handler.\n5.  **Verification:** Run tests, type check, and check CLI help text.\n\nI will start by searching for `dueDate` in the `games/task-tracker` directory.\n\nI have identified all files needing changes. I will start the refactoring by modifying the core types and validation in `games/task-tracker/src/core/task.ts`.\n\n**Task 1: Rename `dueDate` to `deadline`**\n**Task 2: Update `validate()` to reject past dates**\n\nI'll read `games/task-tracker/src/core/task.ts` now.",
+      "evaluation": {
+        "acceptanceScore": 0.625,
+        "passedChecks": 5,
+        "totalChecks": 8,
+        "success": false,
+        "checks": {
+          "fixtureShape": {
+            "passed": true,
+            "detail": "all seeded cross-file fixture files remain present"
+          },
+          "npmScripts": {
+            "passed": true,
+            "detail": "all task-tracker scripts exist"
+          },
+          "renameCoverage": {
+            "passed": false,
+            "detail": "legacy dueDate remains in fixture source\n\ntrue !== false\n"
+          },
+          "pastDeadline": {
+            "passed": false,
+            "detail": "past deadline was accepted\n\ntrue !== false\n"
+          },
+          "twoHopBug": {
+            "passed": false,
+            "detail": "store addTask still drops deadline\n+ actual - expected\n\n+ undefined\n- '2099-02-03T00:00:00.000Z'\n"
+          },
+          "targetedTests": {
+            "passed": true,
+            "detail": "passed in 803 ms"
+          },
+          "typecheck": {
+            "passed": true,
+            "detail": "passed in 1150 ms"
+          },
+          "cliSmoke": {
+            "passed": true,
+            "detail": "passed in 735 ms"
+          }
+        },
+        "hopScores": {
+          "hop1OrLess": {
+            "passed": 0,
+            "total": 2,
+            "score": 0
+          },
+          "hop2": {
+            "passed": 0,
+            "total": 1,
+            "score": 0
+          },
+          "regression": {
+            "passed": 3,
+            "total": 3,
+            "score": 1
+          }
+        },
+        "hidden": {
+          "renameCoverage": {
+            "passed": false,
+            "detail": "legacy dueDate remains in fixture source\n\ntrue !== false\n"
+          },
+          "pastDeadline": {
+            "passed": false,
+            "detail": "past deadline was accepted\n\ntrue !== false\n"
+          },
+          "twoHopBug": {
+            "passed": false,
+            "detail": "store addTask still drops deadline\n+ actual - expected\n\n+ undefined\n- '2099-02-03T00:00:00.000Z'\n"
+          }
+        },
+        "targetedTest": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 803,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:test\n> node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n[PASS] validate accepts a well-formed future due date\n[PASS] validate rejects malformed dates\n[PASS] store supports create, read, update, and delete\n[PASS] API handlers create and list tasks\n[PASS] CLI parser and command formatter work together\n",
+          "stderr": ""
+        },
+        "typecheck": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 1150,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\n",
+          "stderr": ""
+        },
+        "cliSmoke": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 735,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\nTask Tracker CLI\n\nUsage:\n  task-tracker add <title> [--due-date YYYY-MM-DD]\n  task-tracker list\n  task-tracker show <id>\n  task-tracker done <id>\n\n",
+          "stderr": ""
+        }
+      }
+    },
+    {
+      "repeat": 2,
+      "arm": "opencode",
+      "workspace": "<removed after evaluation>",
+      "sessionID": "ses_07311ca25ffe4gQiHg727MTV89",
+      "success": true,
+      "acceptanceScore": 1,
+      "contextTokens": 0,
+      "durationMs": 216440,
+      "usage": {
+        "input": 58334,
+        "output": 2508,
+        "reasoning": 11455,
+        "cacheRead": 746336,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 58334,
+      "totalModelTokens": 72297,
+      "cost": 0.32511840000000003,
+      "toolCalls": 38,
+      "permissionRequests": 21,
+      "rejectedPermissions": 0,
+      "permissionActions": [
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-2/games/task-tracker/src/core/task.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-2/games/task-tracker/src/core/task.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-2/games/task-tracker/src/store/taskStore.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-2/games/task-tracker/src/store/taskStore.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-2/games/task-tracker/src/core/taskFactory.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-2/games/task-tracker/test/fixtures.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-2/games/task-tracker/src/format/compact.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-2/games/task-tracker/src/format/display.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-2/games/task-tracker/src/format/display.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-2/games/task-tracker/src/cli/parser.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-2/games/task-tracker/src/cli/parser.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-2/games/task-tracker/src/cli/parser.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-2/games/task-tracker/src/cli/commands.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-2/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-2/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-2/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-2/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test",
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-2/games/task-tracker/src/cli/main.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        }
+      ],
+      "answer": "The requested changes have been implemented, including the renaming of `Task.dueDate` to `Task.deadline`, the update to the `validate()` function to reject past-dated and malformed dates, and the fix for the silent deadline-dropping bug in the task store.\n\n### Changed Files\n\n1.  `games/task-tracker/src/core/task.ts` (Renamed `dueDate` to `deadline` and updated `validate` logic)\n2.  `games/task-tracker/src/core/taskFactory.ts` (Renamed `dueDate` to `deadline`)\n3.  `games/task-tracker/src/store/taskStore.ts` (Renamed `dueDate` to `deadline` and removed the intentional bug that dropped the date field in `addTask`)\n4.  `games/task-tracker/src/format/compact.ts` (Renamed `dueDate` to `deadline`)\n5.  `games/task-tracker/src/format/display.ts` (Renamed `dueDate` to `deadline` and updated display text from `due` to `deadline`)\n6.  `games/task-tracker/src/cli/parser.ts` (Renamed type property and updated CLI option from `--due-date` to `--deadline`)\n7.  `games/task-tracker/src/cli/commands.ts` (Renamed `dueDate` to `deadline`)\n8.  `games/task-tracker/src/cli/main.ts` (Updated hardcoded help string to `--deadline`)\n9.  `games/task-tracker/test/fixtures.ts` (Renamed `dueDate` to `deadline`)\n10. `games/task-tracker/test/task-tracker.test.ts` (Renamed `dueDate` to `deadline` in tests, added new test case for past-dated deadline rejection, and updated CLI test arguments)\n\n### Exact Validation Results\n\n**`npm run task-tracker:test` output:**\n\n```\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:test\n> node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n[PASS] validate accepts a well-formed future deadline\n[PASS] validate rejects malformed dates\n[PASS] validate rejects past-dated deadlines\n[PASS] store supports create, read, update, and delete\n[PASS] API handlers create and list tasks\n[PASS] CLI parser and command formatter work together\n```\n\n**`npm run task-tracker:typecheck` output:**\n\n```\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\n```\n\n**`npm run task-tracker:run -- --help` output:**\n\n```\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\nTask Tracker CLI\n\nUsage:\n  task-tracker add <title> [--deadline YYYY-MM-DD]\n  task-tracker list\n  task-tracker show <id>\n  task-tracker done <id>\n```",
+      "evaluation": {
+        "acceptanceScore": 1,
+        "passedChecks": 8,
+        "totalChecks": 8,
+        "success": true,
+        "checks": {
+          "fixtureShape": {
+            "passed": true,
+            "detail": "all seeded cross-file fixture files remain present"
+          },
+          "npmScripts": {
+            "passed": true,
+            "detail": "all task-tracker scripts exist"
+          },
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and no dueDate token remains"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines rejected and future deadlines accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → store paths preserve deadline"
+          },
+          "targetedTests": {
+            "passed": true,
+            "detail": "passed in 760 ms"
+          },
+          "typecheck": {
+            "passed": true,
+            "detail": "passed in 1141 ms"
+          },
+          "cliSmoke": {
+            "passed": true,
+            "detail": "passed in 717 ms"
+          }
+        },
+        "hopScores": {
+          "hop1OrLess": {
+            "passed": 2,
+            "total": 2,
+            "score": 1
+          },
+          "hop2": {
+            "passed": 1,
+            "total": 1,
+            "score": 1
+          },
+          "regression": {
+            "passed": 3,
+            "total": 3,
+            "score": 1
+          }
+        },
+        "hidden": {
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and no dueDate token remains"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines rejected and future deadlines accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → store paths preserve deadline"
+          }
+        },
+        "targetedTest": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 760,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:test\n> node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n[PASS] validate accepts a well-formed future deadline\n[PASS] validate rejects malformed dates\n[PASS] validate rejects past-dated deadlines\n[PASS] store supports create, read, update, and delete\n[PASS] API handlers create and list tasks\n[PASS] CLI parser and command formatter work together\n",
+          "stderr": ""
+        },
+        "typecheck": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 1141,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\n",
+          "stderr": ""
+        },
+        "cliSmoke": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 717,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\nTask Tracker CLI\n\nUsage:\n  task-tracker add <title> [--deadline YYYY-MM-DD]\n  task-tracker list\n  task-tracker show <id>\n  task-tracker done <id>\n\n",
+          "stderr": ""
+        }
+      }
+    },
+    {
+      "repeat": 3,
+      "arm": "opencode",
+      "workspace": "<removed after evaluation>",
+      "sessionID": "ses_0730e6559ffe2FgFwjF7LYcW4N",
+      "success": true,
+      "acceptanceScore": 1,
+      "contextTokens": 0,
+      "durationMs": 141091,
+      "usage": {
+        "input": 44973,
+        "output": 1463,
+        "reasoning": 6149,
+        "cacheRead": 441507,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 44973,
+      "totalModelTokens": 52585,
+      "cost": 0.20219355000000003,
+      "toolCalls": 26,
+      "permissionRequests": 16,
+      "rejectedPermissions": 0,
+      "permissionActions": [
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-3/games/task-tracker/src/core/task.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-3/games/task-tracker/src/core/task.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-3/games/task-tracker/src/core/taskFactory.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-3/games/task-tracker/src/store/taskStore.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-3/games/task-tracker/src/cli/parser.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-3/games/task-tracker/src/cli/parser.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-3/games/task-tracker/src/cli/parser.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-3/games/task-tracker/src/cli/commands.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-3/games/task-tracker/src/format/compact.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-3/games/task-tracker/src/format/display.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-3/games/task-tracker/test/fixtures.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-3/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-3/games/task-tracker/src/store/taskStore.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test",
+            "npm run task-tracker:typecheck",
+            "npm run task-tracker:run -- --help"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-3/games/task-tracker/src/cli/main.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test",
+            "npm run task-tracker:typecheck",
+            "npm run task-tracker:run -- --help"
+          ]
+        }
+      ],
+      "answer": "I have completed the requested refactoring, validation update, and bug fix across the `games/task-tracker/` fixture.\n\n### Changed Files\n\n1.  `games/task-tracker/src/core/task.ts` (Renamed `dueDate` to `deadline` and updated `validate` logic)\n2.  `games/task-tracker/src/core/taskFactory.ts` (Renamed field usage)\n3.  `games/task-tracker/src/store/taskStore.ts` (Renamed field and fixed the bug in `addTask` that caused the deadline to be dropped)\n4.  `games/task-tracker/src/cli/parser.ts` (Updated CLI argument parsing from `--due-date` to `--deadline` and renamed field usage)\n5.  `games/task-tracker/src/cli/commands.ts` (Renamed field usage)\n6.  `games/task-tracker/src/cli/main.ts` (Updated hardcoded CLI help text to use `--deadline`)\n7.  `games/task-tracker/src/format/compact.ts` (Renamed field usage)\n8.  `games/task-tracker/src/format/display.ts` (Renamed field usage)\n9.  `games/task-tracker/test/fixtures.ts` (Renamed field usage)\n10. `games/task-tracker/test/task-tracker.test.ts` (Renamed field usage)\n\n### Verification Results\n\nThe required validation scripts all passed successfully:\n\n```\n[PASS] validate accepts a well-formed future due date\n[PASS] validate rejects malformed dates\n[PASS] store supports create, read, update, and delete\n[PASS] API handlers create and list tasks\n[PASS] CLI parser and command formatter work together\n\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\nTask Tracker CLI\n\nUsage:\n  task-tracker add <title> [--deadline YYYY-MM-DD]\n  task-tracker list\n  task-tracker show <id>\n  task-tracker done <id>\n```",
+      "evaluation": {
+        "acceptanceScore": 1,
+        "passedChecks": 8,
+        "totalChecks": 8,
+        "success": true,
+        "checks": {
+          "fixtureShape": {
+            "passed": true,
+            "detail": "all seeded cross-file fixture files remain present"
+          },
+          "npmScripts": {
+            "passed": true,
+            "detail": "all task-tracker scripts exist"
+          },
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and no dueDate token remains"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines rejected and future deadlines accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → store paths preserve deadline"
+          },
+          "targetedTests": {
+            "passed": true,
+            "detail": "passed in 723 ms"
+          },
+          "typecheck": {
+            "passed": true,
+            "detail": "passed in 1122 ms"
+          },
+          "cliSmoke": {
+            "passed": true,
+            "detail": "passed in 741 ms"
+          }
+        },
+        "hopScores": {
+          "hop1OrLess": {
+            "passed": 2,
+            "total": 2,
+            "score": 1
+          },
+          "hop2": {
+            "passed": 1,
+            "total": 1,
+            "score": 1
+          },
+          "regression": {
+            "passed": 3,
+            "total": 3,
+            "score": 1
+          }
+        },
+        "hidden": {
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and no dueDate token remains"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines rejected and future deadlines accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → store paths preserve deadline"
+          }
+        },
+        "targetedTest": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 723,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:test\n> node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n[PASS] validate accepts a well-formed future due date\n[PASS] validate rejects malformed dates\n[PASS] store supports create, read, update, and delete\n[PASS] API handlers create and list tasks\n[PASS] CLI parser and command formatter work together\n",
+          "stderr": ""
+        },
+        "typecheck": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 1122,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\n",
+          "stderr": ""
+        },
+        "cliSmoke": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 741,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\nTask Tracker CLI\n\nUsage:\n  task-tracker add <title> [--deadline YYYY-MM-DD]\n  task-tracker list\n  task-tracker show <id>\n  task-tracker done <id>\n\n",
+          "stderr": ""
+        }
+      }
+    },
+    {
+      "repeat": 3,
+      "arm": "cuppet",
+      "workspace": "<removed after evaluation>",
+      "sessionID": "ses_0730c114affenMOnfIGawwT6h8",
+      "success": false,
+      "acceptanceScore": 0.625,
+      "contextTokens": 1260,
+      "durationMs": 11782,
+      "usage": {
+        "input": 15261,
+        "output": 0,
+        "reasoning": 657,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 15261,
+      "totalModelTokens": 15918,
+      "cost": 0.0288045,
+      "toolCalls": 0,
+      "permissionRequests": 0,
+      "rejectedPermissions": 0,
+      "permissionActions": [],
+      "answer": "",
+      "evaluation": {
+        "acceptanceScore": 0.625,
+        "passedChecks": 5,
+        "totalChecks": 8,
+        "success": false,
+        "checks": {
+          "fixtureShape": {
+            "passed": true,
+            "detail": "all seeded cross-file fixture files remain present"
+          },
+          "npmScripts": {
+            "passed": true,
+            "detail": "all task-tracker scripts exist"
+          },
+          "renameCoverage": {
+            "passed": false,
+            "detail": "legacy dueDate remains in fixture source\n\ntrue !== false\n"
+          },
+          "pastDeadline": {
+            "passed": false,
+            "detail": "past deadline was accepted\n\ntrue !== false\n"
+          },
+          "twoHopBug": {
+            "passed": false,
+            "detail": "store addTask still drops deadline\n+ actual - expected\n\n+ undefined\n- '2099-02-03T00:00:00.000Z'\n"
+          },
+          "targetedTests": {
+            "passed": true,
+            "detail": "passed in 783 ms"
+          },
+          "typecheck": {
+            "passed": true,
+            "detail": "passed in 1112 ms"
+          },
+          "cliSmoke": {
+            "passed": true,
+            "detail": "passed in 729 ms"
+          }
+        },
+        "hopScores": {
+          "hop1OrLess": {
+            "passed": 0,
+            "total": 2,
+            "score": 0
+          },
+          "hop2": {
+            "passed": 0,
+            "total": 1,
+            "score": 0
+          },
+          "regression": {
+            "passed": 3,
+            "total": 3,
+            "score": 1
+          }
+        },
+        "hidden": {
+          "renameCoverage": {
+            "passed": false,
+            "detail": "legacy dueDate remains in fixture source\n\ntrue !== false\n"
+          },
+          "pastDeadline": {
+            "passed": false,
+            "detail": "past deadline was accepted\n\ntrue !== false\n"
+          },
+          "twoHopBug": {
+            "passed": false,
+            "detail": "store addTask still drops deadline\n+ actual - expected\n\n+ undefined\n- '2099-02-03T00:00:00.000Z'\n"
+          }
+        },
+        "targetedTest": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 783,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:test\n> node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n[PASS] validate accepts a well-formed future due date\n[PASS] validate rejects malformed dates\n[PASS] store supports create, read, update, and delete\n[PASS] API handlers create and list tasks\n[PASS] CLI parser and command formatter work together\n",
+          "stderr": ""
+        },
+        "typecheck": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 1112,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\n",
+          "stderr": ""
+        },
+        "cliSmoke": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 729,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\nTask Tracker CLI\n\nUsage:\n  task-tracker add <title> [--due-date YYYY-MM-DD]\n  task-tracker list\n  task-tracker show <id>\n  task-tracker done <id>\n\n",
+          "stderr": ""
+        }
+      }
+    },
+    {
+      "repeat": 4,
+      "arm": "cuppet",
+      "workspace": "<removed after evaluation>",
+      "sessionID": "ses_0730bc960ffewdgMXs7k58WAud",
+      "success": false,
+      "acceptanceScore": 0.375,
+      "contextTokens": 1260,
+      "durationMs": 62443,
+      "usage": {
+        "input": 26442,
+        "output": 1069,
+        "reasoning": 3012,
+        "cacheRead": 94585,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 26442,
+      "totalModelTokens": 30523,
+      "cost": 0.09057975,
+      "toolCalls": 21,
+      "permissionRequests": 11,
+      "rejectedPermissions": 0,
+      "permissionActions": [
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-4/games/task-tracker/src/core/task.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-4/games/task-tracker/src/store/taskStore.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-4/games/task-tracker/src/cli/parser.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-4/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-4/games/task-tracker/src/format/compact.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-4/games/task-tracker/src/core/taskFactory.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-4/games/task-tracker/src/cli/commands.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-4/games/task-tracker/src/format/display.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-4/games/task-tracker/test/fixtures.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-4/games/task-tracker/src/cli/parser.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-4/games/task-tracker/src/format/display.ts"
+          ]
+        }
+      ],
+      "answer": "Right, I need to refactor `Task.dueDate` to `Task.deadline` and fix a deadline-dropping bug in `games/task-tracker/`.\n\nThis is a multi-step refactoring, validation update, and bug fix. I will use a `todowrite` list to track progress.\n\n**Workflow:**\n1. Search for all files containing `dueDate` in `games/task-tracker/`.\n2. Systematically refactor `dueDate` to `deadline` and update validation logic.\n3. Fix the bug in task creation.\n4. Verify with tests, type-checking, and CLI help output.\n\nFirst, let's establish the task list and search the codebase.",
+      "evaluation": {
+        "acceptanceScore": 0.375,
+        "passedChecks": 3,
+        "totalChecks": 8,
+        "success": false,
+        "checks": {
+          "fixtureShape": {
+            "passed": true,
+            "detail": "all seeded cross-file fixture files remain present"
+          },
+          "npmScripts": {
+            "passed": true,
+            "detail": "all task-tracker scripts exist"
+          },
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and no dueDate token remains"
+          },
+          "pastDeadline": {
+            "passed": false,
+            "detail": "past deadline was accepted\n\ntrue !== false\n"
+          },
+          "twoHopBug": {
+            "passed": false,
+            "detail": "Transform failed with 1 error:\n/private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-4/games/task-tracker/src/format/display.ts:5:32: ERROR: Syntax error \"`\""
+          },
+          "targetedTests": {
+            "passed": false,
+            "detail": "failed (node:internal/modules/run_main:123 triggerUncaughtException( ^ Error [TransformError]: Transform failed with 1 error: /private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-4/games/task-tracker/src/format/display.ts:5:32: ERROR: Syntax error \"`\")"
+          },
+          "typecheck": {
+            "passed": false,
+            "detail": "failed (> cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck > tsc --noEmit --project games/task-tracker/tsconfig.json games/task-tracker/src/format/display.ts(5,32): error TS1127: Invalid character. games/task-tracker/src/format/display.ts(5,33))"
+          },
+          "cliSmoke": {
+            "passed": false,
+            "detail": "failed (node:internal/modules/run_main:123 triggerUncaughtException( ^ Error [TransformError]: Transform failed with 1 error: /private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-4/games/task-tracker/src/format/display.ts:5:32: ERROR: Syntax error \"`\")"
+          }
+        },
+        "hopScores": {
+          "hop1OrLess": {
+            "passed": 1,
+            "total": 2,
+            "score": 0.5
+          },
+          "hop2": {
+            "passed": 0,
+            "total": 1,
+            "score": 0
+          },
+          "regression": {
+            "passed": 0,
+            "total": 3,
+            "score": 0
+          }
+        },
+        "hidden": {
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and no dueDate token remains"
+          },
+          "pastDeadline": {
+            "passed": false,
+            "detail": "past deadline was accepted\n\ntrue !== false\n"
+          },
+          "twoHopBug": {
+            "passed": false,
+            "detail": "Transform failed with 1 error:\n/private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-4/games/task-tracker/src/format/display.ts:5:32: ERROR: Syntax error \"`\""
+          }
+        },
+        "targetedTest": {
+          "passed": false,
+          "code": 1,
+          "durationMs": 795,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:test\n> node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n",
+          "stderr": "\nnode:internal/modules/run_main:123\n    triggerUncaughtException(\n    ^\nError [TransformError]: Transform failed with 1 error:\n/private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-4/games/task-tracker/src/format/display.ts:5:32: ERROR: Syntax error \"`\"\n    at failureErrorWithLog (/Users/addy/Downloads/cuppet/node_modules/esbuild/lib/main.js:1467:15)\n    at /Users/addy/Downloads/cuppet/node_modules/esbuild/lib/main.js:736:50\n    at responseCallbacks.<computed> (/Users/addy/Downloads/cuppet/node_modules/esbuild/lib/main.js:603:9)\n    at handleIncomingPacket (/Users/addy/Downloads/cuppet/node_modules/esbuild/lib/main.js:658:12)\n    at Socket.readFromStdout (/Users/addy/Downloads/cuppet/node_modules/esbuild/lib/main.js:581:7)\n    at Socket.emit (node:events:519:28)\n    at addChunk (node:internal/streams/readable:561:12)\n    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)\n    at Readable.push (node:internal/streams/readable:392:5)\n    at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)\n\nNode.js v22.21.0\n"
+        },
+        "typecheck": {
+          "passed": false,
+          "code": 2,
+          "durationMs": 935,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\ngames/task-tracker/src/format/display.ts(5,32): error TS1127: Invalid character.\ngames/task-tracker/src/format/display.ts(5,33): error TS1134: Variable declaration expected.\ngames/task-tracker/src/format/display.ts(6,13): error TS1005: ']' expected.\ngames/task-tracker/src/format/display.ts(6,21): error TS1128: Declaration or statement expected.\ngames/task-tracker/src/format/display.ts(6,23): error TS1434: Unexpected keyword or identifier.\ngames/task-tracker/src/format/display.ts(6,29): error TS1434: Unexpected keyword or identifier.\ngames/task-tracker/src/format/display.ts(6,37): error TS1434: Unexpected keyword or identifier.\ngames/task-tracker/src/format/display.ts(12,1): error TS1160: Unterminated template literal.\n",
+          "stderr": ""
+        },
+        "cliSmoke": {
+          "passed": false,
+          "code": 1,
+          "durationMs": 721,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\n",
+          "stderr": "\nnode:internal/modules/run_main:123\n    triggerUncaughtException(\n    ^\nError [TransformError]: Transform failed with 1 error:\n/private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-4/games/task-tracker/src/format/display.ts:5:32: ERROR: Syntax error \"`\"\n    at failureErrorWithLog (/Users/addy/Downloads/cuppet/node_modules/esbuild/lib/main.js:1467:15)\n    at /Users/addy/Downloads/cuppet/node_modules/esbuild/lib/main.js:736:50\n    at responseCallbacks.<computed> (/Users/addy/Downloads/cuppet/node_modules/esbuild/lib/main.js:603:9)\n    at handleIncomingPacket (/Users/addy/Downloads/cuppet/node_modules/esbuild/lib/main.js:658:12)\n    at Socket.readFromStdout (/Users/addy/Downloads/cuppet/node_modules/esbuild/lib/main.js:581:7)\n    at Socket.emit (node:events:519:28)\n    at addChunk (node:internal/streams/readable:561:12)\n    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)\n    at Readable.push (node:internal/streams/readable:392:5)\n    at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)\n\nNode.js v22.21.0\n"
+        }
+      }
+    },
+    {
+      "repeat": 4,
+      "arm": "opencode",
+      "workspace": "<removed after evaluation>",
+      "sessionID": "ses_0730abc3bffe0CzeccRttAb6z4",
+      "success": true,
+      "acceptanceScore": 1,
+      "contextTokens": 0,
+      "durationMs": 145672,
+      "usage": {
+        "input": 80319,
+        "output": 2393,
+        "reasoning": 6132,
+        "cacheRead": 509218,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 80319,
+      "totalModelTokens": 88844,
+      "cost": 0.27358619999999995,
+      "toolCalls": 28,
+      "permissionRequests": 17,
+      "rejectedPermissions": 0,
+      "permissionActions": [
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-4/games/task-tracker/src/store/taskStore.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-4/games/task-tracker/src/store/taskStore.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-4/games/task-tracker/src/core/task.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-4/games/task-tracker/src/core/task.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-4/games/task-tracker/src/cli/parser.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-4/games/task-tracker/src/cli/parser.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-4/games/task-tracker/src/core/taskFactory.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-4/games/task-tracker/src/cli/commands.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-4/games/task-tracker/src/format/compact.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-4/games/task-tracker/src/format/display.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-4/games/task-tracker/test/fixtures.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-4/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-4/games/task-tracker/src/cli/main.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        }
+      ],
+      "answer": "I need to refactor the `Task Tracker` fixture in `games/task-tracker/`. The plan is to:\n1.  Use `glob` and `grep` to understand the file structure and trace all usages of `dueDate` and the CLI-to-store path.\n2.  Implement the `dueDate` to `deadline` rename across all affected files.\n3.  Update the `validate` function to reject past-dated deadlines.\n4.  Fix the deadline-dropping bug in the store.\n5.  Validate changes using `npm run task-tracker:test`, `npm run task-tracker:typecheck`, and `npm run task-tracker:run -- --help`.\n\nFirst, let's explore the directory and find usages of `dueDate`.\n\n\nThe file structure is clear. Now I'll search for all occurrences of `dueDate` and trace the call path for task creation.\n\n\nI need to perform a comprehensive refactor. I'll start by reading the core files to understand the types, validation, and storage logic, as well as confirm the CLI-to-store path and the nature of the bug.\n\n\n`src/core/task.ts` confirms the field name and validation logic. I need to rename `dueDate` to `deadline` and update the `validate` function.\n\nNext, I'll read `src/store/taskStore.ts` to identify the bug where the deadline is dropped and to plan the store-level refactoring.\n\n\nI've confirmed the bug in `src/store/taskStore.ts` and the needed field renames in `taskStore.ts` and `task.ts`.\n\nBefore making changes, I'll check `src/api/types.ts` to see how the API models map to the core types and if `dueDate` is present there.\n\n\n`src/api/types.ts` is simple and relies on core types. I will now examine `src/cli/commands.ts` to see how the CLI interacts with the API, which will complete the trace for the task creation flow.\n\n\nI'll start by making the necessary changes in `src/store/taskStore.ts` to rename `dueDate` to `deadline` in the `updateTask` type patch, and to fix the task creation bug by preserving the new `deadline` field.\n\n\nI have fixed the structural bug in `addTask`. Now, I will rename `dueDate` to `deadline` in the `updateTask` signature in `src/store/taskStore.ts`.\n\n\nI will now update `src/core/task.ts`. First, I'll rename `dueDate` to `deadline` in the type definitions and the `validate` function signature.\n\n\nI'll now update the `validate` function in `src/core/task.ts` to implement the check for past-dated deadlines (Task 2). I will also ensure the error message uses \"deadline\" instead of \"due date\".\n\n\n`src/core/task.ts` and `src/store/taskStore.ts` are done. I will now perform the remaining renames. I'll start with `src/cli/parser.ts` to update the CLI option and internal field name.\n\n### 1. `src/cli/parser.ts`\n\nI need to change `dueDate` to `deadline` and handle the CLI flag `--dueDate` becoming `--deadline`.\n\n\nI will update `src/cli/parser.ts` to reflect the name changes.\n\n\nThe previous attempt to replace `--due-date` in the usage message failed. I will read the file again to ensure I use the exact string for replacement.\n\n\nIt appears `src/cli/parser.ts` is correctly updated. Now I will update the remaining files by replacing `dueDate` with `deadline`.\n\n\nThe refactoring is complete. Now I will run the required validation commands to check for any errors.\n\n### 1. Typecheck\n\n\nThe typecheck passed. Now, I will run the tests.\n\n\nThe tests passed, confirming the refactoring is functional. Finally, I will check the CLI help text to ensure the option name is updated.\n\n\nThe CLI output still shows `--due-date`. I need to find where this usage message is defined and update it to `--deadline`.\n\n\nThe help text is in `src/cli/main.ts`. I'll read the file to get the exact string and update it.\n\n\nThe help text on line 7 of `src/cli/main.ts` needs to be updated.\n\n\nI have updated the help message. I'll run the command again to confirm the fix.\n\n\nThe refactoring is complete, addressing the rename, new validation rule, and the CLI bug.\n\n### Validation Results\n\n1.  **`npm run task-tracker:typecheck`**\n    ```\n    > cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck\n    > tsc --noEmit --project games/task-tracker/tsconfig.json\n    ```\n    (Passed successfully)\n\n2.  **`npm run task-tracker:test`**\n    ```\n    > cuppet-monorepo@0.2.0-alpha.1 task-tracker:test\n    > node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n    [PASS] validate accepts a well-formed future due date\n    [PASS] validate rejects malformed dates\n    [PASS] store supports create, read, update, and delete\n    [PASS] API handlers create and list tasks\n    [PASS] CLI parser and command formatter work together\n    ```\n    (All tests passed successfully)\n\n3.  **`npm run task-tracker:run -- --help`**\n    ```\n    > cuppet-monorepo@0.2.0-alpha.1 task-tracker:run\n    > node --import tsx games/task-tracker/src/cli/main.ts --help\n\n    Task Tracker CLI\n\n    Usage:\n      task-tracker add <title> [--deadline YYYY-MM-DD]\n      task-tracker list\n      task-tracker show <id>\n      task-tracker done <id>\n    ```\n    (Help text updated successfully)\n\n### Changed Files\n\n- `games/task-tracker/src/api/types.ts` (Implicitly via type inheritance)\n- `games/task-tracker/src/cli/commands.ts`\n- `games/task-tracker/src/cli/main.ts`\n- `games/task-tracker/src/cli/parser.ts`\n- `games/task-tracker/src/core/task.ts`\n- `games/task-tracker/src/core/taskFactory.ts`\n- `games/task-tracker/src/format/compact.ts`\n- `games/task-tracker/src/format/display.ts`\n- `games/task-tracker/src/store/taskStore.ts`\n- `games/task-tracker/test/fixtures.ts`\n- `games/task-tracker/test/task-tracker.test.ts`",
+      "evaluation": {
+        "acceptanceScore": 1,
+        "passedChecks": 8,
+        "totalChecks": 8,
+        "success": true,
+        "checks": {
+          "fixtureShape": {
+            "passed": true,
+            "detail": "all seeded cross-file fixture files remain present"
+          },
+          "npmScripts": {
+            "passed": true,
+            "detail": "all task-tracker scripts exist"
+          },
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and no dueDate token remains"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines rejected and future deadlines accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → store paths preserve deadline"
+          },
+          "targetedTests": {
+            "passed": true,
+            "detail": "passed in 728 ms"
+          },
+          "typecheck": {
+            "passed": true,
+            "detail": "passed in 1126 ms"
+          },
+          "cliSmoke": {
+            "passed": true,
+            "detail": "passed in 716 ms"
+          }
+        },
+        "hopScores": {
+          "hop1OrLess": {
+            "passed": 2,
+            "total": 2,
+            "score": 1
+          },
+          "hop2": {
+            "passed": 1,
+            "total": 1,
+            "score": 1
+          },
+          "regression": {
+            "passed": 3,
+            "total": 3,
+            "score": 1
+          }
+        },
+        "hidden": {
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and no dueDate token remains"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines rejected and future deadlines accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → store paths preserve deadline"
+          }
+        },
+        "targetedTest": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 728,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:test\n> node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n[PASS] validate accepts a well-formed future due date\n[PASS] validate rejects malformed dates\n[PASS] store supports create, read, update, and delete\n[PASS] API handlers create and list tasks\n[PASS] CLI parser and command formatter work together\n",
+          "stderr": ""
+        },
+        "typecheck": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 1126,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\n",
+          "stderr": ""
+        },
+        "cliSmoke": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 716,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\nTask Tracker CLI\n\nUsage:\n  task-tracker add <title> [--deadline YYYY-MM-DD]\n  task-tracker list\n  task-tracker show <id>\n  task-tracker done <id>\n\n",
+          "stderr": ""
+        }
+      }
+    },
+    {
+      "repeat": 5,
+      "arm": "opencode",
+      "workspace": "<removed after evaluation>",
+      "sessionID": "ses_073086b46ffejih36JS1ig5vTj",
+      "success": true,
+      "acceptanceScore": 1,
+      "contextTokens": 0,
+      "durationMs": 211055,
+      "usage": {
+        "input": 62064,
+        "output": 2017,
+        "reasoning": 8108,
+        "cacheRead": 754839,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 62064,
+      "totalModelTokens": 72189,
+      "cost": 0.29744684999999993,
+      "toolCalls": 40,
+      "permissionRequests": 25,
+      "rejectedPermissions": 0,
+      "permissionActions": [
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-5/games/task-tracker/src/core/task.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-5/games/task-tracker/src/core/task.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-5/games/task-tracker/src/core/taskFactory.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-5/games/task-tracker/src/store/taskStore.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-5/games/task-tracker/src/store/taskStore.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-5/games/task-tracker/src/cli/parser.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-5/games/task-tracker/src/cli/parser.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-5/games/task-tracker/src/cli/commands.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-5/games/task-tracker/src/format/compact.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-5/games/task-tracker/src/format/display.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-5/games/task-tracker/src/format/display.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-5/games/task-tracker/test/fixtures.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-5/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-5/games/task-tracker/src/store/taskStore.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-5/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-5/games/task-tracker/test/fixtures.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-5/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-5/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/opencode-5/games/task-tracker/src/cli/main.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        }
+      ],
+      "answer": "I have completed the requested refactoring.\n\nAll instances of `Task.dueDate` have been renamed to `Task.deadline`, the CLI option has been updated to `--deadline`, the validation logic has been enhanced, and the data-dropping bug in the store has been fixed.\n\n### Changed Files\n\n1.  **`games/task-tracker/src/core/task.ts`**: Renamed `dueDate` to `deadline` and updated `validate` to reject past-dated and malformed deadlines.\n2.  **`games/task-tracker/src/core/taskFactory.ts`**: Renamed `dueDate` to `deadline`.\n3.  **`games/task-tracker/src/store/taskStore.ts`**: Renamed `dueDate` to `deadline` and fixed the store bug by removing the intentional defect that dropped the date field in `addTask`.\n4.  **`games/task-tracker/src/cli/parser.ts`**: Renamed property and updated CLI argument parsing from `--due-date` to `--deadline`.\n5.  **`games/task-tracker/src/cli/commands.ts`**: Renamed `dueDate` to `deadline` in the command handler.\n6.  **`games/task-tracker/src/cli/main.ts`**: Updated the hardcoded help message to use `--deadline`.\n7.  **`games/task-tracker/src/format/compact.ts`**: Renamed `dueDate` to `deadline`.\n8.  **`games/task-tracker/src/format/display.ts`**: Renamed property and updated the display text from `due` to `deadline`.\n9.  **`games/task-tracker/test/fixtures.ts`**: Renamed property and added `pastDate` constant.\n10. **`games/task-tracker/test/task-tracker.test.ts`**: Renamed property, fixed the CLI flag in the test command, and added a test case to verify that `validate` rejects past-dated deadlines.\n\n### Validation Results\n\nI ran the required verification commands:\n\n| Command | Status | Output/Result |\n| :--- | :--- | :--- |\n| `npm run task-tracker:typecheck` | **Passed** | No type errors found. |\n| `npm run task-tracker:test` | **Passed** | All 6 tests passed, including the new validation test. |\n| `npm run task-tracker:run -- --help` | **Passed** | Usage reflects the new CLI option: `task-tracker add <title> [--deadline YYYY-MM-DD]` |\n\nThe new validation test added to `test/task-tracker.test.ts` is:\n```typescript\nrunTest('validate rejects past-dated deadlines', () => {\n  assert.equal(validate(taskInput({ deadline: pastDate })).valid, false)\n})\n```",
+      "evaluation": {
+        "acceptanceScore": 1,
+        "passedChecks": 8,
+        "totalChecks": 8,
+        "success": true,
+        "checks": {
+          "fixtureShape": {
+            "passed": true,
+            "detail": "all seeded cross-file fixture files remain present"
+          },
+          "npmScripts": {
+            "passed": true,
+            "detail": "all task-tracker scripts exist"
+          },
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and no dueDate token remains"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines rejected and future deadlines accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → store paths preserve deadline"
+          },
+          "targetedTests": {
+            "passed": true,
+            "detail": "passed in 739 ms"
+          },
+          "typecheck": {
+            "passed": true,
+            "detail": "passed in 1166 ms"
+          },
+          "cliSmoke": {
+            "passed": true,
+            "detail": "passed in 725 ms"
+          }
+        },
+        "hopScores": {
+          "hop1OrLess": {
+            "passed": 2,
+            "total": 2,
+            "score": 1
+          },
+          "hop2": {
+            "passed": 1,
+            "total": 1,
+            "score": 1
+          },
+          "regression": {
+            "passed": 3,
+            "total": 3,
+            "score": 1
+          }
+        },
+        "hidden": {
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and no dueDate token remains"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines rejected and future deadlines accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → store paths preserve deadline"
+          }
+        },
+        "targetedTest": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 739,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:test\n> node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n[PASS] validate accepts a well-formed future due date\n[PASS] validate rejects malformed dates\n[PASS] validate rejects past-dated deadlines\n[PASS] store supports create, read, update, and delete\n[PASS] API handlers create and list tasks\n[PASS] CLI parser and command formatter work together\n",
+          "stderr": ""
+        },
+        "typecheck": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 1166,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\n",
+          "stderr": ""
+        },
+        "cliSmoke": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 725,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\nTask Tracker CLI\n\nUsage:\n  task-tracker add <title> [--deadline YYYY-MM-DD]\n  task-tracker list\n  task-tracker show <id>\n  task-tracker done <id>\n\n",
+          "stderr": ""
+        }
+      }
+    },
+    {
+      "repeat": 5,
+      "arm": "cuppet",
+      "workspace": "<removed after evaluation>",
+      "sessionID": "ses_0730508ffffe7ZvgPp4SFuEd7C",
+      "success": true,
+      "acceptanceScore": 1,
+      "contextTokens": 1260,
+      "durationMs": 231382,
+      "usage": {
+        "input": 87080,
+        "output": 2414,
+        "reasoning": 10914,
+        "cacheRead": 967839,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 87080,
+      "totalModelTokens": 100408,
+      "cost": 0.39574785000000007,
+      "toolCalls": 42,
+      "permissionRequests": 23,
+      "rejectedPermissions": 0,
+      "permissionActions": [
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-5/games/task-tracker/src/core/task.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-5/games/task-tracker/src/core/task.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-5/games/task-tracker/src/core/taskFactory.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-5/games/task-tracker/src/store/taskStore.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-5/games/task-tracker/src/store/taskStore.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-5/games/task-tracker/src/format/compact.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-5/games/task-tracker/src/format/display.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-5/games/task-tracker/src/cli/parser.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-5/games/task-tracker/src/cli/parser.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-5/games/task-tracker/src/cli/commands.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-5/games/task-tracker/test/fixtures.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-5/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-5/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-5/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-5/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-5/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-5/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cuppet-task-tracker-ab-X7NyLK/cuppet-5/games/task-tracker/src/cli/main.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        }
+      ],
+      "answer": "I have completed the refactoring and bug fix as requested.\n\nThe `Task.dueDate` field has been renamed to `Task.deadline` across the entire `games/task-tracker/` fixture, including all types, functions, CLI arguments (`--deadline`), and related files. The bug where the deadline was silently dropped during task creation via the CLI has been fixed at the store level.\n\n### Changed Files\n\n1.  `games/task-tracker/src/api/types.ts` (No change required, relied on updated `NewTask`)\n2.  `games/task-tracker/src/cli/commands.ts`\n3.  `games/task-tracker/src/cli/main.ts`\n4.  `games/task-tracker/src/cli/parser.ts`\n5.  `games/task-tracker/src/core/task.ts`\n6.  `games/task-tracker/src/core/taskFactory.ts`\n7.  `games/task-tracker/src/format/compact.ts`\n8.  `games/task-tracker/src/format/display.ts`\n9.  `games/task-tracker/src/store/taskStore.ts`\n10. `games/task-tracker/test/fixtures.ts`\n11. `games/task-tracker/test/task-tracker.test.ts`\n\n### Validation Results\n\n#### 1. Typecheck (`npm run task-tracker:typecheck`)\n```bash\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\n```\n**Result:** Passed.\n\n#### 2. Tests (`npm run task-tracker:test`)\nThe tests were updated to reflect the new `deadline` field and include checks for past-dated deadlines and CLI bug resolution.\n```bash\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:test\n> node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n[PASS] validate accepts a well-formed future deadline\n[PASS] validate rejects malformed dates\n[PASS] validate rejects past-dated deadlines\n[PASS] validate accepts current-dated deadlines\n[PASS] store supports create, read, update, and delete\n[PASS] API handlers create and list tasks\n[PASS] CLI parser and command formatter work together\n```\n**Result:** Passed (7/7 tests).\n\n#### 3. CLI Help Text (`npm run task-tracker:run -- --help`)\n```bash\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\nTask Tracker CLI\n\nUsage:\n  task-tracker add <title> [--deadline YYYY-MM-DD]\n  task-tracker list\n  task-tracker show <id>\n  task-tracker done <id>\n\n```\n**Result:** The CLI option is correctly displayed as `--deadline`.",
+      "evaluation": {
+        "acceptanceScore": 1,
+        "passedChecks": 8,
+        "totalChecks": 8,
+        "success": true,
+        "checks": {
+          "fixtureShape": {
+            "passed": true,
+            "detail": "all seeded cross-file fixture files remain present"
+          },
+          "npmScripts": {
+            "passed": true,
+            "detail": "all task-tracker scripts exist"
+          },
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and no dueDate token remains"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines rejected and future deadlines accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → store paths preserve deadline"
+          },
+          "targetedTests": {
+            "passed": true,
+            "detail": "passed in 739 ms"
+          },
+          "typecheck": {
+            "passed": true,
+            "detail": "passed in 1154 ms"
+          },
+          "cliSmoke": {
+            "passed": true,
+            "detail": "passed in 711 ms"
+          }
+        },
+        "hopScores": {
+          "hop1OrLess": {
+            "passed": 2,
+            "total": 2,
+            "score": 1
+          },
+          "hop2": {
+            "passed": 1,
+            "total": 1,
+            "score": 1
+          },
+          "regression": {
+            "passed": 3,
+            "total": 3,
+            "score": 1
+          }
+        },
+        "hidden": {
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and no dueDate token remains"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines rejected and future deadlines accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → store paths preserve deadline"
+          }
+        },
+        "targetedTest": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 739,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:test\n> node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n[PASS] validate accepts a well-formed future deadline\n[PASS] validate rejects malformed dates\n[PASS] validate rejects past-dated deadlines\n[PASS] validate accepts current-dated deadlines\n[PASS] store supports create, read, update, and delete\n[PASS] API handlers create and list tasks\n[PASS] CLI parser and command formatter work together\n",
+          "stderr": ""
+        },
+        "typecheck": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 1154,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\n",
+          "stderr": ""
+        },
+        "cliSmoke": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 711,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\nTask Tracker CLI\n\nUsage:\n  task-tracker add <title> [--deadline YYYY-MM-DD]\n  task-tracker list\n  task-tracker show <id>\n  task-tracker done <id>\n\n",
+          "stderr": ""
+        }
+      }
+    }
+  ]
+}

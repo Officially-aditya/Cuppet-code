@@ -1,4 +1,7 @@
-use crate::graph::{CodeGraph, GraphQueryResult, GraphStats};
+use crate::graph::{
+    CodeGraph, GraphFileList, GraphQueryResult, GraphSearchResult, GraphStats, GraphTraceResult,
+    GraphWorkspaceInfo,
+};
 use crate::memory::{
     normalize_key, Evidence, EvidenceKind, MemoryKind, MemoryRecord, MemoryScope, Provenance,
 };
@@ -90,6 +93,7 @@ pub struct TstService {
     project: DurableStore,
     global: DurableStore,
     graph: CodeGraph,
+    project_store: std::path::PathBuf,
 }
 
 impl TstService {
@@ -98,14 +102,17 @@ impl TstService {
         project_store: impl AsRef<Path>,
         global_store: impl AsRef<Path>,
     ) -> Result<Self> {
-        let project = DurableStore::open(project_store)?;
+        let project_store = project_store.as_ref().to_path_buf();
+        let project = DurableStore::open(&project_store)?;
         let global = DurableStore::open(global_store)?;
-        let graph = CodeGraph::new(project_root)?;
+        let mut graph = CodeGraph::new(project_root)?;
+        let _ = graph.load_snapshot(&project_store.join("graph.msgpack"));
         Ok(Self {
             sessions: HashMap::new(),
             project,
             global,
             graph,
+            project_store,
         })
     }
 
@@ -318,10 +325,33 @@ impl TstService {
 
     pub fn finish_graph_index(&mut self) {
         self.graph.finish_build();
+        let _ = self.graph.save_snapshot(&self.project_store.join("graph.msgpack"));
     }
 
     pub fn graph_query(&self, query: &str, limit: usize) -> Vec<GraphQueryResult> {
         self.graph.query(query, limit.clamp(1, 128))
+    }
+
+    pub fn graph_search(&self, pattern: &str, prefix: Option<&str>, limit: usize) -> GraphSearchResult {
+        self.graph.search(pattern, prefix, limit)
+    }
+
+    pub fn graph_list(&self, prefix: Option<&str>, limit: usize) -> GraphFileList {
+        self.graph.list_files(prefix, limit)
+    }
+
+    pub fn graph_workspace(&self, limit: usize) -> GraphWorkspaceInfo {
+        self.graph.workspace_info(limit)
+    }
+
+    pub fn graph_trace(
+        &self,
+        query: &str,
+        direction: &str,
+        depth: usize,
+        limit: usize,
+    ) -> Result<GraphTraceResult> {
+        self.graph.trace(query, direction, depth, limit)
     }
 
     pub fn compact(&mut self) -> Result<()> {
@@ -331,12 +361,14 @@ impl TstService {
         }
         self.project.compact()?;
         self.global.compact()?;
+        let _ = self.graph.save_snapshot(&self.project_store.join("graph.msgpack"));
         Ok(())
     }
 
     pub fn flush(&mut self) -> Result<()> {
         self.project.flush()?;
         self.global.flush()?;
+        let _ = self.graph.save_snapshot(&self.project_store.join("graph.msgpack"));
         Ok(())
     }
 

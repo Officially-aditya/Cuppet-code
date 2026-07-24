@@ -94,6 +94,16 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
     [controller],
   )
   useEffect(() => {
+    if (stdout.isTTY) {
+      stdout.write('\u001b[?1049h\u001b[?1007h')
+    }
+    return () => {
+      if (stdout.isTTY) {
+        stdout.write('\u001b[?1007l\u001b[?1049l')
+      }
+    }
+  }, [stdout])
+  useEffect(() => {
     if (modal.type !== 'none') return
     const next = nextOnboardingModal(controller, snapshot)
     if (next.type !== 'none') {
@@ -153,6 +163,22 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
     setScrollOffset((current) => Math.max(0, current - page))
   }
 
+  const handleScrollTop = () => {
+    setScrollOffset(messageWindow.maxOffset)
+  }
+
+  const handleScrollBottom = () => {
+    setScrollOffset(0)
+  }
+
+  const handleScrollLineUp = () => {
+    setScrollOffset((current) => Math.min(messageWindow.maxOffset, current + 1))
+  }
+
+  const handleScrollLineDown = () => {
+    setScrollOffset((current) => Math.max(0, current - 1))
+  }
+
   useInput((input, key) => {
     if (key.ctrl && input === 'c') {
       void controller.denyPendingPermissions().finally(() => exit())
@@ -179,10 +205,20 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
       }
       return
     }
+    if (key.escape && snapshot.running) {
+      void controller
+        .abort()
+        .then(() => {
+          setNotice('Ongoing message interrupted.')
+          addMessage(setMessages, 'system', 'Interrupted ongoing message.')
+        })
+        .catch((error) => addMessage(setMessages, 'system', `Interrupt failed: ${(error as Error).message}`))
+      return
+    }
     if (modal.type !== 'none') return
-    const page = Math.max(1, layout.messages - 1)
-    const isHome = input === '\u001b[H' || input === '\u001b[1~'
-    const isEnd = input === '\u001b[F' || input === '\u001b[4~'
+    const keyRecord = key as { home?: boolean; end?: boolean }
+    const isHome = keyRecord.home || input === '\u001b[H' || input.includes('\u001b[1~') || input.includes('\u001b[H') || input === '\u001b[1;5H'
+    const isEnd = keyRecord.end || input === '\u001b[F' || input.includes('\u001b[4~') || input.includes('\u001b[F') || input === '\u001b[1;5F'
     const isMouseInput =
       input.startsWith('[<') ||
       input.startsWith('\u001b[<') ||
@@ -202,19 +238,19 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
 
     if (key.pageUp || input === '\u0015' || input.includes('\u001b[5~')) handleScrollUp()
     if (key.pageDown || input === '\u0004' || input.includes('\u001b[6~')) handleScrollDown()
-    if (isHome) setScrollOffset(messageWindow.maxOffset)
-    if (isEnd) setScrollOffset(0)
+    if (isHome) handleScrollTop()
+    if (isEnd) handleScrollBottom()
     if ((key.ctrl || key.shift || key.meta) && key.upArrow) {
-      setScrollOffset((current) => Math.min(messageWindow.maxOffset, current + 1))
+      handleScrollLineUp()
     }
     if ((key.ctrl || key.shift || key.meta) && key.downArrow) {
-      setScrollOffset((current) => Math.max(0, current - 1))
+      handleScrollLineDown()
     }
     if (key.upArrow && scrollOffset > 0) {
-      setScrollOffset((current) => Math.min(messageWindow.maxOffset, current + 1))
+      handleScrollLineUp()
     }
     if (key.downArrow && scrollOffset > 0) {
-      setScrollOffset((current) => Math.max(0, current - 1))
+      handleScrollLineDown()
     }
   })
 
@@ -264,6 +300,9 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
         >
           <Text wrap="truncate-middle">
             <Text bold color="cyan">CUPPET</Text>
+            {snapshot.planMode ? (
+              <Text bold color="yellow"> [PLAN MODE]</Text>
+            ) : null}
             {snapshot.running ? (
               <Text bold color="yellow"> {spinner} Working…</Text>
             ) : null}
@@ -272,7 +311,7 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
         </Box>
       ) : layout.header === 1 ? (
         <Box height={1} overflow="hidden" flexShrink={0}>
-          <Text bold color="cyan" wrap="truncate-end">CUPPET{snapshot.running ? ` ${spinner} Working…` : ''} · {modelLabel(snapshot.primary)}</Text>
+          <Text bold color="cyan" wrap="truncate-end">CUPPET{snapshot.planMode ? ' [PLAN]' : ''}{snapshot.running ? ` ${spinner} Working…` : ''} · {modelLabel(snapshot.primary)}</Text>
         </Box>
       ) : null}
 
@@ -294,7 +333,18 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
       ) : null}
 
       {modal.type === 'none' && layout.editor > 0 ? (
-        <MultilineEditor height={layout.editor} onSubmit={submit} onScrollUp={handleScrollUp} onScrollDown={handleScrollDown} />
+        <MultilineEditor
+          height={layout.editor}
+          scrollOffset={scrollOffset}
+          planMode={snapshot.planMode}
+          onSubmit={submit}
+          onScrollUp={handleScrollUp}
+          onScrollDown={handleScrollDown}
+          onScrollTop={handleScrollTop}
+          onScrollBottom={handleScrollBottom}
+          onScrollLineUp={handleScrollLineUp}
+          onScrollLineDown={handleScrollLineDown}
+        />
       ) : null}
       {modal.type !== 'none' && layout.modal > 0 ? (
         <ModalView
@@ -720,6 +770,19 @@ function ModalView(props: {
   }
 
   if (modal.type === 'permission') {
+    if (isQuestionRequest(modal.request)) {
+      return (
+        <QuestionModalView
+          key={modal.request.id}
+          modal={modal}
+          listLimit={listLimit}
+          height={props.height}
+          controller={controller}
+          setModal={props.setModal}
+          setMessages={props.setMessages}
+        />
+      )
+    }
     return (
       <ModalBox height={props.height} title={`Permission: ${modal.request.action}`}>
         <Text wrap="truncate-end">{modal.request.resources.join(', ')}</Text>
@@ -782,6 +845,174 @@ function ModalBox({ title, height, children }: { title: string; height: number; 
       <Text bold color="yellow" wrap="truncate-end">{title}</Text>
       {children}
     </Box>
+  )
+}
+
+export type QuestionOption = {
+  label: string
+  description?: string
+  value: string
+}
+
+export type ExtractedQuestion = {
+  header?: string
+  questionText: string
+  options: QuestionOption[]
+  multiSelect?: boolean
+}
+
+export function isQuestionRequest(request: PermissionRequest): boolean {
+  const action = request.action.toLowerCase()
+  if (
+    action.includes('question') ||
+    action.includes('ask') ||
+    action.includes('prompt') ||
+    action.includes('input')
+  ) {
+    return true
+  }
+  const meta = request.metadata
+  if (meta) {
+    if (meta.questions || meta.question || meta.options || meta.prompt || meta.answers) return true
+  }
+  return false
+}
+
+export function extractQuestion(request: PermissionRequest): ExtractedQuestion {
+  const meta = request.metadata ?? {}
+  const questions = Array.isArray(meta.questions) ? (meta.questions as Record<string, unknown>[]) : []
+  const firstQ = questions[0] ?? meta
+
+  const header =
+    typeof firstQ.header === 'string'
+      ? firstQ.header
+      : typeof meta.header === 'string'
+        ? meta.header
+        : undefined
+
+  let questionText =
+    typeof firstQ.question === 'string' && firstQ.question
+      ? firstQ.question
+      : typeof meta.question === 'string' && meta.question
+        ? meta.question
+        : typeof firstQ.prompt === 'string' && firstQ.prompt
+          ? firstQ.prompt
+          : typeof meta.prompt === 'string' && meta.prompt
+            ? meta.prompt
+            : typeof meta.message === 'string' && meta.message
+              ? meta.message
+              : request.resources.length > 0
+                ? request.resources[0]!
+                : request.action
+
+  if (!questionText || questionText === 'unknown') {
+    questionText = 'The model is asking a question:'
+  }
+
+  const rawOptions = Array.isArray(firstQ.options)
+    ? firstQ.options
+    : Array.isArray(meta.options)
+      ? meta.options
+      : request.resources.length > 1
+        ? request.resources
+        : []
+
+  const options: QuestionOption[] = []
+
+  for (const raw of rawOptions) {
+    if (typeof raw === 'string') {
+      options.push({ label: raw, value: raw })
+    } else if (typeof raw === 'object' && raw !== null) {
+      const rec = raw as Record<string, unknown>
+      const label = String(rec.label ?? rec.value ?? rec.text ?? '')
+      const description = typeof rec.description === 'string' ? rec.description : undefined
+      const value = String(rec.value ?? rec.label ?? label)
+      if (label) {
+        options.push({ label, ...(description ? { description } : {}), value })
+      }
+    }
+  }
+
+  const multiSelect = Boolean(firstQ.multiSelect ?? meta.multiSelect)
+
+  return {
+    header,
+    questionText,
+    options,
+    multiSelect,
+  }
+}
+
+function QuestionModalView({
+  modal,
+  listLimit,
+  height,
+  controller,
+  setModal,
+}: {
+  modal: Extract<Modal, { type: 'permission' }>
+  listLimit: number
+  height: number
+  controller: CuppetController
+  setModal(value: Modal): void
+  setMessages: React.Dispatch<React.SetStateAction<MessageItem[]>>
+}) {
+  const [customText, setCustomText] = useState('')
+  const extracted = useMemo(() => extractQuestion(modal.request), [modal.request])
+  const [mode, setMode] = useState<'select' | 'custom'>(extracted.options.length > 0 ? 'select' : 'custom')
+
+  const title = `Question: ${extracted.header ?? modal.request.action}`
+  const nextModal = nextPermissionModal(modal)
+
+  if (mode === 'select' && extracted.options.length > 0) {
+    return (
+      <ModalBox height={height} title={title}>
+        <Text bold color="yellow" wrap="truncate-end">{extracted.questionText}</Text>
+        <SelectInput
+          limit={Math.max(1, listLimit - 1)}
+          items={[
+            ...extracted.options.map((opt) => ({
+              label: `${opt.label}${opt.description ? ` · ${opt.description}` : ''}`,
+              value: opt.value,
+            })),
+            { label: 'Type custom answer…', value: '__custom' },
+            { label: 'Deny / Cancel', value: '__reject' },
+          ]}
+          onSelect={(item) => {
+            if (item.value === '__custom') {
+              setMode('custom')
+              return
+            }
+            if (item.value === '__reject') {
+              void controller.replyPermission(modal.request, 'reject').finally(() => setModal(nextModal))
+              return
+            }
+            void controller
+              .replyPermission(modal.request, 'once', item.value)
+              .finally(() => setModal(nextModal))
+          }}
+        />
+      </ModalBox>
+    )
+  }
+
+  return (
+    <ModalBox height={height} title={title}>
+      <Text bold color="yellow" wrap="truncate-end">{extracted.questionText}</Text>
+      <Text dimColor wrap="truncate-end">Type your answer below and press Enter (Esc to cancel):</Text>
+      <TextInput
+        value={customText}
+        onChange={setCustomText}
+        onSubmit={(value) => {
+          const answer = value.trim()
+          if (!answer) return
+          setCustomText('')
+          void controller
+            .replyPermission(modal.request, 'once', answer)
+            .finally(() => setModal(nextModal))
+        }}
+      />
+    </ModalBox>
   )
 }
 

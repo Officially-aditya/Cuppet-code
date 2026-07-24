@@ -20,14 +20,53 @@ export class TstToolClient {
   }
 
   async query(sessionID: string, query: string, limit: number): Promise<unknown> {
+    return this.#request('memory.query', {
+      session_id: sessionID,
+      query,
+      limit: Math.min(Math.max(limit, 1), 40),
+    })
+  }
+
+  async graphSearch(pattern: string, prefix?: string, limit = 40): Promise<unknown> {
+    return this.#request('graph.search', {
+      pattern,
+      ...(prefix ? { prefix } : {}),
+      limit: Math.min(Math.max(limit, 1), 128),
+    })
+  }
+
+  async graphList(prefix?: string, limit = 100): Promise<unknown> {
+    return this.#request('graph.list', {
+      ...(prefix ? { prefix } : {}),
+      limit: Math.min(Math.max(limit, 1), 512),
+    })
+  }
+
+  async graphWorkspace(limit = 100): Promise<unknown> {
+    return this.#request('graph.workspace', {
+      limit: Math.min(Math.max(limit, 1), 512),
+    })
+  }
+
+  async graphTrace(
+    query: string,
+    direction: 'callers' | 'callees' | 'both' = 'both',
+    depth = 2,
+    limit = 40,
+  ): Promise<unknown> {
+    return this.#request('graph.trace', {
+      query,
+      direction,
+      depth: Math.min(Math.max(depth, 1), 4),
+      limit: Math.min(Math.max(limit, 1), 128),
+    })
+  }
+
+  async #request(method: string, params: unknown): Promise<unknown> {
     const socket = await connect(this.#socketPath)
     try {
       await this.#call(socket, 'initialize', { token: this.#token })
-      return await this.#call(socket, 'memory.query', {
-        session_id: sessionID,
-        query,
-        limit: Math.min(Math.max(limit, 1), 40),
-      })
+      return await this.#call(socket, method, params)
     } finally {
       socket.destroy()
     }

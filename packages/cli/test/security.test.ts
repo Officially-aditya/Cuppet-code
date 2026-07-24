@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { foregroundPermissions } from '../src/opencode/server.js'
+import { foregroundPermissions, GRAPH_NATIVE_TOOL_PROFILE } from '../src/opencode/server.js'
 import { redact } from '../src/runtime/logger.js'
 
 test('runtime source contains no legacy credential import path', async () => {
@@ -40,6 +40,17 @@ test('OpenCode permissions use real actions and ordered sensitive resource rules
   assert.equal('read_file' in permissions, false)
   assert.equal('write_file' in permissions, false)
   assert.equal(permissions.bash, 'ask')
+})
+
+test('graph-native profile removes legacy discovery tools from the agent action space', () => {
+  const profile = GRAPH_NATIVE_TOOL_PROFILE as Record<string, boolean | undefined>
+  assert.equal(GRAPH_NATIVE_TOOL_PROFILE['*'], false)
+  for (const tool of ['read', 'edit', 'write', 'bash', 'todowrite', 'cuppet_graph_search', 'cuppet_graph_trace']) {
+    assert.equal(profile[tool], true, `${tool} must remain available`)
+  }
+  for (const tool of ['glob', 'grep', 'lsp', 'webfetch', 'websearch', 'task']) {
+    assert.equal(profile[tool], undefined, `${tool} must not be allowlisted`)
+  }
 })
 
 test('local diagnostics redact common bearer tokens', () => {

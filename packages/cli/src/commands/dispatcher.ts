@@ -70,6 +70,20 @@ export class CommandDispatcher {
         }
       case 'status':
         return { handled: true, action: { type: 'status' } }
+      case 'plan': {
+        const option = arguments_[0]?.toLowerCase()
+        if (option && option !== 'on' && option !== 'off' && option !== 'toggle') {
+          return { handled: true, message: 'Usage: /plan [on|off]' }
+        }
+        const state = option === 'on' ? true : option === 'off' ? false : undefined
+        const active = this.#controller.togglePlanMode(state)
+        return {
+          handled: true,
+          message: active
+            ? 'Plan mode enabled (submitting full code graph for requirement extraction & goal establishment).'
+            : 'Plan mode disabled.',
+        }
+      }
       case 'memory':
         return this.#memory(arguments_)
       case 'compact':
@@ -153,6 +167,9 @@ export const COMMANDS = [
   '/new',
   '/resume',
   '/status',
+  '/plan',
+  '/plan on',
+  '/plan off',
   '/memory',
   '/compact',
   '/steer',
@@ -172,6 +189,7 @@ const HELP = `Cuppet commands:
 /effort [role] [level]           Select a supported model effort level
 /sessions, /new, /resume [id]    Manage project sessions
 /status, /memory                 Engine, usage, memory, graph, and queue status
+/plan [on|off]                   Toggle full graph plan mode
 /compact                         Compact OpenCode and durable memory
 /steer [--interrupt] <text>      Steer at a safe boundary
 /abort, /undo                    Abort or revert the latest change boundary

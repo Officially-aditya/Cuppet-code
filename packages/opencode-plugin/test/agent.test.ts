@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import CuppetPlugin, { foregroundPermissionRules } from '../src/index.js'
+import CuppetPlugin, { CuppetMemoryPlugin, foregroundPermissionRules } from '../src/index.js'
 
 test('Promise plugin registers both Cuppet agents and reloads the pinned v2 domain', async () => {
   const agents = new Map<string, Record<string, unknown>>()
@@ -42,5 +42,16 @@ test('Promise plugin registers both Cuppet agents and reloads the pinned v2 doma
   assert.equal(agents.get('cuppet-background')?.hidden, true)
   assert.deepEqual(agents.get('cuppet-background')?.permissions, [
     { action: '*', resource: '*', effect: 'deny' },
+  ])
+})
+
+test('Promise plugin exposes graph navigation tools alongside memory search', async () => {
+  const plugin = await CuppetMemoryPlugin()
+  assert.deepEqual(Object.keys(plugin.tool), [
+    'cuppet_memory_search',
+    'cuppet_workspace_info',
+    'cuppet_graph_tree',
+    'cuppet_graph_search',
+    'cuppet_graph_trace',
   ])
 })

@@ -175,6 +175,95 @@ npm run game:play -- --help
 printf 'q\n' | npm run game:play
 ```
 
+## Task Tracker refactor benchmark
+
+Tic-Tac-Toe is a useful greenfield control, but it has little existing code to
+navigate. The second fixture tests the disputed capability directly: a
+cross-file rename plus a call-graph-dependent bug in a 14-file TypeScript task
+tracker.
+
+### Task shape and hidden acceptance
+
+The seeded fixture in [`games/task-tracker/`](games/task-tracker/) contains a
+`Task.dueDate` field used across core, store, API, CLI, formatting, fixtures,
+and tests. The store intentionally drops the field during creation. The
+observable path is:
+
+```text
+cli/commands.ts → api/routes.ts → api/handlers.ts → store/taskStore.ts
+```
+
+Each agent had to:
+
+- Rename `dueDate` to `deadline` everywhere, including the `--deadline` CLI
+  option and non-literal cross-file usage sites.
+- Make `validate()` reject past deadlines while accepting future ones.
+- Fix the loss at the store layer so both direct `addTask()` calls and the
+  CLI-to-API-to-store path preserve the deadline.
+- Keep the existing tests, typecheck, and CLI help command passing.
+
+The hidden suite was generated outside each temporary trial workspace and
+scored eight checks: fixture shape, npm scripts, rename coverage, past-date
+validation, two-hop propagation, focused tests, typecheck, and CLI smoke. Hop
+scores are reported separately as:
+
+- `hop≤1`: rename coverage plus validation.
+- `hop2`: direct store and CLI/API/store deadline propagation.
+- `regression`: tests, typecheck, and CLI smoke.
+
+### Five-repeat result
+
+The authoritative run used five paired repeats of
+`google-vertex/gemini-flash-latest`, alternating arm order, fresh isolated
+copies, and `CUPPET_TTT_ALLOW_EXTERNAL=1` for both arms. The full report is
+[`ab-task-tracker-2026-07-23T03-21-57.074Z.md`](benchmarks/results/ab-task-tracker-2026-07-23T03-21-57.074Z.md),
+with raw session data in
+[`ab-task-tracker-2026-07-23T03-21-57.074Z.json`](benchmarks/results/ab-task-tracker-2026-07-23T03-21-57.074Z.json).
+
+| Metric | OpenCode | Cuppet | Cuppet vs OpenCode |
+|---|---:|---:|---:|
+| Successful trials | 5/5 | 2/5 | -60.0 percentage points |
+| Mean acceptance | 100.0% | 72.5% | -27.5 percentage points |
+| `hop≤1` acceptance | 100.0% | 50.0% | -50.0 percentage points |
+| `hop2` acceptance | 100.0% | 40.0% | -60.0 percentage points |
+| Regression checks | 100.0% | 80.0% | -20.0 percentage points |
+| Median latency, all trials | 200.2 s | 62.4 s | 68.8% lower |
+| Median uncached input, all trials | 58,334 | 26,442 | 54.7% lower |
+| Median total model tokens, all trials | 72,189 | 30,523 | 57.7% lower |
+| Median cost, all trials | $0.287087 | $0.090580 | 68.4% lower |
+| Total cost across five trials | $1.385432 | $0.898007 | $0.487425 lower |
+| Mean tool calls | 34.6 | 21.0 | 39.3% fewer |
+
+The all-trial efficiency result is confounded by three incomplete Cuppet
+sessions ending early. Conditioning on successful completions reverses the
+efficiency result: OpenCode's median successful latency was 200.2 seconds vs
+Cuppet's 230.4 seconds, and successful median cost was $0.287087 vs $0.362980.
+
+The graph-sensitive conclusion is therefore negative but precise: in this
+fixture, Cuppet's graph context did not produce a higher-probability solution
+to the two-hop bug. OpenCode reached 100% on both hop groups; Cuppet reached
+50% on hop≤1 and 40% on hop2. Cuppet still used fewer tokens and tools in the
+aggregate, but that saving came with a substantial reliability loss rather than
+an efficiency win on completed refactors.
+
+This should be treated as task-specific evidence, not a general product claim.
+It is one fixture, one provider/model, and five repeats. The Tic-Tac-Toe
+greenfield control remains useful for the other end of the spectrum; together,
+the two tasks suggest measuring both completion-conditioned efficiency and
+navigation-specific acceptance rather than relying on raw median cost alone.
+
+Reproduce it with:
+
+```sh
+CUPPET_TTT_ALLOW_EXTERNAL=1 \
+CUPPET_TASK_TRACKER_REPEATS=5 \
+npm run eval:ab:task-tracker
+```
+
+The executable harness is [`scripts/ab-task-tracker.ts`](scripts/ab-task-tracker.ts),
+and the benchmark methodology is documented in
+[`benchmarks/README.md`](benchmarks/README.md).
+
 ## Alpha limits
 
 Windows, musl, remote daemons, cloud memory sync, vector databases, and

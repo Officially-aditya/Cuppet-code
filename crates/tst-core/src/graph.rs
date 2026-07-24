@@ -1,9 +1,9 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use ignore::gitignore::Gitignore;
 use ignore::WalkBuilder;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tree_sitter::{InputEdit, Language, Node, Parser, Point, Tree};
@@ -86,19 +86,77 @@ pub struct GraphQueryResult {
     pub score: u32,
 }
 
-#[derive(Default)]
-struct ParsedFile {
-    node_ids: Vec<String>,
-    imports: Vec<SyntaxItem>,
-    calls: Vec<SyntaxItem>,
-    references: Vec<SyntaxItem>,
-    implementations: Vec<SyntaxItem>,
+#[derive(Clone, Debug, Serialize)]
+pub struct GraphTextMatch {
+    pub path: String,
+    pub line: usize,
+    pub column: usize,
+    pub content_hash: String,
 }
 
-#[derive(Clone)]
-struct SyntaxItem {
-    text: String,
-    span: SourceSpan,
+#[derive(Clone, Debug, Serialize)]
+pub struct GraphSearchResult {
+    pub query: String,
+    pub nodes: Vec<GraphQueryResult>,
+    pub text_matches: Vec<GraphTextMatch>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct GraphFileList {
+    pub root: String,
+    pub prefix: String,
+    pub total: usize,
+    pub paths: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct GraphWorkspaceInfo {
+    pub root: String,
+    pub graph: GraphStats,
+    pub files: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct GraphTraceEdge {
+    pub from: GraphNode,
+    pub to: GraphNode,
+    pub kind: EdgeKind,
+    pub path: String,
+    pub span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct GraphTraceResult {
+    pub query: String,
+    pub direction: String,
+    pub depth: usize,
+    pub roots: Vec<GraphNode>,
+    pub nodes: Vec<GraphNode>,
+    pub edges: Vec<GraphTraceEdge>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ParsedFile {
+    pub node_ids: Vec<String>,
+    pub imports: Vec<SyntaxItem>,
+    pub calls: Vec<SyntaxItem>,
+    pub references: Vec<SyntaxItem>,
+    pub implementations: Vec<SyntaxItem>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SyntaxItem {
+    pub text: String,
+    pub span: SourceSpan,
+}
+
+const GRAPH_SNAPSHOT_VERSION: u32 = 1;
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GraphSnapshot {
+    pub version: u32,
+    pub nodes: HashMap<String, GraphNode>,
+    pub files: HashMap<String, ParsedFile>,
 }
 
 pub struct CodeGraph {
@@ -110,6 +168,8 @@ pub struct CodeGraph {
     sources: HashMap<String, Vec<u8>>,
     gitignores: Vec<Gitignore>,
     progress: IndexProgress,
+    seen_in_build: HashSet<String>,
+    in_build: bool,
 }
 
 impl CodeGraph {
@@ -125,7 +185,44 @@ impl CodeGraph {
             trees: HashMap::new(),
             sources: HashMap::new(),
             progress: IndexProgress::default(),
+            seen_in_build: HashSet::new(),
+            in_build: false,
         })
+    }
+
+    pub fn save_snapshot(&self, path: &Path) -> Result<()> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let snapshot = GraphSnapshot {
+            version: GRAPH_SNAPSHOT_VERSION,
+            nodes: self.nodes.clone(),
+            files: self.files.clone(),
+        };
+        let bytes = rmp_serde::to_vec_named(&snapshot)
+            .context("serialize graph snapshot")?;
+        let temp_path = path.with_extension("tmp");
+        fs::write(&temp_path, &bytes)?;
+        fs::rename(&temp_path, path)?;
+        Ok(())
+    }
+
+    pub fn load_snapshot(&mut self, path: &Path) -> Result<bool> {
+        if !path.exists() {
+            return Ok(false);
+        }
+        let bytes = fs::read(path)?;
+        let snapshot: GraphSnapshot = match rmp_serde::from_slice::<GraphSnapshot>(&bytes) {
+            Ok(snapshot) if snapshot.version == GRAPH_SNAPSHOT_VERSION => snapshot,
+            _ => return Ok(false),
+        };
+        self.nodes = snapshot.nodes;
+        self.files = snapshot.files;
+        self.rebuild_edges();
+        self.progress.discovered = self.files.len();
+        self.progress.indexed = self.files.len();
+        self.progress.complete = true;
+        Ok(true)
     }
 
     pub fn build(&mut self) -> Result<()> {
@@ -139,11 +236,10 @@ impl CodeGraph {
 
     pub fn begin_build(&mut self) -> Vec<PathBuf> {
         self.gitignores = load_gitignores(&self.root);
-        self.nodes.clear();
-        self.edges.clear();
-        self.files.clear();
         self.trees.clear();
         self.sources.clear();
+        self.seen_in_build.clear();
+        self.in_build = true;
         self.progress = IndexProgress::default();
         let mut paths = Vec::new();
         for item in WalkBuilder::new(&self.root)
@@ -172,6 +268,19 @@ impl CodeGraph {
     }
 
     pub fn finish_build(&mut self) {
+        if self.in_build {
+            let stale_files: Vec<String> = self
+                .files
+                .keys()
+                .filter(|path| !self.seen_in_build.contains(*path))
+                .cloned()
+                .collect();
+            for relative in stale_files {
+                self.remove_file_nodes(&relative);
+            }
+            self.seen_in_build.clear();
+            self.in_build = false;
+        }
         self.rebuild_edges();
         self.progress.complete = true;
     }
@@ -242,6 +351,18 @@ impl CodeGraph {
         }
         let (language, language_name) = language_for_path(&canonical).expect("checked supported language");
         let hash = sha256(&source);
+
+        self.seen_in_build.insert(relative.clone());
+
+        let file_id = stable_id(&format!("file:{relative}"));
+        if self.files.contains_key(&relative) {
+            if let Some(existing_node) = self.nodes.get(&file_id) {
+                if existing_node.content_hash == hash {
+                    self.sources.insert(relative, source);
+                    return Ok(Some(hash));
+                }
+            }
+        }
 
         let mut parser = Parser::new();
         parser.set_language(&language)?;
@@ -531,6 +652,198 @@ impl CodeGraph {
         matches
     }
 
+    pub fn search(&self, pattern: &str, prefix: Option<&str>, limit: usize) -> GraphSearchResult {
+        let pattern = pattern.trim();
+        let limit = limit.clamp(1, 128);
+        let prefix = normalize_prefix(prefix);
+        let nodes = self
+            .query(pattern, limit.saturating_mul(2))
+            .into_iter()
+            .filter(|result| path_matches_prefix(&result.node.path, &prefix))
+            .take(limit)
+            .collect();
+
+        let mut text_matches = Vec::new();
+        if !pattern.is_empty() {
+            let needle = pattern.as_bytes();
+            let mut paths: Vec<&String> = self.files.keys().collect();
+            paths.sort();
+            for path in paths {
+                if !path_matches_prefix(path, &prefix) {
+                    continue;
+                }
+                let Some(source) = self.sources.get(path) else {
+                    continue;
+                };
+                let Some(node) = self.nodes.get(&stable_id(&format!("file:{path}"))) else {
+                    continue;
+                };
+                let mut offset = 0;
+                while offset + needle.len() <= source.len() {
+                    let Some(relative) = source[offset..]
+                        .windows(needle.len())
+                        .position(|window| window == needle)
+                    else {
+                        break;
+                    };
+                    let absolute = offset + relative;
+                    let before = &source[..absolute];
+                    let line = before.iter().filter(|byte| **byte == b'\n').count() + 1;
+                    let column = before
+                        .rsplit(|byte| *byte == b'\n')
+                        .next()
+                        .map(|line| line.len() + 1)
+                        .unwrap_or(1);
+                    text_matches.push(GraphTextMatch {
+                        path: path.clone(),
+                        line,
+                        column,
+                        content_hash: node.content_hash.clone(),
+                    });
+                    if text_matches.len() >= limit {
+                        return GraphSearchResult {
+                            query: pattern.into(),
+                            nodes,
+                            text_matches,
+                        };
+                    }
+                    offset = absolute.saturating_add(needle.len().max(1));
+                }
+            }
+        }
+
+        GraphSearchResult {
+            query: pattern.into(),
+            nodes,
+            text_matches,
+        }
+    }
+
+    pub fn list_files(&self, prefix: Option<&str>, limit: usize) -> GraphFileList {
+        let prefix = normalize_prefix(prefix);
+        let mut paths: Vec<String> = self
+            .files
+            .keys()
+            .filter(|path| path_matches_prefix(path, &prefix))
+            .cloned()
+            .collect();
+        paths.sort();
+        let total = paths.len();
+        paths.truncate(limit.clamp(1, 512));
+        GraphFileList {
+            root: self.root.display().to_string(),
+            prefix,
+            total,
+            paths,
+        }
+    }
+
+    pub fn workspace_info(&self, limit: usize) -> GraphWorkspaceInfo {
+        let files = self.list_files(None, limit.clamp(1, 512));
+        GraphWorkspaceInfo {
+            root: self.root.display().to_string(),
+            graph: self.stats(),
+            files: files.paths,
+        }
+    }
+
+    pub fn trace(
+        &self,
+        query: &str,
+        direction: &str,
+        depth: usize,
+        limit: usize,
+    ) -> Result<GraphTraceResult> {
+        if !matches!(direction, "callers" | "callees" | "both") {
+            return Err(anyhow!("graph trace direction must be callers, callees, or both"));
+        }
+        let depth = depth.clamp(1, 4);
+        let limit = limit.clamp(1, 128);
+        let roots: Vec<GraphNode> = self
+            .query(query, 32)
+            .into_iter()
+            .map(|result| result.node)
+            .collect();
+        let mut nodes = self
+            .nodes
+            .iter()
+            .filter_map(|(id, node)| {
+                roots
+                    .iter()
+                    .any(|root| &root.id == id)
+                    .then_some((id.clone(), node.clone()))
+            })
+            .collect::<HashMap<_, _>>();
+        let mut visited = nodes.keys().cloned().collect::<HashSet<_>>();
+        let mut frontier = roots
+            .iter()
+            .map(|root| (root.id.clone(), 0))
+            .collect::<VecDeque<_>>();
+        let mut edges = Vec::new();
+        let mut seen_edges = HashSet::new();
+
+        while let Some((current, current_depth)) = frontier.pop_front() {
+            if current_depth >= depth || edges.len() >= limit {
+                continue;
+            }
+            for edge in &self.edges {
+                let mut targets = Vec::new();
+                if matches!(direction, "callees" | "both") && edge.from == current {
+                    targets.push(edge.to.clone());
+                }
+                if matches!(direction, "callers" | "both") && edge.to == current {
+                    targets.push(edge.from.clone());
+                }
+                for target in targets {
+                    let edge_key = format!("{}:{}:{:?}:{}", edge.from, edge.to, edge.kind, edge.path);
+                    if !seen_edges.insert(edge_key) {
+                        continue;
+                    }
+                    let Some(from) = self.nodes.get(&edge.from) else {
+                        continue;
+                    };
+                    let Some(to) = self.nodes.get(&edge.to) else {
+                        continue;
+                    };
+                    nodes.entry(edge.from.clone()).or_insert_with(|| from.clone());
+                    nodes.entry(edge.to.clone()).or_insert_with(|| to.clone());
+                    edges.push(GraphTraceEdge {
+                        from: from.clone(),
+                        to: to.clone(),
+                        kind: edge.kind.clone(),
+                        path: edge.path.clone(),
+                        span: edge.span.clone(),
+                    });
+                    if visited.insert(target.clone()) {
+                        frontier.push_back((target, current_depth + 1));
+                    }
+                    if edges.len() >= limit {
+                        break;
+                    }
+                }
+                if edges.len() >= limit {
+                    break;
+                }
+            }
+        }
+
+        let mut nodes: Vec<GraphNode> = nodes.into_values().collect();
+        nodes.sort_by(|left, right| {
+            left.path
+                .cmp(&right.path)
+                .then_with(|| left.name.cmp(&right.name))
+                .then_with(|| left.id.cmp(&right.id))
+        });
+        Ok(GraphTraceResult {
+            query: query.into(),
+            direction: direction.into(),
+            depth,
+            roots,
+            nodes,
+            edges,
+        })
+    }
+
     pub fn stats(&self) -> GraphStats {
         GraphStats {
             files: self.files.len(),
@@ -581,6 +894,19 @@ impl CodeGraph {
         }
         ignored
     }
+}
+
+fn normalize_prefix(prefix: Option<&str>) -> String {
+    prefix
+        .unwrap_or_default()
+        .trim()
+        .trim_start_matches("./")
+        .trim_matches('/')
+        .replace('\\', "/")
+}
+
+fn path_matches_prefix(path: &str, prefix: &str) -> bool {
+    prefix.is_empty() || path == prefix || path.starts_with(&format!("{prefix}/"))
 }
 
 fn load_gitignores(root: &Path) -> Vec<Gitignore> {
@@ -1001,6 +1327,47 @@ mod tests {
     }
 
     #[test]
+    fn graph_navigation_returns_literal_matches_files_and_traces() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::create_dir(temp.path().join("src")).unwrap();
+        fs::write(
+            temp.path().join("src/api.ts"),
+            "import { addTask } from './store';\nexport function handler() { return addTask(); }\n",
+        )
+        .unwrap();
+        fs::write(
+            temp.path().join("src/store.ts"),
+            "export function addTask() { return 'created'; }\n",
+        )
+        .unwrap();
+        let mut graph = CodeGraph::new(temp.path()).unwrap();
+        graph.build().unwrap();
+
+        let search = graph.search("addTask", Some("src"), 10);
+        assert_eq!(search.text_matches.len(), 3);
+        assert!(search
+            .text_matches
+            .iter()
+            .all(|result| result.path.starts_with("src/")));
+
+        let files = graph.list_files(Some("src"), 10);
+        assert_eq!(files.total, 2);
+        assert_eq!(files.paths, vec!["src/api.ts", "src/store.ts"]);
+
+        let trace = graph.trace("api.ts", "callees", 1, 10).unwrap();
+        assert!(trace
+            .edges
+            .iter()
+            .any(|edge| edge.kind == EdgeKind::Call && edge.to.name == "addTask"));
+        let workspace = graph.workspace_info(10);
+        assert_eq!(
+            workspace.root,
+            temp.path().canonicalize().unwrap().display().to_string()
+        );
+        assert_eq!(workspace.files.len(), 2);
+    }
+
+    #[test]
     fn parses_every_alpha_language_and_tsx() {
         let temp = tempfile::tempdir().unwrap();
         for (name, source) in [
@@ -1128,5 +1495,32 @@ mod tests {
         graph.build().unwrap();
         assert!(graph.index_file(&link).unwrap().is_none());
         assert_eq!(graph.stats().files, 1);
+    }
+
+    #[test]
+    fn graph_snapshot_persists_across_sessions_and_handles_updates() {
+        let temp = tempfile::tempdir().unwrap();
+        let src = temp.path().join("src");
+        fs::create_dir(&src).unwrap();
+        let app_file = src.join("app.ts");
+        fs::write(&app_file, "export function oldSymbol() { return 42; }").unwrap();
+
+        let mut graph1 = CodeGraph::new(temp.path()).unwrap();
+        graph1.build().unwrap();
+        assert_eq!(graph1.query("oldSymbol", 5).len(), 1);
+
+        let snapshot_path = temp.path().join("graph.msgpack");
+        graph1.save_snapshot(&snapshot_path).unwrap();
+        assert!(snapshot_path.exists());
+
+        let mut graph2 = CodeGraph::new(temp.path()).unwrap();
+        let loaded = graph2.load_snapshot(&snapshot_path).unwrap();
+        assert!(loaded);
+        assert_eq!(graph2.query("oldSymbol", 5).len(), 1);
+
+        fs::write(&app_file, "export function newSymbol() { return 100; }").unwrap();
+        graph2.build().unwrap();
+        assert_eq!(graph2.query("newSymbol", 5).len(), 1);
+        assert!(graph2.query("oldSymbol", 5).is_empty());
     }
 }

@@ -293,13 +293,13 @@ export class OpenCodeGateway extends EventEmitter {
     return result.map((session) => this.#mapSession(session))
   }
 
-  async createSession(model: ModelRef, background = false): Promise<SessionInfo> {
+  async createSession(model: ModelRef, background = false, graphFirstGate = false, graphOnlySearch = false, graphNativeProfile = false): Promise<SessionInfo> {
     const result = unwrap(
       (await this.#client.session.create({
         directory: this.#directory,
         agent: background ? 'cuppet-background' : 'cuppet',
         model: toSessionModel(model),
-        permission: background ? backgroundPermissions() : foregroundPermissions(),
+        permission: background ? backgroundPermissions() : foregroundPermissions(graphFirstGate, graphOnlySearch, graphNativeProfile),
       })) as SdkResult<LegacySession>,
     )
     this.#sessionModels.set(result.id, { ...model })
@@ -346,8 +346,11 @@ export class OpenCodeGateway extends EventEmitter {
 
   async wait(sessionID: string): Promise<void> {
     // prompt_async starts its fiber before returning, but allow a short grace
-    // window so an immediate idle observation cannot race session startup.
+    // window so an immediate idle observation cannot race session startup. This
+    // matters when a second prompt is queued immediately after a completed
+    // navigation preflight.
     const started = Date.now()
+    const startupGraceMs = 1_000
     let observedBusy = false
     let idleObservations = 0
     while (Date.now() - started < 30 * 60_000) {
@@ -362,7 +365,7 @@ export class OpenCodeGateway extends EventEmitter {
         idleObservations = 0
       } else {
         idleObservations += 1
-        if (observedBusy || (Date.now() - started >= 250 && idleObservations >= 3)) return
+        if (observedBusy || (Date.now() - started >= startupGraceMs && idleObservations >= 3)) return
       }
       await delay(50)
     }
@@ -420,12 +423,14 @@ export class OpenCodeGateway extends EventEmitter {
     _sessionID: string,
     requestID: string,
     reply: 'once' | 'always' | 'reject',
+    message?: string,
   ): Promise<void> {
     ensureSuccess(
       (await this.#client.permission.reply({
         requestID,
         directory: this.#directory,
         reply,
+        ...(message ? { message } : {}),
       })) as SdkResult<unknown>,
     )
   }
@@ -542,6 +547,8 @@ export class OpenCodeEventNormalizer {
   readonly #toolStates = new Map<string, string>()
   readonly #toolTitles = new Map<string, string>()
   readonly #toolSessions = new Map<string, string>()
+  readonly #emittedUsageKeys = new Set<string>()
+  readonly #lastEmittedUsage = new Map<string, string>()
 
   normalize(raw: unknown): AgentEvent[] {
     const wrapper = record(raw)
@@ -642,15 +649,13 @@ export class OpenCodeEventNormalizer {
       case 'session.next.step.ended':
       case 'session.step.ended':
       case 'step.ended':
-      case 'session.usage':
-        return sessionID
-          ? [{
-              type: 'usage',
-              sessionID,
-              usage: mapUsage(record(data.tokens ?? data.usage ?? record(data.step).tokens)),
-              cost: Number(data.cost ?? 0),
-            }]
-          : []
+      case 'session.usage': {
+        if (!sessionID) return []
+        const usage = mapUsage(record(data.tokens ?? data.usage ?? record(data.step).tokens))
+        const cost = Number(data.cost ?? 0)
+        const keyCandidate = String(data.id ?? data.partID ?? data.stepID ?? record(data.step).id ?? '')
+        return this.#emitUsage(sessionID, usage, cost, keyCandidate)
+      }
       case 'session.next.compaction.started':
         return sessionID ? [{ type: 'compaction', sessionID, phase: 'started' }] : []
       case 'session.next.compaction.ended':
@@ -711,12 +716,10 @@ export class OpenCodeEventNormalizer {
     }
     if (part.type === 'tool') return this.#toolUpdated(sessionID, partID, part)
     if (part.type === 'step-finish') {
-      return [{
-        type: 'usage',
-        sessionID,
-        usage: mapUsage(record(part.tokens)),
-        cost: Number(part.cost ?? 0),
-      }]
+      const usage = mapUsage(record(part.tokens))
+      const cost = Number(part.cost ?? 0)
+      const keyCandidate = String(partID ?? part.id ?? '')
+      return this.#emitUsage(sessionID, usage, cost, keyCandidate)
     }
     return []
   }
@@ -777,7 +780,31 @@ export class OpenCodeEventNormalizer {
     return events
   }
 
+  #emitUsage(sessionID: string, usage: TokenUsage, cost: number, keyCandidate?: string): AgentEvent[] {
+    const usageSig = `${sessionID}:${usage.input}:${usage.output}:${usage.reasoning}:${usage.cacheRead}:${usage.cacheWrite}:${cost}`
+    const usageKey = keyCandidate && keyCandidate.length > 0 ? `${sessionID}:${keyCandidate}` : usageSig
+
+    if (this.#emittedUsageKeys.has(usageKey) || this.#lastEmittedUsage.get(sessionID) === usageSig) {
+      return []
+    }
+
+    this.#emittedUsageKeys.add(usageKey)
+    if (this.#emittedUsageKeys.size > 1_000) {
+      const oldest = this.#emittedUsageKeys.values().next().value as string | undefined
+      if (oldest) this.#emittedUsageKeys.delete(oldest)
+    }
+    this.#lastEmittedUsage.set(sessionID, usageSig)
+
+    return [{
+      type: 'usage',
+      sessionID,
+      usage,
+      cost,
+    }]
+  }
+
   #clearSession(sessionID: string): void {
+    this.#lastEmittedUsage.delete(sessionID)
     for (const [id, part] of this.#parts) {
       if (part.sessionID === sessionID) this.#parts.delete(id)
     }
@@ -802,10 +829,12 @@ export class OpenCodeEventNormalizer {
   }
 }
 
-function foregroundPermissions() {
+function foregroundPermissions(graphFirstGate = false, graphOnlySearch = false, graphNativeProfile = false) {
+  const navigationAction = graphFirstGate ? 'ask' : 'allow'
+  const searchAction = graphOnlySearch || graphNativeProfile ? 'deny' : navigationAction
   return [
     { permission: '*', pattern: '*', action: 'ask' as const },
-    { permission: 'read', pattern: '*', action: 'allow' as const },
+    { permission: 'read', pattern: '*', action: navigationAction as 'allow' | 'ask' },
     { permission: 'read', pattern: '*.env', action: 'ask' as const },
     { permission: 'read', pattern: '*.env.*', action: 'ask' as const },
     { permission: 'read', pattern: '**/.env', action: 'ask' as const },
@@ -813,25 +842,32 @@ function foregroundPermissions() {
     { permission: 'read', pattern: '**/*credentials*', action: 'ask' as const },
     { permission: 'read', pattern: '**/*.pem', action: 'ask' as const },
     { permission: 'read', pattern: '**/*.key', action: 'ask' as const },
-    { permission: 'read', pattern: '*.env.example', action: 'allow' as const },
-    { permission: 'read', pattern: '**/.env.example', action: 'allow' as const },
+    { permission: 'read', pattern: '*.env.example', action: navigationAction as 'allow' | 'ask' },
+    { permission: 'read', pattern: '**/.env.example', action: navigationAction as 'allow' | 'ask' },
     { permission: 'read', pattern: '**/.claude.json', action: 'deny' as const },
     { permission: 'read', pattern: '**/.cuppet/credentials.json', action: 'deny' as const },
     { permission: 'read', pattern: '**/.cuppet/ltm-trie.json', action: 'deny' as const },
-    { permission: 'glob', pattern: '*', action: 'allow' as const },
-    { permission: 'grep', pattern: '*', action: 'allow' as const },
-    { permission: 'lsp', pattern: '*', action: 'allow' as const },
-    { permission: 'question', pattern: '*', action: 'allow' as const },
+    { permission: 'glob', pattern: '*', action: searchAction as 'allow' | 'ask' | 'deny' },
+    { permission: 'grep', pattern: '*', action: searchAction as 'allow' | 'ask' | 'deny' },
+    { permission: 'lsp', pattern: '*', action: searchAction as 'allow' | 'ask' | 'deny' },
+    { permission: 'list', pattern: '*', action: graphNativeProfile ? 'deny' as const : navigationAction as 'allow' | 'ask' },
+    { permission: 'question', pattern: '*', action: navigationAction as 'allow' | 'ask' },
+    { permission: 'todowrite', pattern: '*', action: navigationAction as 'allow' | 'ask' },
     { permission: 'cuppet_memory_search', pattern: '*', action: 'allow' as const },
+    { permission: 'cuppet_workspace_info', pattern: '*', action: 'allow' as const },
+    { permission: 'cuppet_graph_tree', pattern: '*', action: 'allow' as const },
+    { permission: 'cuppet_graph_search', pattern: '*', action: 'allow' as const },
+    { permission: 'cuppet_graph_trace', pattern: '*', action: 'allow' as const },
     { permission: 'edit', pattern: '*', action: 'ask' as const },
     { permission: 'edit', pattern: '**/.claude.json', action: 'deny' as const },
     { permission: 'edit', pattern: '**/.cuppet/credentials.json', action: 'deny' as const },
     { permission: 'edit', pattern: '**/.cuppet/ltm-trie.json', action: 'deny' as const },
     { permission: 'bash', pattern: '*', action: 'ask' as const },
     { permission: 'external_directory', pattern: '*', action: 'ask' as const },
-    { permission: 'webfetch', pattern: '*', action: 'ask' as const },
-    { permission: 'websearch', pattern: '*', action: 'ask' as const },
-    { permission: 'task', pattern: '*', action: 'ask' as const },
+    { permission: 'webfetch', pattern: '*', action: graphOnlySearch || graphNativeProfile ? 'deny' as const : 'ask' as const },
+    { permission: 'websearch', pattern: '*', action: graphOnlySearch || graphNativeProfile ? 'deny' as const : 'ask' as const },
+    { permission: 'task', pattern: '*', action: graphOnlySearch || graphNativeProfile ? 'deny' as const : 'ask' as const },
+    { permission: 'skill', pattern: '*', action: graphNativeProfile ? 'deny' as const : 'ask' as const },
   ]
 }
 

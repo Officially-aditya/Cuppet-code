@@ -24,7 +24,7 @@ const staging = await mkdtemp(join(tmpdir(), 'cuppet-install-'))
 try {
   const runtimeTarball = await pack(runtime, staging)
   const cliTarball = await pack(resolve('packages', 'cli'), staging)
-  await run(process.execPath, [npm, 'install', '--global', runtimeTarball, cliTarball])
+  await run(process.execPath, [npm, 'install', '--global', '--force', runtimeTarball, cliTarball])
   process.stdout.write('Installed cupet and cuppet as standalone global commands.\n')
 } finally {
   await rm(staging, { recursive: true, force: true })

@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import type { IntegrationInfo } from '../src/types.js'
 import { nextPermissionModal, previousModal } from '../src/ui/modal.js'
 import { renderMessageLines, viewportLayout, windowMessageLines } from '../src/ui/viewport.js'
-import { diffLineColor, formatDiff, formatToolDetail } from '../src/ui/TerminalApp.js'
+import { diffLineColor, extractQuestion, formatDiff, formatToolDetail, isQuestionRequest } from '../src/ui/TerminalApp.js'
 
 test('Esc targets close command pickers and unwind nested authentication', () => {
   const integration = provider()
@@ -114,6 +114,48 @@ test('diff rendering keeps filenames visible and colors only actual tool diff li
   assert.equal(diffLineColor('-old code', 'tool'), 'red')
   assert.equal(diffLineColor('+new code', 'tool'), 'green')
   assert.equal(diffLineColor('- ordinary assistant bullet', 'assistant'), undefined)
+})
+
+test('question permission requests are detected and extracted into structured question details', () => {
+  const askReq = {
+    id: 'req-1',
+    sessionID: 'session-1',
+    action: 'AskUserQuestion',
+    resources: [],
+    metadata: {
+      questions: [
+        {
+          header: 'Auth Method',
+          question: 'Which authentication method should we use?',
+          options: [
+            { label: 'JWT', description: 'Stateless tokens' },
+            { label: 'Session', description: 'Cookie-based' },
+          ],
+        },
+      ],
+    },
+  }
+
+  assert.ok(isQuestionRequest(askReq))
+  const extracted = extractQuestion(askReq)
+  assert.equal(extracted.header, 'Auth Method')
+  assert.equal(extracted.questionText, 'Which authentication method should we use?')
+  assert.equal(extracted.options.length, 2)
+  assert.equal(extracted.options[0]?.label, 'JWT')
+  assert.equal(extracted.options[0]?.description, 'Stateless tokens')
+  assert.equal(extracted.options[1]?.value, 'Session')
+
+  const freeformReq = {
+    id: 'req-2',
+    sessionID: 'session-1',
+    action: 'ask_user',
+    resources: ['What project name should we use?'],
+  }
+
+  assert.ok(isQuestionRequest(freeformReq))
+  const freeformExtracted = extractQuestion(freeformReq)
+  assert.equal(freeformExtracted.questionText, 'What project name should we use?')
+  assert.equal(freeformExtracted.options.length, 0)
 })
 
 function provider(): IntegrationInfo {

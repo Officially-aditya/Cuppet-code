@@ -37,6 +37,7 @@ export type ControllerSnapshot = {
   foregroundCost: number
   background?: BackgroundStats
   running: boolean
+  planMode: boolean
   activeTools: number
   degraded: boolean
   stepCount: number
@@ -61,6 +62,7 @@ export class CuppetController extends EventEmitter {
   #usage = emptyUsage()
   #cost = 0
   #running = false
+  #planMode = false
   #tools = new Map<string, string>()
   #background: BackgroundWorker | undefined
   #stepCount = 0
@@ -168,6 +170,7 @@ export class CuppetController extends EventEmitter {
       foregroundCost: this.#cost,
       ...(this.#background ? { background: this.#background.stats } : {}),
       running: this.#running,
+      planMode: this.#planMode,
       activeTools: this.#tools.size,
       degraded: !this.#tstAvailable,
       stepCount: this.#stepCount,
@@ -284,6 +287,16 @@ export class CuppetController extends EventEmitter {
     return recommendSecondary(this.modelsForPlatform(this.#platform, 'secondary'), this.#primary)
   }
 
+  togglePlanMode(enable?: boolean): boolean {
+    this.#planMode = enable ?? !this.#planMode
+    this.#changed()
+    return this.#planMode
+  }
+
+  get planMode(): boolean {
+    return this.#planMode
+  }
+
   async submit(prompt: string, delivery: 'queue' | 'steer' = 'queue'): Promise<void> {
     if (!this.#primary) throw new Error('Choose a primary model before starting a session')
     const session = await this.#ensureSession()
@@ -296,6 +309,7 @@ export class CuppetController extends EventEmitter {
       this.#recentSymbols,
       this.#activeDiff,
       this.#paths.projectRealpath,
+      this.#planMode,
     ).catch(() => ({ prompt, contextTokens: 0 }))
     this.#lastUserPrompt = prompt
     this.#assistantBuffer = ''
@@ -430,8 +444,8 @@ export class CuppetController extends EventEmitter {
     this.#changed()
   }
 
-  async replyPermission(request: PermissionRequest, reply: 'once' | 'always' | 'reject'): Promise<void> {
-    await this.#gateway.replyPermission(request.sessionID, request.id, reply)
+  async replyPermission(request: PermissionRequest, reply: 'once' | 'always' | 'reject', message?: string): Promise<void> {
+    await this.#gateway.replyPermission(request.sessionID, request.id, reply, message)
   }
 
   async denyPendingPermissions(): Promise<number> {

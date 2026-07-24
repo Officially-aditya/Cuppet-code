@@ -26,7 +26,11 @@ test('read-only tool client authenticates and uses length-framed JSON-RPC', asyn
         buffered = buffered.subarray(length + 4)
         methods.push(request.method)
         if (request.method === 'initialize') assert.equal(request.params.token, 'a'.repeat(64))
-        const result = request.method === 'memory.query' ? { stm: [], ltm: [{ key: 'style' }], graph: [] } : { protocol: 'cuppet.tst.v1' }
+        const result = request.method === 'memory.query'
+          ? { stm: [], ltm: [{ key: 'style' }], graph: [] }
+          : request.method.startsWith('graph.')
+            ? { query: 'dueDate', nodes: [], text_matches: [], paths: [], root: '/tmp/project' }
+            : { protocol: 'cuppet.tst.v1' }
         const payload = Buffer.from(JSON.stringify({ jsonrpc: '2.0', id: request.id, result }))
         const header = Buffer.alloc(4)
         header.writeUInt32BE(payload.length)
@@ -40,8 +44,24 @@ test('read-only tool client authenticates and uses length-framed JSON-RPC', asyn
   })
   try {
     const result = await new TstToolClient(socketPath, 'a'.repeat(64)).query('session', 'style', 20)
-    assert.deepEqual(methods, ['initialize', 'memory.query'])
     assert.deepEqual(result, { stm: [], ltm: [{ key: 'style' }], graph: [] })
+    const client = new TstToolClient(socketPath, 'a'.repeat(64))
+    await client.graphSearch('dueDate', 'games/task-tracker', 10)
+    await client.graphList('games/task-tracker', 10)
+    await client.graphWorkspace(10)
+    await client.graphTrace('createTask', 'callees', 2, 10)
+    assert.deepEqual(methods, [
+      'initialize',
+      'memory.query',
+      'initialize',
+      'graph.search',
+      'initialize',
+      'graph.list',
+      'initialize',
+      'graph.workspace',
+      'initialize',
+      'graph.trace',
+    ])
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))
     await rm(directory, { recursive: true, force: true })

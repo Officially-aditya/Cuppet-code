@@ -51,13 +51,30 @@ export async function startTstDaemon(
         } finally {
           client.destroy()
           if (child.exitCode === null) child.kill('SIGTERM')
+          await waitForExit(child)
         }
       },
     }
   } catch (error) {
     if (child.exitCode === null) child.kill('SIGTERM')
+    await waitForExit(child)
     throw error
   }
+}
+
+async function waitForExit(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null) return
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(() => {
+      child.off('exit', onExit)
+      resolve()
+    }, 5_000)
+    const onExit = () => {
+      clearTimeout(timer)
+      resolve()
+    }
+    child.once('exit', onExit)
+  })
 }
 
 async function waitForClient(child: ChildProcess, socket: string, token: string): Promise<TstClient> {

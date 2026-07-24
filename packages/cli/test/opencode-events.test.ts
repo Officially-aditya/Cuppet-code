@@ -149,7 +149,7 @@ test('legacy OpenCode tool, permission, and usage events map into the Cuppet eve
   }])
   assert.deepEqual(normalizer.normalize(completed), [])
 
-  assert.deepEqual(normalizer.normalize(event('message.part.updated', {
+  const stepFinishEvent = event('message.part.updated', {
     sessionID: 'session',
     part: {
       id: 'step-finish',
@@ -159,12 +159,25 @@ test('legacy OpenCode tool, permission, and usage events map into the Cuppet eve
       cost: 0.25,
       tokens: { input: 10, output: 4, reasoning: 2, cache: { read: 3, write: 1 } },
     },
-  })), [{
+  })
+
+  assert.deepEqual(normalizer.normalize(stepFinishEvent), [{
     type: 'usage',
     sessionID: 'session',
     usage: { input: 10, output: 4, reasoning: 2, cacheRead: 3, cacheWrite: 1 },
     cost: 0.25,
   }])
+
+  // Duplicate step-finish part update should emit nothing
+  assert.deepEqual(normalizer.normalize(stepFinishEvent), [])
+
+  // Subsequent session.step.ended for the same step should emit nothing
+  assert.deepEqual(normalizer.normalize(event('session.step.ended', {
+    sessionID: 'session',
+    id: 'step-finish',
+    cost: 0.25,
+    tokens: { input: 10, output: 4, reasoning: 2, cache: { read: 3, write: 1 } },
+  })), [])
 })
 
 function event(type: string, properties: Record<string, unknown>) {

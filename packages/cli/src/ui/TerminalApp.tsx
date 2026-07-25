@@ -6,7 +6,7 @@ import type { CommandAction, CommandDispatcher } from '../commands/dispatcher.js
 import type { ControllerSnapshot, CuppetController } from '../controller.js'
 import { PLATFORM_OPTIONS, platformLabel } from '../platforms.js'
 import type { AgentEvent, IntegrationInfo, IntegrationMethod, MessageItem, ModelRef, Platform, SessionInfo, TokenUsage } from '../types.js'
-import { totalTokenUsage } from '../usage.js'
+import { formatTokenCount, totalTokenUsage } from '../usage.js'
 import { MultilineEditor } from './MultilineEditor.js'
 import { nextPermissionModal, previousModal, type Modal } from './modal.js'
 import { renderMessageLines, viewportLayout, windowMessageLines, type MessageLine } from './viewport.js'
@@ -365,7 +365,7 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
       {layout.footer > 0 ? (
         <Box height={1} overflow="hidden" flexShrink={0}>
           <Text {...(notice ? { color: 'yellow' as const } : snapshot.running || messageWindow.offset > 0 ? { color: 'yellow' as const } : { dimColor: true })} wrap="truncate-end">
-            {notice ?? (messageWindow.offset > 0 ? `▲ Scrolled ${messageWindow.offset} lines back` : `Token usage: ${tokenCount.toLocaleString()}`)} · {modal.type !== 'none'
+            {notice ?? (messageWindow.offset > 0 ? `▲ Scrolled ${messageWindow.offset} lines back` : `Token usage: ${formatTokenCount(tokenCount)}`)} · {modal.type !== 'none'
               ? 'Esc back · ↑↓ select · Enter confirm'
               : snapshot.running
                 ? `${spinner} Working… step ${snapshot.stepCount}/64 · tools ${snapshot.activeTools}`
@@ -1017,13 +1017,163 @@ function QuestionModalView({
 }
 
 const Message = React.memo(function Message({ item }: { item: MessageLine }) {
-  return renderMarkdownLine(item.text, item.sender)
+  return renderMarkdownLine(item.text, item.sender, item.isCodeBlock)
 })
 
-function renderMarkdownLine(text: string, sender: MessageItem['sender']) {
-  const diffColor = diffLineColor(text, sender)
-  if (diffColor) {
-    return <Text color={diffColor} bold={diffColor === 'cyan'} wrap="truncate-end">{text}</Text>
+function highlightCodeLine(text: string): React.ReactNode {
+  const commentIdx = text.indexOf('//')
+  let codePart = text
+  let commentPart = ''
+  if (commentIdx !== -1) {
+    const quoteMatches = text.slice(0, commentIdx).match(/["'`]/g)
+    if (!quoteMatches || quoteMatches.length % 2 === 0) {
+      codePart = text.slice(0, commentIdx)
+      commentPart = text.slice(commentIdx)
+    }
+  }
+
+  const keywordRegex = /\b(const|let|var|function|return|import|export|from|if|else|for|while|async|await|class|type|interface|default|switch|case|try|catch|throw|new|this|public|private|protected|static|readonly|extends|implements|struct|fn|pub|mut|def|val|nil|null|undefined|true|false|boolean|number|string|any|void)\b/g
+  const stringRegex = /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)/g
+  const numberRegex = /\b\d+(?:\.\d+)?\b/g
+  const fnCallRegex = /\b([a-zA-Z_$][a-zA-Z0-9_$]*)(?=\s*\()/g
+
+  const stringTokens = codePart.split(stringRegex)
+
+  const elements: React.ReactNode[] = stringTokens.map((token, idx) => {
+    if (!token) return null
+    if (token.startsWith('"') || token.startsWith("'") || token.startsWith('`')) {
+      return (
+        <Text key={`str-${idx}`} color="green">
+          {token}
+        </Text>
+      )
+    }
+
+    const subTokens = token.split(/(\b(?:const|let|var|function|return|import|export|from|if|else|for|while|async|await|class|type|interface|default|switch|case|try|catch|throw|new|this|public|private|protected|static|readonly|extends|implements|struct|fn|pub|mut|def|val|nil|null|undefined|true|false|boolean|number|string|any|void)\b|\b\d+(?:\.\d+)?\b|\b[a-zA-Z_$][a-zA-Z0-9_$]*(?=\s*\())/g)
+
+    return subTokens.map((sub, sIdx) => {
+      if (!sub) return null
+      if (keywordRegex.test(sub)) {
+        keywordRegex.lastIndex = 0
+        return (
+          <Text key={`kw-${idx}-${sIdx}`} color="magenta" bold>
+            {sub}
+          </Text>
+        )
+      }
+      keywordRegex.lastIndex = 0
+
+      if (numberRegex.test(sub)) {
+        numberRegex.lastIndex = 0
+        return (
+          <Text key={`num-${idx}-${sIdx}`} color="yellow">
+            {sub}
+          </Text>
+        )
+      }
+      numberRegex.lastIndex = 0
+
+      if (fnCallRegex.test(sub)) {
+        fnCallRegex.lastIndex = 0
+        return (
+          <Text key={`fn-${idx}-${sIdx}`} color="blue">
+            {sub}
+          </Text>
+        )
+      }
+      fnCallRegex.lastIndex = 0
+
+      return sub
+    })
+  })
+
+  return (
+    <>
+      {elements}
+      {commentPart ? <Text color="gray" dimColor>{commentPart}</Text> : null}
+    </>
+  )
+}
+
+function renderMarkdownLine(text: string, sender: MessageItem['sender'], isCodeBlock?: boolean) {
+  if (sender === 'tool' || text.startsWith('diff -- ') || text.startsWith('┌── ') || text.startsWith('└── ')) {
+    if (text.startsWith('diff -- ') || text.startsWith('┌── ') || text.startsWith('└── ')) {
+      const match = /^(?:diff -- |┌── |└── )(.+?)(?:\s+·\s+\+(\d+)\s+-(\d+))?$/.exec(text)
+      const file = match?.[1] ?? text.replace(/^(?:diff -- |┌── |└── )/, '').split(' · ')[0] ?? text
+      const adds = match?.[2]
+      const dels = match?.[3]
+
+      if (!file || file === 'file' || file === 'undefined' || file === 'null') {
+        return null
+      }
+
+      return (
+        <Text wrap="truncate-end">
+          <Text color="cyan" bold>{file}</Text>
+          {adds !== undefined && dels !== undefined ? (
+            <>
+              <Text color="gray"> · </Text>
+              <Text color="green">+{adds}</Text>
+              <Text color="red"> -{dels}</Text>
+            </>
+          ) : null}
+        </Text>
+      )
+    }
+
+    if (text.startsWith('+')) {
+      return (
+        <Text color="green" wrap="truncate-end">
+          {text}
+        </Text>
+      )
+    }
+
+    if (text.startsWith('-')) {
+      return (
+        <Text color="red" wrap="truncate-end">
+          {text}
+        </Text>
+      )
+    }
+
+    if (text.startsWith('@@') || text.startsWith('+++ ') || text.startsWith('--- ')) {
+      return (
+        <Text color="cyan" wrap="truncate-end">
+          {text}
+        </Text>
+      )
+    }
+
+    if (text.startsWith('…') || text.includes('more line(s)')) {
+      return (
+        <Text color="gray" dimColor wrap="truncate-end">
+          {text}
+        </Text>
+      )
+    }
+  }
+
+  if (text.startsWith('```')) {
+    const lang = text.slice(3).trim()
+    if (lang) {
+      return (
+        <Text wrap="truncate-end">
+          <Text color="gray">┌── </Text>
+          <Text color="cyan" bold>{lang}</Text>
+        </Text>
+      )
+    }
+    return <Text color="gray" dimColor wrap="truncate-end">└──</Text>
+  }
+
+  if (isCodeBlock) {
+    return (
+      <Text wrap="truncate-end">
+        <Text color="gray">│ </Text>
+        {highlightCodeLine(text)}
+      </Text>
+    )
   }
 
   const headerMatch = /^(#{1,6})\s+(.*)$/.exec(text)
@@ -1055,11 +1205,6 @@ function renderMarkdownLine(text: string, sender: MessageItem['sender']) {
         {parseInlineMarkdown(content)}
       </Text>
     )
-  }
-
-  if (text.startsWith('```')) {
-    const lang = text.slice(3).trim()
-    return <Text color="gray" dimColor wrap="truncate-end">─── {lang || 'code'} ───</Text>
   }
 
   const defaultColor = sender === 'user' ? 'green' : sender === 'system' ? 'yellow' : sender === 'tool' ? 'cyan' : undefined
@@ -1174,7 +1319,176 @@ async function beginOAuth(
 }
 
 let activeTurnSegment = 0
-const activeToolInfos = new Map<string, { name: string; detail?: string }>()
+const activeToolInfos = new Map<string, { name: string; detail?: string; input?: unknown }>()
+
+function unwrapToolInput(input: unknown): Record<string, unknown> | undefined {
+  if (!input || typeof input !== 'object') return undefined
+  let target = input as Record<string, unknown>
+  if (target.input && typeof target.input === 'object') target = target.input as Record<string, unknown>
+  else if (target.args && typeof target.args === 'object') target = target.args as Record<string, unknown>
+  else if (target.parameters && typeof target.parameters === 'object') target = target.parameters as Record<string, unknown>
+  else if (target.params && typeof target.params === 'object') target = target.params as Record<string, unknown>
+  return target
+}
+
+export function formatToolLineStats(name: string, input: unknown): string | undefined {
+  const rec = unwrapToolInput(input)
+  if (!rec) return undefined
+
+  const toolName = name.toLowerCase()
+
+  if ((toolName.includes('edit') || toolName.includes('patch') || toolName.includes('replace')) && !toolName.includes('notebook')) {
+    const oldStr =
+      typeof rec.old_string === 'string'
+        ? rec.old_string
+        : typeof rec.oldString === 'string'
+          ? rec.oldString
+          : typeof rec.old_content === 'string'
+            ? rec.old_content
+            : typeof rec.oldContent === 'string'
+              ? rec.oldContent
+              : undefined
+    const newStr =
+      typeof rec.new_string === 'string'
+        ? rec.new_string
+        : typeof rec.newString === 'string'
+          ? rec.newString
+          : typeof rec.new_content === 'string'
+            ? rec.new_content
+            : typeof rec.newContent === 'string'
+              ? rec.newContent
+              : typeof rec.replacement === 'string'
+                ? rec.replacement
+                : undefined
+
+    if (oldStr !== undefined || newStr !== undefined) {
+      const deletions = oldStr ? oldStr.split('\n').length : 0
+      const additions = newStr ? newStr.split('\n').length : 0
+      return `+${additions} -${deletions}`
+    }
+  }
+
+  if (toolName.includes('write')) {
+    const content =
+      typeof rec.content === 'string'
+        ? rec.content
+        : typeof rec.new_string === 'string'
+          ? rec.new_string
+          : typeof rec.newContent === 'string'
+            ? rec.newContent
+            : undefined
+    if (content !== undefined) {
+      const additions = content ? content.split('\n').length : 0
+      return `+${additions}`
+    }
+  }
+
+  if (toolName.includes('notebook') || toolName.includes('cell')) {
+    const newSource = typeof rec.new_source === 'string' ? rec.new_source : typeof rec.newSource === 'string' ? rec.newSource : undefined
+    if (newSource !== undefined) {
+      const additions = newSource ? newSource.split('\n').length : 0
+      return `+${additions}`
+    }
+  }
+
+  return undefined
+}
+
+export function formatToolDiff(name: string, input: unknown): string | undefined {
+  const rec = unwrapToolInput(input)
+  if (!rec) return undefined
+
+  const toolName = name.toLowerCase()
+
+  let filePath =
+    typeof rec.file_path === 'string'
+      ? rec.file_path
+      : typeof rec.path === 'string'
+        ? rec.path
+        : typeof rec.file === 'string'
+          ? rec.file
+          : typeof rec.filename === 'string'
+            ? rec.filename
+            : typeof rec.notebook_path === 'string'
+              ? rec.notebook_path
+              : typeof rec.target === 'string'
+                ? rec.target
+                : typeof rec.filepath === 'string'
+                  ? rec.filepath
+                  : typeof rec.file_name === 'string'
+                    ? rec.file_name
+                    : typeof rec.resource === 'string'
+                      ? rec.resource
+                      : typeof rec.uri === 'string'
+                        ? rec.uri
+                        : ''
+
+  if (filePath === 'file' || filePath === 'undefined' || filePath === 'null') {
+    filePath = ''
+  }
+
+  try {
+    const cwd = process.cwd()
+    if (cwd && filePath.startsWith(cwd)) {
+      filePath = filePath.slice(cwd.length).replace(/^[/\\]+/, '')
+    }
+  } catch {
+    // Ignore cwd errors
+  }
+
+  if ((toolName.includes('edit') || toolName.includes('patch') || toolName.includes('replace')) && !toolName.includes('notebook')) {
+    const oldStr =
+      typeof rec.old_string === 'string'
+        ? rec.old_string
+        : typeof rec.oldString === 'string'
+          ? rec.oldString
+          : typeof rec.old_content === 'string'
+            ? rec.old_content
+            : typeof rec.oldContent === 'string'
+              ? rec.oldContent
+              : undefined
+    const newStr =
+      typeof rec.new_string === 'string'
+        ? rec.new_string
+        : typeof rec.newString === 'string'
+          ? rec.newString
+          : typeof rec.new_content === 'string'
+            ? rec.new_content
+            : typeof rec.newContent === 'string'
+              ? rec.newContent
+              : typeof rec.replacement === 'string'
+                ? rec.replacement
+                : undefined
+
+    if (oldStr !== undefined || newStr !== undefined) {
+      return formatDiff([{ file: filePath, before: oldStr ?? '', after: newStr ?? '' }])
+    }
+  }
+
+  if (toolName.includes('write')) {
+    const content =
+      typeof rec.content === 'string'
+        ? rec.content
+        : typeof rec.new_string === 'string'
+          ? rec.new_string
+          : typeof rec.newContent === 'string'
+            ? rec.newContent
+            : undefined
+    if (content !== undefined) {
+      return formatDiff([{ file: filePath, before: '', after: content }])
+    }
+  }
+
+  if (toolName.includes('notebook') || toolName.includes('cell')) {
+    const newSource = typeof rec.new_source === 'string' ? rec.new_source : typeof rec.newSource === 'string' ? rec.newSource : undefined
+    const oldSource = typeof rec.old_source === 'string' ? rec.old_source : typeof rec.oldSource === 'string' ? rec.oldSource : ''
+    if (newSource !== undefined) {
+      return formatDiff([{ file: filePath, before: oldSource, after: newSource }])
+    }
+  }
+
+  return undefined
+}
 
 export function formatToolDetail(name: string, input: unknown): string | undefined {
   if (!input) return undefined
@@ -1263,7 +1577,8 @@ function handleAgentEvent(
     const existing = activeToolInfos.get(event.callID)
     const detail = formatToolDetail(event.name, event.input) ?? existing?.detail
     const name = event.name === 'tool' && existing ? existing.name : event.name
-    activeToolInfos.set(event.callID, { name, ...(detail ? { detail } : {}) })
+    const input = event.input ?? existing?.input
+    activeToolInfos.set(event.callID, { name, ...(detail ? { detail } : {}), ...(input !== undefined ? { input } : {}) })
     const base = detail ? `${name} (${detail})` : name
     if (existing) updateMessage(setMessages, `tool:${event.callID}`, base)
     else addMessage(setMessages, 'tool', base, `tool:${event.callID}`)
@@ -1273,12 +1588,21 @@ function handleAgentEvent(
     updateMessage(setMessages, `tool:${event.callID}`, `${base} · ${event.message}`)
   } else if (event.type === 'tool-end') {
     const info = activeToolInfos.get(event.callID)
+    const input = event.input ?? info?.input
     let detail = info?.detail
     if (!detail && event.outputPaths?.length) {
       detail = formatToolDetail(info?.name ?? 'tool', event.outputPaths[0])
     }
+    const lineStats = formatToolLineStats(info?.name ?? event.name ?? 'tool', input)
     const base = info ? (detail ? `${info.name} (${detail})` : info.name) : 'tool'
-    updateMessage(setMessages, `tool:${event.callID}`, `${base} · ${event.success ? 'completed' : 'failed'}`)
+    const statsPart = lineStats ? ` · ${lineStats}` : ''
+    updateMessage(setMessages, `tool:${event.callID}`, `${base}${statsPart} · ${event.success ? 'completed' : 'failed'}`)
+    if (event.success) {
+      const toolDiff = formatToolDiff(info?.name ?? event.name ?? 'tool', input)
+      if (toolDiff) {
+        addMessage(setMessages, 'tool', toolDiff)
+      }
+    }
     activeToolInfos.delete(event.callID)
     activeTurnSegment += 1
   } else if (event.type === 'idle') {
@@ -1418,8 +1742,26 @@ export function formatDiff(diffData: unknown): string {
       chunks?: unknown[]
       hunks?: unknown[]
     }
-    const file = String(entry.path ?? entry.file ?? 'file')
-    lines.push(`diff -- ${file}`)
+    let file = String(entry.path ?? entry.file ?? '')
+    if (file === 'file' || file === 'undefined' || file === 'null') {
+      file = ''
+    }
+
+    const preview = typeof entry.before === 'string' && typeof entry.after === 'string'
+      ? changedLinePreview(entry.before, entry.after)
+      : []
+
+    const additions = Number.isFinite(entry.additions) ? Math.max(0, Number(entry.additions)) : countPrefixed(preview, '+')
+    const deletions = Number.isFinite(entry.deletions) ? Math.max(0, Number(entry.deletions)) : countPrefixed(preview, '-')
+
+    if (file) {
+      if (additions > 0 || deletions > 0) {
+        lines.push(`diff -- ${file} · +${additions} -${deletions}`)
+      } else {
+        lines.push(`diff -- ${file}`)
+      }
+    }
+
     const chunks = entry.chunks ?? entry.hunks
     if (Array.isArray(chunks)) {
       for (const chunk of chunks) {
@@ -1432,13 +1774,9 @@ export function formatDiff(diffData: unknown): string {
           }
         }
       }
-    } else if (typeof entry.before === 'string' && typeof entry.after === 'string') {
-      lines.push(...changedLinePreview(entry.before, entry.after))
+    } else {
+      lines.push(...preview)
     }
-    const additions = Number.isFinite(entry.additions) ? Math.max(0, Number(entry.additions)) : countPrefixed(lines, '+')
-    const deletions = Number.isFinite(entry.deletions) ? Math.max(0, Number(entry.deletions)) : countPrefixed(lines, '-')
-    // Keep the target visible at the bottom of a short viewport after the preview scrolls.
-    lines.push(`diff -- ${file} · +${additions} -${deletions}`)
   }
   return lines.join('\n')
 }
@@ -1455,8 +1793,8 @@ export function diffLineColor(
 }
 
 function changedLinePreview(before: string, after: string): string[] {
-  const oldLines = before.split('\n')
-  const newLines = after.split('\n')
+  const oldLines = before ? before.split('\n') : []
+  const newLines = after ? after.split('\n') : []
   let prefix = 0
   while (prefix < oldLines.length && prefix < newLines.length && oldLines[prefix] === newLines[prefix]) prefix += 1
   let suffix = 0
@@ -1477,7 +1815,7 @@ function changedLinePreview(before: string, after: string): string[] {
 function previewLines(lines: string[], prefix: '+' | '-'): string[] {
   const limit = 3
   const preview = lines.slice(0, limit).map((line) => `${prefix}${line}`)
-  if (lines.length > limit) preview.push(`${prefix}… ${lines.length - limit} more line(s)`)
+  if (lines.length > limit) preview.push(`… ${lines.length - limit} more line(s)`)
   return preview
 }
 

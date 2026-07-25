@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { constants, createReadStream } from 'node:fs'
 import { access, readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
-import { dirname, join, resolve } from 'node:path'
+import { delimiter, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { OPENCODE_REVISION, OPENCODE_VERSION, TST_PROTOCOL_VERSION } from '../constants.js'
 
@@ -87,31 +87,77 @@ export async function resolveRuntimeAssets(): Promise<RuntimeAssets> {
 async function fillDevelopmentDefaults(assets: RuntimeAssets): Promise<void> {
   const moduleDirectory = dirname(fileURLToPath(import.meta.url))
   const repositoryRoot = await findRepositoryRoot(moduleDirectory)
-  const runtimeDirectory = runtimeDirectories[`${process.platform}-${process.arch}`]
+  const key = `${process.platform}-${process.arch}`
+  const packageName = packageNames[key]
+  const runtimeDirectory = runtimeDirectories[key]
   const localRuntimeCandidate = repositoryRoot && runtimeDirectory
     ? resolve(repositoryRoot, 'artifacts', runtimeDirectory)
     : undefined
   const localRuntime = localRuntimeCandidate && await verifyLocalRuntime(localRuntimeCandidate, assets.diagnostics)
     ? localRuntimeCandidate
     : undefined
+
+  let globalPackageRoot: string | undefined
+  if (packageName) {
+    try {
+      const require = createRequire(import.meta.url)
+      const manifestPath = require.resolve(`${packageName}/manifest.json`)
+      globalPackageRoot = dirname(manifestPath)
+    } catch {
+      // Ignore if package cannot be resolved
+    }
+  }
+
+  const pathOpencode = await findInPath('opencode')
+  const pathTst = await findInPath('tst-daemon')
+
   const candidates = {
     opencode: [
       ...(localRuntime ? [resolve(localRuntime, 'bin/opencode')] : []),
+      ...(repositoryRoot && runtimeDirectory ? [resolve(repositoryRoot, 'packages', runtimeDirectory, 'bin/opencode')] : []),
+      ...(globalPackageRoot ? [resolve(globalPackageRoot, 'bin/opencode')] : []),
+      ...(pathOpencode ? [pathOpencode] : []),
     ],
     tst: [
+      resolve(process.cwd(), 'target/release/tst-daemon'),
       resolve(process.cwd(), 'target/debug/tst-daemon'),
       ...(localRuntime ? [resolve(localRuntime, 'bin/tst-daemon')] : []),
-      ...(repositoryRoot ? [resolve(repositoryRoot, 'target/debug/tst-daemon')] : []),
+      ...(repositoryRoot ? [
+        resolve(repositoryRoot, 'target/release/tst-daemon'),
+        resolve(repositoryRoot, 'target/debug/tst-daemon'),
+      ] : []),
+      ...(repositoryRoot && runtimeDirectory ? [resolve(repositoryRoot, 'packages', runtimeDirectory, 'bin/tst-daemon')] : []),
+      ...(globalPackageRoot ? [resolve(globalPackageRoot, 'bin/tst-daemon')] : []),
+      ...(pathTst ? [pathTst] : []),
     ],
     plugin: [
       resolve(process.cwd(), 'packages/opencode-plugin/dist/index.js'),
       ...(localRuntime ? [resolve(localRuntime, 'plugin/index.js')] : []),
       ...(repositoryRoot ? [resolve(repositoryRoot, 'packages/opencode-plugin/dist/index.js')] : []),
+      ...(repositoryRoot && runtimeDirectory ? [resolve(repositoryRoot, 'packages', runtimeDirectory, 'plugin/index.js')] : []),
+      ...(globalPackageRoot ? [resolve(globalPackageRoot, 'plugin/index.js')] : []),
     ],
   }
   if (!assets.opencode) assets.opencode = await firstExisting(candidates.opencode)
   if (!assets.tst) assets.tst = await firstExisting(candidates.tst)
   if (!assets.plugin) assets.plugin = await firstExisting(candidates.plugin)
+}
+
+async function findInPath(binaryName: string): Promise<string | undefined> {
+  const pathEnv = process.env.PATH
+  if (!pathEnv) return undefined
+  const directories = pathEnv.split(delimiter)
+  for (const directory of directories) {
+    if (!directory) continue
+    const candidate = join(directory, binaryName)
+    try {
+      await access(candidate, constants.X_OK)
+      return candidate
+    } catch {
+      // Continue searching PATH
+    }
+  }
+  return undefined
 }
 
 const runtimeDirectories: Record<string, string> = {

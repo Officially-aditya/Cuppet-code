@@ -145,6 +145,7 @@ test('legacy OpenCode tool, permission, and usage events map into the Cuppet eve
     sessionID: 'session',
     callID: 'call-1',
     success: true,
+    input: { filePath: 'src/index.ts' },
     outputPaths: ['src/index.ts'],
   }])
   assert.deepEqual(normalizer.normalize(completed), [])

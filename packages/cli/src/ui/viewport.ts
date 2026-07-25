@@ -15,6 +15,7 @@ export type MessageLine = {
   id: string
   sender: MessageItem['sender']
   text: string
+  isCodeBlock?: boolean
 }
 
 export function viewportLayout(rows: number, modalOpen: boolean): ViewportLayout {
@@ -57,12 +58,56 @@ export function renderMessageLines(messages: MessageItem[], columns: number): Me
         : message.sender === 'system'
           ? 'ℹ '
           : ''
-    const wrapped = wrapTerminalText(`${prefix}${cleanText || message.text}`, width)
-    return wrapped.map((text, index) => ({
-      id: `${message.id}:${index}`,
-      sender: message.sender,
-      text: text || ' ',
-    }))
+    const fullText = `${prefix}${cleanText || message.text}`
+    const sourceLines = fullText.split('\n')
+    let inCodeBlock = false
+    let inDiffBlock = false
+    const result: MessageLine[] = []
+    let lineIdx = 0
+
+    const addBlankLines = () => {
+      result.push({ id: `${message.id}:${lineIdx++}`, sender: message.sender, text: ' ' })
+      result.push({ id: `${message.id}:${lineIdx++}`, sender: message.sender, text: ' ' })
+    }
+
+    for (let i = 0; i < sourceLines.length; i += 1) {
+      const sourceLine = sourceLines[i] ?? ''
+      const trimmed = sourceLine.trimStart()
+      const isCodeFence = trimmed.startsWith('```')
+      const isDiffHeader = trimmed.startsWith('diff -- ') || trimmed.startsWith('┌── ')
+
+      if (isCodeFence) {
+        const lang = trimmed.slice(3).trim()
+        if (lang) {
+          addBlankLines()
+          inCodeBlock = true
+        } else {
+          inCodeBlock = false
+        }
+      } else if (isDiffHeader && !inDiffBlock) {
+        addBlankLines()
+        inDiffBlock = true
+      }
+
+      const wrapped = wrapTerminalText(sourceLine, width)
+      const currentIsCodeBlock = inCodeBlock && !isCodeFence
+      for (const text of wrapped) {
+        result.push({
+          id: `${message.id}:${lineIdx++}`,
+          sender: message.sender,
+          text: text || ' ',
+          ...(currentIsCodeBlock ? { isCodeBlock: true } : {}),
+        })
+      }
+
+      if (isCodeFence && !inCodeBlock) {
+        addBlankLines()
+      } else if (inDiffBlock && (i === sourceLines.length - 1 || (sourceLines[i + 1] !== undefined && !sourceLines[i + 1]?.startsWith('+') && !sourceLines[i + 1]?.startsWith('-') && !sourceLines[i + 1]?.startsWith('@@') && !sourceLines[i + 1]?.startsWith('…') && !sourceLines[i + 1]?.includes('more line(s)')))) {
+        inDiffBlock = false
+        addBlankLines()
+      }
+    }
+    return result
   })
 }
 

@@ -579,7 +579,7 @@ fn prepare_socket(path: &Path) -> Result<()> {
 #[cfg(unix)]
 fn set_runtime_mode(path: &Path) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
-    fs::set_permissions(path, fs::Permissions::from_mode(0o700))?;
+    let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o700));
     Ok(())
 }
 

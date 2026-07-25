@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import type { IntegrationInfo } from '../src/types.js'
 import { nextPermissionModal, previousModal } from '../src/ui/modal.js'
 import { renderMessageLines, viewportLayout, windowMessageLines } from '../src/ui/viewport.js'
-import { diffLineColor, extractQuestion, formatDiff, formatToolDetail, isQuestionRequest } from '../src/ui/TerminalApp.js'
+import { diffLineColor, extractQuestion, formatDiff, formatToolDetail, formatToolDiff, formatToolLineStats, isQuestionRequest } from '../src/ui/TerminalApp.js'
 
 test('Esc targets close command pickers and unwind nested authentication', () => {
   const integration = provider()
@@ -89,6 +89,26 @@ test('formatToolDetail extracts file paths, commands, and search queries cleanly
   assert.equal(formatToolDetail('read_file', undefined), undefined)
 })
 
+test('formatToolLineStats calculates line additions and deletions for edit and write tools', () => {
+  assert.equal(formatToolLineStats('Edit', { file_path: 'src/app.tsx', old_string: 'line1\nline2', new_string: 'lineA' }), '+1 -2')
+  assert.equal(formatToolLineStats('Write', { file_path: 'src/new.ts', content: 'const x = 1\nconst y = 2\nconst z = 3' }), '+3')
+  assert.equal(formatToolLineStats('NotebookEdit', { notebook_path: 'nb.ipynb', new_source: 'import numpy as np' }), '+1')
+  assert.equal(formatToolLineStats('Read', { file_path: 'package.json' }), undefined)
+})
+
+test('formatToolDiff generates formatted diff code blocks for file modifications', () => {
+  const editDiff = formatToolDiff('Edit', { file_path: 'src/app.tsx', old_string: 'old line', new_string: 'new line' })
+  assert.ok(editDiff?.includes('diff -- src/app.tsx'))
+  assert.ok(editDiff?.includes('-old line'))
+  assert.ok(editDiff?.includes('+new line'))
+
+  const writeDiff = formatToolDiff('Write', { file_path: 'src/new.ts', content: 'const x = 1' })
+  assert.ok(writeDiff?.includes('diff -- src/new.ts'))
+  assert.ok(writeDiff?.includes('+const x = 1'))
+
+  assert.equal(formatToolDiff('Read', { file_path: 'package.json' }), undefined)
+})
+
 test('tool messages render single gear icon and include details', () => {
   const lines = renderMessageLines([
     { id: 'tool-1', sender: 'tool', text: 'write_file (frontend/build/app.apk) · completed' },
@@ -106,14 +126,43 @@ test('diff rendering keeps filenames visible and colors only actual tool diff li
   }])
   const lines = rendered.split('\n')
 
-  assert.equal(lines.at(-1), 'diff -- src/example.ts · +1 -1')
+  assert.equal(lines[0], 'diff -- src/example.ts · +1 -1')
   assert.ok(lines.includes('-const oldValue = 2'))
   assert.ok(lines.includes('+const newValue = 3'))
+
+  const genericDiff = formatDiff([{
+    file: 'file',
+    before: '',
+    after: 'GITIGNORE_UPDATED.md',
+  }])
+  assert.equal(genericDiff, '+GITIGNORE_UPDATED.md')
+
   assert.equal(diffLineColor('--- a/src/example.ts', 'tool'), 'cyan')
   assert.equal(diffLineColor('+++ b/src/example.ts', 'tool'), 'cyan')
   assert.equal(diffLineColor('-old code', 'tool'), 'red')
   assert.equal(diffLineColor('+new code', 'tool'), 'green')
   assert.equal(diffLineColor('- ordinary assistant bullet', 'assistant'), undefined)
+})
+
+test('code blocks and diff blocks format with box frames and code block indicators', () => {
+  const lines = renderMessageLines([
+    {
+      id: 'msg-1',
+      sender: 'assistant',
+      text: 'Here is code:\n```typescript\nconst x = 1\n```',
+    },
+  ], 80)
+
+  assert.equal(lines[0]?.text, 'Here is code:')
+  assert.equal(lines[1]?.text, ' ')
+  assert.equal(lines[2]?.text, ' ')
+  assert.equal(lines[3]?.text, '```typescript')
+  assert.equal(lines[4]?.text, 'const x = 1')
+  assert.equal(lines[4]?.isCodeBlock, true)
+  assert.equal(lines[5]?.text, '```')
+  assert.equal(lines[5]?.isCodeBlock, undefined)
+  assert.equal(lines[6]?.text, ' ')
+  assert.equal(lines[7]?.text, ' ')
 })
 
 test('question permission requests are detected and extracted into structured question details', () => {

@@ -53,6 +53,8 @@ pub struct DurableStore {
     records: HashMap<String, MemoryRecord>,
     trie: TernaryTrie,
     recovery: RecoveryReport,
+    exclusive: bool,
+    wal_position: u64,
 }
 
 impl DurableStore {
@@ -71,8 +73,8 @@ impl DurableStore {
             .open(&lock_path)
             .with_context(|| format!("open writer lock {}", lock_path.display()))?;
         set_private_file_mode(&lock)?;
-        lock.try_lock_exclusive()
-            .map_err(|error| anyhow!("project memory is already owned by another process: {error}"))?;
+
+        let exclusive = lock.try_lock_exclusive().is_ok();
 
         let snapshot_path = directory.join("snapshot.msgpack");
         let previous_path = directory.join("snapshot.previous.msgpack");
@@ -121,17 +123,32 @@ impl DurableStore {
             records,
             trie: TernaryTrie::default(),
             recovery,
+            exclusive,
+            wal_position: 0,
         };
         store.replay_wal()?;
         store.rebuild_trie();
-        store.wal.seek(SeekFrom::End(0))?;
         Ok(store)
     }
 
+    fn sync_wal_if_needed(&mut self) -> Result<()> {
+        if !self.exclusive {
+            let current_len = self.wal.metadata()?.len();
+            if current_len > self.wal_position {
+                self.replay_wal()?;
+                self.rebuild_trie();
+            }
+        }
+        Ok(())
+    }
+
     fn replay_wal(&mut self) -> Result<()> {
-        self.wal.seek(SeekFrom::Start(0))?;
+        self.wal.seek(SeekFrom::Start(self.wal_position))?;
         let total = self.wal.metadata()?.len();
-        let mut valid_end = 0u64;
+        if total <= self.wal_position {
+            return Ok(());
+        }
+        let mut valid_end = self.wal_position;
         loop {
             let mut header = [0u8; 8];
             match self.wal.read_exact(&mut header) {
@@ -165,11 +182,12 @@ impl DurableStore {
             valid_end += 8 + length as u64;
         }
 
-        if valid_end < total {
+        if self.exclusive && valid_end < total {
             self.recovery.truncated_wal_bytes = total - valid_end;
             self.wal.set_len(valid_end)?;
             self.wal.sync_data()?;
         }
+        self.wal_position = valid_end;
         Ok(())
     }
 
@@ -178,10 +196,12 @@ impl DurableStore {
         if payload.len() > MAX_FRAME_BYTES {
             return Err(anyhow!("WAL event exceeds frame limit"));
         }
+        self.wal.seek(SeekFrom::End(0))?;
         self.wal.write_all(&(payload.len() as u32).to_be_bytes())?;
         self.wal.write_all(&crc32(&payload).to_be_bytes())?;
         self.wal.write_all(&payload)?;
         self.wal.sync_data()?;
+        self.wal_position = self.wal.metadata()?.len();
         Ok(())
     }
 
@@ -248,6 +268,7 @@ impl DurableStore {
     }
 
     pub fn exact(&mut self, key: &str) -> Option<MemoryRecord> {
+        let _ = self.sync_wal_if_needed();
         let id = self.trie.get(key)?.to_owned();
         let record = self.records.get_mut(&id)?;
         if record.tombstone || record.stale || !record.verified {
@@ -258,6 +279,7 @@ impl DurableStore {
     }
 
     pub fn query(&mut self, query: &str, limit: usize) -> Vec<MemoryRecord> {
+        let _ = self.sync_wal_if_needed();
         let normalized = normalize_key(query);
         let mut ids = self.trie.prefix(&normalized, limit);
         if ids.len() < limit {
@@ -300,6 +322,14 @@ impl DurableStore {
     }
 
     pub fn compact(&mut self) -> Result<()> {
+        let _ = self.sync_wal_if_needed();
+        if !self.exclusive {
+            if self._lock.try_lock_exclusive().is_ok() {
+                self.exclusive = true;
+            } else {
+                return self.flush();
+            }
+        }
         self.records.retain(|_, record| !record.tombstone);
         let snapshot = Snapshot {
             schema: SNAPSHOT_SCHEMA_VERSION,
@@ -321,6 +351,7 @@ impl DurableStore {
         self.wal.set_len(0)?;
         self.wal.seek(SeekFrom::Start(0))?;
         self.wal.sync_all()?;
+        self.wal_position = 0;
         self.rebuild_trie();
         Ok(())
     }
@@ -429,7 +460,7 @@ fn crc32(payload: &[u8]) -> u32 {
 #[cfg(unix)]
 fn set_private_dir_mode(path: &Path) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
-    fs::set_permissions(path, fs::Permissions::from_mode(0o700))?;
+    let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o700));
     Ok(())
 }
 

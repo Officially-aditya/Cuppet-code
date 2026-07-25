@@ -578,7 +578,13 @@ export class OpenCodeEventNormalizer {
         return sessionID ? [{ type: 'reasoning-delta', sessionID, text: String(data.delta ?? '') }] : []
       case 'session.next.tool.input.started':
         return sessionID
-          ? [{ type: 'tool-start', sessionID, callID: String(data.callID ?? ''), name: String(data.name ?? 'tool') }]
+          ? [{
+              type: 'tool-start',
+              sessionID,
+              callID: String(data.callID ?? ''),
+              name: String(data.name ?? 'tool'),
+              ...(data.input !== undefined ? { input: data.input } : {}),
+            }]
           : []
       case 'session.next.tool.called':
         return sessionID
@@ -613,6 +619,7 @@ export class OpenCodeEventNormalizer {
               sessionID,
               callID: String(data.callID ?? ''),
               success: type.endsWith('success'),
+              ...(data.input !== undefined ? { input: data.input } : {}),
               ...(Array.isArray(data.outputPaths) ? { outputPaths: data.outputPaths.map(String) } : {}),
             }]
           : []
@@ -770,6 +777,7 @@ export class OpenCodeEventNormalizer {
         sessionID,
         callID,
         success: status === 'completed',
+        ...(state.input !== undefined ? { input: state.input } : {}),
         ...(() => {
           const outputPaths = extractOutputPaths(part)
           return outputPaths.length > 0 ? { outputPaths } : {}

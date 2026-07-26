@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: anomalyco/opencode
-          ref: 0317531906d3f3bb01cf33c16319870cfde9170c
+          ref: 49c69c5ed3ccf706b61b3febb43c8aaff7f8325e
           path: .opencode-src
           persist-credentials: false
       - uses: actions/setup-node@v4

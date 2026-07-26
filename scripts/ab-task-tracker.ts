@@ -185,6 +185,15 @@ type Trial = {
   toolCounts: Record<string, number>
   firstToolName: string | null
   graphSearchCalls: number
+  graphOutputBytes: number
+  graphToolTrace: Array<{
+    name: string
+    input: unknown
+    outputBytes: number
+    resultCount: number
+    truncated: boolean
+    cacheHit: boolean
+  }>
   graphBeforeWorkspace: boolean
   firstToolMs: number | null
   firstGraphMs: number | null
@@ -647,6 +656,8 @@ async function runTrial(options: { arm: Arm; model: ModelRef; repeat: number; ro
   const toolCounts: Record<string, number> = {}
   let firstToolName: string | null = null
   let graphSearchCalls = 0
+  let graphOutputBytes = 0
+  const graphToolTrace: Trial['graphToolTrace'] = []
   let graphBeforeWorkspace = false
   let workspaceToolSeen = false
   let firstToolMs: number | null = null
@@ -768,6 +779,20 @@ async function runTrial(options: { arm: Arm; model: ModelRef; repeat: number; ro
       }
       if (event.type === 'tool-end') {
         const toolName = toolNamesByCallID.get(event.callID)
+        if (isGraphTool(toolName ?? event.name ?? '')) {
+          graphOutputBytes += event.outputBytes
+          // Exact graph arguments and bounded output measurements are kept
+          // only in this disposable benchmark artifact, never in product
+          // telemetry or controller snapshots.
+          graphToolTrace.push({
+            name: toolName ?? event.name ?? 'tool',
+            input: event.input ?? null,
+            outputBytes: event.outputBytes,
+            resultCount: event.resultCount,
+            truncated: event.truncated,
+            cacheHit: event.cacheHit,
+          })
+        }
         if (event.sessionID === graphGateSessionID && isGraphTool(toolName ?? '')) {
           resolveGraphPreflightOutcome?.('graph')
           resolveGraphPreflightOutcome = undefined
@@ -855,6 +880,8 @@ async function runTrial(options: { arm: Arm; model: ModelRef; repeat: number; ro
       toolCounts,
       firstToolName,
       graphSearchCalls,
+      graphOutputBytes,
+      graphToolTrace,
       graphBeforeWorkspace,
       firstToolMs,
       firstGraphMs,
@@ -1238,6 +1265,7 @@ function summarizeIsolationArm(values: Trial[], arm: Arm) {
     graphFirstToolRate: ratio(selected.filter((trial) => isGraphTool(trial.firstToolName ?? '')).length, selected.length),
     graphBeforeWorkspaceRate: ratio(selected.filter((trial) => trial.graphBeforeWorkspace).length, selected.length),
     meanGraphSearchCalls: mean(selected.map((trial) => trial.graphSearchCalls)),
+    meanGraphOutputBytes: mean(selected.map((trial) => trial.graphOutputBytes)),
     medianFirstToolMs: medianNullable(selected.map((trial) => trial.firstToolMs)),
     medianFirstGraphMs: medianNullable(selected.map((trial) => trial.firstGraphMs)),
     medianFirstWorkspaceToolMs: medianNullable(selected.map((trial) => trial.firstWorkspaceToolMs)),
@@ -1341,7 +1369,7 @@ function renderNavigationMarkdown(
   const milliseconds = (value: number | null) => value === null ? '—' : `${value} ms`
   const rows = armNames.map((arm) => {
     const summary = report.summary.arms[arm]!
-    return `| ${arm} | ${summary.successes}/${summary.trials} | ${percent(summary.meanAcceptanceScore)} | ${percent(summary.hop1OrLess)} | ${percent(summary.hop2)} | ${summary.medianLatencyMs} ms | ${milliseconds(summary.medianSuccessfulLatencyMs)} | ${money(summary.medianSuccessfulCost)} | ${summary.medianSuccessfulTotalModelTokens} | ${summary.medianContextTokens} | ${percent(summary.instructionAppliedRate)} | ${percent(summary.graphPreflightPassRate)} | ${summary.graphGateRejections} | ${summary.unexpectedRejectedPermissions} | ${summary.blockedFileSearchCalls} | ${summary.graphRedirectMessages} | ${summary.blockedBashRequests} | ${percent(summary.graphFirstToolRate)} | ${percent(summary.graphBeforeWorkspaceRate)} | ${summary.meanGraphSearchCalls.toFixed(1)} | ${milliseconds(summary.medianFirstGraphMs)} | ${milliseconds(summary.medianFirstWorkspaceToolMs)} |`
+    return `| ${arm} | ${summary.successes}/${summary.trials} | ${percent(summary.meanAcceptanceScore)} | ${percent(summary.hop1OrLess)} | ${percent(summary.hop2)} | ${summary.medianLatencyMs} ms | ${milliseconds(summary.medianSuccessfulLatencyMs)} | ${money(summary.medianSuccessfulCost)} | ${summary.medianSuccessfulTotalModelTokens} | ${summary.medianContextTokens} | ${percent(summary.instructionAppliedRate)} | ${percent(summary.graphPreflightPassRate)} | ${summary.graphGateRejections} | ${summary.unexpectedRejectedPermissions} | ${summary.blockedFileSearchCalls} | ${summary.graphRedirectMessages} | ${summary.blockedBashRequests} | ${percent(summary.graphFirstToolRate)} | ${percent(summary.graphBeforeWorkspaceRate)} | ${summary.meanGraphSearchCalls.toFixed(1)} | ${summary.meanGraphOutputBytes.toFixed(0)} | ${milliseconds(summary.medianFirstGraphMs)} | ${milliseconds(summary.medianFirstWorkspaceToolMs)} |`
   })
   const comparison = report.summary.comparison
   return [
@@ -1362,7 +1390,7 @@ function renderNavigationMarkdown(
     '',
     '## Results',
     '',
-    '| Arm | Successes | Mean acceptance | Hop≤1 | Hop2 | Median latency | Successful latency | Successful cost | Successful tokens | Context tokens | Instruction applied | Preflight passed | Gate denials | Unexpected rejects | Blocked file search | Graph guidance messages | Blocked bash | First tool graph | Graph before workspace | Mean graph calls | First graph | First workspace |',
+    '| Arm | Successes | Mean acceptance | Hop≤1 | Hop2 | Median latency | Successful latency | Successful cost | Successful tokens | Context tokens | Instruction applied | Preflight passed | Gate denials | Unexpected rejects | Blocked file search | Graph guidance messages | Blocked bash | First tool graph | Graph before workspace | Mean graph calls | Mean graph bytes | First graph | First workspace |',
     '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|',
     ...rows,
     '',
@@ -1380,7 +1408,7 @@ function renderNavigationMarkdown(
       const failed = Object.entries(trial.evaluation.checks).filter(([, check]) => !check.passed).map(([name, check]) => `${name}: ${check.detail}`)
       const firstToolCompliance = isGraphTool(trial.firstToolName ?? '') ? 'compliant' : 'violation'
       return [
-        `- Repeat ${trial.repeat}, **${trial.arm}**: ${trial.success ? 'success' : 'incomplete'}; acceptance ${(trial.acceptanceScore * 100).toFixed(1)}%; latency ${trial.durationMs} ms; instruction applied ${trial.instructionApplied === null ? 'not probed' : trial.instructionApplied ? 'yes' : 'no'}; graph preflight ${trial.graphPreflightPassed ? 'passed' : 'failed'}; first tool \`${trial.firstToolName ?? 'none'}\` (${firstToolCompliance}); graph calls ${trial.graphSearchCalls}; graph before workspace ${trial.graphBeforeWorkspace ? 'yes' : 'no'}; gate denials ${trial.graphGateRejections}; unexpected rejects ${trial.unexpectedRejectedPermissions}; blocked file search ${trial.blockedFileSearchCalls}; graph guidance messages ${trial.graphRedirectMessages}; blocked bash ${trial.blockedBashRequests}; first graph ${milliseconds(trial.firstGraphMs)}; first workspace ${milliseconds(trial.firstWorkspaceToolMs)}.`,
+        `- Repeat ${trial.repeat}, **${trial.arm}**: ${trial.success ? 'success' : 'incomplete'}; acceptance ${(trial.acceptanceScore * 100).toFixed(1)}%; latency ${trial.durationMs} ms; instruction applied ${trial.instructionApplied === null ? 'not probed' : trial.instructionApplied ? 'yes' : 'no'}; graph preflight ${trial.graphPreflightPassed ? 'passed' : 'failed'}; first tool \`${trial.firstToolName ?? 'none'}\` (${firstToolCompliance}); graph calls ${trial.graphSearchCalls}; graph output ${trial.graphOutputBytes} bytes; graph before workspace ${trial.graphBeforeWorkspace ? 'yes' : 'no'}; gate denials ${trial.graphGateRejections}; unexpected rejects ${trial.unexpectedRejectedPermissions}; blocked file search ${trial.blockedFileSearchCalls}; graph guidance messages ${trial.graphRedirectMessages}; blocked bash ${trial.blockedBashRequests}; first graph ${milliseconds(trial.firstGraphMs)}; first workspace ${milliseconds(trial.firstWorkspaceToolMs)}.`,
         ...(failed.length > 0 ? [`  - Failed: ${failed.join(' · ')}`] : []),
       ]
     }),
@@ -1438,7 +1466,7 @@ function renderGraphNativeMarkdown(report: {
     graphNativeArmNames,
     '# Task Tracker graph-native agent-profile experiment',
     'graph-native',
-    '- The graph-native arm used a kernel-level foreground-agent tool allowlist: legacy glob, grep, LSP, web, task, and other unlisted tools were not exposed to the model; graph navigation, read, edit/write, Bash, planning, and question tools remained available. No graph preflight or permission feedback was added.',
+    '- The graph-native arm is reportable only after the OpenCode end-to-end contract test verifies that its actual model tool payload omits both glob and grep. A source-level allowlist alone is not treated as proof. When that gate passes, legacy glob, grep, LSP, web, task, and other unlisted tools are absent while graph navigation, read, edit/write, Bash, planning, and question tools remain available.',
     '- **graph-native**: current Cuppet instruction and bounded TST context with the kernel graph-native tool profile.',
     `Interpretation must remain task-specific. This tests tool exposure rather than prompt enforcement: the model cannot select legacy discovery tools because they are absent from its tool set. ${report.repeats} repeats per arm provide directional evidence, not a product-wide statistical claim.`,
   )

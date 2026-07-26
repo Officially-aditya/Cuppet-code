@@ -35,6 +35,14 @@ export class TstToolClient {
     })
   }
 
+  async graphLocate(pattern: string, prefix?: string, limit = 12): Promise<unknown> {
+    return this.#request('graph.locate', {
+      pattern,
+      ...(prefix ? { prefix } : {}),
+      limit: Math.min(Math.max(limit, 1), 12),
+    })
+  }
+
   async graphList(prefix?: string, limit = 100): Promise<unknown> {
     return this.#request('graph.list', {
       ...(prefix ? { prefix } : {}),
@@ -59,6 +67,20 @@ export class TstToolClient {
       direction,
       depth: Math.min(Math.max(depth, 1), 4),
       limit: Math.min(Math.max(limit, 1), 128),
+    })
+  }
+
+  async graphTraceSummary(
+    query: string,
+    direction: 'callers' | 'callees' | 'both' = 'both',
+    depth = 2,
+    limit = 12,
+  ): Promise<unknown> {
+    return this.#request('graph.trace_summary', {
+      query,
+      direction,
+      depth: Math.min(Math.max(depth, 1), 4),
+      limit: Math.min(Math.max(limit, 1), 12),
     })
   }
 

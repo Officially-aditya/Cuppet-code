@@ -155,49 +155,50 @@ export class CommandDispatcher {
   }
 }
 
-export const COMMANDS = [
-  '/platform',
-  '/login',
-  '/model primary',
-  '/model secondary',
-  '/effort',
-  '/effort primary',
-  '/effort secondary',
-  '/sessions',
-  '/new',
-  '/resume',
-  '/status',
-  '/plan',
-  '/plan on',
-  '/plan off',
-  '/memory',
-  '/compact',
-  '/steer',
-  '/steer --interrupt',
-  '/abort',
-  '/undo',
-  '/background pause',
-  '/background resume',
-  '/doctor',
-  '/help',
+export type CommandCompletion = {
+  command: string
+  description: string
+}
+
+/**
+ * The one canonical list of interactive commands. Keep the command text here
+ * so the completion menu and `/help` can never drift apart.
+ */
+export const COMMAND_COMPLETIONS: readonly CommandCompletion[] = [
+  { command: '/platform', description: 'Choose a provider platform' },
+  { command: '/login', description: 'Connect a provider with a key or OAuth' },
+  { command: '/model primary', description: 'Select the primary model' },
+  { command: '/model secondary', description: 'Select the secondary model' },
+  { command: '/effort', description: 'Choose primary model effort' },
+  { command: '/effort primary', description: 'Choose primary model effort' },
+  { command: '/effort secondary', description: 'Choose secondary model effort' },
+  { command: '/sessions', description: 'Resume a project session' },
+  { command: '/new', description: 'Start a new session' },
+  { command: '/resume', description: 'Resume a session by ID' },
+  { command: '/status', description: 'Show session and runtime status' },
+  { command: '/plan', description: 'Toggle plan mode' },
+  { command: '/plan on', description: 'Enable plan mode' },
+  { command: '/plan off', description: 'Disable plan mode' },
+  { command: '/memory', description: 'Show memory status' },
+  { command: '/compact', description: 'Compact conversation and memory' },
+  { command: '/steer', description: 'Steer at the next safe boundary' },
+  { command: '/steer --interrupt', description: 'Interrupt and steer immediately' },
+  { command: '/abort', description: 'Abort the active session' },
+  { command: '/undo', description: 'Revert the latest change boundary' },
+  { command: '/background pause', description: 'Pause background enrichment' },
+  { command: '/background resume', description: 'Resume background enrichment' },
+  { command: '/doctor', description: 'Check runtime and provider health' },
+  { command: '/help', description: 'List available commands' },
 ]
 
-const HELP = `Cuppet commands:
-/platform                        Choose Anthropic, OpenAI, Google, Vertex AI, or OpenCode
-/login [provider]                 OpenCode-advertised key or OAuth login
-/model primary|secondary         Select a live authenticated model
-/effort [role] [level]           Select a supported model effort level
-/sessions, /new, /resume [id]    Manage project sessions
-/status, /memory                 Engine, usage, memory, graph, and queue status
-/plan [on|off]                   Toggle full graph plan mode
-/compact                         Compact OpenCode and durable memory
-/steer [--interrupt] <text>      Steer at a safe boundary
-/abort, /undo                    Abort or revert the latest change boundary
-/memory remember [scope] k=v     Store an explicit preference
-/memory forget <key>             Tombstone a memory
-/memory clear <scope>            Clear with confirmation
-/background pause|resume         Emergency background control
-/doctor                          Verify runtime and provider health`
+// Retained as a lightweight compatibility export for callers that only need
+// command text. New UI code should use COMMAND_COMPLETIONS.
+export const COMMANDS = COMMAND_COMPLETIONS.map(({ command }) => command)
+
+const HELP = [
+  'Cuppet commands:',
+  ...COMMAND_COMPLETIONS.map(({ command, description }) => `${command.padEnd(30)} ${description}`),
+].join('\n')
 
 function splitArguments(value: string): string[] {
   const matches = value.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? []

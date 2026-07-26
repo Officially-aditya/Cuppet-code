@@ -24,7 +24,46 @@ Environment controls:
 - `CUPPET_AB_MODEL=provider/model` selects a model; otherwise the configured
   Cuppet primary model is used. Set `CUPPET_AB_VARIANT=low` (or another live
   provider variant) when the selected model exposes an effort variant.
-- `CUPPET_AB_LIMIT=N` runs the first N task pairs for a low-cost pilot.
+- `CUPPET_AB_LIMIT=N` runs N task pairs for a low-cost pilot.
+- `CUPPET_AB_TASK_OFFSET=N` selects a later contiguous task window when a
+  longer run must be split into independently persisted reports.
+
+To exercise code-graph persistence as part of the same paired navigation
+evaluation, run:
+
+```bash
+npm run eval:ab:persistent
+```
+
+It builds the graph once, restarts the native daemon against the same project
+store, verifies an immediate graph query from the restored snapshot, then
+finishes background revalidation before the OpenCode/Cuppet trials begin. The
+JSON report includes cold-index, snapshot, warm-start, and first-query timing.
+
+For the native implementation-only measurement (no model calls), run:
+
+```bash
+npm run eval:native:tst
+```
+
+This creates an isolated 4,096-file fixture, measures cold indexing versus a
+restart from the persisted graph, and validates full-capacity STM decay through
+the real daemon RPC. STM decay is an in-place score/eviction policy; it does
+not itself shrink injected context or claim model-token savings.
+
+## Continuous background-worker benchmark
+
+Run a live paused-versus-active comparison for the configured primary and
+secondary models with:
+
+```bash
+npm run eval:background
+```
+
+It uses two isolated three-turn sessions, records a successful validation as
+one merged deferred batch, and waits through the foreground-idle window before
+secondary work starts. The report gates one deferred batch, zero foreground
+overlap, and a batch-count reduction versus the former per-turn behavior.
 
 This five-task suite measures code navigation and retrieval. It is a smoke
 benchmark, not sufficient evidence for the public 20% efficiency claim. A

@@ -1,6 +1,6 @@
 use crate::graph::{
-    CodeGraph, GraphFileList, GraphQueryResult, GraphSearchResult, GraphStats, GraphTraceResult,
-    GraphWorkspaceInfo,
+    CodeGraph, GraphFileList, GraphLocateResult, GraphQueryResult, GraphSearchResult, GraphStats,
+    GraphTraceResult, GraphTraceSummary, GraphWorkspaceInfo,
 };
 use crate::memory::{
     normalize_key, Evidence, EvidenceKind, MemoryKind, MemoryRecord, MemoryScope, Provenance,
@@ -325,7 +325,9 @@ impl TstService {
 
     pub fn finish_graph_index(&mut self) {
         self.graph.finish_build();
-        let _ = self.graph.save_snapshot(&self.project_store.join("graph.msgpack"));
+        let _ = self
+            .graph
+            .save_snapshot(&self.project_store.join("graph.msgpack"));
     }
 
     pub fn graph_query(&self, query: &str, limit: usize) -> Vec<GraphQueryResult> {
@@ -334,6 +336,10 @@ impl TstService {
 
     pub fn graph_search(&self, pattern: &str, prefix: Option<&str>, limit: usize) -> GraphSearchResult {
         self.graph.search(pattern, prefix, limit)
+    }
+
+    pub fn graph_locate(&self, pattern: &str, prefix: Option<&str>, limit: usize) -> GraphLocateResult {
+        self.graph.locate(pattern, prefix, limit)
     }
 
     pub fn graph_list(&self, prefix: Option<&str>, limit: usize) -> GraphFileList {
@@ -354,6 +360,16 @@ impl TstService {
         self.graph.trace(query, direction, depth, limit)
     }
 
+    pub fn graph_trace_summary(
+        &self,
+        query: &str,
+        direction: &str,
+        depth: usize,
+        limit: usize,
+    ) -> Result<GraphTraceSummary> {
+        self.graph.trace_summary(query, direction, depth, limit)
+    }
+
     pub fn compact(&mut self) -> Result<()> {
         let session_ids: Vec<String> = self.sessions.keys().cloned().collect();
         for session_id in session_ids {
@@ -361,14 +377,18 @@ impl TstService {
         }
         self.project.compact()?;
         self.global.compact()?;
-        let _ = self.graph.save_snapshot(&self.project_store.join("graph.msgpack"));
+        let _ = self
+            .graph
+            .save_snapshot(&self.project_store.join("graph.msgpack"));
         Ok(())
     }
 
     pub fn flush(&mut self) -> Result<()> {
         self.project.flush()?;
         self.global.flush()?;
-        let _ = self.graph.save_snapshot(&self.project_store.join("graph.msgpack"));
+        let _ = self
+            .graph
+            .save_snapshot(&self.project_store.join("graph.msgpack"));
         Ok(())
     }
 

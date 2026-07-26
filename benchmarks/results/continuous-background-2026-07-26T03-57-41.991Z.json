@@ -1,0 +1,202 @@
+{
+  "schema": 1,
+  "createdAt": "2026-07-26T03:57:41.990Z",
+  "primary": {
+    "providerID": "openai",
+    "modelID": "gpt-5.6-luna",
+    "variant": "high"
+  },
+  "secondary": {
+    "providerID": "openai",
+    "modelID": "gpt-5.6-luna",
+    "variant": "low"
+  },
+  "design": "Two isolated three-turn foreground sessions use the same selected models and read-only prompts. The paused arm suppresses all background model work. The active arm drains initialization work, then starts every later foreground turn while the preceding background canonicalization is running. Background usage is measured independently from foreground session usage.",
+  "scenarios": {
+    "paused": {
+      "name": "paused",
+      "foregroundUsage": {
+        "input": 20682,
+        "output": 121,
+        "reasoning": 36,
+        "cacheRead": 55296,
+        "cacheWrite": 0
+      },
+      "foregroundCost": 0,
+      "backgroundInitialization": {
+        "paused": true,
+        "queued": 0,
+        "running": false,
+        "completed": 0,
+        "failed": 0,
+        "usage": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0
+        },
+        "cost": 0
+      },
+      "backgroundFinal": {
+        "paused": true,
+        "queued": 2,
+        "running": false,
+        "completed": 0,
+        "failed": 0,
+        "usage": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0
+        },
+        "cost": 0
+      },
+      "turns": [
+        {
+          "id": "context-builder",
+          "correct": true,
+          "durationMs": 7864,
+          "foregroundUsage": {
+            "input": 16069,
+            "output": 91,
+            "reasoning": 36,
+            "cacheRead": 24576,
+            "cacheWrite": 0
+          },
+          "backgroundRunningAtStart": false
+        },
+        {
+          "id": "allocator",
+          "correct": true,
+          "durationMs": 2648,
+          "foregroundUsage": {
+            "input": 1965,
+            "output": 15,
+            "reasoning": 0,
+            "cacheRead": 14848,
+            "cacheWrite": 0
+          },
+          "backgroundRunningAtStart": false
+        },
+        {
+          "id": "graph-renderer",
+          "correct": true,
+          "durationMs": 2889,
+          "foregroundUsage": {
+            "input": 2648,
+            "output": 15,
+            "reasoning": 0,
+            "cacheRead": 15872,
+            "cacheWrite": 0
+          },
+          "backgroundRunningAtStart": false
+        }
+      ],
+      "overlapTurns": 0
+    },
+    "active": {
+      "name": "active",
+      "foregroundUsage": {
+        "input": 20216,
+        "output": 121,
+        "reasoning": 34,
+        "cacheRead": 56320,
+        "cacheWrite": 0
+      },
+      "foregroundCost": 0,
+      "backgroundInitialization": {
+        "paused": false,
+        "queued": 0,
+        "running": false,
+        "completed": 1,
+        "failed": 0,
+        "usage": {
+          "input": 2267,
+          "output": 65,
+          "reasoning": 33,
+          "cacheRead": 0,
+          "cacheWrite": 0
+        },
+        "cost": 0
+      },
+      "backgroundFinal": {
+        "paused": false,
+        "queued": 0,
+        "running": false,
+        "completed": 4,
+        "failed": 0,
+        "usage": {
+          "input": 7065,
+          "output": 230,
+          "reasoning": 121,
+          "cacheRead": 3584,
+          "cacheWrite": 0
+        },
+        "cost": 0
+      },
+      "turns": [
+        {
+          "id": "context-builder",
+          "correct": true,
+          "durationMs": 8537,
+          "foregroundUsage": {
+            "input": 16207,
+            "output": 91,
+            "reasoning": 34,
+            "cacheRead": 24576,
+            "cacheWrite": 0
+          },
+          "backgroundRunningAtStart": false
+        },
+        {
+          "id": "allocator",
+          "correct": true,
+          "durationMs": 3687,
+          "foregroundUsage": {
+            "input": 2136,
+            "output": 15,
+            "reasoning": 0,
+            "cacheRead": 14848,
+            "cacheWrite": 0
+          },
+          "backgroundRunningAtStart": true
+        },
+        {
+          "id": "graph-renderer",
+          "correct": true,
+          "durationMs": 1941,
+          "foregroundUsage": {
+            "input": 1873,
+            "output": 15,
+            "reasoning": 0,
+            "cacheRead": 16896,
+            "cacheWrite": 0
+          },
+          "backgroundRunningAtStart": true
+        }
+      ],
+      "overlapTurns": 2
+    }
+  },
+  "comparison": {
+    "paused": {
+      "foregroundTokens": 20839,
+      "backgroundTokens": 0,
+      "correctTurns": 3
+    },
+    "active": {
+      "foregroundTokens": 20371,
+      "backgroundTokens": 7416,
+      "totalTokens": 27787,
+      "initializationBackgroundTokens": 2365,
+      "continuousBackgroundTokens": 5051,
+      "completedBackgroundJobs": 4,
+      "failedBackgroundJobs": 0,
+      "overlapTurns": 2,
+      "correctTurns": 3
+    },
+    "totalTokenIncreaseVsPaused": 6948
+  }
+}

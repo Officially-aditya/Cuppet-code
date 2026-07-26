@@ -86,7 +86,19 @@ export type AgentEvent =
   | { type: 'reasoning-delta'; sessionID: string; text: string }
   | { type: 'tool-start'; sessionID: string; callID: string; name: string; input?: unknown }
   | { type: 'tool-progress'; sessionID: string; callID: string; message: string }
-  | { type: 'tool-end'; sessionID: string; callID: string; success: boolean; outputPaths?: string[]; input?: unknown }
+  | {
+      type: 'tool-end'
+      sessionID: string
+      callID: string
+      success: boolean
+      name?: string
+      outputPaths?: string[]
+      input?: unknown
+      outputBytes: number
+      resultCount: number
+      truncated: boolean
+      cacheHit: boolean
+    }
   | { type: 'diff'; sessionID: string; diff: unknown[] }
   | { type: 'permission'; request: PermissionRequest }
   | { type: 'usage'; sessionID: string; usage: TokenUsage; cost: number }

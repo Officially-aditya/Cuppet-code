@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Box, Text, useApp, useInput, useStdout } from 'ink'
 import SelectInput from 'ink-select-input'
 import TextInput from 'ink-text-input'
 import type { CommandAction, CommandDispatcher } from '../commands/dispatcher.js'
 import type { ControllerSnapshot, CuppetController } from '../controller.js'
 import { PLATFORM_OPTIONS, platformLabel } from '../platforms.js'
-import type { AgentEvent, IntegrationInfo, IntegrationMethod, MessageItem, ModelRef, Platform, SessionInfo, TokenUsage } from '../types.js'
+import type { AgentEvent, IntegrationInfo, IntegrationMethod, MessageItem, ModelRef, PermissionRequest, Platform, SessionInfo, TokenUsage } from '../types.js'
 import { formatTokenCount, totalTokenUsage } from '../usage.js'
 import { MultilineEditor } from './MultilineEditor.js'
 import { nextPermissionModal, previousModal, type Modal } from './modal.js'
@@ -23,6 +23,7 @@ const initialSnapshot: ControllerSnapshot = {
   foregroundUsage: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
   foregroundCost: 0,
   running: false,
+  planMode: false,
   activeTools: 0,
   degraded: true,
   stepCount: 0,
@@ -85,6 +86,7 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
   const [modal, setModal] = useState<Modal>({ type: 'none' })
   const [notice, setNotice] = useState(initialNotice)
   const [scrollOffset, setScrollOffset] = useState(0)
+  const [completionFocused, setCompletionFocused] = useState(false)
   const [credential, setCredential] = useState('')
   const [oauthCode, setOAuthCode] = useState('')
 
@@ -93,16 +95,6 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
     () => controller.onAgentEvent((event) => handleAgentEvent(event, setMessages, setModal, setNotice)),
     [controller],
   )
-  useEffect(() => {
-    if (stdout.isTTY) {
-      stdout.write('\u001b[?1049h\u001b[?1007h')
-    }
-    return () => {
-      if (stdout.isTTY) {
-        stdout.write('\u001b[?1007l\u001b[?1049l')
-      }
-    }
-  }, [stdout])
   useEffect(() => {
     if (modal.type !== 'none') return
     const next = nextOnboardingModal(controller, snapshot)
@@ -179,6 +171,10 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
     setScrollOffset((current) => Math.max(0, current - 1))
   }
 
+  const handleCompletionChange = useCallback((active: boolean) => {
+    setCompletionFocused(active)
+  }, [])
+
   useInput((input, key) => {
     if (key.ctrl && input === 'c') {
       void controller.denyPendingPermissions().finally(() => exit())
@@ -205,6 +201,7 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
       }
       return
     }
+    if (key.escape && completionFocused) return
     if (key.escape && snapshot.running) {
       void controller
         .abort()
@@ -216,26 +213,10 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
       return
     }
     if (modal.type !== 'none') return
+    if (completionFocused && (key.upArrow || key.downArrow)) return
     const keyRecord = key as { home?: boolean; end?: boolean }
     const isHome = keyRecord.home || input === '\u001b[H' || input.includes('\u001b[1~') || input.includes('\u001b[H') || input === '\u001b[1;5H'
     const isEnd = keyRecord.end || input === '\u001b[F' || input.includes('\u001b[4~') || input.includes('\u001b[F') || input === '\u001b[1;5F'
-    const isMouseInput =
-      input.startsWith('[<') ||
-      input.startsWith('\u001b[<') ||
-      input.startsWith('[M') ||
-      input.startsWith('\u001b[M') ||
-      /^\[<[0-9]+;/i.test(input)
-
-    if (isMouseInput) {
-      const button = parseInt(input.replace(/^[^\d]*/, ''), 10)
-      if (button === 64 || button === 96 || input.includes('64;')) {
-        setScrollOffset((current) => Math.min(messageWindow.maxOffset, current + 3))
-      } else if (button === 65 || button === 97 || input.includes('65;')) {
-        setScrollOffset((current) => Math.max(0, current - 3))
-      }
-      return
-    }
-
     if (key.pageUp || input === '\u0015' || input.includes('\u001b[5~')) handleScrollUp()
     if (key.pageDown || input === '\u0004' || input.includes('\u001b[6~')) handleScrollDown()
     if (isHome) handleScrollTop()
@@ -282,6 +263,8 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
     }
   }
 
+  if (layout.rows === 0) return null
+
   return (
     <Box
       flexDirection="column"
@@ -289,29 +272,14 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
       overflow="hidden"
       paddingX={horizontalPadding}
     >
-      {layout.header === 3 ? (
-        <Box
-          borderStyle="round"
-          borderColor={snapshot.running ? 'yellow' : 'cyan'}
-          paddingX={1}
-          height={3}
-          flexShrink={0}
-          overflow="hidden"
-        >
-          <Text wrap="truncate-middle">
-            <Text bold color="cyan">CUPPET</Text>
-            {snapshot.planMode ? (
-              <Text bold color="yellow"> [PLAN MODE]</Text>
-            ) : null}
-            {snapshot.running ? (
-              <Text bold color="yellow"> {spinner} Working…</Text>
-            ) : null}
-            <Text dimColor> · {snapshot.platform ? `${platformLabel(snapshot.platform)} · ` : ''}{modelLabel(snapshot.primary)} → {modelLabel(snapshot.secondary)}{snapshot.degraded ? '  [TST degraded]' : ''}</Text>
-          </Text>
-        </Box>
-      ) : layout.header === 1 ? (
+      {layout.header > 0 ? (
         <Box height={1} overflow="hidden" flexShrink={0}>
-          <Text bold color="cyan" wrap="truncate-end">CUPPET{snapshot.planMode ? ' [PLAN]' : ''}{snapshot.running ? ` ${spinner} Working…` : ''} · {modelLabel(snapshot.primary)}</Text>
+          <Text wrap="truncate-end">
+            <Text bold color="cyan">CUPPET</Text>
+            {snapshot.planMode ? <Text color="yellow"> · plan</Text> : null}
+            {snapshot.running ? <Text color="yellow"> · {spinner} working</Text> : null}
+            <Text dimColor> · {snapshot.platform ? `${platformLabel(snapshot.platform)} · ` : ''}{modelLabel(snapshot.primary)}{snapshot.degraded ? ' · degraded' : ''}</Text>
+          </Text>
         </Box>
       ) : null}
 
@@ -338,6 +306,7 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
           scrollOffset={scrollOffset}
           planMode={snapshot.planMode}
           onSubmit={submit}
+          onCompletionChange={handleCompletionChange}
           onScrollUp={handleScrollUp}
           onScrollDown={handleScrollDown}
           onScrollTop={handleScrollTop}
@@ -365,11 +334,15 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
       {layout.footer > 0 ? (
         <Box height={1} overflow="hidden" flexShrink={0}>
           <Text {...(notice ? { color: 'yellow' as const } : snapshot.running || messageWindow.offset > 0 ? { color: 'yellow' as const } : { dimColor: true })} wrap="truncate-end">
-            {notice ?? (messageWindow.offset > 0 ? `▲ Scrolled ${messageWindow.offset} lines back` : `Token usage: ${formatTokenCount(tokenCount)}`)} · {modal.type !== 'none'
+            {notice ?? (messageWindow.offset > 0 ? `↑ ${messageWindow.offset} lines back` : `Tokens ${formatTokenCount(tokenCount)}`)} · {modal.type !== 'none'
               ? 'Esc back · ↑↓ select · Enter confirm'
-              : snapshot.running
-                ? `${spinner} Working… step ${snapshot.stepCount}/64 · tools ${snapshot.activeTools}`
-                : `Ctrl+N newline · PgUp/PgDn/PgUp/Home/End scroll${messageWindow.offset ? ' · PgDn/End return to bottom' : ''}`}
+              : completionFocused
+                ? '↑↓ choose · Tab complete · Enter run · Esc dismiss'
+                : snapshot.running
+                ? `${spinner} working · step ${snapshot.stepCount}/64 · ${snapshot.activeTools} tools`
+                : messageWindow.offset > 0
+                  ? 'PgDn or End for latest'
+                  : 'Ctrl+N newline · /help'}
           </Text>
         </Box>
       ) : null}
@@ -403,6 +376,14 @@ function ModalView(props: {
     const usage = foreground?.usage ?? { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
     const totalTokens = totalTokenUsage(usage)
     const tst = data.tst as { graph?: { files?: number; symbols?: number }; mode?: string } | undefined
+    const background = data.background as {
+      paused?: boolean
+      running?: boolean
+      queued?: number
+      deferred?: number
+      attempts?: number
+      cancellations?: number
+    } | undefined
 
     return (
       <ModalBox height={props.height} title="System & Session Status">
@@ -426,6 +407,12 @@ function ModalView(props: {
             <Text wrap="truncate-end">
               <Text color="yellow" bold>Code Graph: </Text>
               Files: {tst.graph.files ?? 0} │ Symbols: {tst.graph.symbols ?? 0}
+            </Text>
+          ) : null}
+          {background ? (
+            <Text wrap="truncate-end">
+              <Text color="magenta" bold>Background: </Text>
+              {background.paused ? 'paused' : background.running ? 'running' : 'idle'} │ Pending: {background.queued ?? 0} │ Deferred: {background.deferred ?? 0} │ Attempts: {background.attempts ?? 0} │ Cancelled: {background.cancellations ?? 0}
             </Text>
           ) : null}
         </Box>
@@ -837,12 +824,12 @@ function ModalBox({ title, height, children }: { title: string; height: number; 
     <Box
       flexDirection="column"
       borderStyle="single"
-      borderColor="yellow"
+      borderColor="gray"
       paddingX={1}
       height={height}
       overflow="hidden"
     >
-      <Text bold color="yellow" wrap="truncate-end">{title}</Text>
+      <Text bold color="cyan" wrap="truncate-end">{title}</Text>
       {children}
     </Box>
   )
@@ -855,7 +842,7 @@ export type QuestionOption = {
 }
 
 export type ExtractedQuestion = {
-  header?: string
+  header?: string | undefined
   questionText: string
   options: QuestionOption[]
   multiSelect?: boolean
@@ -1017,89 +1004,30 @@ function QuestionModalView({
 }
 
 const Message = React.memo(function Message({ item }: { item: MessageLine }) {
-  return renderMarkdownLine(item.text, item.sender, item.isCodeBlock)
-})
-
-function highlightCodeLine(text: string): React.ReactNode {
-  const commentIdx = text.indexOf('//')
-  let codePart = text
-  let commentPart = ''
-  if (commentIdx !== -1) {
-    const quoteMatches = text.slice(0, commentIdx).match(/["'`]/g)
-    if (!quoteMatches || quoteMatches.length % 2 === 0) {
-      codePart = text.slice(0, commentIdx)
-      commentPart = text.slice(commentIdx)
-    }
+  if (item.kind === 'code-header') {
+    return (
+      <Box height={1} width="100%" paddingX={1} overflow="hidden">
+        <Text backgroundColor="gray" color="white" bold wrap="truncate-end">{item.language ?? item.text}</Text>
+      </Box>
+    )
   }
 
-  const keywordRegex = /\b(const|let|var|function|return|import|export|from|if|else|for|while|async|await|class|type|interface|default|switch|case|try|catch|throw|new|this|public|private|protected|static|readonly|extends|implements|struct|fn|pub|mut|def|val|nil|null|undefined|true|false|boolean|number|string|any|void)\b/g
-  const stringRegex = /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)/g
-  const numberRegex = /\b\d+(?:\.\d+)?\b/g
-  const fnCallRegex = /\b([a-zA-Z_$][a-zA-Z0-9_$]*)(?=\s*\()/g
+  if (item.kind === 'code') {
+    return (
+      <Box height={1} width="100%" paddingX={1} overflow="hidden">
+        <Text backgroundColor="gray" color="white" wrap="truncate-end">{item.text || ' '}</Text>
+      </Box>
+    )
+  }
 
-  const stringTokens = codePart.split(stringRegex)
+  return renderMarkdownLine(item.text, item.sender)
+})
 
-  const elements: React.ReactNode[] = stringTokens.map((token, idx) => {
-    if (!token) return null
-    if (token.startsWith('"') || token.startsWith("'") || token.startsWith('`')) {
-      return (
-        <Text key={`str-${idx}`} color="green">
-          {token}
-        </Text>
-      )
-    }
-
-    const subTokens = token.split(/(\b(?:const|let|var|function|return|import|export|from|if|else|for|while|async|await|class|type|interface|default|switch|case|try|catch|throw|new|this|public|private|protected|static|readonly|extends|implements|struct|fn|pub|mut|def|val|nil|null|undefined|true|false|boolean|number|string|any|void)\b|\b\d+(?:\.\d+)?\b|\b[a-zA-Z_$][a-zA-Z0-9_$]*(?=\s*\())/g)
-
-    return subTokens.map((sub, sIdx) => {
-      if (!sub) return null
-      if (keywordRegex.test(sub)) {
-        keywordRegex.lastIndex = 0
-        return (
-          <Text key={`kw-${idx}-${sIdx}`} color="magenta" bold>
-            {sub}
-          </Text>
-        )
-      }
-      keywordRegex.lastIndex = 0
-
-      if (numberRegex.test(sub)) {
-        numberRegex.lastIndex = 0
-        return (
-          <Text key={`num-${idx}-${sIdx}`} color="yellow">
-            {sub}
-          </Text>
-        )
-      }
-      numberRegex.lastIndex = 0
-
-      if (fnCallRegex.test(sub)) {
-        fnCallRegex.lastIndex = 0
-        return (
-          <Text key={`fn-${idx}-${sIdx}`} color="blue">
-            {sub}
-          </Text>
-        )
-      }
-      fnCallRegex.lastIndex = 0
-
-      return sub
-    })
-  })
-
-  return (
-    <>
-      {elements}
-      {commentPart ? <Text color="gray" dimColor>{commentPart}</Text> : null}
-    </>
-  )
-}
-
-function renderMarkdownLine(text: string, sender: MessageItem['sender'], isCodeBlock?: boolean) {
-  if (sender === 'tool' || text.startsWith('diff -- ') || text.startsWith('┌── ') || text.startsWith('└── ')) {
-    if (text.startsWith('diff -- ') || text.startsWith('┌── ') || text.startsWith('└── ')) {
-      const match = /^(?:diff -- |┌── |└── )(.+?)(?:\s+·\s+\+(\d+)\s+-(\d+))?$/.exec(text)
-      const file = match?.[1] ?? text.replace(/^(?:diff -- |┌── |└── )/, '').split(' · ')[0] ?? text
+function renderMarkdownLine(text: string, sender: MessageItem['sender']) {
+  if (sender === 'tool' || text.startsWith('diff -- ')) {
+    if (text.startsWith('diff -- ')) {
+      const match = /^diff -- (.+?)(?:\s+·\s+\+(\d+)\s+-(\d+))?$/.exec(text)
+      const file = match?.[1] ?? text.replace(/^diff -- /, '').split(' · ')[0] ?? text
       const adds = match?.[2]
       const dels = match?.[3]
 
@@ -1152,28 +1080,6 @@ function renderMarkdownLine(text: string, sender: MessageItem['sender'], isCodeB
         </Text>
       )
     }
-  }
-
-  if (text.startsWith('```')) {
-    const lang = text.slice(3).trim()
-    if (lang) {
-      return (
-        <Text wrap="truncate-end">
-          <Text color="gray">┌── </Text>
-          <Text color="cyan" bold>{lang}</Text>
-        </Text>
-      )
-    }
-    return <Text color="gray" dimColor wrap="truncate-end">└──</Text>
-  }
-
-  if (isCodeBlock) {
-    return (
-      <Text wrap="truncate-end">
-        <Text color="gray">│ </Text>
-        {highlightCodeLine(text)}
-      </Text>
-    )
   }
 
   const headerMatch = /^(#{1,6})\s+(.*)$/.exec(text)

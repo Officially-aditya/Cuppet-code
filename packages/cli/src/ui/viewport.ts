@@ -2,6 +2,8 @@ import { stripVTControlCharacters } from 'node:util'
 import type { MessageItem } from '../types.js'
 
 export type ViewportLayout = {
+  terminalRows: number
+  reserved: number
   rows: number
   header: number
   body: number
@@ -11,27 +13,47 @@ export type ViewportLayout = {
   footer: number
 }
 
+export type MessageLineKind = 'text' | 'code-header' | 'code'
+
 export type MessageLine = {
   id: string
   sender: MessageItem['sender']
   text: string
+  kind: MessageLineKind
+  language?: string
+  /** @deprecated Use kind === 'code' instead. */
   isCodeBlock?: boolean
 }
 
 export function viewportLayout(rows: number, modalOpen: boolean): ViewportLayout {
-  const available = Math.max(1, Number.isFinite(rows) ? Math.floor(rows) : 24)
-  const header = available >= 8 ? 3 : available >= 3 ? 1 : 0
+  const terminalRows = Math.max(1, Number.isFinite(rows) ? Math.floor(rows) : 24)
+  // Ink falls back to clearing the whole terminal when its render consumes the
+  // last physical row. Leaving one row free keeps the interactive surface in
+  // the normal terminal buffer and preserves native scrollback.
+  const reserved = 1
+  const available = Math.max(0, terminalRows - reserved)
+  const header = available >= 3 ? 1 : 0
   const footer = available >= 2 ? 1 : 0
   const body = Math.max(0, available - header - footer)
   if (modalOpen) {
-    return { rows: available, header, body, messages: 0, editor: 0, modal: body, footer }
+    return {
+      terminalRows,
+      reserved,
+      rows: available,
+      header,
+      body,
+      messages: 0,
+      editor: 0,
+      modal: body,
+      footer,
+    }
   }
-  const editor = body >= 6
-    ? Math.min(5, Math.max(3, Math.floor(body / 3)))
-    : body >= 4
-      ? 3
-      : body
+  const editor = body >= 5
+    ? Math.min(5, Math.max(4, Math.floor(body / 3)))
+    : body
   return {
+    terminalRows,
+    reserved,
     rows: available,
     header,
     body,
@@ -58,54 +80,59 @@ export function renderMessageLines(messages: MessageItem[], columns: number): Me
         : message.sender === 'system'
           ? 'ℹ '
           : ''
-    const fullText = `${prefix}${cleanText || message.text}`
-    const sourceLines = fullText.split('\n')
+    const sourceLines = (cleanText || message.text).split('\n')
     let inCodeBlock = false
-    let inDiffBlock = false
+    let codeLanguage = 'text'
     const result: MessageLine[] = []
     let lineIdx = 0
 
-    const addBlankLines = () => {
-      result.push({ id: `${message.id}:${lineIdx++}`, sender: message.sender, text: ' ' })
-      result.push({ id: `${message.id}:${lineIdx++}`, sender: message.sender, text: ' ' })
+    const addWrappedLine = (
+      value: string,
+      kind: MessageLineKind,
+      metadata: Pick<MessageLine, 'language' | 'isCodeBlock'> = {},
+    ) => {
+      const wrapped = wrapTerminalText(value, width)
+      for (const text of wrapped) {
+        result.push({
+          id: `${message.id}:${lineIdx++}`,
+          sender: message.sender,
+          text: kind === 'code' ? text : text || ' ',
+          kind,
+          ...metadata,
+        })
+      }
     }
 
     for (let i = 0; i < sourceLines.length; i += 1) {
       const sourceLine = sourceLines[i] ?? ''
       const trimmed = sourceLine.trimStart()
       const isCodeFence = trimmed.startsWith('```')
-      const isDiffHeader = trimmed.startsWith('diff -- ') || trimmed.startsWith('┌── ')
 
       if (isCodeFence) {
-        const lang = trimmed.slice(3).trim()
-        if (lang) {
-          addBlankLines()
+        if (!inCodeBlock) {
+          const language = trimmed.slice(3).trim().split(/\s+/)[0]
+          codeLanguage = language || 'text'
           inCodeBlock = true
+          result.push({
+            id: `${message.id}:${lineIdx++}`,
+            sender: message.sender,
+            text: codeLanguage,
+            kind: 'code-header',
+            language: codeLanguage,
+          })
         } else {
           inCodeBlock = false
         }
-      } else if (isDiffHeader && !inDiffBlock) {
-        addBlankLines()
-        inDiffBlock = true
+        continue
       }
 
-      const wrapped = wrapTerminalText(sourceLine, width)
-      const currentIsCodeBlock = inCodeBlock && !isCodeFence
-      for (const text of wrapped) {
-        result.push({
-          id: `${message.id}:${lineIdx++}`,
-          sender: message.sender,
-          text: text || ' ',
-          ...(currentIsCodeBlock ? { isCodeBlock: true } : {}),
-        })
+      if (inCodeBlock) {
+        addWrappedLine(sourceLine, 'code', { language: codeLanguage, isCodeBlock: true })
+        continue
       }
 
-      if (isCodeFence && !inCodeBlock) {
-        addBlankLines()
-      } else if (inDiffBlock && (i === sourceLines.length - 1 || (sourceLines[i + 1] !== undefined && !sourceLines[i + 1]?.startsWith('+') && !sourceLines[i + 1]?.startsWith('-') && !sourceLines[i + 1]?.startsWith('@@') && !sourceLines[i + 1]?.startsWith('…') && !sourceLines[i + 1]?.includes('more line(s)')))) {
-        inDiffBlock = false
-        addBlankLines()
-      }
+      const displayLine = i === 0 ? `${prefix}${sourceLine}` : sourceLine
+      addWrappedLine(displayLine, 'text')
     }
     return result
   })

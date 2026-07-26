@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "createdAt": "2026-07-26T03:23:58.596Z",
+  "project": "/Users/addy/Downloads/cuppet",
+  "design": "Native tst-daemon test on a generated 4,096-file TypeScript fixture. Cold indexing is followed by a daemon restart against the same project store; the first graph search is issued before waiting for background revalidation. STM decay uses a full 256-slot session and measures complete turn.completed RPCs.",
+  "graphPersistence": {
+    "fixtureFiles": 4096,
+    "coldDaemonStartMs": 78,
+    "coldIndexMs": 13482,
+    "coldFiles": 4097,
+    "snapshotBytes": 6075036,
+    "warmDaemonStartMs": 78,
+    "warmFirstGraphQueryMs": 3,
+    "warmSnapshotAvailableBeforeRevalidation": true,
+    "warmRevalidationMs": 256,
+    "warmFiles": 4097
+  },
+  "stmDecay": {
+    "capacity": 256,
+    "completedTurns": 250,
+    "durationMs": 6.599,
+    "perTurnMs": 0.0264,
+    "recordsTouched": 64000,
+    "recordsPerSecond": 9698072,
+    "expectedScore": 0.003202498444397445,
+    "observedScore": 0.0032025151886045933,
+    "pinnedScoreUnchanged": true
+  }
+}

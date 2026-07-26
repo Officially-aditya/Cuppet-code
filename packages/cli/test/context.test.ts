@@ -78,15 +78,39 @@ test('a large STM cannot crowd verified LTM and graph out of their allocations',
   assert.ok(result.contextTokens <= 300)
 })
 
-test('plan mode context includes full workspace map and goal establishment instructions', async () => {
+test('ordinary context has a 768-token hard cap and keeps graph records compact', async () => {
+  const client = {
+    async call() {
+      return {
+        stm: [],
+        ltm: [],
+        graph: Array.from({ length: 20 }, (_, index) => ({
+          score: 20 - index,
+          node: {
+            path: `src/record-${index}.ts`,
+            name: `symbol${index}`,
+            symbol_kind: 'function',
+            signature: `function symbol${index}(${ 'x'.repeat(200) })`,
+            content_hash: `hash-${index}`,
+            span: { start_row: index, start_column: 2 },
+          },
+        })),
+      }
+    },
+  } as unknown as TstClient
+  const result = await buildCuppetContext(client, 'session', 'inspect symbols', 1_000_000)
+  assert.ok(result.contextTokens <= 768)
+  assert.match(result.prompt, /src\/record-0\.ts:1:3/)
+  assert.doesNotMatch(result.prompt, /hash-0/)
+  assert.doesNotMatch(result.prompt, /symbol6/)
+  assert.match(result.prompt, /…/)
+})
+
+test('plan mode uses a bounded context instead of a 512-file map', async () => {
+  const calls: string[] = []
   const client = {
     async call(method: string) {
-      if (method === 'graph.list') {
-        return {
-          total: 3,
-          paths: ['src/main.ts', 'src/utils.ts', 'src/types.ts'],
-        }
-      }
+      calls.push(method)
       return {
         stm: [{ id: 's1', key: 'goal', value: 'Build auth', provenance: 'explicit_user' }],
         ltm: [],
@@ -108,7 +132,10 @@ test('plan mode context includes full workspace map and goal establishment instr
   const result = await buildCuppetContext(client, 'session', 'Plan feature', 2_000, [], '', process.cwd(), true)
   assert.match(result.prompt, /CUPPET_PLAN_MODE_CONTEXT/)
   assert.match(result.prompt, /PLAN MODE IS ACTIVE/)
-  assert.match(result.prompt, /FULL CODE GRAPH WORKSPACE FILE MAP/)
+  assert.match(result.prompt, /bounded, untrusted retrieval/i)
+  assert.doesNotMatch(result.prompt, /FULL CODE GRAPH WORKSPACE FILE MAP/)
   assert.match(result.prompt, /src\/main\.ts/)
   assert.match(result.prompt, /Create a dedicated TODO list for the establishment of the goal/)
+  assert.ok(result.contextTokens <= 1_536)
+  assert.deepEqual(calls, ['memory.query'])
 })

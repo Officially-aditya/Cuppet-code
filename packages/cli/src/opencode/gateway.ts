@@ -613,16 +613,19 @@ export class OpenCodeEventNormalizer {
       }
       case 'session.next.tool.success':
       case 'session.next.tool.failed':
-        return sessionID
-          ? [{
-              type: 'tool-end',
-              sessionID,
-              callID: String(data.callID ?? ''),
-              success: type.endsWith('success'),
-              ...(data.input !== undefined ? { input: data.input } : {}),
-              ...(Array.isArray(data.outputPaths) ? { outputPaths: data.outputPaths.map(String) } : {}),
-            }]
-          : []
+        if (!sessionID) return []
+        return [{
+          type: 'tool-end',
+          sessionID,
+          callID: String(data.callID ?? ''),
+          success: type.endsWith('success'),
+          ...(typeof data.name === 'string' || typeof data.tool === 'string'
+            ? { name: String(data.tool ?? data.name) }
+            : {}),
+          ...(data.input !== undefined ? { input: data.input } : {}),
+          ...(Array.isArray(data.outputPaths) ? { outputPaths: data.outputPaths.map(String) } : {}),
+          ...toolCompletionTelemetry(data),
+        }]
       case 'session.diff':
         return sessionID && Array.isArray(data.diff) ? [{ type: 'diff', sessionID, diff: data.diff }] : []
       case 'permission.v2.asked':
@@ -777,11 +780,13 @@ export class OpenCodeEventNormalizer {
         sessionID,
         callID,
         success: status === 'completed',
+        name,
         ...(state.input !== undefined ? { input: state.input } : {}),
         ...(() => {
           const outputPaths = extractOutputPaths(part)
           return outputPaths.length > 0 ? { outputPaths } : {}
         })(),
+        ...toolCompletionTelemetry(state, part),
       })
     }
     this.#toolStates.set(partID, status)
@@ -936,6 +941,76 @@ function mapUsage(tokens: Record<string, unknown>): TokenUsage {
   const cacheRead = Number(cache.read ?? cache.read_tokens ?? tokens.cache_read_input_tokens ?? 0)
   const cacheWrite = Number(cache.write ?? cache.write_tokens ?? tokens.cache_creation_input_tokens ?? 0)
   return { input, output, reasoning, cacheRead, cacheWrite }
+}
+
+type ToolCompletionTelemetry = {
+  outputBytes: number
+  resultCount: number
+  truncated: boolean
+  cacheHit: boolean
+}
+
+/**
+ * Normalize completion measurements without forwarding raw tool output into
+ * controller events or ordinary telemetry.  Plugin tools provide these values
+ * in metadata; built-ins get conservative measurements from their result.
+ */
+function toolCompletionTelemetry(...sources: unknown[]): ToolCompletionTelemetry {
+  const records = sources.map(record)
+  const metadata = records.flatMap((source) => {
+    const output = record(source.output)
+    return [record(source.metadata), record(output.metadata)]
+  })
+  const metrics = [...metadata, ...records]
+  const output = records
+    .map((source) => source.output ?? source.result ?? source.content)
+    .find((value) => value !== undefined)
+  const explicitBytes = metricNumber(metrics, ['outputBytes', 'output_bytes'])
+  const explicitCount = metricNumber(metrics, ['resultCount', 'result_count'])
+  return {
+    outputBytes: explicitBytes ?? outputByteLength(output),
+    resultCount: explicitCount ?? inferResultCount(output),
+    truncated: metricBoolean(metrics, ['truncated', 'isTruncated']),
+    cacheHit: metricBoolean(metrics, ['cacheHit', 'cache_hit']),
+  }
+}
+
+function metricNumber(records: Record<string, unknown>[], names: string[]): number | undefined {
+  for (const source of records) {
+    for (const name of names) {
+      const value = Number(source[name])
+      if (Number.isFinite(value) && value >= 0) return Math.floor(value)
+    }
+  }
+  return undefined
+}
+
+function metricBoolean(records: Record<string, unknown>[], names: string[]): boolean {
+  for (const source of records) {
+    for (const name of names) {
+      if (source[name] === true) return true
+    }
+  }
+  return false
+}
+
+function outputByteLength(value: unknown): number {
+  if (value === undefined || value === null) return 0
+  if (typeof value === 'string') return Buffer.byteLength(value)
+  try {
+    return Buffer.byteLength(JSON.stringify(value) ?? '')
+  } catch {
+    return 0
+  }
+}
+
+function inferResultCount(value: unknown): number {
+  if (Array.isArray(value)) return value.length
+  const source = record(value)
+  for (const key of ['matches', 'edges', 'paths', 'files', 'nodes', 'results', 'candidates']) {
+    if (Array.isArray(source[key])) return source[key].length
+  }
+  return 0
 }
 
 function extractOutputPaths(part: Record<string, unknown>): string[] {

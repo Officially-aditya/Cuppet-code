@@ -145,8 +145,13 @@ test('legacy OpenCode tool, permission, and usage events map into the Cuppet eve
     sessionID: 'session',
     callID: 'call-1',
     success: true,
+    name: 'edit',
     input: { filePath: 'src/index.ts' },
     outputPaths: ['src/index.ts'],
+    outputBytes: 4,
+    resultCount: 0,
+    truncated: false,
+    cacheHit: false,
   }])
   assert.deepEqual(normalizer.normalize(completed), [])
 
@@ -179,6 +184,34 @@ test('legacy OpenCode tool, permission, and usage events map into the Cuppet eve
     cost: 0.25,
     tokens: { input: 10, output: 4, reasoning: 2, cache: { read: 3, write: 1 } },
   })), [])
+})
+
+test('tool completion records measured output metadata without retaining raw output', () => {
+  const normalizer = new OpenCodeEventNormalizer()
+  const events = normalizer.normalize(event('session.next.tool.success', {
+    sessionID: 'session',
+    callID: 'call-graph',
+    tool: 'cuppet_graph_search',
+    output: 'this raw graph text must not be placed on the event',
+    metadata: {
+      outputBytes: 47,
+      resultCount: 3,
+      truncated: true,
+      cacheHit: true,
+    },
+  }))
+  assert.deepEqual(events, [{
+    type: 'tool-end',
+    sessionID: 'session',
+    callID: 'call-graph',
+    success: true,
+    name: 'cuppet_graph_search',
+    outputBytes: 47,
+    resultCount: 3,
+    truncated: true,
+    cacheHit: true,
+  }])
+  assert.doesNotMatch(JSON.stringify(events), /raw graph text/)
 })
 
 function event(type: string, properties: Record<string, unknown>) {

@@ -101,6 +101,25 @@ pub struct GraphSearchResult {
     pub text_matches: Vec<GraphTextMatch>,
 }
 
+/// A deliberately small, model-facing graph location.  The rich graph types
+/// above are kept for debugging and API compatibility; this projection is the
+/// default for code-navigation tools.
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct GraphLocateMatch {
+    pub path: String,
+    pub symbol: String,
+    pub kind: String,
+    pub line: usize,
+    pub column: usize,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct GraphLocateResult {
+    pub query: String,
+    pub matches: Vec<GraphLocateMatch>,
+    pub truncated: bool,
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct GraphFileList {
     pub root: String,
@@ -133,6 +152,33 @@ pub struct GraphTraceResult {
     pub roots: Vec<GraphNode>,
     pub nodes: Vec<GraphNode>,
     pub edges: Vec<GraphTraceEdge>,
+}
+
+/// A compact endpoint reference used by graph.trace_summary.  It intentionally
+/// omits graph IDs, hashes, language information, and full source spans.
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct GraphReference {
+    pub path: String,
+    pub symbol: String,
+    pub kind: String,
+    pub line: usize,
+    pub column: usize,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct GraphTraceSummaryEdge {
+    pub from: GraphReference,
+    pub to: GraphReference,
+    pub kind: EdgeKind,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct GraphTraceSummary {
+    pub query: String,
+    pub direction: String,
+    pub depth: usize,
+    pub edges: Vec<GraphTraceSummaryEdge>,
+    pub truncated: bool,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -199,8 +245,7 @@ impl CodeGraph {
             nodes: self.nodes.clone(),
             files: self.files.clone(),
         };
-        let bytes = rmp_serde::to_vec_named(&snapshot)
-            .context("serialize graph snapshot")?;
+        let bytes = rmp_serde::to_vec_named(&snapshot).context("serialize graph snapshot")?;
         let temp_path = path.with_extension("tmp");
         fs::write(&temp_path, &bytes)?;
         fs::rename(&temp_path, path)?;
@@ -719,6 +764,62 @@ impl CodeGraph {
         }
     }
 
+    /// Return a compact, ranked projection of graph search results for model
+    /// navigation.  Rich `search` remains available for debugging clients.
+    pub fn locate(&self, pattern: &str, prefix: Option<&str>, limit: usize) -> GraphLocateResult {
+        let limit = limit.clamp(1, 12);
+        // Search wider than the compact response so `truncated` reflects a
+        // real omitted result rather than only the caller's requested bound.
+        let search = self.search(pattern, prefix, 128);
+        let mut matches = Vec::new();
+        let mut seen = HashSet::new();
+
+        // `search` already ranks symbols by relevance.  Preserve that order
+        // and then add literal source matches as a lower-priority fallback.
+        for result in search.nodes {
+            let node = result.node;
+            let item = GraphLocateMatch {
+                path: node.path,
+                symbol: node.name,
+                kind: node.symbol_kind,
+                line: node.span.start_row + 1,
+                column: node.span.start_column + 1,
+            };
+            let key = format!(
+                "{}\u{0}{}\u{0}{}\u{0}{}\u{0}{}",
+                item.path, item.symbol, item.kind, item.line, item.column
+            );
+            if seen.insert(key) {
+                matches.push(item);
+            }
+        }
+
+        for result in search.text_matches {
+            let item = GraphLocateMatch {
+                path: result.path,
+                symbol: String::new(),
+                kind: "text".into(),
+                line: result.line,
+                column: result.column,
+            };
+            let key = format!(
+                "{}\u{0}{}\u{0}{}\u{0}{}\u{0}{}",
+                item.path, item.symbol, item.kind, item.line, item.column
+            );
+            if seen.insert(key) {
+                matches.push(item);
+            }
+        }
+
+        let truncated = matches.len() > limit;
+        matches.truncate(limit);
+        GraphLocateResult {
+            query: pattern.trim().into(),
+            matches,
+            truncated,
+        }
+    }
+
     pub fn list_files(&self, prefix: Option<&str>, limit: usize) -> GraphFileList {
         let prefix = normalize_prefix(prefix);
         let mut paths: Vec<String> = self
@@ -844,6 +945,47 @@ impl CodeGraph {
         })
     }
 
+    /// Return only compact dependency edges for model-facing traversal.  This
+    /// avoids re-sending roots, node tables, IDs, hashes, languages, and full
+    /// spans for every trace call.
+    pub fn trace_summary(
+        &self,
+        query: &str,
+        direction: &str,
+        depth: usize,
+        limit: usize,
+    ) -> Result<GraphTraceSummary> {
+        let limit = limit.clamp(1, 12);
+        let trace = self.trace(query, direction, depth, 128)?;
+        let mut edges = Vec::new();
+        let mut seen = HashSet::new();
+
+        for edge in trace.edges {
+            let item = GraphTraceSummaryEdge {
+                from: compact_reference(&edge.from),
+                to: compact_reference(&edge.to),
+                kind: edge.kind,
+            };
+            let key = format!(
+                "{}\u{0}{}\u{0}{}\u{0}{}\u{0}{:?}",
+                item.from.path, item.from.symbol, item.to.path, item.to.symbol, item.kind
+            );
+            if seen.insert(key) {
+                edges.push(item);
+            }
+        }
+
+        let truncated = edges.len() > limit;
+        edges.truncate(limit);
+        Ok(GraphTraceSummary {
+            query: trace.query,
+            direction: trace.direction,
+            depth: trace.depth,
+            edges,
+            truncated,
+        })
+    }
+
     pub fn stats(&self) -> GraphStats {
         GraphStats {
             files: self.files.len(),
@@ -907,6 +1049,16 @@ fn normalize_prefix(prefix: Option<&str>) -> String {
 
 fn path_matches_prefix(path: &str, prefix: &str) -> bool {
     prefix.is_empty() || path == prefix || path.starts_with(&format!("{prefix}/"))
+}
+
+fn compact_reference(node: &GraphNode) -> GraphReference {
+    GraphReference {
+        path: node.path.clone(),
+        symbol: node.name.clone(),
+        kind: node.symbol_kind.clone(),
+        line: node.span.start_row + 1,
+        column: node.span.start_column + 1,
+    }
 }
 
 fn load_gitignores(root: &Path) -> Vec<Gitignore> {
@@ -1365,6 +1517,55 @@ mod tests {
             temp.path().canonicalize().unwrap().display().to_string()
         );
         assert_eq!(workspace.files.len(), 2);
+
+        let located = graph.locate("addTask", Some("src"), 12);
+        assert!(located.matches.len() <= 12);
+        assert!(located.matches.iter().all(|item| item.path.starts_with("src/")));
+        assert!(located
+            .matches
+            .iter()
+            .any(|item| item.symbol == "addTask" && item.line > 0 && item.column > 0));
+        let unique_locations = located
+            .matches
+            .iter()
+            .map(|item| {
+                format!(
+                    "{}:{}:{}:{}:{}",
+                    item.path, item.symbol, item.kind, item.line, item.column
+                )
+            })
+            .collect::<HashSet<_>>();
+        assert_eq!(unique_locations.len(), located.matches.len());
+
+        let summary = graph.trace_summary("api.ts", "callees", 1, 12).unwrap();
+        assert!(summary.edges.len() <= 12);
+        assert!(summary.edges.iter().any(|edge| {
+            edge.kind == EdgeKind::Call
+                && edge.from.path == "src/api.ts"
+                && edge.to.symbol == "addTask"
+                && edge.to.line > 0
+        }));
+    }
+
+    #[test]
+    fn compact_graph_projections_enforce_hard_limits_and_mark_truncation() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut source = String::new();
+        for index in 0..20 {
+            source.push_str(&format!(
+                "export function needle{index}() {{ return {index}; }}\n"
+            ));
+        }
+        fs::write(temp.path().join("many.ts"), source).unwrap();
+        let mut graph = CodeGraph::new(temp.path()).unwrap();
+        graph.build().unwrap();
+
+        let located = graph.locate("needle", None, 128);
+        assert_eq!(located.matches.len(), 12);
+        assert!(located.truncated);
+
+        let summary = graph.trace_summary("needle", "both", 4, 128).unwrap();
+        assert!(summary.edges.len() <= 12);
     }
 
     #[test]

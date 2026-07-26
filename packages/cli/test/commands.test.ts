@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { CommandDispatcher, COMMANDS } from '../src/commands/dispatcher.js'
+import { CommandDispatcher, COMMAND_COMPLETIONS, COMMANDS } from '../src/commands/dispatcher.js'
 import type { CuppetController } from '../src/controller.js'
 
 test('/platform opens the platform selector', async () => {
@@ -10,6 +10,8 @@ test('/platform opens the platform selector', async () => {
     action: { type: 'platform' },
   })
   assert.ok(COMMANDS.includes('/platform'))
+  assert.deepEqual(COMMANDS, COMMAND_COMPLETIONS.map(({ command }) => command))
+  assert.equal(COMMAND_COMPLETIONS.find(({ command }) => command === '/platform')?.description, 'Choose a provider platform')
 })
 
 test('/effort opens the primary effort selector by default', async () => {

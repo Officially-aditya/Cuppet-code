@@ -8,7 +8,7 @@ import type { CommandDispatcher } from '../src/commands/dispatcher.js'
 import type { CuppetController } from '../src/controller.js'
 import { TerminalApp } from '../src/ui/TerminalApp.js'
 
-test('terminal UI stays inside the viewport and Esc closes a slash-command picker', async () => {
+test('terminal UI stays below the physical viewport and Esc closes a slash-command picker', async () => {
   const stdin = terminalInput()
   const stdout = terminalOutput(42, 10)
   const chunks: string[] = []
@@ -30,14 +30,14 @@ test('terminal UI stays inside the viewport and Esc closes a slash-command picke
 
   try {
     await settle()
-    assertFrameHeight(latestFrame(chunks), 10)
+    assertFrameHeightBelowTerminal(latestFrame(chunks), 10)
 
     stdin.write('/platform')
     await settle()
     stdin.write('\r')
     await settle()
     assert.match(latestFrame(chunks), /Select platform/)
-    assertFrameHeight(latestFrame(chunks), 10)
+    assertFrameHeightBelowTerminal(latestFrame(chunks), 10)
 
     stdin.write('\u001B')
     await settle()
@@ -47,7 +47,7 @@ test('terminal UI stays inside the viewport and Esc closes a slash-command picke
     Object.defineProperty(stdout, 'rows', { configurable: true, value: 6, writable: true })
     stdout.emit('resize')
     await settle()
-    assertFrameHeight(latestFrame(chunks), 6)
+    assertFrameHeightBelowTerminal(latestFrame(chunks), 6)
   } finally {
     app.unmount()
     stdin.destroy()
@@ -55,7 +55,88 @@ test('terminal UI stays inside the viewport and Esc closes a slash-command picke
   }
 })
 
-test('terminal UI initializes alternate screen and alternate scroll modes and supports scrolling history', async () => {
+test('terminal UI dispatches the selected slash completion on Enter', async () => {
+  const stdin = terminalInput()
+  const stdout = terminalOutput(80, 14)
+  const chunks: string[] = []
+  const dispatched: string[] = []
+  stdout.on('data', (chunk: Buffer) => chunks.push(chunk.toString('utf8')))
+  const app = render(React.createElement(TerminalApp, {
+    controller: fakeController(),
+    dispatcher: {
+      async dispatch(input: string) {
+        dispatched.push(input)
+        return { handled: true }
+      },
+    } as CommandDispatcher,
+  }), {
+    stdin,
+    stdout,
+    debug: true,
+    patchConsole: false,
+    exitOnCtrlC: false,
+  })
+
+  try {
+    await settle()
+    stdin.write('/st')
+    await settle()
+    assert.match(latestFrame(chunks), /› \/status/)
+
+    stdin.write('\r')
+    await settle()
+    assert.deepEqual(dispatched, ['/status'])
+  } finally {
+    app.unmount()
+    stdin.destroy()
+    stdout.destroy()
+  }
+})
+
+test('completion arrows do not move the terminal transcript', async () => {
+  const stdin = terminalInput()
+  const stdout = terminalOutput(80, 14)
+  const chunks: string[] = []
+  const controller = fakeController()
+  stdout.on('data', (chunk: Buffer) => chunks.push(chunk.toString('utf8')))
+  const app = render(React.createElement(TerminalApp, {
+    controller,
+    dispatcher: { async dispatch() { return { handled: true } } } as unknown as CommandDispatcher,
+  }), {
+    stdin,
+    stdout,
+    debug: true,
+    patchConsole: false,
+    exitOnCtrlC: false,
+  })
+
+  try {
+    await settle()
+    for (let index = 0; index < 20; index += 1) {
+      controller.emitAgentEvent({ type: 'text-delta', sessionID: 'sess-menu', text: `line ${index}\n` })
+    }
+    controller.emitAgentEvent({ type: 'idle', sessionID: 'sess-menu' })
+    await settle()
+    stdin.write('\u001b[5~')
+    await settle()
+    const before = /↑ (\d+) lines back/.exec(latestFrame(chunks))
+    assert.ok(before?.[1])
+
+    stdin.write('/')
+    await settle()
+    stdin.write('\u001b[B')
+    await settle()
+    const frame = latestFrame(chunks)
+    assert.match(frame, /› \/login/)
+    assert.match(frame, new RegExp(`↑ ${before[1]} lines back`))
+  } finally {
+    app.unmount()
+    stdin.destroy()
+    stdout.destroy()
+  }
+})
+
+test('terminal UI stays in the normal buffer and supports keyboard transcript navigation', async () => {
   const stdin = terminalInput()
   const stdout = terminalOutput(60, 12)
   const chunks: string[] = []
@@ -76,7 +157,9 @@ test('terminal UI initializes alternate screen and alternate scroll modes and su
   try {
     await settle()
     const allRawOutput = chunks.join('')
-    assert.ok(allRawOutput.includes('\u001b[?1049h\u001b[?1007h'), 'expected TTY mount to enable alternate screen and alternate scroll')
+    assert.doesNotMatch(allRawOutput, /\u001b\[\?1049[hl]|\u001b\[\?1007[hl]/, 'must not enter alternate screen or mouse tracking')
+    assert.doesNotMatch(allRawOutput, /\u001b\[2J/, 'must not clear the physical terminal')
+    assertFrameHeightBelowTerminal(latestFrame(chunks), 12)
 
     // Trigger long assistant response lines
     for (let i = 1; i <= 20; i += 1) {
@@ -88,36 +171,67 @@ test('terminal UI initializes alternate screen and alternate scroll modes and su
     // Verify scrolling indicators or line navigation
     stdin.write('\u001b[5~') // PageUp
     await settle()
-    assert.match(latestFrame(chunks), /Scrolled \d+ lines back/)
+    assert.match(latestFrame(chunks), /↑ \d+ lines back/)
 
     stdin.write('\u001b[6~') // PageDown (scroll back down)
     await settle()
-    assert.doesNotMatch(latestFrame(chunks), /Scrolled/)
-
-    // Test mouse wheel scroll up sequence
-    stdin.write('\u001b[<64;10;10M')
-    await settle()
-    assert.match(latestFrame(chunks), /Scrolled/)
-
-    // Test mouse wheel scroll down sequence
-    stdin.write('\u001b[<65;10;10M')
-    await settle()
-    assert.doesNotMatch(latestFrame(chunks), /Scrolled/)
+    assert.doesNotMatch(latestFrame(chunks), /lines back/)
 
     // Test Up Arrow when scrolled back scrolls history line-by-line
     stdin.write('\u001b[5~') // PageUp first
     await settle()
     const frameAfterPageUp = latestFrame(chunks)
-    assert.match(frameAfterPageUp, /Scrolled \d+ lines back/)
+    assert.match(frameAfterPageUp, /↑ \d+ lines back/)
 
     stdin.write('\u001b[A') // Up Arrow line scroll
     await settle()
-    assert.match(latestFrame(chunks), /Scrolled \d+ lines back/)
+    assert.match(latestFrame(chunks), /↑ \d+ lines back/)
+    assertFrameHeightBelowTerminal(latestFrame(chunks), 12)
   } finally {
     app.unmount()
     await settle()
     const finalRawOutput = chunks.join('')
-    assert.ok(finalRawOutput.includes('\u001b[?1007l\u001b[?1049l'), 'expected unmount to disable alternate scroll and alternate screen')
+    assert.doesNotMatch(finalRawOutput, /\u001b\[\?1049[hl]|\u001b\[\?1007[hl]/, 'must not emit alternate-screen cleanup sequences')
+    assert.doesNotMatch(finalRawOutput, /\u001b\[2J/, 'must not clear the physical terminal on unmount')
+    stdin.destroy()
+    stdout.destroy()
+  }
+})
+
+test('terminal UI renders fenced code as a labelled panel without legacy rails', async () => {
+  const stdin = terminalInput()
+  const stdout = terminalOutput(80, 16)
+  const chunks: string[] = []
+  stdout.on('data', (chunk: Buffer) => chunks.push(chunk.toString('utf8')))
+  const controller = fakeController()
+  const app = render(React.createElement(TerminalApp, {
+    controller,
+    dispatcher: { async dispatch() { return { handled: true } } } as unknown as CommandDispatcher,
+  }), {
+    stdin,
+    stdout,
+    debug: true,
+    patchConsole: false,
+    exitOnCtrlC: false,
+  })
+
+  try {
+    await settle()
+    controller.emitAgentEvent({
+      type: 'text-delta',
+      sessionID: 'sess-code',
+      text: 'Example:\n```typescript\n  const value = call(42) // keep indentation\n```',
+    })
+    controller.emitAgentEvent({ type: 'idle', sessionID: 'sess-code' })
+    await settle()
+
+    const frame = latestFrame(chunks)
+    assert.match(frame, /typescript/)
+    assert.match(frame, /  const value = call\(42\) \/\/ keep indentation/)
+    assert.doesNotMatch(frame, /```|┌── typescript|│\s+const value/)
+    assertFrameHeightBelowTerminal(frame, 16)
+  } finally {
+    app.unmount()
     stdin.destroy()
     stdout.destroy()
   }
@@ -186,9 +300,9 @@ function latestFrame(chunks: string[]): string {
   throw new Error(`No UI frame in chunks: ${JSON.stringify(chunks)}`)
 }
 
-function assertFrameHeight(frame: string, rows: number): void {
+function assertFrameHeightBelowTerminal(frame: string, rows: number): void {
   assert.ok(frame.length > 0, 'expected Ink to render a frame')
-  assert.ok(frame.split('\n').length <= rows, `rendered ${frame.split('\n').length} rows into a ${rows}-row terminal`)
+  assert.ok(frame.split('\n').length < rows, `rendered ${frame.split('\n').length} rows into a ${rows}-row terminal`)
 }
 
 async function settle(ms = 50): Promise<void> {

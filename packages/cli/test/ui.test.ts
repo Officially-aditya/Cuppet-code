@@ -49,11 +49,15 @@ test('permission dismissal advances queued requests instead of abandoning them',
   assert.deepEqual(nextPermissionModal({ type: 'permission', request: second }), { type: 'none' })
 })
 
-test('viewport allocations never exceed the live terminal height', () => {
+test('viewport reserves a physical terminal row for inline rendering', () => {
   for (let rows = 1; rows <= 80; rows += 1) {
     for (const modalOpen of [false, true]) {
       const layout = viewportLayout(rows, modalOpen)
-      assert.equal(layout.header + layout.messages + layout.editor + layout.modal + layout.footer, rows)
+      assert.equal(layout.terminalRows, rows)
+      assert.equal(layout.reserved, 1)
+      assert.equal(layout.rows, rows - layout.reserved)
+      assert.ok(layout.rows < rows)
+      assert.equal(layout.header + layout.messages + layout.editor + layout.modal + layout.footer, layout.rows)
       assert.equal(layout.messages + layout.editor + layout.modal, layout.body)
     }
   }
@@ -144,25 +148,29 @@ test('diff rendering keeps filenames visible and colors only actual tool diff li
   assert.equal(diffLineColor('- ordinary assistant bullet', 'assistant'), undefined)
 })
 
-test('code blocks and diff blocks format with box frames and code block indicators', () => {
+test('fenced code blocks expose structured metadata without legacy rails', () => {
   const lines = renderMessageLines([
     {
       id: 'msg-1',
       sender: 'assistant',
-      text: 'Here is code:\n```typescript\nconst x = 1\n```',
+      text: 'Here is code:\n```typescript\n  const x = 1\n```',
     },
   ], 80)
 
   assert.equal(lines[0]?.text, 'Here is code:')
-  assert.equal(lines[1]?.text, ' ')
-  assert.equal(lines[2]?.text, ' ')
-  assert.equal(lines[3]?.text, '```typescript')
-  assert.equal(lines[4]?.text, 'const x = 1')
-  assert.equal(lines[4]?.isCodeBlock, true)
-  assert.equal(lines[5]?.text, '```')
-  assert.equal(lines[5]?.isCodeBlock, undefined)
-  assert.equal(lines[6]?.text, ' ')
-  assert.equal(lines[7]?.text, ' ')
+  assert.equal(lines[0]?.kind, 'text')
+  assert.deepEqual(lines[1] && { kind: lines[1].kind, text: lines[1].text, language: lines[1].language }, {
+    kind: 'code-header',
+    text: 'typescript',
+    language: 'typescript',
+  })
+  assert.deepEqual(lines[2] && { kind: lines[2].kind, text: lines[2].text, language: lines[2].language }, {
+    kind: 'code',
+    text: '  const x = 1',
+    language: 'typescript',
+  })
+  assert.equal(lines[2]?.isCodeBlock, true)
+  assert.doesNotMatch(lines.map((line) => line.text).join('\n'), /```|┌──|└──|│/)
 })
 
 test('question permission requests are detected and extracted into structured question details', () => {

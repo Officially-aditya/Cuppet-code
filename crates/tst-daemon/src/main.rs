@@ -234,7 +234,7 @@ async fn serve_connection(
                         "protocol": PROTOCOL_VERSION,
                         "capabilities": [
                             "memory.observe", "memory.query", "memory.remember", "memory.forget",
-                            "evidence.record", "graph.query", "graph.search", "graph.list", "graph.workspace", "graph.trace", "status", "compact", "flush", "shutdown",
+                            "evidence.record", "graph.query", "graph.search", "graph.locate", "graph.list", "graph.workspace", "graph.trace", "graph.trace_summary", "status", "compact", "flush", "shutdown",
                             "notifications"
                         ]
                     }),
@@ -300,9 +300,11 @@ fn is_known_method(method: &str) -> bool {
             | "evidence.record"
             | "graph.query"
             | "graph.search"
+            | "graph.locate"
             | "graph.list"
             | "graph.workspace"
             | "graph.trace"
+            | "graph.trace_summary"
             | "turn.completed"
             | "status"
             | "compact"
@@ -354,6 +356,14 @@ async fn dispatch(method: &str, params: Value, service: &Arc<Mutex<TstService>>)
                 service.lock().await.graph_search(pattern, prefix, limit),
             )?)
         }
+        "graph.locate" => {
+            let pattern = required_string(&params, "pattern")?;
+            let prefix = params.get("prefix").and_then(Value::as_str);
+            let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(12) as usize;
+            Ok(serde_json::to_value(
+                service.lock().await.graph_locate(pattern, prefix, limit),
+            )?)
+        }
         "graph.list" => {
             let prefix = params.get("prefix").and_then(Value::as_str);
             let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(100) as usize;
@@ -372,6 +382,18 @@ async fn dispatch(method: &str, params: Value, service: &Arc<Mutex<TstService>>)
             let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(40) as usize;
             Ok(serde_json::to_value(
                 service.lock().await.graph_trace(query, direction, depth, limit)?,
+            )?)
+        }
+        "graph.trace_summary" => {
+            let query = required_string(&params, "query")?;
+            let direction = params.get("direction").and_then(Value::as_str).unwrap_or("both");
+            let depth = params.get("depth").and_then(Value::as_u64).unwrap_or(2) as usize;
+            let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(12) as usize;
+            Ok(serde_json::to_value(
+                service
+                    .lock()
+                    .await
+                    .graph_trace_summary(query, direction, depth, limit)?,
             )?)
         }
         "turn.completed" => {

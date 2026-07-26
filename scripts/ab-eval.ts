@@ -1,6 +1,6 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { PreferenceStore } from '../packages/cli/src/config/preferences.js'
 import { OpenCodeGateway } from '../packages/cli/src/opencode/gateway.js'
 import { startOpenCodeServer, type OpenCodeRuntime } from '../packages/cli/src/opencode/server.js'
@@ -22,6 +22,18 @@ type Trial = {
   answer: string
   durationMs: number
   contextTokens: number
+  expectedCoverage: number
+  toolCalls: number
+  graphCalls: number
+  graphOutputBytes: number
+  graphToolTrace: Array<{
+    name: string
+    input: unknown
+    outputBytes: number
+    resultCount: number
+    truncated: boolean
+    cacheHit: boolean
+  }>
   usage: TokenUsage
   uncachedInputTokens: number
   cost: number
@@ -56,7 +68,9 @@ const tasks: Task[] = [
   },
 ]
 const taskLimit = Math.max(1, Math.min(tasks.length, Number(process.env.CUPPET_AB_LIMIT ?? tasks.length) || tasks.length))
-const selectedTasks = tasks.slice(0, taskLimit)
+const taskOffset = Math.max(0, Math.min(tasks.length - 1, Number(process.env.CUPPET_AB_TASK_OFFSET ?? '0') || 0))
+const selectedTasks = tasks.slice(taskOffset, taskOffset + taskLimit)
+const persistentGraph = process.env.CUPPET_AB_PERSISTENT_GRAPH === '1'
 
 const project = resolve(process.cwd())
 const base = await mkdtemp(join(tmpdir(), 'cuppet-ab-'))
@@ -68,7 +82,7 @@ if (!assets.opencode || !assets.tst) throw new Error(`Evaluation runtimes unavai
 const globalPreferences = new PreferenceStore(join(process.env.HOME ?? '', '.cuppet', 'v2', 'preferences.json'))
 await globalPreferences.load()
 const configuredModel = globalPreferences.value.primary
-const model = parseModel(process.env.CUPPET_AB_MODEL) ?? configuredModel ?? {
+const model = parseModel(process.env.CUPPET_AB_MODEL, process.env.CUPPET_AB_VARIANT) ?? configuredModel ?? {
   providerID: 'google-vertex',
   modelID: 'gemini-flash-latest',
 }
@@ -79,28 +93,66 @@ let gateway: OpenCodeGateway | undefined
 const trials: Trial[] = []
 
 try {
-  tst = await startTstDaemon(assets.tst, paths, logger)
+  await seedOpenCodeProviderState(paths)
+  let activeTst = await startTstDaemon(assets.tst, paths, logger)
+  tst = activeTst
+  let graphPersistence: Awaited<ReturnType<typeof restartAgainstGraphSnapshot>> | undefined
+  if (persistentGraph) {
+    graphPersistence = await restartAgainstGraphSnapshot(activeTst, assets.tst, paths, logger)
+    activeTst = graphPersistence.runtime
+    tst = activeTst
+  }
+  await waitForIndex(activeTst)
   opencode = await startOpenCodeServer({
     binary: assets.opencode,
     paths,
     logger,
     ...(assets.plugin ? { plugin: assets.plugin } : {}),
-    tst: { socket: tst.socket, token: tst.token },
+    tst: { socket: activeTst.socket, token: activeTst.token },
     ...(globalPreferences.value.vertexProject ? { vertexProject: globalPreferences.value.vertexProject } : {}),
   })
   gateway = new OpenCodeGateway(opencode.client, project)
   const pending = new Set<string>()
   const errors = new Map<string, string>()
+  const toolCalls = new Map<string, number>()
+  const graphCalls = new Map<string, number>()
+  const graphOutputBytes = new Map<string, number>()
+  const graphToolTrace = new Map<string, Trial['graphToolTrace']>()
+  const toolNamesByCallID = new Map<string, string>()
   gateway.onEvent((event) => {
     if (event.type === 'permission' && !pending.has(event.request.id)) {
       pending.add(event.request.id)
       // Evaluation tasks are read-only. Reject any unexpected mutation/shell request identically.
       void gateway?.replyPermission(event.request.sessionID, event.request.id, 'reject')
     }
+    if (event.type === 'tool-start') {
+      toolCalls.set(event.sessionID, (toolCalls.get(event.sessionID) ?? 0) + 1)
+      toolNamesByCallID.set(event.callID, event.name)
+      if (isGraphTool(event.name)) {
+        graphCalls.set(event.sessionID, (graphCalls.get(event.sessionID) ?? 0) + 1)
+      }
+    }
+    if (event.type === 'tool-end') {
+      const name = toolNamesByCallID.get(event.callID) ?? event.name ?? 'tool'
+      if (isGraphTool(name)) {
+        graphOutputBytes.set(event.sessionID, (graphOutputBytes.get(event.sessionID) ?? 0) + event.outputBytes)
+        const traces = graphToolTrace.get(event.sessionID) ?? []
+        // Exact arguments are deliberately retained only in this disposable
+        // benchmark result, never in normal controller telemetry.
+        traces.push({
+          name,
+          input: event.input ?? null,
+          outputBytes: event.outputBytes,
+          resultCount: event.resultCount,
+          truncated: event.truncated,
+          cacheHit: event.cacheHit,
+        })
+        graphToolTrace.set(event.sessionID, traces)
+      }
+    }
     if (event.type === 'error' && event.sessionID) errors.set(event.sessionID, event.message)
   })
   gateway.startEvents()
-  await waitForIndex(tst)
 
   for (let index = 0; index < selectedTasks.length; index += 1) {
     const task = selectedTasks[index]!
@@ -109,7 +161,7 @@ try {
       process.stdout.write(`[${index + 1}/${selectedTasks.length}] ${task.id} · ${arm}\n`)
       const session = await gateway.createSession(model)
       const enriched = arm === 'cuppet'
-        ? await buildCuppetContext(tst.client, session.id, task.prompt, 1_048_576, [], '', project)
+        ? await buildCuppetContext(activeTst.client, session.id, task.prompt, 1_048_576, [], '', project)
         : { prompt: task.prompt, contextTokens: 0 }
       const started = performance.now()
       let answer = ''
@@ -124,15 +176,24 @@ try {
       const completed = await gateway.getSession(session.id)
       const eventError = errors.get(session.id)
       const normalizedAnswer = answer.toLowerCase()
+      const expectedCoverage = ratio(
+        task.expected.filter((item) => normalizedAnswer.includes(item.toLowerCase())).length,
+        task.expected.length,
+      )
       trials.push({
         task: task.id,
         arm,
         sessionID: session.id,
-        success: !failure && !eventError && task.expected.every((item) => normalizedAnswer.includes(item.toLowerCase())),
+        success: !failure && !eventError && expectedCoverage === 1,
         expected: task.expected,
         answer,
         durationMs: Math.round(performance.now() - started),
         contextTokens: enriched.contextTokens,
+        expectedCoverage,
+        toolCalls: toolCalls.get(session.id) ?? 0,
+        graphCalls: graphCalls.get(session.id) ?? 0,
+        graphOutputBytes: graphOutputBytes.get(session.id) ?? 0,
+        graphToolTrace: graphToolTrace.get(session.id) ?? [],
         usage: completed.tokens,
         // OpenCode records cache reads/writes separately; input is the uncached-input counter.
         uncachedInputTokens: completed.tokens.input,
@@ -148,7 +209,11 @@ try {
     project,
     opencodeVersion: '1.18.4',
     model,
-    design: 'paired fresh sessions; shared OpenCode server/kernel; identical read-only tools and permissions; alternating arm order',
+    taskOffset,
+    design: persistentGraph
+      ? 'paired fresh sessions; shared OpenCode server/kernel; identical read-only tools and permissions; alternating arm order; Cuppet graph is built once, daemon-restarted from its project snapshot, then fully revalidated before trials'
+      : 'paired fresh sessions; shared OpenCode server/kernel; identical read-only tools and permissions; alternating arm order',
+    ...(graphPersistence ? { graphPersistence: graphPersistence.metrics } : {}),
     summary: summarize(trials),
     trials,
   }
@@ -164,11 +229,75 @@ try {
   await rm(base, { recursive: true, force: true }).catch(() => undefined)
 }
 
-function parseModel(value: string | undefined): ModelRef | undefined {
+function parseModel(value: string | undefined, variant: string | undefined): ModelRef | undefined {
   if (!value) return undefined
   const slash = value.indexOf('/')
   if (slash <= 0 || slash === value.length - 1) throw new Error('CUPPET_AB_MODEL must be provider/model')
-  return { providerID: value.slice(0, slash), modelID: value.slice(slash + 1) }
+  return {
+    providerID: value.slice(0, slash),
+    modelID: value.slice(slash + 1),
+    ...(variant ? { variant } : {}),
+  }
+}
+
+async function seedOpenCodeProviderState(paths: Awaited<ReturnType<typeof createRuntimePaths>>): Promise<void> {
+  const persistentRoot = join(process.env.HOME ?? '', '.cuppet', 'v2', 'opencode')
+  const files = [
+    { source: join(persistentRoot, 'data', 'opencode', 'auth.json'), target: join(paths.opencode.data, 'opencode', 'auth.json') },
+    { source: join(persistentRoot, 'data', 'opencode', 'opencode.db'), target: join(paths.opencode.data, 'opencode', 'opencode.db') },
+    { source: join(persistentRoot, 'data', 'opencode', 'opencode.db-wal'), target: join(paths.opencode.data, 'opencode', 'opencode.db-wal') },
+    { source: join(persistentRoot, 'data', 'opencode', 'opencode.db-shm'), target: join(paths.opencode.data, 'opencode', 'opencode.db-shm') },
+    { source: join(persistentRoot, 'cache', 'opencode', 'models.json'), target: join(paths.opencode.cache, 'opencode', 'models.json') },
+  ]
+  for (const file of files) {
+    try {
+      await mkdir(dirname(file.target), { recursive: true, mode: 0o700 })
+      await cp(file.source, file.target, { force: true })
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+  }
+}
+
+async function restartAgainstGraphSnapshot(
+  first: TstRuntime,
+  binary: string,
+  paths: Awaited<ReturnType<typeof createRuntimePaths>>,
+  logger: RedactedLogger,
+): Promise<{ runtime: TstRuntime; metrics: Record<string, number | boolean> }> {
+  const coldIndexStarted = performance.now()
+  await waitForIndex(first)
+  const coldIndexMs = Math.round(performance.now() - coldIndexStarted)
+  const snapshot = await stat(join(paths.projectStore, 'graph.msgpack'))
+  await first.close()
+
+  const warmStartStarted = performance.now()
+  const runtime = await startTstDaemon(binary, paths, logger)
+  const warmDaemonStartMs = Math.round(performance.now() - warmStartStarted)
+  const statusBeforeProbe = await runtime.client.call<{ graph?: { progress?: { complete?: boolean } } }>('status')
+  const warmQueryStarted = performance.now()
+  const search = await runtime.client.call<{ nodes?: Array<{ node?: { name?: string } }> }>('graph.search', {
+    pattern: 'buildCuppetContext',
+    limit: 5,
+  })
+  const warmFirstGraphQueryMs = Math.round(performance.now() - warmQueryStarted)
+  const snapshotQueryMatched = Boolean(search.nodes?.some((result) => result.node?.name === 'buildCuppetContext'))
+  if (!snapshotQueryMatched) {
+    await runtime.close().catch(() => undefined)
+    throw new Error('persisted graph snapshot was not queryable after daemon restart')
+  }
+
+  return {
+    runtime,
+    metrics: {
+      coldIndexMs,
+      snapshotBytes: snapshot.size,
+      warmDaemonStartMs,
+      warmFirstGraphQueryMs,
+      snapshotQueryMatched,
+      revalidationAlreadyCompleteBeforeProbe: Boolean(statusBeforeProbe.graph?.progress?.complete),
+    },
+  }
 }
 
 async function waitForIndex(runtime: TstRuntime): Promise<void> {
@@ -207,6 +336,12 @@ function summarize(values: Trial[]) {
       medianUncachedInputTokensPerSuccess: median(successful.map((trial) => trial.uncachedInputTokens)),
       medianDurationMsPerSuccess: median(successful.map((trial) => trial.durationMs)),
       medianCostPerSuccess: median(successful.map((trial) => trial.cost)),
+      medianTotalModelTokensPerSuccess: median(successful.map((trial) => totalModelTokens(trial.usage))),
+      meanExpectedCoverage: mean(selected.map((trial) => trial.expectedCoverage)),
+      meanToolCalls: mean(selected.map((trial) => trial.toolCalls)),
+      meanGraphCalls: mean(selected.map((trial) => trial.graphCalls)),
+      meanGraphOutputBytes: mean(selected.map((trial) => trial.graphOutputBytes)),
+      costTelemetryAvailable: selected.some((trial) => trial.cost > 0),
       totalCost: selected.reduce((sum, trial) => sum + trial.cost, 0),
       medianInjectedContextTokens: median(selected.map((trial) => trial.contextTokens)),
     }
@@ -223,7 +358,13 @@ function summarize(values: Trial[]) {
       ),
       completionRateDelta: cuppet.completionRate - baseline.completionRate,
       medianLatencyDeltaMsPerSuccess: cuppet.medianDurationMsPerSuccess - baseline.medianDurationMsPerSuccess,
+      medianLatencyReduction: ratio(
+        baseline.medianDurationMsPerSuccess - cuppet.medianDurationMsPerSuccess,
+        baseline.medianDurationMsPerSuccess,
+      ),
       medianCostDeltaPerSuccess: cuppet.medianCostPerSuccess - baseline.medianCostPerSuccess,
+      outputQualityDelta: cuppet.meanExpectedCoverage - baseline.meanExpectedCoverage,
+      toolCallDelta: cuppet.meanToolCalls - baseline.meanToolCalls,
       totalCostDelta: cuppet.totalCost - baseline.totalCost,
     },
   }
@@ -234,6 +375,21 @@ function median(values: number[]): number {
   const sorted = [...values].sort((left, right) => left - right)
   const middle = Math.floor(sorted.length / 2)
   return sorted.length % 2 === 0 ? ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2 : sorted[middle] ?? 0
+}
+
+function mean(values: number[]): number {
+  return values.length === 0 ? 0 : values.reduce((sum, value) => sum + value, 0) / values.length
+}
+
+function totalModelTokens(usage: TokenUsage): number {
+  return usage.input + usage.output + usage.reasoning + usage.cacheRead + usage.cacheWrite
+}
+
+function isGraphTool(name: string): boolean {
+  return name === 'cuppet_workspace_info'
+    || name === 'cuppet_graph_tree'
+    || name === 'cuppet_graph_search'
+    || name === 'cuppet_graph_trace'
 }
 
 function ratio(numerator: number, denominator: number): number {

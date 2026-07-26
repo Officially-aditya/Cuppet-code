@@ -1,6 +1,6 @@
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Box, Text, useInput } from 'ink'
-import { COMMANDS } from '../commands/dispatcher.js'
+import { COMMAND_COMPLETIONS, type CommandCompletion } from '../commands/dispatcher.js'
 
 type Props = {
   disabled?: boolean
@@ -8,6 +8,7 @@ type Props = {
   scrollOffset?: number
   planMode?: boolean
   onSubmit(value: string): void | Promise<void>
+  onCompletionChange?(active: boolean): void
   onScrollUp?(): void
   onScrollDown?(): void
   onScrollTop?(): void
@@ -22,6 +23,7 @@ export function MultilineEditor({
   scrollOffset = 0,
   planMode = false,
   onSubmit,
+  onCompletionChange,
   onScrollUp,
   onScrollDown,
   onScrollTop,
@@ -31,31 +33,32 @@ export function MultilineEditor({
 }: Props) {
   const [value, setValue] = useState('')
   const [historyIndex, setHistoryIndex] = useState(-1)
+  const [selectedSuggestion, setSelectedSuggestion] = useState(0)
+  const [completionDismissed, setCompletionDismissed] = useState(false)
   const history = useRef<string[]>([])
-  const suggestions = useMemo(() => {
+  const viewportHeight = Math.max(1, Math.floor(height))
+  const suggestions = useMemo<readonly CommandCompletion[]>(() => {
     if (!value.startsWith('/') || value.includes('\n')) return []
-    return COMMANDS.filter((command) => command.startsWith(value)).slice(0, 4)
+    return COMMAND_COMPLETIONS.filter(({ command }) => command.startsWith(value)).slice(0, 5)
   }, [value])
+  const hasExactCommand = suggestions.some(({ command }) => command === value)
+  const completionOpen = viewportHeight >= 4 && suggestions.length > 0 && !hasExactCommand && !completionDismissed
+  const selectedIndex = Math.min(Math.max(0, selectedSuggestion), Math.max(0, suggestions.length - 1))
+  const selectedCompletion = suggestions[selectedIndex]
+
+  useEffect(() => {
+    // A newly typed prefix should always start on its first match.
+    setSelectedSuggestion(0)
+  }, [value])
+
+  useEffect(() => {
+    onCompletionChange?.(completionOpen)
+    return () => onCompletionChange?.(false)
+  }, [completionOpen, onCompletionChange])
 
   useInput(
     (input, key) => {
       if (key.ctrl && input === 'c') return
-      const isMouseInput =
-        input.startsWith('[<') ||
-        input.startsWith('\u001b[<') ||
-        input.startsWith('[M') ||
-        input.startsWith('\u001b[M') ||
-        /^\[<[0-9]+;/i.test(input)
-
-      if (isMouseInput) {
-        const button = parseInt(input.replace(/^[^\d]*/, ''), 10)
-        if (button === 64 || button === 96 || input.includes('64;')) {
-          onScrollUp?.()
-        } else if (button === 65 || button === 97 || input.includes('65;')) {
-          onScrollDown?.()
-        }
-        return
-      }
 
       const keyRecord = key as { home?: boolean; end?: boolean }
       const isHome = keyRecord.home || input === '\u001b[H' || input.includes('\u001b[1~') || input.includes('\u001b[H') || input === '\u001b[1;5H'
@@ -91,6 +94,15 @@ export function MultilineEditor({
         return
       }
 
+      if (completionOpen && (key.upArrow || key.downArrow)) {
+        const delta = key.downArrow ? 1 : -1
+        setSelectedSuggestion((current) => {
+          const count = suggestions.length
+          return count > 0 ? (current + delta + count) % count : 0
+        })
+        return
+      }
+
       if (scrollOffset > 0) {
         if (key.upArrow) {
           onScrollLineUp?.()
@@ -103,35 +115,52 @@ export function MultilineEditor({
       }
 
       if (key.escape) {
+        if (completionOpen) {
+          setCompletionDismissed(true)
+          return
+        }
         setValue('')
         setHistoryIndex(-1)
+        setSelectedSuggestion(0)
+        setCompletionDismissed(false)
         return
       }
       if (key.return) {
         if (key.ctrl || key.shift) {
+          setCompletionDismissed(false)
+          setSelectedSuggestion(0)
           setValue((current) => `${current}\n`)
           return
         }
-        const submitted = value.trim()
+        const submitted = completionOpen && selectedCompletion ? selectedCompletion.command : value.trim()
         if (!submitted) return
         history.current = [...history.current.filter((item) => item !== submitted), submitted].slice(-200)
         setValue('')
         setHistoryIndex(-1)
+        setCompletionDismissed(false)
+        setSelectedSuggestion(0)
         void onSubmit(submitted)
         return
       }
       if (key.backspace || key.delete) {
+        setCompletionDismissed(false)
+        setSelectedSuggestion(0)
         setValue((current) => Array.from(current).slice(0, -1).join(''))
         return
       }
-      if (key.tab && suggestions[0]) {
-        setValue(suggestions[0])
+      if (key.tab && completionOpen && selectedCompletion) {
+        setValue(selectedCompletion.command)
+        setHistoryIndex(-1)
+        setCompletionDismissed(false)
+        setSelectedSuggestion(0)
         return
       }
       if (key.upArrow && !value.includes('\n')) {
         const next = Math.min(history.current.length - 1, historyIndex + 1)
         if (next >= 0) {
           setHistoryIndex(next)
+          setCompletionDismissed(false)
+          setSelectedSuggestion(0)
           setValue(history.current[history.current.length - 1 - next] ?? '')
         } else if (value === '') {
           onScrollLineUp?.()
@@ -141,21 +170,26 @@ export function MultilineEditor({
       if (key.downArrow && !value.includes('\n')) {
         const next = historyIndex - 1
         setHistoryIndex(next)
+        setCompletionDismissed(false)
+        setSelectedSuggestion(0)
         setValue(next < 0 ? '' : (history.current[history.current.length - 1 - next] ?? ''))
         return
       }
       if (key.ctrl && input === 'n') {
+        setCompletionDismissed(false)
+        setSelectedSuggestion(0)
         setValue((current) => `${current}\n`)
         return
       }
       if (input) {
+        setCompletionDismissed(false)
+        setSelectedSuggestion(0)
         setValue((current) => `${current}${input.replace(/\r\n/g, '\n')}`)
       }
     },
     { isActive: !disabled },
   )
 
-  const viewportHeight = Math.max(1, Math.floor(height))
   const lines = value.length > 0 ? value.split('\n') : ['']
   const promptChar = planMode ? 'plan› ' : '› '
   if (viewportHeight < 3) {
@@ -171,36 +205,46 @@ export function MultilineEditor({
     )
   }
 
-  const showSuggestions = suggestions.length > 0 && value !== suggestions[0] && viewportHeight >= 4
-  const inputHeight = viewportHeight - (showSuggestions ? 1 : 0)
-  const visibleLineCount = Math.max(1, inputHeight - 2)
-  const firstVisibleIndex = Math.max(0, lines.length - visibleLineCount)
+  const menuRows = completionOpen ? Math.min(suggestions.length, viewportHeight >= 5 ? 2 : 1) : 0
+  const inputRowCount = Math.max(1, viewportHeight - 2 - menuRows)
+  const firstVisibleIndex = Math.max(0, lines.length - inputRowCount)
   const visibleLines = lines.slice(firstVisibleIndex)
+  const firstSuggestionIndex = completionOpen
+    ? Math.min(Math.max(0, selectedIndex - menuRows + 1), Math.max(0, suggestions.length - menuRows))
+    : 0
+  const visibleSuggestions = completionOpen ? suggestions.slice(firstSuggestionIndex, firstSuggestionIndex + menuRows) : []
+
   return (
-    <Box flexDirection="column" height={viewportHeight} overflow="hidden">
-      <Box
-        borderStyle="single"
-        borderColor={planMode ? 'yellow' : 'gray'}
-        paddingX={1}
-        flexDirection="column"
-        height={inputHeight}
-        overflow="hidden"
-      >
-        {visibleLines.map((line, visibleIndex) => {
-          const index = firstVisibleIndex + visibleIndex
-          const isLast = index === lines.length - 1
-          return (
+    <Box
+      borderStyle="single"
+      borderColor={planMode ? 'yellow' : 'gray'}
+      paddingX={1}
+      flexDirection="column"
+      height={viewportHeight}
+      overflow="hidden"
+    >
+      {visibleLines.map((line, visibleIndex) => {
+        const index = firstVisibleIndex + visibleIndex
+        const isLast = index === lines.length - 1
+        return (
           <Text key={`${index}:${line}`} wrap={isLast ? 'truncate-start' : 'truncate-end'}>
             <Text color={planMode ? 'yellow' : 'cyan'} bold>{index === 0 ? promptChar : visibleIndex === 0 ? '… ' : '  '}</Text>
             {line || (index === 0 ? <Text dimColor>Type a request or /help…</Text> : '')}
             {isLast ? <Text inverse> </Text> : null}
           </Text>
-          )
-        })}
-      </Box>
-      {showSuggestions ? (
-        <Text dimColor wrap="truncate-end">Tab: {suggestions.join('   ')}</Text>
-      ) : null}
+        )
+      })}
+      {visibleSuggestions.map((suggestion, index) => {
+        const suggestionIndex = firstSuggestionIndex + index
+        const selected = suggestionIndex === selectedIndex
+        return (
+          <Text key={suggestion.command} wrap="truncate-end" dimColor={!selected}>
+            <Text color={selected ? 'cyan' : 'gray'} bold={selected}>{selected ? '› ' : '  '}{suggestion.command}</Text>
+            <Text dimColor> — {suggestion.description}</Text>
+            {selected && suggestions.length > 1 ? <Text dimColor>  {suggestionIndex + 1}/{suggestions.length}</Text> : null}
+          </Text>
+        )
+      })}
     </Box>
   )
 }

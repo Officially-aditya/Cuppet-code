@@ -45,6 +45,26 @@ test('native daemon authenticates, persists verified memory, compacts, and resta
       limit: 10,
     })
     assert.equal(query.ltm[0]?.key, 'formatting preference')
+    await waitForGraph(first.client)
+    const located = await first.client.call<{
+      matches: Array<{ path: string; symbol: string; kind: string; line: number; column: number; content_hash?: string }>
+    }>('graph.locate', {
+      pattern: 'buildCuppetContext',
+      limit: 99,
+    })
+    assert.ok(located.matches.length <= 12)
+    assert.ok(located.matches.every((match) => match.path && match.kind && match.line > 0 && match.column > 0))
+    assert.ok(located.matches.every((match) => match.content_hash === undefined))
+    const trace = await first.client.call<{
+      edges: Array<{ from: { path: string }; to: { path: string }; kind: string; span?: unknown }>
+    }>('graph.trace_summary', {
+      query: 'buildCuppetContext',
+      direction: 'both',
+      depth: 2,
+      limit: 99,
+    })
+    assert.ok(trace.edges.length <= 12)
+    assert.ok(trace.edges.every((edge) => edge.from.path && edge.to.path && edge.span === undefined))
     await first.client.call('compact')
     assert.equal((await stat(join(directory, 'first.sock'))).mode & 0o777, 0o600)
     await stop(first)
@@ -96,4 +116,14 @@ async function stop(runtime: { child: ChildProcess; client: TstClient }) {
     if (runtime.child.exitCode !== null) return resolvePromise()
     runtime.child.once('exit', () => resolvePromise())
   })
+}
+
+async function waitForGraph(client: TstClient): Promise<void> {
+  const deadline = Date.now() + 10_000
+  while (Date.now() < deadline) {
+    const status = await client.call<{ graph?: { progress?: { complete?: boolean } } }>('status')
+    if (status.graph?.progress?.complete) return
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 25))
+  }
+  throw new Error('graph indexing timed out')
 }

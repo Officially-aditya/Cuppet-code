@@ -61,6 +61,9 @@ export class CuppetController extends EventEmitter {
   #session: SessionInfo | undefined
   #usage = emptyUsage()
   #cost = 0
+  #usageBaseline = emptyUsage()
+  #costBaseline = 0
+  #usageSessionID: string | undefined
   #running = false
   #planMode = false
   #tools = new Map<string, string>()
@@ -143,7 +146,7 @@ export class CuppetController extends EventEmitter {
       try {
         this.#session = await this.#gateway.getSession(previousSessionID)
         await this.#gateway.switchModel(previousSessionID, this.#primary)
-        this.#syncUsage(this.#session)
+        this.#startUsageWindow(this.#session)
       } catch {
         // A missing/archived session is not fatal; create lazily on the next prompt.
       }
@@ -155,6 +158,7 @@ export class CuppetController extends EventEmitter {
     this.#unsubscribe?.()
     this.#unsubscribeTst?.()
     this.#unsubscribeTstDisconnect?.()
+    await this.#background?.close()
     await this.#gateway.close()
   }
 
@@ -299,7 +303,14 @@ export class CuppetController extends EventEmitter {
 
   async submit(prompt: string, delivery: 'queue' | 'steer' = 'queue'): Promise<void> {
     if (!this.#primary) throw new Error('Choose a primary model before starting a session')
-    const session = await this.#ensureSession()
+    this.#background?.foregroundStarted()
+    let session: SessionInfo
+    try {
+      session = await this.#ensureSession()
+    } catch (error) {
+      this.#background?.foregroundIdle('unavailable')
+      throw error
+    }
     const model = this.#findModel(this.#primary)
     const enriched = await buildCuppetContext(
       this.#tstAvailable ? this.#tst : undefined,
@@ -311,6 +322,9 @@ export class CuppetController extends EventEmitter {
       this.#paths.projectRealpath,
       this.#planMode,
     ).catch(() => ({ prompt, contextTokens: 0 }))
+    // Keep the last completed diff available to this request's retrieval, then
+    // start a fresh verified-diff window for the foreground turn.
+    this.#activeDiff = ''
     this.#lastUserPrompt = prompt
     this.#assistantBuffer = ''
     this.#running = true
@@ -321,6 +335,7 @@ export class CuppetController extends EventEmitter {
       await this.#gateway.prompt(session.id, enriched.prompt, delivery)
     } catch (error) {
       this.#running = false
+      this.#background?.foregroundIdle(session.id)
       this.#changed()
       throw error
     }
@@ -346,24 +361,37 @@ export class CuppetController extends EventEmitter {
   }
 
   async steer(instruction: string, interrupt: boolean): Promise<string> {
-    const session = await this.#requireSession()
-    if (!interrupt) {
+    this.#background?.foregroundStarted()
+    let session: SessionInfo
+    try {
+      session = await this.#requireSession()
+    } catch (error) {
+      this.#background?.foregroundIdle('unavailable')
+      throw error
+    }
+    try {
+      if (!interrupt) {
+        await this.#gateway.prompt(session.id, instruction, 'steer')
+        return 'Steer queued for the next safe model boundary.'
+      }
+      if (this.#tools.size > 0) {
+        this.#deferredSteer = instruction
+        return 'A tool is running; interruption is deferred until the tool finishes.'
+      }
+      if (this.#running) await this.#gateway.interrupt(session.id)
       await this.#gateway.prompt(session.id, instruction, 'steer')
-      return 'Steer queued for the next safe model boundary.'
+      return 'Model request interrupted and steer submitted.'
+    } catch (error) {
+      this.#background?.foregroundIdle(session.id)
+      throw error
     }
-    if (this.#tools.size > 0) {
-      this.#deferredSteer = instruction
-      return 'A tool is running; interruption is deferred until the tool finishes.'
-    }
-    if (this.#running) await this.#gateway.interrupt(session.id)
-    await this.#gateway.prompt(session.id, instruction, 'steer')
-    return 'Model request interrupted and steer submitted.'
   }
 
   async abort(): Promise<void> {
     const session = await this.#requireSession()
     await this.#gateway.interrupt(session.id)
     this.#running = false
+    this.#background?.foregroundIdle(session.id)
     this.#changed()
   }
 
@@ -384,8 +412,7 @@ export class CuppetController extends EventEmitter {
   async newSession(): Promise<SessionInfo> {
     if (!this.#primary) throw new Error('Choose a primary model first')
     this.#session = await this.#gateway.createSession(this.#primary)
-    this.#usage = emptyUsage()
-    this.#cost = 0
+    this.#startUsageWindow(this.#session)
     await this.#preferences.setLastSession(this.#paths.projectID, this.#session.id)
     this.#changed()
     return this.#session
@@ -399,7 +426,7 @@ export class CuppetController extends EventEmitter {
     const session = await this.#gateway.getSession(sessionID)
     if (this.#primary) await this.#gateway.switchModel(sessionID, this.#primary)
     this.#session = session
-    this.#syncUsage(session)
+    this.#startUsageWindow(session)
     await this.#preferences.setLastSession(this.#paths.projectID, sessionID)
     this.#changed()
     return session
@@ -543,38 +570,17 @@ export class CuppetController extends EventEmitter {
       ...(this.#tstAvailable && this.#tst ? { tst: this.#tst } : {}),
       model: this.#secondary,
       paused,
+      projectStore: this.#paths.projectStore,
     })
     this.#background.on('change', () => this.#changed())
-    void this.#enqueueGraphSnapshot()
   }
 
   #handleTstNotification(notification: TstNotification): void {
-    if (notification.method === 'indexing.complete' || notification.method === 'graph.changed') {
-      this.#background?.enqueue(
-        'graph_batch',
-        `graph:${this.#paths.projectID}`,
-        `Verified native graph update: ${JSON.stringify(notification.params).slice(0, 6_000)}`,
-      )
-    }
     this.emit('agent-event', {
       type: 'tst-notification',
       method: notification.method,
       params: notification.params,
     } satisfies AgentEvent)
-  }
-
-  async #enqueueGraphSnapshot(): Promise<void> {
-    if (!this.#tstAvailable || !this.#tst || !this.#background) return
-    const status = await this.#tst.call<Record<string, unknown>>('status').catch(() => undefined)
-    const graph = status?.graph
-    if (!graph || typeof graph !== 'object') return
-    const files = Number((graph as { files?: unknown }).files ?? 0)
-    if (files <= 0) return
-    this.#background.enqueue(
-      'graph_batch',
-      `graph:${this.#paths.projectID}`,
-      `Verified native graph snapshot: ${JSON.stringify(graph).slice(0, 6_000)}`,
-    )
   }
 
   async #ensureSession(): Promise<SessionInfo> {
@@ -625,6 +631,7 @@ export class CuppetController extends EventEmitter {
     if (event.type === 'error') {
       this.#running = false
       this.#tools.clear()
+      if (event.sessionID) this.#background?.foregroundIdle(event.sessionID)
     }
     if (event.type === 'diff') this.#activeDiff = JSON.stringify(event.diff).slice(0, 8_000)
     if (event.type === 'tool-start') {
@@ -648,7 +655,7 @@ export class CuppetController extends EventEmitter {
           .filter((value, index, values) => values.indexOf(value) === index)
           .slice(0, 20)
       }
-      const name = this.#tools.get(event.callID) ?? 'tool'
+      const name = this.#tools.get(event.callID) ?? event.name ?? 'tool'
       this.#tools.delete(event.callID)
       if (event.success) {
         if (this.#tstAvailable && this.#tst && event.sessionID) {
@@ -661,9 +668,8 @@ export class CuppetController extends EventEmitter {
             scope: 'session',
           }).catch(() => undefined)
         }
-        if (/(?:bash|shell|test|lint|build)/i.test(name)) {
-          await this.#background?.recordSuccessfulValidation(event.sessionID, name)
-          this.#background?.enqueue('validation', event.sessionID, `Successful validation tool: ${name}`)
+        if (isValidationTool(name, event.input)) {
+          await this.#background?.recordSuccessfulValidation(event.sessionID, validationReference(name, event.input))
         }
       }
       if (this.#deferredSteer && this.#tools.size === 0 && this.#session) {
@@ -703,11 +709,8 @@ export class CuppetController extends EventEmitter {
           .then(() => this.#tst?.call('flush'))
           .catch(() => undefined)
       }
-      this.#background?.enqueue(
-        'foreground_turn',
-        event.sessionID,
-        `User request: ${this.#lastUserPrompt}\nActive verified diff: ${this.#activeDiff.slice(0, 4_000)}\nCompleted response summary source: ${this.#assistantBuffer.slice(0, 6_000)}`,
-      )
+      if (this.#activeDiff) await this.#background?.recordVerifiedDiff(event.sessionID, this.#activeDiff)
+      this.#background?.foregroundIdle(event.sessionID)
     }
     this.emit('agent-event', event)
     if (event.type !== 'text-delta' && event.type !== 'reasoning-delta') {
@@ -715,12 +718,22 @@ export class CuppetController extends EventEmitter {
     }
   }
 
+  #startUsageWindow(session: SessionInfo): void {
+    this.#usage = emptyUsage()
+    this.#cost = 0
+    this.#usageBaseline = { ...session.tokens }
+    this.#costBaseline = session.cost
+    this.#usageSessionID = session.id
+  }
+
   #syncUsage(session: SessionInfo): void {
-    const sessionTotal = totalTokenUsage(session.tokens)
+    if (session.id !== this.#usageSessionID) return
+    const usage = usageSince(session.tokens, this.#usageBaseline)
+    const sessionTotal = totalTokenUsage(usage)
     const currentTotal = totalTokenUsage(this.#usage)
     if (sessionTotal >= currentTotal && sessionTotal > 0) {
-      this.#usage = { ...session.tokens }
-      this.#cost = session.cost
+      this.#usage = usage
+      this.#cost = Math.max(0, session.cost - this.#costBaseline)
     }
   }
 
@@ -753,6 +766,40 @@ function addUsage(target: TokenUsage, value: TokenUsage): void {
   target.reasoning += value.reasoning
   target.cacheRead += value.cacheRead
   target.cacheWrite += value.cacheWrite
+}
+
+function usageSince(total: TokenUsage, baseline: TokenUsage): TokenUsage {
+  return {
+    input: Math.max(0, total.input - baseline.input),
+    output: Math.max(0, total.output - baseline.output),
+    reasoning: Math.max(0, total.reasoning - baseline.reasoning),
+    cacheRead: Math.max(0, total.cacheRead - baseline.cacheRead),
+    cacheWrite: Math.max(0, total.cacheWrite - baseline.cacheWrite),
+  }
+}
+
+function isValidationTool(name: string, input: unknown): boolean {
+  if (/(?:test|lint|build|typecheck|validate|verify|check)/i.test(name)) return true
+  if (!/(?:bash|shell|command)/i.test(name)) return false
+  let text = typeof input === 'string' ? input : ''
+  if (!text && input && typeof input === 'object') {
+    try {
+      text = JSON.stringify(input)
+    } catch {
+      return false
+    }
+  }
+  return /(?:\bnpm\s+(?:run\s+)?(?:test|lint|build|typecheck|check)\b|\b(?:cargo|pnpm|yarn)\s+(?:test|check|build|lint)\b|\b(?:pytest|jest|vitest|tsc)\b)/i.test(text)
+}
+
+function validationReference(name: string, input: unknown): string {
+  if (typeof input === 'string') return `${name}: ${input}`
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return name
+  const value = input as Record<string, unknown>
+  for (const key of ['command', 'cmd', 'script']) {
+    if (typeof value[key] === 'string') return `${name}: ${value[key]}`
+  }
+  return name
 }
 
 async function inspectPath(path: string, accessMode: number): Promise<Record<string, unknown>> {

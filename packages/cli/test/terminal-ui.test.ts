@@ -31,7 +31,10 @@ test('terminal UI stays below the physical viewport and Esc closes a slash-comma
 
   try {
     await settle()
-    assertFrameHeightBelowTerminal(latestFrame(chunks), 10)
+    const initialFrame = latestFrame(chunks)
+    assertFrameHeightBelowTerminal(initialFrame, 10)
+    const initialLines = initialFrame.split('\n')
+    assert.equal(initialLines.findIndex((line) => line.includes('Tokens')), initialLines.length - 1, 'the composer footer should stay at the bottom of the live terminal surface')
 
     stdin.write('/platform')
     await settle()
@@ -122,10 +125,58 @@ test('terminal UI keeps the active model above the composer and removes the alph
     const messageIndex = lines.findIndex((line) => line.includes('Transcript message'))
     const headerIndex = lines.findIndex((line) => line.includes('CUPPET'))
     const composerIndex = lines.findIndex((line) => line.includes('Type a request'))
+    const footerIndex = lines.findIndex((line) => line.includes('Tokens'))
     assert.ok(messageIndex >= 0)
     assert.ok(headerIndex > messageIndex, 'the model header should follow the transcript')
+    assert.equal(headerIndex, messageIndex + 1, 'the newest transcript line should sit directly above the composer surface')
     assert.ok(composerIndex > headerIndex, 'the model header should sit above the composer')
+    assert.equal(footerIndex, lines.length - 1, 'the composer should remain pinned to the bottom of the live surface')
     assert.doesNotMatch(frame, /Cuppet public alpha/i)
+  } finally {
+    app.unmount()
+    stdin.destroy()
+    stdout.destroy()
+  }
+})
+
+test('tool phases do not split a short transcript with blank rows', async () => {
+  const stdin = terminalInput()
+  const stdout = terminalOutput(80, 16)
+  const chunks: string[] = []
+  stdout.on('data', (chunk: Buffer) => chunks.push(chunk.toString('utf8')))
+  const controller = fakeController()
+  const app = render(React.createElement(TerminalApp, {
+    controller,
+    dispatcher: { async dispatch() { return { handled: true } } } as unknown as CommandDispatcher,
+  }), {
+    stdin,
+    stdout,
+    debug: true,
+    patchConsole: false,
+    exitOnCtrlC: false,
+  })
+
+  try {
+    await settle()
+    controller.emitAgentEvent({ type: 'text-delta', sessionID: 'sess-phases', text: 'I’ll review the pending FAQ changes.' })
+    controller.emitAgentEvent({ type: 'tool-start', sessionID: 'sess-phases', callID: 'status', name: 'bash', input: { command: 'git status' } })
+    controller.emitAgentEvent({ type: 'tool-end', sessionID: 'sess-phases', callID: 'status', success: true, outputBytes: 0, resultCount: 0, truncated: false, cacheHit: false })
+    controller.emitAgentEvent({ type: 'idle', sessionID: 'sess-phases' })
+    controller.emitAgentEvent({ type: 'tool-start', sessionID: 'sess-phases', callID: 'add', name: 'bash', input: { command: 'git add src/sections/FAQ.tsx' } })
+    controller.emitAgentEvent({ type: 'tool-end', sessionID: 'sess-phases', callID: 'add', success: true, outputBytes: 0, resultCount: 0, truncated: false, cacheHit: false })
+    controller.emitAgentEvent({ type: 'text-delta', sessionID: 'sess-phases', text: 'Committed and pushed the FAQ section.' })
+    controller.emitAgentEvent({ type: 'idle', sessionID: 'sess-phases' })
+    await settle()
+
+    const lines = latestFrame(chunks).split('\n')
+    const reviewIndex = lines.findIndex((line) => line.includes('pending FAQ changes'))
+    const statusIndex = lines.findIndex((line) => line.includes('git status'))
+    const addIndex = lines.findIndex((line) => line.includes('git add src/sections/FAQ.tsx'))
+    const committedIndex = lines.findIndex((line) => line.includes('Committed and pushed'))
+    assert.ok(reviewIndex >= 0)
+    assert.equal(statusIndex, reviewIndex + 1)
+    assert.equal(addIndex, statusIndex + 1)
+    assert.equal(committedIndex, addIndex + 1)
   } finally {
     app.unmount()
     stdin.destroy()
@@ -186,7 +237,7 @@ test('terminal UI selects a model once, then asks for its effort', async () => {
   }
 })
 
-test('completion arrows do not move the terminal transcript', async () => {
+test('completion arrows leave the full terminal transcript visible', async () => {
   const stdin = terminalInput()
   const stdout = terminalOutput(80, 14)
   const chunks: string[] = []
@@ -210,10 +261,8 @@ test('completion arrows do not move the terminal transcript', async () => {
     }
     controller.emitAgentEvent({ type: 'idle', sessionID: 'sess-menu' })
     await settle()
-    stdin.write('\u001b[5~')
-    await settle()
-    const before = /↑ (\d+) lines back/.exec(latestFrame(chunks))
-    assert.ok(before?.[1])
+    assert.match(latestFrame(chunks), /line 0/)
+    assert.match(latestFrame(chunks), /line 19/)
 
     stdin.write('/')
     await settle()
@@ -221,7 +270,8 @@ test('completion arrows do not move the terminal transcript', async () => {
     await settle()
     const frame = latestFrame(chunks)
     assert.match(frame, /› \/login/)
-    assert.match(frame, new RegExp(`↑ ${before[1]} lines back`))
+    assert.match(frame, /line 0/)
+    assert.match(frame, /line 19/)
   } finally {
     app.unmount()
     stdin.destroy()
@@ -229,7 +279,7 @@ test('completion arrows do not move the terminal transcript', async () => {
   }
 })
 
-test('terminal UI stays in the normal buffer and supports keyboard transcript navigation', async () => {
+test('terminal UI preserves the full transcript in the normal terminal buffer', async () => {
   const stdin = terminalInput()
   const stdout = terminalOutput(60, 12)
   const chunks: string[] = []
@@ -261,31 +311,53 @@ test('terminal UI stays in the normal buffer and supports keyboard transcript na
     controller.emitAgentEvent({ type: 'idle', sessionID: 'sess1' })
     await settle()
 
-    // Verify scrolling indicators or line navigation
-    stdin.write('\u001b[5~') // PageUp
-    await settle()
-    assert.match(latestFrame(chunks), /↑ \d+ lines back/)
-
-    stdin.write('\u001b[6~') // PageDown (scroll back down)
-    await settle()
-    assert.doesNotMatch(latestFrame(chunks), /lines back/)
-
-    // Test Up Arrow when scrolled back scrolls history line-by-line
-    stdin.write('\u001b[5~') // PageUp first
-    await settle()
-    const frameAfterPageUp = latestFrame(chunks)
-    assert.match(frameAfterPageUp, /↑ \d+ lines back/)
-
-    stdin.write('\u001b[A') // Up Arrow line scroll
-    await settle()
-    assert.match(latestFrame(chunks), /↑ \d+ lines back/)
-    assertFrameHeightBelowTerminal(latestFrame(chunks), 12)
+    const frame = latestFrame(chunks)
+    assert.match(frame, /History Line 1/)
+    assert.match(frame, /History Line 20/)
+    assert.ok(frame.split('\n').length > 12, 'the transcript should be allowed to exceed the physical viewport')
+    assert.doesNotMatch(frame, /↑ \d+ lines back|PgDn or End for latest/)
   } finally {
     app.unmount()
     await settle()
     const finalRawOutput = chunks.join('')
     assert.doesNotMatch(finalRawOutput, /\u001b\[\?1049[hl]|\u001b\[\?1007[hl]/, 'must not emit alternate-screen cleanup sequences')
     assert.doesNotMatch(finalRawOutput, /\u001b\[2J/, 'must not clear the physical terminal on unmount')
+    stdin.destroy()
+    stdout.destroy()
+  }
+})
+
+test('completed transcript output does not clear the terminal when it exceeds the viewport', async () => {
+  const stdin = terminalInput()
+  const stdout = terminalOutput(60, 12)
+  const chunks: string[] = []
+  stdout.on('data', (chunk: Buffer) => chunks.push(chunk.toString('utf8')))
+  const controller = fakeController()
+  const app = render(React.createElement(TerminalApp, {
+    controller,
+    dispatcher: { async dispatch() { return { handled: true } } } as unknown as CommandDispatcher,
+  }), {
+    stdin,
+    stdout,
+    debug: false,
+    patchConsole: false,
+    exitOnCtrlC: false,
+  })
+
+  try {
+    await settle()
+    for (let i = 1; i <= 20; i += 1) {
+      controller.emitAgentEvent({ type: 'text-delta', sessionID: 'sess-static', text: `Permanent Line ${i}\n` })
+    }
+    controller.emitAgentEvent({ type: 'idle', sessionID: 'sess-static' })
+    await settle()
+
+    const output = chunks.join('')
+    assert.match(stripVTControlCharacters(output), /Permanent Line 1/)
+    assert.match(stripVTControlCharacters(output), /Permanent Line 20/)
+    assert.doesNotMatch(output, /\u001b\[2J/, 'completed history must not trigger Ink terminal clearing')
+  } finally {
+    app.unmount()
     stdin.destroy()
     stdout.destroy()
   }
@@ -322,7 +394,6 @@ test('terminal UI renders fenced code as a labelled panel without legacy rails',
     assert.match(frame, /typescript/)
     assert.match(frame, /  const value = call\(42\) \/\/ keep indentation/)
     assert.doesNotMatch(frame, /```|┌── typescript|│\s+const value/)
-    assertFrameHeightBelowTerminal(frame, 16)
   } finally {
     app.unmount()
     stdin.destroy()

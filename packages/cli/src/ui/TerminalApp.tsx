@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Box, Text, useApp, useInput, useStdout } from 'ink'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { Box, Static, Text, useApp, useInput, useStdout } from 'ink'
 import SelectInput from 'ink-select-input'
 import TextInput from 'ink-text-input'
 import type { CommandAction, CommandDispatcher } from '../commands/dispatcher.js'
@@ -79,7 +79,7 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
   const [messages, setMessages] = useState<MessageItem[]>([])
   const [modal, setModal] = useState<Modal>({ type: 'none' })
   const [notice, setNotice] = useState(initialNotice)
-  const [scrollOffset, setScrollOffset] = useState(0)
+  const [committedLineCount, setCommittedLineCount] = useState(0)
   const [completionFocused, setCompletionFocused] = useState(false)
   const [credential, setCredential] = useState('')
   const [oauthCode, setOAuthCode] = useState('')
@@ -127,43 +127,33 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
   const layout = viewportLayout(terminal.rows, modal.type !== 'none')
   const horizontalPadding = terminal.columns > 4 ? 1 : 0
   const contentColumns = Math.max(1, terminal.columns - horizontalPadding * 2)
-  const messageLines = useMemo(
+  const allMessageLines = useMemo(
     () => renderMessageLines(messages, contentColumns),
     [contentColumns, messages],
   )
-  const messageWindow = useMemo(
-    () => windowMessageLines(messageLines, layout.messages, scrollOffset),
-    [layout.messages, messageLines, scrollOffset],
+  // Keep the newest lines directly above the composer. Older lines are emitted
+  // once to native terminal scrollback. Never split a short transcript merely
+  // because an agent changed phases; that creates a blank band in the middle.
+  const targetCommittedLineCount = Math.max(
+    committedLineCount,
+    Math.max(0, allMessageLines.length - layout.messages),
   )
-  useEffect(() => {
-    setScrollOffset((current) => Math.min(current, messageWindow.maxOffset))
-  }, [messageWindow.maxOffset])
-
-  const handleScrollUp = () => {
-    const page = Math.max(1, layout.messages - 1)
-    setScrollOffset((current) => Math.min(messageWindow.maxOffset, current + page))
-  }
-
-  const handleScrollDown = () => {
-    const page = Math.max(1, layout.messages - 1)
-    setScrollOffset((current) => Math.max(0, current - page))
-  }
-
-  const handleScrollTop = () => {
-    setScrollOffset(messageWindow.maxOffset)
-  }
-
-  const handleScrollBottom = () => {
-    setScrollOffset(0)
-  }
-
-  const handleScrollLineUp = () => {
-    setScrollOffset((current) => Math.min(messageWindow.maxOffset, current + 1))
-  }
-
-  const handleScrollLineDown = () => {
-    setScrollOffset((current) => Math.max(0, current - 1))
-  }
+  const staticLineCount = Math.min(allMessageLines.length, targetCommittedLineCount)
+  const staticLines = useMemo(
+    () => allMessageLines.slice(0, staticLineCount),
+    [allMessageLines, staticLineCount],
+  )
+  const liveMessageLines = useMemo(
+    () => allMessageLines.slice(staticLineCount),
+    [allMessageLines, staticLineCount],
+  )
+  const messageWindow = useMemo(
+    () => windowMessageLines(liveMessageLines, layout.messages, 0),
+    [layout.messages, liveMessageLines],
+  )
+  useLayoutEffect(() => {
+    setCommittedLineCount((current) => Math.max(current, targetCommittedLineCount))
+  }, [targetCommittedLineCount])
 
   const handleCompletionChange = useCallback((active: boolean) => {
     setCompletionFocused(active)
@@ -208,25 +198,6 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
     }
     if (modal.type !== 'none') return
     if (completionFocused && (key.upArrow || key.downArrow)) return
-    const keyRecord = key as { home?: boolean; end?: boolean }
-    const isHome = keyRecord.home || input === '\u001b[H' || input.includes('\u001b[1~') || input.includes('\u001b[H') || input === '\u001b[1;5H'
-    const isEnd = keyRecord.end || input === '\u001b[F' || input.includes('\u001b[4~') || input.includes('\u001b[F') || input === '\u001b[1;5F'
-    if (key.pageUp || input === '\u0015' || input.includes('\u001b[5~')) handleScrollUp()
-    if (key.pageDown || input === '\u0004' || input.includes('\u001b[6~')) handleScrollDown()
-    if (isHome) handleScrollTop()
-    if (isEnd) handleScrollBottom()
-    if ((key.ctrl || key.shift || key.meta) && key.upArrow) {
-      handleScrollLineUp()
-    }
-    if ((key.ctrl || key.shift || key.meta) && key.downArrow) {
-      handleScrollLineDown()
-    }
-    if (key.upArrow && scrollOffset > 0) {
-      handleScrollLineUp()
-    }
-    if (key.downArrow && scrollOffset > 0) {
-      handleScrollLineDown()
-    }
   })
 
   const tokenCount = totalTokenUsage(snapshot.foregroundUsage)
@@ -241,7 +212,6 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
       addMessage(setMessages, 'system', 'A turn is active. Use /steer <instruction> or /steer --interrupt <instruction>.')
       return
     }
-    setScrollOffset(0)
     try {
       const result = await dispatcher.dispatch(value)
       if (result.handled) {
@@ -260,88 +230,81 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
   if (layout.rows === 0) return null
 
   return (
-    <Box
-      flexDirection="column"
-      height={layout.rows}
-      overflow="hidden"
-      paddingX={horizontalPadding}
-    >
-      {layout.messages > 0 ? (
-        <Box flexDirection="row" height={layout.messages} overflow="hidden" flexShrink={0}>
-          <Box flexDirection="column" flexGrow={1} overflow="hidden">
+    <>
+      <Static items={staticLines}>
+        {(line) => (
+          <Box key={line.id} flexDirection="column" paddingX={horizontalPadding}>
+            <Message item={line} />
+          </Box>
+        )}
+      </Static>
+
+      <Box
+        flexDirection="column"
+        justifyContent="flex-end"
+        height={layout.rows}
+        overflow="hidden"
+        paddingX={horizontalPadding}
+      >
+        {modal.type === 'none' && messageWindow.lines.length > 0 ? (
+          <Box flexDirection="column" justifyContent="flex-end" height={layout.messages} overflow="hidden" flexShrink={0}>
             {messageWindow.lines.map((line) => (
               <Message key={line.id} item={line} />
             ))}
           </Box>
-          {messageLines.length > layout.messages ? (
-            <Box flexDirection="column" width={1} height={layout.messages} overflow="hidden" flexShrink={0}>
-              {renderScrollbar(messageLines.length, layout.messages, messageWindow.offset).map((char, index) => (
-                <Text key={index} color={char === '█' ? 'cyan' : 'gray'}>{char}</Text>
-              ))}
-            </Box>
-          ) : null}
-        </Box>
-      ) : null}
+        ) : null}
 
-      {modal.type === 'none' && layout.header > 0 ? (
-        <Box height={1} overflow="hidden" flexShrink={0}>
-          <Text wrap="truncate-end">
-            <Text bold color="cyan">CUPPET</Text>
-            <Text dimColor> · {modelLabel(snapshot.primary)}</Text>
-            {snapshot.planMode ? <Text color="yellow"> · plan</Text> : null}
-            {snapshot.running ? <Text color="yellow"> · {spinner} working</Text> : null}
-            {snapshot.degraded ? <Text dimColor> · degraded</Text> : null}
-          </Text>
-        </Box>
-      ) : null}
+        {modal.type === 'none' && layout.header > 0 ? (
+          <Box height={1} overflow="hidden" flexShrink={0}>
+            <Text wrap="truncate-end">
+              <Text bold color="cyan">CUPPET</Text>
+              <Text dimColor> · {modelLabel(snapshot.primary)}</Text>
+              {snapshot.planMode ? <Text color="yellow"> · plan</Text> : null}
+              {snapshot.running ? <Text color="yellow"> · {spinner} working</Text> : null}
+              {snapshot.degraded ? <Text dimColor> · degraded</Text> : null}
+            </Text>
+          </Box>
+        ) : null}
 
-      {modal.type === 'none' && layout.editor > 0 ? (
-        <MultilineEditor
-          height={layout.editor}
-          scrollOffset={scrollOffset}
-          planMode={snapshot.planMode}
-          onSubmit={submit}
-          onCompletionChange={handleCompletionChange}
-          onScrollUp={handleScrollUp}
-          onScrollDown={handleScrollDown}
-          onScrollTop={handleScrollTop}
-          onScrollBottom={handleScrollBottom}
-          onScrollLineUp={handleScrollLineUp}
-          onScrollLineDown={handleScrollLineDown}
-        />
-      ) : null}
-      {modal.type !== 'none' && layout.modal > 0 ? (
-        <ModalView
-          height={layout.modal}
-          modal={modal}
-          snapshot={snapshot}
-          controller={controller}
-          credential={credential}
-          setCredential={setCredential}
-          oauthCode={oauthCode}
-          setOAuthCode={setOAuthCode}
-          setModal={setModal}
-          setMessages={setMessages}
-          setNotice={setNotice}
-        />
-      ) : null}
+        {modal.type === 'none' && layout.editor > 0 ? (
+          <MultilineEditor
+            height={layout.editor}
+            planMode={snapshot.planMode}
+            onSubmit={submit}
+            onCompletionChange={handleCompletionChange}
+          />
+        ) : null}
+        {modal.type !== 'none' && layout.modal > 0 ? (
+          <ModalView
+            height={layout.modal}
+            modal={modal}
+            snapshot={snapshot}
+            controller={controller}
+            credential={credential}
+            setCredential={setCredential}
+            oauthCode={oauthCode}
+            setOAuthCode={setOAuthCode}
+            setModal={setModal}
+            setMessages={setMessages}
+            setNotice={setNotice}
+          />
+        ) : null}
 
-      {layout.footer > 0 ? (
-        <Box height={1} overflow="hidden" flexShrink={0}>
-          <Text {...(notice ? { color: 'yellow' as const } : snapshot.running || messageWindow.offset > 0 ? { color: 'yellow' as const } : { dimColor: true })} wrap="truncate-end">
-            {notice ?? (messageWindow.offset > 0 ? `↑ ${messageWindow.offset} lines back` : `Tokens ${formatTokenCount(tokenCount)}`)} · {modal.type !== 'none'
-              ? 'Esc back · ↑↓ select · Enter confirm'
-              : completionFocused
-                ? '↑↓ choose · Tab complete · Enter run · Esc dismiss'
-                : snapshot.running
-                ? `${spinner} working · step ${snapshot.stepCount}/64 · ${snapshot.activeTools} tools`
-                : messageWindow.offset > 0
-                  ? 'PgDn or End for latest'
-                  : 'Ctrl+N newline · /help'}
-          </Text>
-        </Box>
-      ) : null}
-    </Box>
+        {layout.footer > 0 ? (
+          <Box height={1} overflow="hidden" flexShrink={0}>
+            <Text {...(notice || snapshot.running ? { color: 'yellow' as const } : { dimColor: true })} wrap="truncate-end">
+              {notice ?? `Tokens ${formatTokenCount(tokenCount)}`} · {modal.type !== 'none'
+                ? 'Esc back · ↑↓ select · Enter confirm'
+                : completionFocused
+                  ? '↑↓ choose · Tab complete · Enter run · Esc dismiss'
+                  : snapshot.running
+                    ? `${spinner} working · step ${snapshot.stepCount}/64 · ${snapshot.activeTools} tools`
+                    : 'Ctrl+N newline · /help'}
+            </Text>
+          </Box>
+        ) : null}
+      </Box>
+    </>
   )
 }
 
@@ -1029,6 +992,34 @@ const Message = React.memo(function Message({ item }: { item: MessageLine }) {
         <Text backgroundColor="gray" color="white" wrap="truncate-end">{item.text || ' '}</Text>
       </Box>
     )
+  }
+
+  if (item.kind === 'diagram-header') {
+    return (
+      <Text bold color="cyan" wrap="truncate-end">
+        <Text color="magenta">◇ </Text>{item.text}
+      </Text>
+    )
+  }
+
+  if (item.kind === 'diagram-edge') {
+    return (
+      <Text wrap="truncate-end">
+        <Text color="magenta">↳ </Text>{parseInlineMarkdown(item.text)}
+      </Text>
+    )
+  }
+
+  if (item.kind === 'table-header') {
+    return <Text bold color="cyan" wrap="truncate-end">{item.text}</Text>
+  }
+
+  if (item.kind === 'table-divider') {
+    return <Text color="gray" dimColor wrap="truncate-end">{item.text}</Text>
+  }
+
+  if (item.kind === 'table-row') {
+    return <Text wrap="truncate-end">{item.text}</Text>
   }
 
   return renderMarkdownLine(item.text, item.sender)
@@ -1791,26 +1782,6 @@ function formatDiffString(diffText: string): string {
     }
   }
   return result.join('\n')
-}
-
-function renderScrollbar(total: number, height: number, offset: number): string[] {
-  if (total <= height || height <= 0) return []
-  const thumbHeight = Math.max(1, Math.round((height / total) * height))
-  const maxOffset = Math.max(1, total - height)
-  const clampedOffset = Math.min(maxOffset, Math.max(0, offset))
-  const progress = (maxOffset - clampedOffset) / maxOffset
-  const maxTop = height - thumbHeight
-  const thumbTop = Math.min(maxTop, Math.max(0, Math.round(progress * maxTop)))
-
-  const bar: string[] = []
-  for (let i = 0; i < height; i += 1) {
-    if (i >= thumbTop && i < thumbTop + thumbHeight) {
-      bar.push('█')
-    } else {
-      bar.push('│')
-    }
-  }
-  return bar
 }
 
 function nextOnboardingModal(controller: CuppetController, snapshot: ControllerSnapshot): Modal {

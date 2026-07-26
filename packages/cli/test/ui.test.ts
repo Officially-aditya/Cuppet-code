@@ -207,6 +207,41 @@ test('fenced code blocks expose structured metadata without legacy rails', () =>
   assert.doesNotMatch(lines.map((line) => line.text).join('\n'), /```|┌──|└──|│/)
 })
 
+test('Mermaid flowmaps and Markdown tables render as compact terminal layouts', () => {
+  const lines = renderMessageLines([
+    {
+      id: 'visuals',
+      sender: 'assistant',
+      text: [
+        'Project Flowmap',
+        '',
+        '```mermaid',
+        'flowchart TD',
+        'A[Flutter App Launch] --> B{Authenticated?}',
+        'B -- Yes --> C[Inbox]',
+        '```',
+        '',
+        '| Layer | Responsibility |',
+        '| --- | --- |',
+        '| Frontend | Flutter |',
+        '| Backend | Fastify |',
+        '',
+        'Done.',
+      ].join('\n'),
+    },
+  ], 80)
+  const output = lines.map((line) => line.text).join('\n')
+
+  assert.ok(lines.some((line) => line.kind === 'diagram-header' && line.text === 'Flowmap'))
+  assert.ok(lines.some((line) => line.kind === 'diagram-edge' && line.text === 'Flutter App Launch → Authenticated?'))
+  assert.ok(lines.some((line) => line.kind === 'diagram-edge' && line.text === 'Authenticated? — Yes → Inbox'))
+  assert.ok(lines.some((line) => line.kind === 'table-header' && line.text.includes('Layer') && line.text.includes('Responsibility')))
+  assert.ok(lines.some((line) => line.kind === 'table-divider' && line.text.includes('┼')))
+  assert.ok(lines.some((line) => line.kind === 'table-row' && line.text.includes('Frontend') && line.text.includes('Flutter')))
+  assert.doesNotMatch(output, /flowchart TD|A\[Flutter App Launch\]|```/)
+  assert.ok(lines.every((line) => line.text.trim().length > 0), 'blank Markdown rows should not become empty terminal rows')
+})
+
 test('question permission requests are detected and extracted into structured question details', () => {
   const askReq = {
     id: 'req-1',

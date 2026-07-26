@@ -13,7 +13,15 @@ export type ViewportLayout = {
   footer: number
 }
 
-export type MessageLineKind = 'text' | 'code-header' | 'code'
+export type MessageLineKind =
+  | 'text'
+  | 'code-header'
+  | 'code'
+  | 'diagram-header'
+  | 'diagram-edge'
+  | 'table-header'
+  | 'table-divider'
+  | 'table-row'
 
 export type MessageLine = {
   id: string
@@ -86,6 +94,20 @@ export function renderMessageLines(messages: MessageItem[], columns: number): Me
     const result: MessageLine[] = []
     let lineIdx = 0
 
+    const addLine = (
+      text: string,
+      kind: MessageLineKind,
+      metadata: Pick<MessageLine, 'language' | 'isCodeBlock'> = {},
+    ) => {
+      result.push({
+        id: `${message.id}:${lineIdx++}`,
+        sender: message.sender,
+        text: kind === 'code' ? text || ' ' : text || ' ',
+        kind,
+        ...metadata,
+      })
+    }
+
     const addWrappedLine = (
       value: string,
       kind: MessageLineKind,
@@ -93,13 +115,7 @@ export function renderMessageLines(messages: MessageItem[], columns: number): Me
     ) => {
       const wrapped = wrapTerminalText(value, width)
       for (const text of wrapped) {
-        result.push({
-          id: `${message.id}:${lineIdx++}`,
-          sender: message.sender,
-          text: kind === 'code' ? text : text || ' ',
-          kind,
-          ...metadata,
-        })
+        addLine(text, kind, metadata)
       }
     }
 
@@ -112,14 +128,21 @@ export function renderMessageLines(messages: MessageItem[], columns: number): Me
         if (!inCodeBlock) {
           const language = trimmed.slice(3).trim().split(/\s+/)[0]
           codeLanguage = language || 'text'
+          if (codeLanguage.toLowerCase() === 'mermaid') {
+            const diagramLines: string[] = []
+            let end = i + 1
+            while (end < sourceLines.length && !(sourceLines[end] ?? '').trimStart().startsWith('```')) {
+              diagramLines.push(sourceLines[end] ?? '')
+              end += 1
+            }
+            for (const line of renderMermaidDiagram(diagramLines)) {
+              addWrappedLine(line.text, line.kind)
+            }
+            i = end
+            continue
+          }
           inCodeBlock = true
-          result.push({
-            id: `${message.id}:${lineIdx++}`,
-            sender: message.sender,
-            text: codeLanguage,
-            kind: 'code-header',
-            language: codeLanguage,
-          })
+          addLine(codeLanguage, 'code-header', { language: codeLanguage })
         } else {
           inCodeBlock = false
         }
@@ -127,15 +150,154 @@ export function renderMessageLines(messages: MessageItem[], columns: number): Me
       }
 
       if (inCodeBlock) {
+        if (!sourceLine.trim()) continue
         addWrappedLine(sourceLine, 'code', { language: codeLanguage, isCodeBlock: true })
         continue
       }
+
+      const headerCells = parseMarkdownTableRow(sourceLine)
+      if (headerCells && isMarkdownTableDivider(sourceLines[i + 1])) {
+        const rows: string[][] = []
+        let end = i + 2
+        while (end < sourceLines.length) {
+          const row = parseMarkdownTableRow(sourceLines[end] ?? '')
+          if (!row) break
+          rows.push(row)
+          end += 1
+        }
+        for (const line of renderMarkdownTable(headerCells, rows, width)) {
+          addLine(line.text, line.kind)
+        }
+        i = end - 1
+        continue
+      }
+
+      // Paragraph spacing should not consume a large part of a small terminal
+      // viewport. Markdown still reads clearly without blank-only rows.
+      if (!sourceLine.trim()) continue
 
       const displayLine = i === 0 ? `${prefix}${sourceLine}` : sourceLine
       addWrappedLine(displayLine, 'text')
     }
     return result
   })
+}
+
+type RenderedMarkdownLine = {
+  kind: Extract<MessageLineKind, 'diagram-header' | 'diagram-edge' | 'table-header' | 'table-divider' | 'table-row'>
+  text: string
+}
+
+function renderMermaidDiagram(sourceLines: string[]): RenderedMarkdownLine[] {
+  const labels = new Map<string, string>()
+  for (const sourceLine of sourceLines) {
+    for (const match of sourceLine.matchAll(/([A-Za-z][\w-]*)\s*(?:\[\s*([^\]]+?)\s*\]|\{\s*([^}]+?)\s*\}|\(\(\s*([^)]+?)\s*\)\)|\(\s*([^)]+?)\s*\))/g)) {
+      const id = match[1]
+      const label = cleanDiagramLabel(match[2] ?? match[3] ?? match[4] ?? match[5] ?? id ?? '')
+      if (id && label) labels.set(id, label)
+    }
+  }
+
+  const edges: string[] = []
+  for (const sourceLine of sourceLines) {
+    const arrow = sourceLine.indexOf('-->')
+    if (arrow < 0) continue
+    let left = sourceLine.slice(0, arrow).trim()
+    let right = sourceLine.slice(arrow + 3).trim()
+    let edgeLabel = ''
+
+    const labelledLeft = /^(.*?)\s+--\s*(.*?)\s*$/.exec(left)
+    if (labelledLeft) {
+      left = labelledLeft[1] ?? left
+      edgeLabel = cleanDiagramLabel(labelledLeft[2] ?? '')
+    }
+    const labelledRight = /^\|([^|]+)\|\s*(.*)$/.exec(right)
+    if (labelledRight) {
+      edgeLabel ||= cleanDiagramLabel(labelledRight[1] ?? '')
+      right = labelledRight[2] ?? right
+    }
+
+    const fromID = mermaidNodeID(left)
+    const toID = mermaidNodeID(right)
+    if (!fromID || !toID) continue
+    const from = labels.get(fromID) ?? fromID
+    const to = labels.get(toID) ?? toID
+    edges.push(`${from}${edgeLabel ? ` — ${edgeLabel}` : ''} → ${to}`)
+  }
+
+  if (edges.length === 0) {
+    const fallback = sourceLines
+      .map((line) => cleanDiagramLabel(line))
+      .filter((line) => line && !/^(flowchart|graph|subgraph|end)\b/i.test(line))
+    return [
+      { kind: 'diagram-header', text: 'Flowmap' },
+      ...fallback.map((text) => ({ kind: 'diagram-edge' as const, text })),
+    ]
+  }
+
+  return [
+    { kind: 'diagram-header', text: 'Flowmap' },
+    ...edges.map((text) => ({ kind: 'diagram-edge' as const, text })),
+  ]
+}
+
+function mermaidNodeID(value: string): string | undefined {
+  return /^\s*([A-Za-z][\w-]*)/.exec(value)?.[1]
+}
+
+function cleanDiagramLabel(value: string): string {
+  return value
+    .replace(/<br\s*\/?\s*>/gi, ' ')
+    .replace(/[`"']/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function parseMarkdownTableRow(value: string): string[] | undefined {
+  const trimmed = value.trim()
+  if (!trimmed.includes('|')) return undefined
+  const content = trimmed.replace(/^\|/, '').replace(/\|$/, '')
+  const cells = content.split(/(?<!\\)\|/).map((cell) => cell.replace(/\\\|/g, '|').trim())
+  return cells.length >= 2 ? cells : undefined
+}
+
+function isMarkdownTableDivider(value: string | undefined): boolean {
+  const cells = value ? parseMarkdownTableRow(value) : undefined
+  return Boolean(cells?.length && cells.every((cell) => /^:?-{3,}:?$/.test(cell.trim())))
+}
+
+function renderMarkdownTable(headers: string[], rows: string[][], width: number): RenderedMarkdownLine[] {
+  const columnCount = Math.max(headers.length, ...rows.map((row) => row.length))
+  const separatorWidth = Math.max(0, columnCount - 1) * 3
+  const cellWidth = Math.max(3, Math.floor(Math.max(columnCount * 3, width - separatorWidth) / columnCount))
+  const widths = Array.from({ length: columnCount }, () => cellWidth)
+  const formatRow = (cells: string[]) => widths
+    .map((cellWidthForColumn, index) => padTerminalText(truncateTerminalText(cells[index] ?? '', cellWidthForColumn), cellWidthForColumn))
+    .join(' │ ')
+
+  return [
+    { kind: 'table-header', text: formatRow(headers) },
+    { kind: 'table-divider', text: widths.map((cell) => '─'.repeat(cell)).join('─┼─') },
+    ...rows.map((row) => ({ kind: 'table-row' as const, text: formatRow(row) })),
+  ]
+}
+
+function truncateTerminalText(value: string, width: number): string {
+  let output = ''
+  let used = 0
+  for (const { segment } of graphemeSegmenter.segment(stripVTControlCharacters(value))) {
+    const size = terminalWidth(segment)
+    if (used + size > width) return `${output.slice(0, Math.max(0, output.length - 1))}…`
+    output += segment
+    used += size
+  }
+  return output
+}
+
+function padTerminalText(value: string, width: number): string {
+  let used = 0
+  for (const { segment } of graphemeSegmenter.segment(value)) used += terminalWidth(segment)
+  return `${value}${' '.repeat(Math.max(0, width - used))}`
 }
 
 function wrapTerminalText(value: string, columns: number): string[] {

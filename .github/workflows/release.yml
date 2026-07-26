@@ -45,6 +45,7 @@ jobs:
           registry-url: https://registry.npmjs.org
       - uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: 1.88
           targets: ${{ matrix.target }}
       - uses: oven-sh/setup-bun@v2
         with:

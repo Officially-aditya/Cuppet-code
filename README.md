@@ -12,7 +12,7 @@ memory records.
 ## Requirements
 
 - Node.js 22 or newer
-- Rust 1.82 or newer for source builds
+- Rust 1.88 or newer for source builds
 - macOS 13+ or Ubuntu 22.04+ on arm64/x64
 - The pinned OpenCode binary (a release package includes it; source builds can
   set `CUPPET_OPENCODE_BIN`)

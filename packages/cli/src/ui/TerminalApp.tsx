@@ -5,7 +5,7 @@ import TextInput from 'ink-text-input'
 import type { CommandAction, CommandDispatcher } from '../commands/dispatcher.js'
 import type { ControllerSnapshot, CuppetController } from '../controller.js'
 import { PLATFORM_OPTIONS, platformLabel } from '../platforms.js'
-import type { AgentEvent, IntegrationInfo, IntegrationMethod, MessageItem, ModelRef, PermissionRequest, Platform, SessionInfo, TokenUsage } from '../types.js'
+import type { AgentEvent, IntegrationInfo, IntegrationMethod, MessageItem, ModelInfo, ModelRef, PermissionRequest, Platform, SessionInfo, TokenUsage } from '../types.js'
 import { formatTokenCount, totalTokenUsage } from '../usage.js'
 import { MultilineEditor } from './MultilineEditor.js'
 import { nextPermissionModal, previousModal, type Modal } from './modal.js'
@@ -76,13 +76,7 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
   const { stdout } = useStdout()
   const terminal = useTerminalSize(stdout)
   const [snapshot, setSnapshot] = useState(controller.snapshot ?? initialSnapshot)
-  const [messages, setMessages] = useState<MessageItem[]>([
-    {
-      id: 'welcome',
-      sender: 'system',
-      text: `Cuppet public alpha${controller.snapshot.degraded ? ' — OpenCode-only degraded mode' : ''}`,
-    },
-  ])
+  const [messages, setMessages] = useState<MessageItem[]>([])
   const [modal, setModal] = useState<Modal>({ type: 'none' })
   const [notice, setNotice] = useState(initialNotice)
   const [scrollOffset, setScrollOffset] = useState(0)
@@ -272,17 +266,6 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
       overflow="hidden"
       paddingX={horizontalPadding}
     >
-      {layout.header > 0 ? (
-        <Box height={1} overflow="hidden" flexShrink={0}>
-          <Text wrap="truncate-end">
-            <Text bold color="cyan">CUPPET</Text>
-            {snapshot.planMode ? <Text color="yellow"> · plan</Text> : null}
-            {snapshot.running ? <Text color="yellow"> · {spinner} working</Text> : null}
-            <Text dimColor> · {snapshot.platform ? `${platformLabel(snapshot.platform)} · ` : ''}{modelLabel(snapshot.primary)}{snapshot.degraded ? ' · degraded' : ''}</Text>
-          </Text>
-        </Box>
-      ) : null}
-
       {layout.messages > 0 ? (
         <Box flexDirection="row" height={layout.messages} overflow="hidden" flexShrink={0}>
           <Box flexDirection="column" flexGrow={1} overflow="hidden">
@@ -297,6 +280,18 @@ export function TerminalApp({ controller, dispatcher, initialNotice }: Props) {
               ))}
             </Box>
           ) : null}
+        </Box>
+      ) : null}
+
+      {modal.type === 'none' && layout.header > 0 ? (
+        <Box height={1} overflow="hidden" flexShrink={0}>
+          <Text wrap="truncate-end">
+            <Text bold color="cyan">CUPPET</Text>
+            <Text dimColor> · {modelLabel(snapshot.primary)}</Text>
+            {snapshot.planMode ? <Text color="yellow"> · plan</Text> : null}
+            {snapshot.running ? <Text color="yellow"> · {spinner} working</Text> : null}
+            {snapshot.degraded ? <Text dimColor> · degraded</Text> : null}
+          </Text>
         </Box>
       ) : null}
 
@@ -506,27 +501,37 @@ function ModalView(props: {
 
   if (modal.type === 'model') {
     const recommended = modal.role === 'secondary' ? controller.recommendedSecondary() : undefined
-    const models = controller.modelsForPlatform(snapshot.platform, modal.role).sort((left, right) => {
-      const leftRecommended = recommended && sameModel(left, recommended) ? -1 : 0
-      const rightRecommended = recommended && sameModel(right, recommended) ? -1 : 0
+    const choices = modelPickerChoices(controller.modelsForPlatform(snapshot.platform, modal.role)).sort((left, right) => {
+      const leftRecommended = recommended && sameModelFamily(left.model, recommended) ? -1 : 0
+      const rightRecommended = recommended && sameModelFamily(right.model, recommended) ? -1 : 0
       return leftRecommended - rightRecommended || left.name.localeCompare(right.name)
     })
     return (
       <ModalBox height={props.height} title={`Select ${modal.role} model${modal.required ? ' (required)' : ''}`}>
         <SelectInput
           limit={listLimit}
-          items={models.map((model) => ({
-            label: `${model.name} · ${model.providerID}${recommended && sameModel(model, recommended) ? ' (recommended)' : ''}`,
-            value: `${model.providerID}\u0000${model.modelID}\u0000${model.variant ?? ''}`,
+          items={choices.map((choice) => ({
+            label: `${choice.name} · ${choice.model.providerID}${recommended && sameModelFamily(choice.model, recommended) ? ' (recommended)' : ''}`,
+            value: modelPickerValue(choice.model),
           }))}
           onSelect={(item) => {
-            const [providerID = '', modelID = '', variant = ''] = item.value.split('\u0000')
+            const choice = choices.find((candidate) => modelPickerValue(candidate.model) === item.value)
+            if (!choice) return
+            if (choice.efforts.length > 0) {
+              props.setModal({
+                type: 'effort',
+                role: modal.role,
+                options: choice.efforts,
+                model: choice.model,
+                returnToModel: true,
+                required: modal.required,
+              })
+              return
+            }
             void controller
-              .selectModel(modal.role, { providerID, modelID, ...(variant ? { variant } : {}) })
+              .selectModel(modal.role, choice.model)
               .then(() => {
-                if (modal.role === 'primary' && !snapshot.secondary) {
-                  props.setModal({ type: 'model', role: 'secondary', required: true })
-                } else props.setModal({ type: 'none' })
+                props.setModal(nextModelSelectionModal(modal.role, snapshot))
               })
               .catch((error) => addMessage(props.setMessages, 'system', `Model error: ${error.message}`))
           }}
@@ -536,21 +541,27 @@ function ModalView(props: {
   }
 
   if (modal.type === 'effort') {
-    const selected = modal.role === 'primary' ? snapshot.primary : snapshot.secondary
+    const selected = modal.model ?? (modal.role === 'primary' ? snapshot.primary : snapshot.secondary)
     return (
       <ModalBox height={props.height} title={`Select ${modal.role} effort for ${selected ? `${selected.providerID}/${selected.modelID}` : 'model'}`}>
         <SelectInput
           limit={listLimit}
           items={modal.options.map((effort) => ({
-            label: `${effort}${selected?.variant === effort ? ' (current)' : ''}`,
+            label: `${effort}${!modal.model && selected?.variant === effort ? ' (current)' : ''}`,
             value: effort,
           }))}
           onSelect={(item) => {
-            void controller
-              .selectEffort(modal.role, item.value)
-              .then((effort) => props.setNotice(`${capitalize(modal.role)} effort set to ${effort}.`))
+            const selection: Promise<string> = modal.model
+              ? controller
+                .selectModel(modal.role, { ...modal.model, variant: item.value })
+                .then(() => item.value)
+              : controller.selectEffort(modal.role, item.value)
+            void selection
+              .then((effort) => {
+                props.setNotice(`${capitalize(modal.role)} effort set to ${effort}.`)
+                props.setModal(modal.model ? nextModelSelectionModal(modal.role, snapshot) : { type: 'none' })
+              })
               .catch((error) => addMessage(props.setMessages, 'system', `Effort error: ${error.message}`))
-              .finally(() => props.setModal({ type: 'none' }))
           }}
         />
       </ModalBox>
@@ -1620,12 +1631,47 @@ function modelLabel(model?: ModelRef): string {
   return model ? `${model.providerID}/${model.modelID}${model.variant ? `@${model.variant}` : ''}` : 'not selected'
 }
 
+export type ModelPickerChoice = {
+  model: ModelRef
+  name: string
+  efforts: string[]
+}
+
+export function modelPickerChoices(models: ModelInfo[]): ModelPickerChoice[] {
+  const groups = new Map<string, ModelInfo[]>()
+  for (const model of models) {
+    const key = modelPickerValue(model)
+    const group = groups.get(key)
+    if (group) group.push(model)
+    else groups.set(key, [model])
+  }
+  return [...groups.values()].map((group) => {
+    const baseModel = group.find((model) => model.variant === undefined) ?? group[0]!
+    return {
+      model: { providerID: baseModel.providerID, modelID: baseModel.modelID },
+      name: pickerModelName(baseModel),
+      efforts: [...new Set(group.flatMap((model) => model.variant ? [model.variant] : []))],
+    }
+  })
+}
+
+function modelPickerValue(model: Pick<ModelRef, 'providerID' | 'modelID'>): string {
+  return `${model.providerID}\u0000${model.modelID}`
+}
+
+function pickerModelName(model: ModelInfo): string {
+  const suffix = model.variant ? ` [${model.variant}]` : ''
+  return suffix && model.name.endsWith(suffix)
+    ? model.name.slice(0, -suffix.length)
+    : model.name
+}
+
 function capitalize(value: string): string {
   return `${value[0]?.toUpperCase() ?? ''}${value.slice(1)}`
 }
 
-function sameModel(left: ModelRef, right: ModelRef): boolean {
-  return left.providerID === right.providerID && left.modelID === right.modelID && left.variant === right.variant
+function sameModelFamily(left: ModelRef, right: ModelRef): boolean {
+  return left.providerID === right.providerID && left.modelID === right.modelID
 }
 
 export function formatDiff(diffData: unknown): string {
@@ -1792,6 +1838,12 @@ function nextOnboardingModal(controller: CuppetController, snapshot: ControllerS
       : { type: 'platform', required: true }
   }
   return { type: 'none' }
+}
+
+function nextModelSelectionModal(role: 'primary' | 'secondary', snapshot: ControllerSnapshot): Modal {
+  return role === 'primary' && !snapshot.secondary
+    ? { type: 'model', role: 'secondary', required: true }
+    : { type: 'none' }
 }
 
 function nextPromptIndex(

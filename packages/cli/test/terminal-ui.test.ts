@@ -6,6 +6,7 @@ import React from 'react'
 import { render } from 'ink'
 import type { CommandDispatcher } from '../src/commands/dispatcher.js'
 import type { CuppetController } from '../src/controller.js'
+import type { ModelInfo, ModelRef } from '../src/types.js'
 import { TerminalApp } from '../src/ui/TerminalApp.js'
 
 test('terminal UI stays below the physical viewport and Esc closes a slash-command picker', async () => {
@@ -86,6 +87,98 @@ test('terminal UI dispatches the selected slash completion on Enter', async () =
     stdin.write('\r')
     await settle()
     assert.deepEqual(dispatched, ['/status'])
+  } finally {
+    app.unmount()
+    stdin.destroy()
+    stdout.destroy()
+  }
+})
+
+test('terminal UI keeps the active model above the composer and removes the alpha banner', async () => {
+  const stdin = terminalInput()
+  const stdout = terminalOutput(80, 14)
+  const chunks: string[] = []
+  stdout.on('data', (chunk: Buffer) => chunks.push(chunk.toString('utf8')))
+  const controller = fakeController()
+  const app = render(React.createElement(TerminalApp, {
+    controller,
+    dispatcher: { async dispatch() { return { handled: true } } } as unknown as CommandDispatcher,
+  }), {
+    stdin,
+    stdout,
+    debug: true,
+    patchConsole: false,
+    exitOnCtrlC: false,
+  })
+
+  try {
+    await settle()
+    controller.emitAgentEvent({ type: 'text-delta', sessionID: 'sess-layout', text: 'Transcript message' })
+    controller.emitAgentEvent({ type: 'idle', sessionID: 'sess-layout' })
+    await settle()
+
+    const frame = latestFrame(chunks)
+    const lines = frame.split('\n')
+    const messageIndex = lines.findIndex((line) => line.includes('Transcript message'))
+    const headerIndex = lines.findIndex((line) => line.includes('CUPPET'))
+    const composerIndex = lines.findIndex((line) => line.includes('Type a request'))
+    assert.ok(messageIndex >= 0)
+    assert.ok(headerIndex > messageIndex, 'the model header should follow the transcript')
+    assert.ok(composerIndex > headerIndex, 'the model header should sit above the composer')
+    assert.doesNotMatch(frame, /Cuppet public alpha/i)
+  } finally {
+    app.unmount()
+    stdin.destroy()
+    stdout.destroy()
+  }
+})
+
+test('terminal UI selects a model once, then asks for its effort', async () => {
+  const stdin = terminalInput()
+  const stdout = terminalOutput(80, 14)
+  const chunks: string[] = []
+  const selectedModels: ModelRef[] = []
+  stdout.on('data', (chunk: Buffer) => chunks.push(chunk.toString('utf8')))
+  const app = render(React.createElement(TerminalApp, {
+    controller: fakeController({
+      models: [pickerModel(), pickerModel('low'), pickerModel('high')],
+      selectedModels,
+    }),
+    dispatcher: {
+      async dispatch(input: string) {
+        return input === '/model primary'
+          ? { handled: true, action: { type: 'model' as const, role: 'primary' as const } }
+          : { handled: true }
+      },
+    } as CommandDispatcher,
+  }), {
+    stdin,
+    stdout,
+    debug: true,
+    patchConsole: false,
+    exitOnCtrlC: false,
+  })
+
+  try {
+    await settle()
+    stdin.write('/model primary')
+    await settle()
+    stdin.write('\r')
+    await settle()
+
+    const modelFrame = latestFrame(chunks)
+    assert.match(modelFrame, /Select primary model/)
+    assert.equal((modelFrame.match(/GPT Test/g) ?? []).length, 1)
+    assert.doesNotMatch(modelFrame, /\[low\]|\[high\]/)
+
+    stdin.write('\r')
+    await settle()
+    assert.match(latestFrame(chunks), /Select primary effort for openai\/gpt-test/)
+    assert.deepEqual(selectedModels, [])
+
+    stdin.write('\r')
+    await settle()
+    assert.deepEqual(selectedModels, [{ providerID: 'openai', modelID: 'gpt-test', variant: 'low' }])
   } finally {
     app.unmount()
     stdin.destroy()
@@ -237,7 +330,7 @@ test('terminal UI renders fenced code as a labelled panel without legacy rails',
   }
 })
 
-function fakeController(): CuppetController & { emitAgentEvent(event: unknown): void } {
+function fakeController(options: { models?: ModelInfo[]; selectedModels?: ModelRef[] } = {}): CuppetController & { emitAgentEvent(event: unknown): void } {
   const model = { providerID: 'openai', modelID: 'gpt-test' }
   const agentListeners = new Set<(event: unknown) => void>()
   const snapshot = {
@@ -263,8 +356,10 @@ function fakeController(): CuppetController & { emitAgentEvent(event: unknown): 
     emitAgentEvent(event: unknown) {
       for (const listener of agentListeners) listener(event)
     },
-    modelsForPlatform() { return [] },
+    modelsForPlatform() { return options.models ?? [] },
     integrationsForPlatform() { return [] },
+    recommendedSecondary() { return undefined },
+    async selectModel(_role: 'primary' | 'secondary', model: ModelRef) { options.selectedModels?.push(model) },
     async denyPendingPermissions() { return 0 },
     async replyPermission() {},
     gateway: { async cancelOAuth() {} },
@@ -295,9 +390,25 @@ function terminalOutput(columns: number, rows: number): NodeJS.WriteStream {
 function latestFrame(chunks: string[]): string {
   for (let index = chunks.length - 1; index >= 0; index -= 1) {
     const frame = stripVTControlCharacters(chunks[index] ?? '')
-    if (frame.includes('CUPPET')) return frame
+    if (frame.trim()) return frame
   }
   throw new Error(`No UI frame in chunks: ${JSON.stringify(chunks)}`)
+}
+
+function pickerModel(variant?: string): ModelInfo {
+  return {
+    providerID: 'openai',
+    modelID: 'gpt-test',
+    ...(variant ? { variant } : {}),
+    name: `GPT Test${variant ? ` [${variant}]` : ''}`,
+    context: 128_000,
+    output: 16_000,
+    enabled: true,
+    status: 'active',
+    inputCost: 1,
+    outputCost: 1,
+    capabilities: { tools: true, input: ['text'], output: ['text'] },
+  }
 }
 
 function assertFrameHeightBelowTerminal(frame: string, rows: number): void {

@@ -1,6 +1,7 @@
 import type {
   IntegrationInfo,
   IntegrationMethod,
+  ModelRef,
   PermissionRequest,
   Platform,
   SessionInfo,
@@ -15,7 +16,16 @@ export type Modal =
   | { type: 'platform'; required: boolean }
   | { type: 'vertex-setup'; required: boolean }
   | { type: 'model'; role: 'primary' | 'secondary'; required: boolean }
-  | { type: 'effort'; role: 'primary' | 'secondary'; options: string[] }
+  | {
+      type: 'effort'
+      role: 'primary' | 'secondary'
+      options: string[]
+      /** A model picked immediately before choosing its effort. */
+      model?: ModelRef
+      /** Return to the model list instead of dismissing on Esc. */
+      returnToModel?: boolean
+      required?: boolean
+    }
   | { type: 'login-integration'; provider?: string; platform?: Platform; required?: boolean }
   | { type: 'login-method'; integration: IntegrationInfo }
   | { type: 'login-key'; integration: IntegrationInfo; method?: KeyMethod; metadata?: Record<string, string> }
@@ -54,6 +64,10 @@ export function previousModal(modal: Modal): Modal {
       return modal.role === 'secondary'
         ? { type: 'model', role: 'primary', required: true }
         : { type: 'platform', required: true }
+    case 'effort':
+      return modal.returnToModel
+        ? { type: 'model', role: modal.role, required: modal.required ?? false }
+        : { type: 'none' }
     case 'login-integration':
       return modal.required ? { type: 'platform', required: true } : { type: 'none' }
     case 'vertex-setup':

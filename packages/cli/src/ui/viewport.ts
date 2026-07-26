@@ -32,7 +32,7 @@ export function viewportLayout(rows: number, modalOpen: boolean): ViewportLayout
   // the normal terminal buffer and preserves native scrollback.
   const reserved = 1
   const available = Math.max(0, terminalRows - reserved)
-  const header = available >= 3 ? 1 : 0
+  const header = !modalOpen && available >= 3 ? 1 : 0
   const footer = available >= 2 ? 1 : 0
   const body = Math.max(0, available - header - footer)
   if (modalOpen) {

@@ -1,15 +1,27 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import type { IntegrationInfo } from '../src/types.js'
+import type { IntegrationInfo, ModelInfo } from '../src/types.js'
 import { nextPermissionModal, previousModal } from '../src/ui/modal.js'
 import { renderMessageLines, viewportLayout, windowMessageLines } from '../src/ui/viewport.js'
-import { diffLineColor, extractQuestion, formatDiff, formatToolDetail, formatToolDiff, formatToolLineStats, isQuestionRequest } from '../src/ui/TerminalApp.js'
+import { diffLineColor, extractQuestion, formatDiff, formatToolDetail, formatToolDiff, formatToolLineStats, isQuestionRequest, modelPickerChoices } from '../src/ui/TerminalApp.js'
 
 test('Esc targets close command pickers and unwind nested authentication', () => {
   const integration = provider()
   assert.deepEqual(previousModal({ type: 'platform', required: false }), { type: 'none' })
   assert.deepEqual(previousModal({ type: 'model', role: 'primary', required: false }), { type: 'none' })
   assert.deepEqual(previousModal({ type: 'effort', role: 'primary', options: ['high'] }), { type: 'none' })
+  assert.deepEqual(previousModal({
+    type: 'effort',
+    role: 'primary',
+    options: ['low', 'high'],
+    model: { providerID: 'openai', modelID: 'gpt-test' },
+    returnToModel: true,
+    required: true,
+  }), {
+    type: 'model',
+    role: 'primary',
+    required: true,
+  })
   assert.deepEqual(previousModal({ type: 'sessions', sessions: [] }), { type: 'none' })
   assert.deepEqual(previousModal({ type: 'login-key', integration }), {
     type: 'login-method',
@@ -120,6 +132,28 @@ test('tool messages render single gear icon and include details', () => {
   assert.equal(lines[0]?.text, '⚙ write_file (frontend/build/app.apk) · completed')
 })
 
+test('model picker groups variants into one model and exposes their effort levels', () => {
+  const choices = modelPickerChoices([
+    pickerModel('gpt-test', 'GPT Test'),
+    pickerModel('gpt-test', 'GPT Test [low]', 'low'),
+    pickerModel('gpt-test', 'GPT Test [high]', 'high'),
+    pickerModel('reasoner', 'Reasoner [medium]', 'medium'),
+  ])
+
+  assert.deepEqual(choices, [
+    {
+      model: { providerID: 'openai', modelID: 'gpt-test' },
+      name: 'GPT Test',
+      efforts: ['low', 'high'],
+    },
+    {
+      model: { providerID: 'openai', modelID: 'reasoner' },
+      name: 'Reasoner',
+      efforts: ['medium'],
+    },
+  ])
+})
+
 test('diff rendering keeps filenames visible and colors only actual tool diff lines', () => {
   const rendered = formatDiff([{
     file: 'src/example.ts',
@@ -221,5 +255,21 @@ function provider(): IntegrationInfo {
     name: 'OpenAI',
     methods: [{ id: 'browser', type: 'oauth', label: 'Browser' }],
     connections: [],
+  }
+}
+
+function pickerModel(modelID: string, name: string, variant?: string): ModelInfo {
+  return {
+    providerID: 'openai',
+    modelID,
+    ...(variant ? { variant } : {}),
+    name,
+    context: 128_000,
+    output: 16_000,
+    enabled: true,
+    status: 'active',
+    inputCost: 1,
+    outputCost: 1,
+    capabilities: { tools: true, input: ['text'], output: ['text'] },
   }
 }

@@ -1,0 +1,22 @@
+diff --git a/packages/opencode/src/cuppet/derivative/mermaid.ts b/packages/opencode/src/cuppet/derivative/mermaid.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/opencode/src/cuppet/derivative/mermaid.ts
+@@ -0,0 +1,16 @@
++export type CuppetMermaidEdge = { from: string; to: string; label?: string }
++
++/** Convert only lossless basic flowcharts; unsupported Mermaid stays code. */
++export function compactMermaid(source: string): string | undefined {
++  const lines = source.replace(/\r\n?/g, "\n").split("\n")
++  const header = lines.find((line) => /^\s*(flowchart|graph)\s+(TB|TD|BT|RL|LR)\s*$/.test(line))
++  if (!header) return undefined
++  const edges: CuppetMermaidEdge[] = []
++  for (const line of lines.slice(lines.indexOf(header) + 1)) {
++    const value = line.trim()
++    if (!value || value.startsWith("%%")) continue
++    const match = /^([A-Za-z][\w-]*)\s*--(?:>|\|([^|]+)\|>?)\s*([A-Za-z][\w-]*)\s*$/.exec(value)
++    if (!match) return undefined
++    edges.push({ from: match[1]!, to: match[3]!, ...(match[2] ? { label: match[2].trim() } : {}) })
++  }
++  return edges.length ? edges.map((edge) => `${edge.from} ${edge.label ? `—${edge.label}→` : "→"} ${edge.to}`).join("\n") : undefined
++}

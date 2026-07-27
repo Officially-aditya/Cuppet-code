@@ -7,7 +7,7 @@ import { test } from 'node:test'
 import { CuppetMemoryPlugin } from '../src/index.js'
 import { TstToolClient } from '../src/rpc.js'
 
-test('read-only tool client authenticates and uses length-framed JSON-RPC', async () => {
+test('read-only tool client authenticates and uses length-framed JSON-RPC', async (t) => {
   const temporaryRoot = process.platform === 'darwin' ? '/private/tmp' : tmpdir()
   const directory = await mkdtemp(join(temporaryRoot, 'cuppet-plugin-rpc-'))
   const socketPath = join(directory, 'tst.sock')
@@ -47,10 +47,20 @@ test('read-only tool client authenticates and uses length-framed JSON-RPC', asyn
       }
     })
   })
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject)
-    server.listen(socketPath, resolve)
-  })
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(socketPath, resolve)
+    })
+  } catch (error) {
+    server.close()
+    await rm(directory, { recursive: true, force: true })
+    if ((error as NodeJS.ErrnoException).code === 'EPERM') {
+      t.skip('sandbox does not permit Unix-domain sockets')
+      return
+    }
+    throw error
+  }
   try {
     const result = await new TstToolClient(socketPath, 'a'.repeat(64)).query('session', 'style', 20)
     assert.deepEqual(result, { stm: [], ltm: [{ key: 'style' }], graph: [] })

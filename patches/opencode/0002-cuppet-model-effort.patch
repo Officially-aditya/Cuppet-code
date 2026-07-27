@@ -1,0 +1,27 @@
+diff --git a/packages/opencode/src/cuppet/derivative/model-selection.ts b/packages/opencode/src/cuppet/derivative/model-selection.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/opencode/src/cuppet/derivative/model-selection.ts
+@@ -0,0 +1,21 @@
++export type CuppetModelRow = {
++  providerID: string
++  modelID: string
++  name: string
++  efforts: string[]
++}
++
++/** Collapse model variants into one row; the effort dialog follows selection. */
++export function uniqueModelRows(models: Array<{ providerID: string; modelID: string; name: string; variant?: string }>): CuppetModelRow[] {
++  const rows = new Map<string, CuppetModelRow>()
++  for (const model of models) {
++    const key = `${model.providerID}\u0000${model.modelID}`
++    const row = rows.get(key) ?? { providerID: model.providerID, modelID: model.modelID, name: model.name.replace(/\s+\[[^\]]+\]$/, ""), efforts: [] }
++    if (model.variant && !row.efforts.includes(model.variant)) row.efforts.push(model.variant)
++    rows.set(key, row)
++  }
++  return [...rows.values()]
++}
++
++export function nextModelDialog(row: CuppetModelRow): "effort" | "close" {
++  return row.efforts.length > 0 ? "effort" : "close"
++}

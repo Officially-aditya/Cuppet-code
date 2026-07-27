@@ -1,0 +1,42 @@
+diff --git a/packages/tui/src/util/presentation.ts b/packages/tui/src/util/presentation.ts
+--- a/packages/tui/src/util/presentation.ts
++++ b/packages/tui/src/util/presentation.ts
+@@ -1,6 +1,6 @@
+ const logo = {
+-  left: ["                   ", "█▀▀█ █▀▀█ █▀▀█ █▀▀▄", "█__█ █__█ █^^^ █__█", "▀▀▀▀ █▀▀▀ ▀▀▀▀ ▀~~▀"],
+-  right: ["             ▄     ", "█▀▀▀ █▀▀█ █▀▀█ █▀▀█", "█___ █__█ █__█ █^^^", "▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀"],
++  left: ["              ", "█▀▀▀ █  █ █▀▀█", "█___ █__█ █__█", "▀▀▀▀ ▀▀▀▀ █▀▀▀"],
++  right: ["              ", "█▀▀█ █▀▀▀ ▀█▀▀", "█__█ █^^^  █  ", "█▀▀▀ ▀▀▀▀  ▀  "],
+ }
+ 
+ const reset = "\x1b[0m"
+@@ -32,7 +32,7 @@ export function sessionEpilogue(input: { title: string; sessionID?: string }) {
+     ...wordmark("  "),
+     "",
+     `  ${weak("Session")}${bold}${input.title}${reset}`,
+-    `  ${weak("Continue")}${bold}opencode -s ${input.sessionID}${reset}`,
++    `  ${weak("Continue")}${bold}cupet -s ${input.sessionID}${reset}`,
+     "",
+   ].join("\n")
+ }
+diff --git a/packages/opencode/src/cli/cmd/run/splash.ts b/packages/opencode/src/cli/cmd/run/splash.ts
+--- a/packages/opencode/src/cli/cmd/run/splash.ts
++++ b/packages/opencode/src/cli/cmd/run/splash.ts
+@@ -194,7 +194,7 @@ function build(input: SplashWriterInput, kind: "entry" | "exit", ctx: Scrollbac
+       })
+     }
+ 
+-    push(lines, body_left, top, "OpenCode", right, undefined, TextAttributes.BOLD)
++    push(lines, body_left, top, "Cuppet", right, undefined, TextAttributes.BOLD)
+     if (input.detail) {
+       push(
+         lines,
+@@ -236,7 +236,7 @@ function build(input: SplashWriterInput, kind: "entry" | "exit", ctx: Scrollbac
+       lines,
+       body_left + label.length,
+       top + 1,
+-      `opencode --mini -s ${meta.session_id}`,
++      `cupet -s ${meta.session_id}`,
+       right,
+       undefined,
+       TextAttributes.BOLD,

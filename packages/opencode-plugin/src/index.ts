@@ -127,7 +127,33 @@ export const CuppetMemoryPlugin = async () => ({
       },
     },
   },
+  'experimental.chat.system.transform': async (input: unknown, output: unknown) => {
+    await injectEphemeralContext(input, output)
+  },
 })
+
+async function injectEphemeralContext(input: unknown, output: unknown): Promise<void> {
+  const request = asRecord(input)
+  const target = asRecord(output)
+  if (request.agent === 'cuppet-background') return
+  const sessionID = typeof request.sessionID === 'string' ? request.sessionID : 'unknown-session'
+  const system = Array.isArray(target.system) ? target.system : undefined
+  if (!system || system.some((item) => typeof item === 'string' && item.includes('<CUPPET_CONTEXT'))) return
+  const client = createToolClient()
+  if (typeof client === 'string') return
+  const query = typeof request.prompt === 'string' && request.prompt.trim()
+    ? request.prompt.trim()
+    : 'current workspace task'
+  const result = await client.query(sessionID, query, 20).catch(() => undefined)
+  if (!result) return
+  const serialized = JSON.stringify(result)
+  if (!serialized || serialized === '{}') return
+  const budget = request.agent === 'plan' ? 1_536 : 768
+  const availableCharacters = Math.max(0, budget * 4 - 120)
+  system.push(
+    `<CUPPET_CONTEXT trust="untrusted" ephemeral="true" budget_tokens="${budget}">\n${serialized.slice(0, availableCharacters)}\n</CUPPET_CONTEXT>`,
+  )
+}
 
 function createToolClient(): TstToolClient | string {
   const socket = process.env.CUPPET_TST_SOCKET
@@ -447,7 +473,22 @@ type PromisePluginContext = {
     transform(update: (catalog: CatalogDraft) => Promise<void> | void): Promise<{ dispose(): Promise<void> }>
     reload(): Promise<void>
   }
+  command?: {
+    transform(update: (commands: CommandDraft) => Promise<void> | void): Promise<{ dispose(): Promise<void> }>
+    reload?: () => Promise<void>
+  }
 }
+
+type CommandDraft = {
+  update(id: string, update: (command: { description?: string; template?: string }) => void): void
+}
+
+const CUPPET_COMMANDS = [
+  ['background', 'Control Cuppet background memory enrichment', 'Use the Cuppet background memory controls.'],
+  ['memory', 'Show and manage Cuppet memory', 'Use the Cuppet memory tools to inspect or manage memory.'],
+  ['doctor', 'Diagnose Cuppet runtime and provider health', 'Run Cuppet diagnostics and report the result.'],
+  ['status', 'Show Cuppet runtime status', 'Report the current Cuppet foreground, background, and memory status.'],
+] as const
 
 const CuppetPlugin = {
   id: 'cuppet',
@@ -483,6 +524,17 @@ const CuppetPlugin = {
       // The pinned server loads external Promise plugins asynchronously. Force the
       // newly registered transform to materialize before advertising readiness.
       await context.agent.reload()
+      if (context.command) {
+        await context.command.transform((commands) => {
+          for (const [id, description, template] of CUPPET_COMMANDS) {
+            commands.update(id, (command) => {
+              command.description = description
+              command.template = template
+            })
+          }
+        })
+        await context.command.reload?.()
+      }
       await writePluginStatus(statusPath, { state: 'ready' })
     } catch (error) {
       await writePluginStatus(statusPath, {

@@ -2,7 +2,7 @@
   "name": "cuppet-monorepo",
   "version": "0.2.0-alpha.1",
   "private": true,
-  "description": "Cuppet public alpha: OpenCode-backed terminal coding agent with native TST memory",
+  "description": "Cuppet public alpha: modified OpenCode TUI derivative with native TST memory",
   "license": "Apache-2.0",
   "type": "module",
   "workspaces": [
@@ -15,6 +15,8 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present && cargo build --workspace --locked",
     "build:ts": "npm run build --workspaces --if-present",
+    "build:opencode": "node scripts/build-opencode.mjs",
+    "package:platform": "node scripts/package-platform.mjs",
     "build:rust": "cargo build --workspace --locked",
     "eval:ab": "node --import tsx scripts/ab-eval.ts",
     "eval:ab:persistent": "CUPPET_AB_PERSISTENT_GRAPH=1 node --import tsx scripts/ab-eval.ts",
@@ -44,7 +46,6 @@
   },
   "devDependencies": {
     "@types/node": "22.15.3",
-    "@types/react": "18.3.20",
     "tsx": "4.19.4",
     "typescript": "5.8.3"
   }

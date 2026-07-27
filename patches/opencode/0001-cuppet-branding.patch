@@ -1,0 +1,17 @@
+diff --git a/packages/opencode/src/cuppet/derivative/branding.ts b/packages/opencode/src/cuppet/derivative/branding.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/opencode/src/cuppet/derivative/branding.ts
+@@ -0,0 +1,11 @@
++/** Cuppet's user-facing strings for the OpenCode TUI derivative. */
++export const CUPPET_PRODUCT = "Cuppet"
++export const CUPPET_WORDMARK = "CUPPET"
++export const CUPPET_TERMINAL_TITLE = "Cuppet"
++export const CUPPET_HELP_PREFIX = "Cuppet help"
++export const CUPPET_STATUS_PREFIX = "Cuppet status"
++export const CUPPET_CRASH_PREFIX = "Cuppet crashed"
++export const CUPPET_RESUME_COMMANDS = ["cuppet --continue", "cuppet --session <id>"] as const
++
++export function productText(value: string): string {
++  return value.replace(/\bOpenCode\b/g, CUPPET_PRODUCT)
++}

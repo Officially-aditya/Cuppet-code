@@ -23,6 +23,7 @@ for (const manifestPath of manifests) {
   ) {
     throw new Error(`version mismatch in ${manifestPath}`)
   }
+  if (!/^[a-f0-9]{64}$/.test(manifest.patchSetDigest ?? '')) throw new Error(`invalid derivative patch digest in ${manifestPath}`)
   if (manifest.tstProtocol !== 'cuppet.tst.v1') throw new Error(`protocol mismatch in ${manifestPath}`)
   const platformKey = `${manifest.platform}-${manifest.arch}-${manifest.libc ?? 'native'}`
   if (platformKeys.has(platformKey)) throw new Error(`duplicate platform package ${platformKey}`)
@@ -39,6 +40,13 @@ for (const manifestPath of manifests) {
       throw new Error(`binary is not executable: ${path}`)
     }
   }
+  const marker = JSON.parse(await readFile(join(directory, 'bin/.cuppet-derivative.json'), 'utf8'))
+  if (
+    marker.product !== 'cuppet-opencode-derivative' ||
+    marker.upstreamVersion !== '1.18.4' ||
+    marker.upstreamRevision !== '49c69c5ed3ccf706b61b3febb43c8aaff7f8325e' ||
+    marker.patchSetDigest !== manifest.patchSetDigest
+  ) throw new Error(`invalid derivative identity marker in ${directory}`)
   for (const required of ['LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md', 'sbom.spdx.json']) {
     if (!(await stat(join(directory, required))).isFile()) throw new Error(`missing ${required} in ${directory}`)
   }
@@ -47,7 +55,8 @@ for (const manifestPath of manifests) {
     sbom.spdxVersion !== 'SPDX-2.3' ||
     !Array.isArray(sbom.packages) ||
     !sbom.packages.some((item) => item.name === 'OpenCode' && item.versionInfo === '1.18.4') ||
-    !sbom.packages.some((item) => item.name === 'tst-daemon')
+    !sbom.packages.some((item) => item.name === 'tst-daemon') ||
+    !sbom.packages.some((item) => item.name === 'Cuppet OpenCode derivative patch set')
   ) {
     throw new Error(`incomplete SPDX SBOM in ${directory}`)
   }

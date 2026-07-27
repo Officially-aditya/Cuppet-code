@@ -1,0 +1,17 @@
+diff --git a/packages/tui/src/app.tsx b/packages/tui/src/app.tsx
+--- a/packages/tui/src/app.tsx
++++ b/packages/tui/src/app.tsx
+@@ -762,10 +762,10 @@
+         : []),
+       {
+-        name: "opencode.status",
+-        title: "View status",
+-        slashName: "status",
++        name: "opencode.upstream-status",
++        title: "View upstream status",
++        hidden: true,
+         run: () => {
+           dialog.replace(() => <DialogStatus />)
+         },
+         category: "System",
+       },

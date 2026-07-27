@@ -1,16 +1,18 @@
 import { randomBytes } from 'node:crypto'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { constants as fsConstants } from 'node:fs'
-import { access, chmod, copyFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { access, chmod, copyFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { createOpencodeClient } from '@opencode-ai/sdk/v2'
 import { DEFAULT_STEP_LIMIT, OPENCODE_VERSION } from '../constants.js'
 import type { RuntimePaths } from '../runtime/paths.js'
 import type { RedactedLogger } from '../runtime/logger.js'
 import { buildVariantBridge, type VariantBridge } from './variant-bridge.js'
+import { readDerivativeMarker } from '../runtime/derivative.js'
 
 export type OpenCodeRuntime = {
   url: string
+  auth: { username: string; password: string }
   client: ReturnType<typeof createOpencodeClient>
   vertex: VertexRuntimeStatus
   close(): Promise<void>
@@ -37,6 +39,8 @@ type StartOptions = {
   paths: RuntimePaths
   logger: RedactedLogger
   plugin?: string
+  tuiPlugin?: string
+  control?: { socket: string; token: string }
   tst?: { socket: string; token: string }
   vertexProject?: string
   instructions?: string[]
@@ -70,11 +74,15 @@ export const DEFAULT_CUPPET_INSTRUCTION =
 
 export async function startOpenCodeServer(options: StartOptions): Promise<OpenCodeRuntime> {
   await verifyVersion(options.binary)
+  const derivative = await readDerivativeMarker(options.binary)
   const password = randomBytes(32).toString('base64url')
   const username = 'cuppet'
   const variantBridgePath = join(options.paths.runtime, 'opencode-model-variants.json')
   const pluginStatusPath = join(options.paths.runtime, 'opencode-plugin-status.json')
-  if (options.plugin) await installOpenCodePlugin(options.plugin, options.paths.opencode.config)
+  const tuiPlugin = options.tuiPlugin ?? (options.plugin ? join(dirname(options.plugin), 'tui.js') : undefined)
+  if (options.plugin) {
+    await installOpenCodePlugin(options.plugin, options.paths.opencode.config, tuiPlugin)
+  }
   const vertex = await resolveVertexEnvironment({
     ...process.env,
     ...(options.vertexProject ? { GOOGLE_VERTEX_PROJECT: options.vertexProject } : {}),
@@ -129,10 +137,18 @@ export async function startOpenCodeServer(options: StartOptions): Promise<OpenCo
         OPENCODE_SERVER_USERNAME: username,
         OPENCODE_SERVER_PASSWORD: password,
         OPENCODE_DISABLE_AUTOUPDATE: 'true',
+        CUPPET_DERIVATIVE_PRODUCT: 'Cuppet',
+        CUPPET_DERIVATIVE_UPSTREAM: `${OPENCODE_VERSION}:${derivative.patchSetDigest}`,
         ...(options.plugin
           ? {
               CUPPET_OPENCODE_VARIANTS_PATH: variantBridgePath,
               CUPPET_OPENCODE_PLUGIN_STATUS_PATH: pluginStatusPath,
+            }
+          : {}),
+        ...(options.control
+          ? {
+              CUPPET_CONTROL_SOCKET: options.control.socket,
+              CUPPET_CONTROL_TOKEN: options.control.token,
             }
           : {}),
         ...(options.tst
@@ -169,6 +185,7 @@ export async function startOpenCodeServer(options: StartOptions): Promise<OpenCo
     }
     return {
       url,
+      auth: { username, password },
       client,
       vertex: vertex.status,
       async close() {
@@ -211,7 +228,7 @@ async function waitForCuppetAgents(
   )
 }
 
-async function installOpenCodePlugin(source: string, xdgConfig: string): Promise<void> {
+export async function installOpenCodePlugin(source: string, xdgConfig: string, tuiSource?: string): Promise<void> {
   // The isolated XDG plugin directory is discovered by both the tool host and the v2
   // model catalog, so the memory tool and model-variant bridge share one artifact.
   const directory = join(xdgConfig, 'opencode', 'plugins')
@@ -222,6 +239,26 @@ async function installOpenCodePlugin(source: string, xdgConfig: string): Promise
   await copyFile(source, temporary)
   await chmod(temporary, 0o600)
   await rename(temporary, destination)
+  if (tuiSource) {
+    // TUI modules must not live in the auto-discovered server plugin directory:
+    // the server requires every module there to export server(), while this
+    // entrypoint intentionally exports tui().
+    const tuiDirectory = join(xdgConfig, 'opencode', 'tui-plugins')
+    const tuiDestination = join(tuiDirectory, 'cuppet-tui.js')
+    const tuiTemporary = join(tuiDirectory, `.cuppet-tui-${randomBytes(6).toString('hex')}.tmp`)
+    await mkdir(tuiDirectory, { recursive: true, mode: 0o700 })
+    await chmod(tuiDirectory, 0o700)
+    await copyFile(tuiSource, tuiTemporary)
+    await chmod(tuiTemporary, 0o600)
+    await rename(tuiTemporary, tuiDestination)
+    await rm(join(directory, 'cuppet-tui.js'), { force: true })
+    await rm(join(directory, 'tui.json'), { force: true })
+    await writeFile(
+      join(xdgConfig, 'opencode', 'tui.json'),
+      `${JSON.stringify({ plugin: [tuiDestination] }, null, 2)}\n`,
+      { mode: 0o600 },
+    )
+  }
 }
 
 async function synchronizeVariants(

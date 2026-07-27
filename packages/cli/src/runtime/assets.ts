@@ -5,6 +5,7 @@ import { createRequire } from 'node:module'
 import { delimiter, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { OPENCODE_REVISION, OPENCODE_VERSION, TST_PROTOCOL_VERSION } from '../constants.js'
+import { readDerivativeMarker } from './derivative.js'
 
 type RuntimeManifest = {
   schema: 1
@@ -15,6 +16,7 @@ type RuntimeManifest = {
   opencodeRevision: string
   sdkVersion: string
   tstProtocol: string
+  patchSetDigest: string
   files: Record<string, string>
 }
 
@@ -23,6 +25,7 @@ export type RuntimeAssets = {
   opencode?: string | undefined
   tst?: string | undefined
   plugin?: string | undefined
+  tuiPlugin?: string | undefined
   manifest?: RuntimeManifest | undefined
   diagnostics: string[]
 }
@@ -39,13 +42,15 @@ export async function resolveRuntimeAssets(): Promise<RuntimeAssets> {
   const opencodeOverride = process.env.CUPPET_OPENCODE_BIN
   const tstOverride = process.env.CUPPET_TST_BIN
   const pluginOverride = process.env.CUPPET_PLUGIN_PATH
-  if (opencodeOverride || tstOverride || pluginOverride) {
+  const tuiPluginOverride = process.env.CUPPET_TUI_PLUGIN_PATH
+  if (opencodeOverride || tstOverride || pluginOverride || tuiPluginOverride) {
     const assets: RuntimeAssets = {
       source: 'development',
       diagnostics,
       ...(opencodeOverride ? { opencode: resolve(opencodeOverride) } : {}),
       ...(tstOverride ? { tst: resolve(tstOverride) } : {}),
       ...(pluginOverride ? { plugin: resolve(pluginOverride) } : {}),
+      ...(tuiPluginOverride ? { tuiPlugin: resolve(tuiPluginOverride) } : {}),
     }
     await fillDevelopmentDefaults(assets)
     await checkPresence(assets)
@@ -68,10 +73,12 @@ export async function resolveRuntimeAssets(): Promise<RuntimeAssets> {
       opencode: join(root, 'bin', 'opencode'),
       tst: join(root, 'bin', 'tst-daemon'),
       plugin: join(root, 'plugin', 'index.js'),
+      tuiPlugin: join(root, 'plugin', 'tui.js'),
       manifest,
       diagnostics,
     }
     await verifyChecksums(root, manifest)
+    await readDerivativeMarker(assets.opencode!)
     await checkPresence(assets)
     return assets
   } catch (error) {
@@ -137,10 +144,18 @@ async function fillDevelopmentDefaults(assets: RuntimeAssets): Promise<void> {
       ...(repositoryRoot && runtimeDirectory ? [resolve(repositoryRoot, 'packages', runtimeDirectory, 'plugin/index.js')] : []),
       ...(globalPackageRoot ? [resolve(globalPackageRoot, 'plugin/index.js')] : []),
     ],
+    tuiPlugin: [
+      resolve(process.cwd(), 'packages/opencode-plugin/dist/tui.js'),
+      ...(localRuntime ? [resolve(localRuntime, 'plugin/tui.js')] : []),
+      ...(repositoryRoot ? [resolve(repositoryRoot, 'packages/opencode-plugin/dist/tui.js')] : []),
+      ...(repositoryRoot && runtimeDirectory ? [resolve(repositoryRoot, 'packages', runtimeDirectory, 'plugin/tui.js')] : []),
+      ...(globalPackageRoot ? [resolve(globalPackageRoot, 'plugin/tui.js')] : []),
+    ],
   }
   if (!assets.opencode) assets.opencode = await firstExisting(candidates.opencode)
   if (!assets.tst) assets.tst = await firstExisting(candidates.tst)
   if (!assets.plugin) assets.plugin = await firstExisting(candidates.plugin)
+  if (!assets.tuiPlugin) assets.tuiPlugin = await firstExisting(candidates.tuiPlugin)
 }
 
 async function findInPath(binaryName: string): Promise<string | undefined> {
@@ -178,6 +193,7 @@ async function verifyLocalRuntime(root: string, diagnostics: string[]): Promise<
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as RuntimeManifest
     validateManifest(manifest)
     await verifyChecksums(root, manifest)
+    await readDerivativeMarker(resolve(root, 'bin/opencode'))
     return true
   } catch (error) {
     diagnostics.push(`Local runtime artifact is invalid: ${(error as Error).message}`)
@@ -206,6 +222,7 @@ async function checkPresence(assets: RuntimeAssets): Promise<void> {
     ['OpenCode', assets.opencode, constants.X_OK],
     ['TST daemon', assets.tst, constants.X_OK],
     ['memory plugin', assets.plugin, constants.R_OK],
+    ['TUI plugin', assets.tuiPlugin, constants.R_OK],
   ] as const) {
     if (!path) {
       assets.diagnostics.push(`${label} path is not configured`)
@@ -213,11 +230,13 @@ async function checkPresence(assets: RuntimeAssets): Promise<void> {
     }
     try {
       await access(path, mode)
+      if (label === 'OpenCode') await readDerivativeMarker(path)
     } catch {
-      assets.diagnostics.push(`${label} missing at ${path}`)
+      assets.diagnostics.push(`${label} missing, unreadable, or not a Cuppet derivative at ${path}`)
       if (label === 'OpenCode') assets.opencode = undefined
       if (label === 'TST daemon') assets.tst = undefined
       if (label === 'memory plugin') assets.plugin = undefined
+      if (label === 'TUI plugin') assets.tuiPlugin = undefined
     }
   }
 }
@@ -228,7 +247,8 @@ function validateManifest(manifest: RuntimeManifest): void {
     manifest.opencodeVersion !== OPENCODE_VERSION ||
     manifest.sdkVersion !== OPENCODE_VERSION ||
     manifest.opencodeRevision !== OPENCODE_REVISION ||
-    manifest.tstProtocol !== TST_PROTOCOL_VERSION
+    manifest.tstProtocol !== TST_PROTOCOL_VERSION ||
+    !/^[a-f0-9]{64}$/.test(manifest.patchSetDigest)
   ) {
     throw new Error('runtime manifest is incompatible with this Cuppet release')
   }
@@ -247,7 +267,15 @@ function validateManifest(manifest: RuntimeManifest): void {
 }
 
 async function verifyChecksums(root: string, manifest: RuntimeManifest): Promise<void> {
-  const required = ['bin/opencode', 'bin/tst-daemon', 'plugin/index.js']
+  const required = [
+    'bin/opencode',
+    'bin/.cuppet-derivative.json',
+    'bin/tst-daemon',
+    'package.json',
+    'plugin/index.js',
+    'plugin/server.js',
+    'plugin/tui.js',
+  ]
   for (const relative of required) {
     const expected = manifest.files[relative]
     if (!expected) throw new Error(`manifest has no checksum for ${relative}`)

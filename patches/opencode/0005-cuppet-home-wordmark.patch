@@ -1,0 +1,95 @@
+diff --git a/packages/tui/src/logo.ts b/packages/tui/src/logo.ts
+index 23ae877da..14a08a49f 100644
+--- a/packages/tui/src/logo.ts
++++ b/packages/tui/src/logo.ts
+@@ -1,6 +1,6 @@
+ export const logo = {
+-  left: ["                   ", "█▀▀█ █▀▀█ █▀▀█ █▀▀▄", "█__█ █__█ █^^^ █__█", "▀▀▀▀ █▀▀▀ ▀▀▀▀ ▀~~▀"],
+-  right: ["             ▄     ", "█▀▀▀ █▀▀█ █▀▀█ █▀▀█", "█___ █__█ █__█ █^^^", "▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀"],
++  left: ["              ", "█▀▀▀ █  █ █▀▀█", "█___ █__█ █__█", "▀▀▀▀ ▀▀▀▀ █▀▀▀"],
++  right: ["              ", "█▀▀█ █▀▀▀ ▀█▀▀", "█__█ █^^^  █  ", "█▀▀▀ ▀▀▀▀  ▀  "],
+ }
+ 
+ export const go = {
+diff --git a/packages/tui/src/app.tsx b/packages/tui/src/app.tsx
+--- a/packages/tui/src/app.tsx
++++ b/packages/tui/src/app.tsx
+@@ -454,22 +454,22 @@
+     if (!terminalTitleEnabled() || Flag.OPENCODE_DISABLE_TERMINAL_TITLE) return
+ 
+     if (route.data.type === "home") {
+-      renderer.setTerminalTitle("OpenCode")
++      renderer.setTerminalTitle("Cuppet")
+       return
+     }
+ 
+     if (route.data.type === "session") {
+       const session = sync.session.get(route.data.sessionID)
+       if (!session || isDefaultTitle(session.title)) {
+-        renderer.setTerminalTitle("OpenCode")
++        renderer.setTerminalTitle("Cuppet")
+         return
+       }
+ 
+       const title = session.title.length > 40 ? session.title.slice(0, 37) + "..." : session.title
+-      renderer.setTerminalTitle(`OC | ${title}`)
++      renderer.setTerminalTitle(`Cuppet | ${title}`)
+       return
+     }
+ 
+     if (route.data.type === "plugin") {
+-      renderer.setTerminalTitle(`OC | ${route.data.id}`)
++      renderer.setTerminalTitle(`Cuppet | ${route.data.id}`)
+     }
+diff --git a/packages/tui/src/feature-plugins/home/tips-view.tsx b/packages/tui/src/feature-plugins/home/tips-view.tsx
+--- a/packages/tui/src/feature-plugins/home/tips-view.tsx
++++ b/packages/tui/src/feature-plugins/home/tips-view.tsx
+@@ -235,16 +235,16 @@ const TIPS: Tip[] = [
+   "Use plugins to send OS notifications when sessions complete",
+-  "Create a plugin to prevent OpenCode from reading sensitive files",
+-  "Use {highlight}opencode run{/highlight} for non-interactive scripting",
+-  "Use {highlight}opencode --continue{/highlight} to resume the last session",
+-  "Use {highlight}opencode run -f file.ts{/highlight} to attach files via CLI",
+-  "Use {highlight}--format json{/highlight} for machine-readable output in scripts",
+-  "Run {highlight}opencode serve{/highlight} for headless API access to OpenCode",
+-  "Use {highlight}opencode run --attach{/highlight} to connect to a running server",
+-  "Run {highlight}opencode upgrade{/highlight} to update to the latest version",
+-  "Run {highlight}opencode auth list{/highlight} to see all configured providers",
+-  "Run {highlight}opencode agent create{/highlight} for guided agent creation",
+-  "Use {highlight}/opencode{/highlight} in GitHub issues/PRs to trigger AI actions",
+-  "Run {highlight}opencode github install{/highlight} to set up the GitHub workflow",
+-  "Comment {highlight}/opencode fix this{/highlight} on issues to auto-create PRs",
+-  "Comment {highlight}/oc{/highlight} on PR code lines for targeted code reviews",
++  "Create a plugin to prevent Cuppet from reading sensitive files",
++  "Use {highlight}cupet --prompt \"...\"{/highlight} for non-interactive prompts",
++  "Use {highlight}cupet --continue{/highlight} to resume the last session",
++  "Use {highlight}cupet --session <id>{/highlight} to resume a specific session",
++  "Use {highlight}/status{/highlight} to inspect Cuppet runtime health",
++  "Use {highlight}/doctor{/highlight} to diagnose Cuppet configuration",
++  "Use {highlight}/memory{/highlight} to inspect persistent memory",
++  "Use {highlight}/background{/highlight} to pause or resume background enrichment",
++  "Use {highlight}/model{/highlight} to choose the foreground model",
++  "Use {highlight}/effort{/highlight} to choose model effort",
++  "Use {highlight}/plan{/highlight} to toggle Cuppet plan mode",
++  "Use {highlight}/steer{/highlight} to guide an active session",
++  "Use {highlight}/compact{/highlight} to compact conversation and memory",
++  "Use {highlight}/undo{/highlight} to revert the latest Cuppet change boundary",
+   'Use {highlight}"theme": "system"{/highlight} to match your terminal\'s colors',
+@@ -264,7 +264,7 @@ const TIPS: Tip[] = [
+   "Run {highlight}/unshare{/highlight} to remove a session from public access",
+   "Permission {highlight}doom_loop{/highlight} prevents infinite tool call loops",
+   "Permission {highlight}external_directory{/highlight} protects files outside project",
+-  "Run {highlight}opencode debug config{/highlight} to troubleshoot configuration",
++  "Run {highlight}/doctor{/highlight} to troubleshoot Cuppet configuration",
+   "Use {highlight}--print-logs{/highlight} flag to see detailed logs in stderr",
+   (shortcuts) => `Use ${commandText("/timeline", shortcuts.sessionTimeline())} to jump to specific messages`,
+   (shortcuts) => press(shortcuts.messagesToggleConceal(), "to toggle code block visibility in messages"),
+@@ -274,7 +274,7 @@ const TIPS: Tip[] = [
+     shortcuts.commandList()
+       ? `Toggle username display in chat via the command palette (${shortcutText(shortcuts.commandList())})`
+       : "Toggle username display in chat via the command palette",
+-  "Run {highlight}docker run -it --rm ghcr.io/anomalyco/opencode{/highlight} in a container",
++  "Use {highlight}/memory-remember{/highlight} to save a project preference",
+   "Use {highlight}/connect{/highlight} with OpenCode Zen for curated, tested models",
+   "Commit your project's {highlight}AGENTS.md{/highlight} file to Git for team sharing",
+   "Use {highlight}/review{/highlight} to review uncommitted changes, branches, or PRs",

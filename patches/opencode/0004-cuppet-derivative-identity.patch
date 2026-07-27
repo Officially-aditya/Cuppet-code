@@ -1,0 +1,15 @@
+diff --git a/packages/opencode/src/cuppet/derivative/identity.ts b/packages/opencode/src/cuppet/derivative/identity.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/opencode/src/cuppet/derivative/identity.ts
+@@ -0,0 +1,9 @@
++export const CUPPET_DERIVATIVE = {
++  product: "cuppet-opencode-derivative",
++  upstreamVersion: "1.18.4",
++  upstreamRevision: "49c69c5ed3ccf706b61b3febb43c8aaff7f8325e",
++} as const
++
++/** Kept in the compiled derivative as a hidden identity marker. */
++export function derivativeIdentity(patchSetDigest: string): string {
++  return `${CUPPET_DERIVATIVE.product}:${CUPPET_DERIVATIVE.upstreamRevision}:${patchSetDigest}`
++}

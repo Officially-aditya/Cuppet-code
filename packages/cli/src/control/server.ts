@@ -1,0 +1,180 @@
+import { randomBytes } from 'node:crypto'
+import { chmod, mkdir, unlink } from 'node:fs/promises'
+import { createServer, type Server, type Socket } from 'node:net'
+
+import type { CuppetController } from '../controller.js'
+import { PLATFORM_OPTIONS } from '../platforms.js'
+import type { RuntimePaths } from '../runtime/paths.js'
+import type { Platform } from '../types.js'
+
+const MAX_LINE_BYTES = 256 * 1024
+
+export type ControlAddress = {
+  socket: string
+  token: string
+}
+
+export class CuppetControlServer {
+  readonly #controller: CuppetController
+  readonly #server: Server
+  readonly #address: ControlAddress
+
+  private constructor(controller: CuppetController, server: Server, address: ControlAddress) {
+    this.#controller = controller
+    this.#server = server
+    this.#address = address
+  }
+
+  static async start(
+    controller: CuppetController,
+    paths: RuntimePaths,
+    address = createControlAddress(paths),
+  ): Promise<CuppetControlServer> {
+    const { socket } = address
+    await mkdir(paths.runtime, { recursive: true, mode: 0o700 })
+    await unlink(socket).catch((error) => {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    })
+    const server = createServer()
+    const instance = new CuppetControlServer(controller, server, address)
+    server.on('connection', (connection) => instance.#handle(connection))
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(socket, () => {
+        server.off('error', reject)
+        resolve()
+      })
+    })
+    await chmod(socket, 0o600)
+    return instance
+  }
+
+  get address(): ControlAddress { return { ...this.#address } }
+
+  async close(): Promise<void> {
+    await new Promise<void>((resolve) => this.#server.close(() => resolve()))
+    await unlink(this.#address.socket).catch(() => undefined)
+  }
+
+  #handle(socket: Socket): void {
+    let buffer = ''
+    socket.setEncoding('utf8')
+    socket.on('data', (chunk: string) => {
+      buffer += chunk
+      if (Buffer.byteLength(buffer) > MAX_LINE_BYTES) {
+        socket.destroy(new Error('control request exceeds frame limit'))
+        return
+      }
+      let newline = buffer.indexOf('\n')
+      while (newline >= 0) {
+        const line = buffer.slice(0, newline)
+        buffer = buffer.slice(newline + 1)
+        newline = buffer.indexOf('\n')
+        void this.#dispatch(socket, line)
+      }
+    })
+  }
+
+  async #dispatch(socket: Socket, line: string): Promise<void> {
+    let request: Record<string, unknown>
+    try {
+      const parsed: unknown = JSON.parse(line)
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('request must be an object')
+      request = parsed as Record<string, unknown>
+    } catch (error) {
+      this.#write(socket, { ok: false, error: (error as Error).message })
+      return
+    }
+    if (request.token !== this.#address.token) {
+      this.#write(socket, { ok: false, error: 'unauthorized' })
+      socket.end()
+      return
+    }
+    const method = typeof request.method === 'string' ? request.method : ''
+    const params = request.params && typeof request.params === 'object' ? request.params as Record<string, unknown> : {}
+    try {
+      const result = await this.#call(method, params)
+      this.#write(socket, { ok: true, result })
+    } catch (error) {
+      this.#write(socket, { ok: false, error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
+  async #call(method: string, params: Record<string, unknown>): Promise<unknown> {
+    switch (method) {
+      case 'status': return this.#controller.status()
+      case 'doctor': return this.#controller.doctor()
+      case 'platform.list': return platformState(this.#controller)
+      case 'platform.select': {
+        const platform = platformParam(params.platform)
+        await this.#controller.selectPlatform(platform)
+        return platformState(this.#controller)
+      }
+      case 'background.status': return this.#controller.snapshot.background ?? { paused: true }
+      case 'background.set': {
+        if (typeof params.paused !== 'boolean') throw new Error('background.set requires paused')
+        await this.#controller.setBackgroundPaused(params.paused)
+        return this.#controller.snapshot.background ?? { paused: params.paused }
+      }
+      case 'memory.remember':
+        return this.#controller.remember(stringParam(params, 'key'), stringParam(params, 'value'), memoryScopeParam(params.scope))
+      case 'memory.forget': return this.#controller.forget(stringParam(params, 'key'))
+      case 'memory.clear': return this.#controller.clearMemory(scopeParam(params.scope))
+      case 'session.steer':
+        return this.#controller.steer(stringParam(params, 'instruction'), params.interrupt === true)
+      case 'session.compact':
+        await this.#controller.compact()
+        return { compacted: true }
+      case 'session.undo':
+        await this.#controller.undo()
+        return { undone: true }
+      case 'plan.toggle':
+        return { enabled: this.#controller.togglePlanMode() }
+      case 'session.adopt': return this.#controller.adoptSession(stringParam(params, 'sessionID'))
+      case 'session.list': return this.#controller.listSessions()
+      default: throw new Error(`unknown control method ${method}`)
+    }
+  }
+
+  #write(socket: Socket, value: unknown): void {
+    socket.write(`${JSON.stringify(value)}\n`)
+  }
+}
+
+function platformState(controller: CuppetController): Record<string, unknown> {
+  return {
+    selected: controller.snapshot.platform,
+    options: PLATFORM_OPTIONS.map((option) => ({
+      ...option,
+      models: controller.modelsForPlatform(option.value, 'primary').length,
+      connected: controller.integrationsForPlatform(option.value).some((integration) => integration.connections.length > 0),
+    })),
+  }
+}
+
+export function createControlAddress(paths: RuntimePaths): ControlAddress {
+  return { socket: `${paths.runtime}/control.sock`, token: randomBytes(32).toString('base64url') }
+}
+
+function stringParam(params: Record<string, unknown>, name: string): string {
+  const value = params[name]
+  if (typeof value !== 'string' || !value.trim()) throw new Error(`${name} is required`)
+  return value.trim()
+}
+
+function scopeParam(value: unknown): 'session' | 'project' | 'global' {
+  if (value === 'session' || value === 'project' || value === 'global') return value
+  throw new Error('scope must be session, project, or global')
+}
+
+function memoryScopeParam(value: unknown): 'project' | 'global' {
+  if (value === 'project' || value === 'global') return value
+  throw new Error('memory remember scope must be project or global')
+}
+
+function platformParam(value: unknown): Platform {
+  if (value === 'anthropic' || value === 'openai' || value === 'google' || value === 'opencode' || value === 'vertex') {
+    return value
+  }
+  throw new Error('platform must be anthropic, openai, google, opencode, or vertex')
+}

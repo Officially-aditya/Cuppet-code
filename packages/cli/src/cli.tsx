@@ -1,29 +1,28 @@
-import React from 'react'
 import { rm } from 'node:fs/promises'
-import { render } from 'ink'
-import { CommandDispatcher } from './commands/dispatcher.js'
 import { PreferenceStore } from './config/preferences.js'
 import { CuppetController } from './controller.js'
+import { CuppetControlServer, createControlAddress } from './control/server.js'
 import { OpenCodeGateway } from './opencode/gateway.js'
 import { startOpenCodeServer, type OpenCodeRuntime } from './opencode/server.js'
+import { runNativeTui } from './opencode/tui.js'
 import { CUPPET_VERSION } from './constants.js'
 import { resolveRuntimeAssets } from './runtime/assets.js'
 import { RedactedLogger, redact } from './runtime/logger.js'
 import { createRuntimePaths } from './runtime/paths.js'
 import { startTstDaemon, type TstRuntime } from './tst/supervisor.js'
-import { TerminalApp } from './ui/TerminalApp.js'
 
 type Arguments = {
   doctor: boolean
   prompt?: string
   help: boolean
   version: boolean
+  tuiArguments: string[]
 }
 
 async function main(): Promise<void> {
   const arguments_ = parseArguments(process.argv.slice(2))
   if (arguments_.help) {
-    process.stdout.write(`Cuppet ${CUPPET_VERSION}\n\nUsage: cuppet [--doctor] [--prompt <text>]\n`)
+    process.stdout.write(`Cuppet ${CUPPET_VERSION}\n\nUsage: cuppet [--doctor] [--prompt <text>] [-c|--continue] [-s|--session <id>] [--fork]\n`)
     return
   }
   if (arguments_.version) {
@@ -43,6 +42,9 @@ async function main(): Promise<void> {
   let tst: TstRuntime | undefined
   let opencode: OpenCodeRuntime | undefined
   let controller: CuppetController | undefined
+  let control: CuppetControlServer | undefined
+  let tuiExitCode = 0
+  const controlAddress = createControlAddress(paths)
   try {
     const preferences = new PreferenceStore(paths.preferences)
     await preferences.load()
@@ -58,6 +60,8 @@ async function main(): Promise<void> {
       paths,
       logger,
       ...(assets.plugin ? { plugin: assets.plugin } : {}),
+      ...(assets.tuiPlugin ? { tuiPlugin: assets.tuiPlugin } : {}),
+      control: controlAddress,
       ...(tst ? { tst: { socket: tst.socket, token: tst.token } } : {}),
       ...(preferences.value.vertexProject ? { vertexProject: preferences.value.vertexProject } : {}),
     })
@@ -87,26 +91,33 @@ async function main(): Promise<void> {
       return
     }
 
-    const dispatcher = new CommandDispatcher(controller)
-    const app = render(
-      <TerminalApp
-        controller={controller}
-        dispatcher={dispatcher}
-        initialNotice={tst ? undefined : 'TST unavailable — continuing in OpenCode-only degraded mode'}
-      />,
-      { exitOnCtrlC: false },
-    )
-    await app.waitUntilExit()
+    control = await CuppetControlServer.start(controller, paths, controlAddress)
+    tuiExitCode = await runNativeTui({
+      binary: assets.opencode,
+      url: opencode.url,
+      directory: paths.projectRealpath,
+      username: opencode.auth.username,
+      password: opencode.auth.password,
+      xdg: paths.opencode,
+      arguments: arguments_.tuiArguments,
+      environment: {
+        CUPPET_CONTROL_SOCKET: control.address.socket,
+        CUPPET_CONTROL_TOKEN: control.address.token,
+        ...(tst ? { CUPPET_TST_SOCKET: tst.socket, CUPPET_TST_TOKEN: tst.token } : {}),
+      },
+    })
   } finally {
+    await control?.close().catch(() => undefined)
     await controller?.close().catch(() => undefined)
     await opencode?.close().catch(() => undefined)
     await tst?.close().catch(() => undefined)
     await rm(paths.runtime, { recursive: true, force: true }).catch(() => undefined)
   }
+  if (tuiExitCode !== 0) process.exitCode = tuiExitCode
 }
 
 function parseArguments(arguments_: string[]): Arguments {
-  const result: Arguments = { doctor: false, help: false, version: false }
+  const result: Arguments = { doctor: false, help: false, version: false, tuiArguments: [] }
   for (let index = 0; index < arguments_.length; index += 1) {
     const argument = arguments_[index]
     if (argument === '--doctor') result.doctor = true
@@ -117,6 +128,15 @@ function parseArguments(arguments_: string[]): Arguments {
       if (!prompt) throw new Error('--prompt requires a value')
       result.prompt = prompt
       index += 1
+    } else if (argument === '--continue' || argument === '-c') {
+      result.tuiArguments.push('--continue')
+    } else if (argument === '--session' || argument === '-s') {
+      const session = arguments_[index + 1]
+      if (!session) throw new Error(`${argument} requires a session id`)
+      result.tuiArguments.push('--session', session)
+      index += 1
+    } else if (argument === '--fork') {
+      result.tuiArguments.push('--fork')
     } else throw new Error(`Unknown argument ${argument}`)
   }
   return result

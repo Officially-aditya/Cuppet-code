@@ -57,9 +57,9 @@ const tasks: Task[] = [
     expected: ['crates/tst-core/src/service.rs', 'query'],
   },
   {
-    id: 'diff-colors',
-    prompt: 'Read-only code navigation task. Identify the source file and function that decide green, red, or cyan coloring for rendered diff lines. Answer with only: <path> :: <function>. Do not modify files.',
-    expected: ['packages/cli/src/ui/TerminalApp.tsx', 'diffLineColor'],
+    id: 'native-tui-attach',
+    prompt: 'Read-only code navigation task. Identify the source file and function that attach the native OpenCode TUI to the private Cuppet server. Answer with only: <path> :: <function>. Do not modify files.',
+    expected: ['packages/cli/src/opencode/tui.ts', 'runNativeTui'],
   },
   {
     id: 'token-total',

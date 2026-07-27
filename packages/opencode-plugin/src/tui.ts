@@ -1,0 +1,564 @@
+import { CuppetControlClient } from './control.js'
+
+export type ModelRow = {
+  providerID: string
+  modelID: string
+  name: string
+  efforts: string[]
+}
+
+/** Keep one visible model row and put all variants in the follow-up dialog. */
+export function uniqueModelRows(
+  models: Array<{ providerID: string; modelID: string; name: string; variant?: string }>,
+): ModelRow[] {
+  const rows = new Map<string, ModelRow>()
+  for (const model of models) {
+    const key = `${model.providerID}\u0000${model.modelID}`
+    const row = rows.get(key) ?? {
+      providerID: model.providerID,
+      modelID: model.modelID,
+      name: model.name.replace(/\s+\[[^\]]+\]$/, ''),
+      efforts: [],
+    }
+    if (model.variant && !row.efforts.includes(model.variant)) row.efforts.push(model.variant)
+    rows.set(key, row)
+  }
+  return [...rows.values()].sort((left, right) => left.name.localeCompare(right.name))
+}
+
+export function modelSelectionSequence(row: ModelRow): Array<'model' | 'effort'> {
+  return row.efforts.length > 0 ? ['model', 'effort'] : ['model']
+}
+
+type TuiToast = {
+  variant?: 'info' | 'success' | 'warning' | 'error'
+  title?: string
+  message: string
+  duration?: number
+}
+
+type TuiCommand = {
+  name: string
+  title: string
+  desc?: string
+  category?: string
+  namespace?: string
+  slashName?: string
+  slashAliases?: string[]
+  run: () => void | Promise<void>
+}
+
+type TuiApi = {
+  keymap: {
+    registerLayer(layer: { priority?: number; commands: TuiCommand[] }): () => void
+    dispatchCommand(name: string): void
+  }
+  ui: {
+    toast(toast: TuiToast): void
+    dialog?: {
+      replace(render: () => unknown, onClose?: () => void): void
+      clear(): void
+      setSize?(size: 'medium' | 'large' | 'xlarge'): void
+    }
+    DialogAlert?: (props: { title: string; message: string; onConfirm?: () => void }) => unknown
+    DialogPrompt?: (props: {
+      title: string
+      placeholder?: string
+      value?: string
+      onConfirm?: (value: string) => void
+      onCancel?: () => void
+    }) => unknown
+    DialogSelect?: <Value>(props: {
+      title: string
+      placeholder?: string
+      options: Array<{
+        title: string
+        value: Value
+        description?: string
+        footer?: string
+      }>
+      current?: Value
+      onSelect?: (option: { title: string; value: Value }) => void
+    }) => unknown
+  }
+  route?: {
+    current?: { name?: string; params?: Record<string, unknown> }
+  }
+  client?: {
+    session?: {
+      abort(input: { sessionID: string }): Promise<unknown>
+    }
+  }
+}
+
+type TuiPluginModule = {
+  id: 'cuppet-tui'
+  tui(api: TuiApi): Promise<void>
+}
+
+const CuppetTuiPlugin: TuiPluginModule = {
+  id: 'cuppet-tui',
+  async tui(api) {
+    if (!process.env.CUPPET_CONTROL_SOCKET || !process.env.CUPPET_CONTROL_TOKEN) return
+    const client = new CuppetControlClient()
+
+    const notify = async (title: string, method: string, params: Record<string, unknown> = {}) => {
+      try {
+        const result = await client.call(method, params)
+        api.ui.toast({
+          title,
+          variant: 'info',
+          duration: 8_000,
+          message: formatResult(result),
+        })
+      } catch (error) {
+        api.ui.toast({
+          title,
+          variant: 'error',
+          message: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+
+    const dispatch = (name: string) => () => api.keymap.dispatchCommand(name)
+    const sessionID = () => {
+      const value = api.route?.current?.params?.sessionID
+      return typeof value === 'string' ? value : undefined
+    }
+
+    const prompt = (title: string, placeholder: string, onConfirm: (value: string) => void) => {
+      if (!api.ui.dialog || !api.ui.DialogPrompt) {
+        api.ui.toast({ title, variant: 'warning', message: 'This Cuppet dialog is unavailable in the current TUI.' })
+        return
+      }
+      api.ui.dialog.replace(() => api.ui.DialogPrompt!({
+        title,
+        placeholder,
+        onConfirm: (value) => {
+          api.ui.dialog?.clear()
+          onConfirm(value)
+        },
+        onCancel: () => api.ui.dialog?.clear(),
+      }))
+    }
+
+    const choosePlatform = async () => {
+      if (!api.ui.dialog || !api.ui.DialogSelect) {
+        api.ui.toast({ title: 'Cuppet platform', variant: 'warning', message: 'The platform dialog is unavailable.' })
+        return
+      }
+      try {
+        const state = await client.call<{
+          selected?: string
+          options: Array<{ value: string; label: string; description: string; models: number; connected: boolean }>
+        }>('platform.list')
+        api.ui.dialog.replace(() => api.ui.DialogSelect!({
+          title: 'Choose Cuppet platform',
+          placeholder: 'Search platforms',
+          current: state.selected,
+          options: state.options.map((option) => ({
+            title: option.label,
+            value: option.value,
+            description: option.description,
+            footer: `${option.models} models${option.connected ? ' · connected' : ''}`,
+          })),
+          onSelect: (option) => {
+            api.ui.dialog?.clear()
+            void client.call<{ selected?: string }>('platform.select', { platform: option.value })
+              .then(() => {
+                api.ui.toast({
+                  title: 'Cuppet platform',
+                  variant: 'success',
+                  message: `${option.title} selected. Choose the foreground model.`,
+                })
+                api.keymap.dispatchCommand('model.list')
+              })
+              .catch((error) => api.ui.toast({
+                title: 'Cuppet platform',
+                variant: 'error',
+                message: error instanceof Error ? error.message : String(error),
+              }))
+          },
+        }))
+      } catch (error) {
+        api.ui.toast({
+          title: 'Cuppet platform',
+          variant: 'error',
+          message: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+
+    const showStatus = async () => {
+      if (!api.ui.dialog || !api.ui.DialogAlert) {
+        api.ui.toast({ title: 'Cuppet status', variant: 'warning', message: 'The status dialog is unavailable.' })
+        return
+      }
+      try {
+        const status = await client.call<Record<string, unknown>>('status')
+        api.ui.dialog.setSize?.('large')
+        api.ui.dialog.replace(() => api.ui.DialogAlert!({
+          title: 'Cuppet status',
+          message: formatStatus(status),
+          onConfirm: () => api.ui.dialog?.clear(),
+        }))
+      } catch (error) {
+        api.ui.toast({
+          title: 'Cuppet status',
+          variant: 'error',
+          message: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+
+    const callWithToast = (title: string, method: string, params: Record<string, unknown> = {}) => {
+      void notify(title, method, params)
+    }
+
+    // Keep this layer additive. A high-priority plugin layer makes lower host
+    // layers unreachable in OpenTUI's palette/slash resolution and hides the
+    // native OpenCode commands.
+    api.keymap.registerLayer({
+      commands: [
+        {
+          // Reuse the host command ID so Cuppet replaces OpenCode's default
+          // status action instead of adding a second prefixed command.
+          name: 'opencode.status',
+          title: 'Cuppet status',
+          desc: 'Show Cuppet runtime, foreground, background, and memory status',
+          category: 'Cuppet',
+          namespace: 'palette',
+          slashName: 'status',
+          run: showStatus,
+        },
+        {
+          name: 'cuppet.doctor',
+          title: 'Cuppet doctor',
+          desc: 'Diagnose Cuppet runtime, provider, storage, and graph health',
+          category: 'Cuppet',
+          namespace: 'palette',
+          slashName: 'doctor',
+          run: () => notify('Cuppet doctor', 'doctor'),
+        },
+        {
+          name: 'cuppet.memory',
+          title: 'Cuppet memory status',
+          desc: 'Show Cuppet memory and graph status',
+          category: 'Cuppet',
+          namespace: 'palette',
+          slashName: 'memory',
+          run: () => notify('Cuppet memory', 'status'),
+        },
+        {
+          name: 'cuppet.memory.remember',
+          title: 'Remember a Cuppet preference',
+          desc: 'Save a project or global key=value preference in memory',
+          category: 'Cuppet',
+          namespace: 'palette',
+          slashName: 'memory-remember',
+          run: () => prompt('Remember preference', 'project key=value', (value) => {
+            const match = value.trim().match(/^(?:(project|global)\s+)?([^=\s]+)\s*=\s*(.+)$/i)
+            if (!match) {
+              api.ui.toast({ title: 'Cuppet memory', variant: 'warning', message: 'Use: project key=value or global key=value' })
+              return
+            }
+            callWithToast('Cuppet memory', 'memory.remember', {
+              scope: (match[1] ?? 'project').toLowerCase(),
+              key: match[2],
+              value: match[3],
+            })
+          }),
+        },
+        {
+          name: 'cuppet.memory.forget',
+          title: 'Forget a Cuppet preference',
+          desc: 'Remove matching Cuppet memory by key',
+          category: 'Cuppet',
+          namespace: 'palette',
+          slashName: 'memory-forget',
+          run: () => prompt('Forget preference', 'key', (value) => {
+            if (!value.trim()) return
+            callWithToast('Cuppet memory', 'memory.forget', { key: value.trim() })
+          }),
+        },
+        {
+          name: 'cuppet.memory.clear',
+          title: 'Clear Cuppet memory',
+          desc: 'Clear session, project, or global Cuppet memory',
+          category: 'Cuppet',
+          namespace: 'palette',
+          slashName: 'memory-clear',
+          run: () => prompt('Clear memory', 'session, project, or global', (value) => {
+            const scope = value.trim().toLowerCase()
+            if (scope !== 'session' && scope !== 'project' && scope !== 'global') {
+              api.ui.toast({ title: 'Cuppet memory', variant: 'warning', message: 'Scope must be session, project, or global.' })
+              return
+            }
+            callWithToast('Cuppet memory', 'memory.clear', { scope })
+          }),
+        },
+        {
+          name: 'cuppet.background.toggle',
+          title: 'Toggle Cuppet background enrichment',
+          desc: 'Pause or resume background memory enrichment',
+          category: 'Cuppet',
+          namespace: 'palette',
+          slashName: 'background',
+          run: async () => {
+            const status = await client.call<{ paused?: boolean }>('background.status')
+            await client.call('background.set', { paused: !status.paused })
+            api.ui.toast({
+              title: 'Cuppet background',
+              variant: 'success',
+              message: status.paused ? 'Background enrichment resumed.' : 'Background enrichment paused.',
+            })
+          },
+        },
+        {
+          name: 'cuppet.background.pause',
+          title: 'Pause Cuppet background enrichment',
+          desc: 'Pause background memory enrichment',
+          category: 'Cuppet',
+          namespace: 'palette',
+          slashName: 'background-pause',
+          run: () => notify('Cuppet background', 'background.set', { paused: true }),
+        },
+        {
+          name: 'cuppet.background.resume',
+          title: 'Resume Cuppet background enrichment',
+          desc: 'Resume background memory enrichment',
+          category: 'Cuppet',
+          namespace: 'palette',
+          slashName: 'background-resume',
+          run: () => notify('Cuppet background', 'background.set', { paused: false }),
+        },
+        {
+          name: 'cuppet.platform',
+          title: 'Choose Cuppet platform',
+          desc: 'Choose Anthropic, OpenAI, Google, OpenCode, or Vertex AI',
+          category: 'Cuppet',
+          namespace: 'palette',
+          slashName: 'platform',
+          slashAliases: ['login'],
+          run: choosePlatform,
+        },
+        {
+          name: 'cuppet.model',
+          title: 'Select Cuppet model',
+          desc: 'Open the native model selection dialog',
+          category: 'Cuppet',
+          namespace: 'palette',
+          slashName: 'model',
+          run: dispatch('model.list'),
+        },
+        {
+          name: 'cuppet.effort',
+          title: 'Select model effort',
+          desc: 'Open the native model effort/variant dialog',
+          category: 'Cuppet',
+          namespace: 'palette',
+          slashName: 'effort',
+          run: dispatch('variant.list'),
+        },
+        {
+          name: 'cuppet.steer',
+          title: 'Steer at the next safe boundary',
+          desc: 'Queue an instruction for the active foreground session',
+          category: 'Cuppet',
+          namespace: 'palette',
+          slashName: 'steer',
+          run: () => prompt('Steer session', 'instruction', (value) => {
+            if (!value.trim()) return
+            callWithToast('Cuppet steer', 'session.steer', { instruction: value.trim(), interrupt: false })
+          }),
+        },
+        {
+          name: 'cuppet.steer.interrupt',
+          title: 'Interrupt and steer immediately',
+          desc: 'Interrupt the active foreground session and submit an instruction',
+          category: 'Cuppet',
+          namespace: 'palette',
+          slashName: 'steer-interrupt',
+          run: () => prompt('Interrupt and steer', 'instruction', (value) => {
+            if (!value.trim()) return
+            callWithToast('Cuppet steer', 'session.steer', { instruction: value.trim(), interrupt: true })
+          }),
+        },
+        {
+          name: 'cuppet.abort',
+          title: 'Abort active Cuppet session',
+          desc: 'Abort the active foreground turn',
+          category: 'Cuppet',
+          namespace: 'palette',
+          slashName: 'abort',
+          run: async () => {
+            const active = sessionID()
+            if (!active || !api.client?.session?.abort) {
+              api.ui.toast({ title: 'Cuppet abort', variant: 'warning', message: 'No active session.' })
+              return
+            }
+            await api.client.session.abort({ sessionID: active })
+            api.ui.toast({ title: 'Cuppet abort', variant: 'success', message: 'Active session aborted.' })
+          },
+        },
+        {
+          name: 'cuppet.plan',
+          title: 'Toggle Cuppet plan mode',
+          desc: 'Enable or disable Cuppet plan-mode budgets',
+          category: 'Cuppet',
+          namespace: 'palette',
+          slashName: 'plan',
+          run: () => callWithToast('Cuppet plan', 'plan.toggle'),
+        },
+        {
+          name: 'cuppet.plan.agent',
+          title: 'Choose Cuppet plan agent',
+          desc: 'Open the native agent picker for plan mode',
+          category: 'Cuppet',
+          namespace: 'palette',
+          slashName: 'plan-agent',
+          run: dispatch('agent.list'),
+        },
+        {
+          name: 'session.compact',
+          title: 'Compact Cuppet conversation and memory',
+          desc: 'Compact the active conversation, eligible memory, snapshots, and WAL',
+          category: 'Cuppet',
+          namespace: 'palette',
+          slashName: 'compact',
+          run: () => callWithToast('Cuppet compact', 'session.compact'),
+        },
+        {
+          name: 'session.undo',
+          title: 'Undo the latest Cuppet change boundary',
+          desc: 'Revert the latest OpenCode change boundary',
+          category: 'Cuppet',
+          namespace: 'palette',
+          slashName: 'undo',
+          run: () => callWithToast('Cuppet undo', 'session.undo'),
+        },
+      ],
+    })
+  },
+}
+
+export default CuppetTuiPlugin
+
+function formatResult(value: unknown): string {
+  const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2)
+  return (text || 'ok').slice(0, 4_000)
+}
+
+export function formatStatus(value: unknown): string {
+  const status = record(value)
+  const session = record(status.session)
+  const foreground = record(status.foreground)
+  const foregroundUsage = record(foreground.usage)
+  const background = record(status.background)
+  const tst = record(status.tst)
+  const project = record(tst.project)
+  const global = record(tst.global)
+  const graph = record(tst.graph)
+  const progress = record(graph.progress)
+
+  const platform = platformName(stringValue(status.platform) ?? 'not selected')
+  const sessionTitle = stringValue(session.title)
+  const running = booleanValue(foreground.running) ? 'running' : 'idle'
+  const steps = numberValue(foreground.steps)
+  const foregroundCost = numberValue(foreground.cost)
+  const backgroundCost = numberValue(background.cost)
+  const warnings = Array.isArray(tst.recovery_warnings) ? tst.recovery_warnings.length : 0
+  const tstHealth = stringValue(tst.mode) === 'degraded'
+    ? `degraded · ${stringValue(tst.reason) ?? 'daemon unavailable'}`
+    : warnings > 0 ? `${warnings} recovery warning${warnings === 1 ? '' : 's'}` : 'healthy'
+  const graphState = booleanValue(progress.complete) ? 'ready' : 'indexing'
+
+  return [
+    row('Platform', platform),
+    ...(sessionTitle ? [row('Session', sessionTitle)] : []),
+    row('Primary', modelSummary(status.primary)),
+    row('Secondary', modelSummary(status.secondary)),
+    row('State', `${running}${steps === undefined ? '' : ` · ${steps} step${steps === 1 ? '' : 's'}`}`),
+    row('Usage', usageSummary(foregroundUsage, foregroundCost)),
+    row('Background', backgroundSummary(background, backgroundCost)),
+    row('TST', tstHealth),
+    row('Memory', `${formatCount(numberValue(project.records))} project · ${formatCount(numberValue(global.records))} global · ${formatCount(numberValue(tst.stm_entries))} recent`),
+    row('Graph', `${graphState} · ${formatCount(numberValue(graph.files))} files · ${formatCount(numberValue(graph.symbols))} syms · ${formatCount(numberValue(graph.edges))} edges`),
+  ].join('\n')
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value ? value : undefined
+}
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function booleanValue(value: unknown): boolean {
+  return value === true
+}
+
+function row(label: string, value: string): string {
+  return `  ${label.padEnd(12)}${shorten(value, 42)}`
+}
+
+function shorten(value: string, width: number): string {
+  return value.length <= width ? value : `${value.slice(0, width - 1)}…`
+}
+
+function platformName(value: string): string {
+  return ({ vertex: 'Vertex AI', openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google', opencode: 'OpenCode' } as Record<string, string>)[value] ?? value
+}
+
+function providerName(value: string): string {
+  return ({
+    'google-vertex': 'Vertex',
+    'google-vertex-anthropic': 'Vertex',
+    openai: 'OpenAI',
+    anthropic: 'Anthropic',
+    google: 'Google',
+    opencode: 'OpenCode',
+  } as Record<string, string>)[value] ?? value
+}
+
+function modelSummary(value: unknown): string {
+  const model = record(value)
+  const id = stringValue(model.modelID)
+  if (!id) return 'not configured'
+  const variant = stringValue(model.variant)
+  const rawName = stringValue(model.name) ?? id
+  const name = variant ? rawName.replace(/\s+\[[^\]]+\]$/, '') : rawName
+  const provider = stringValue(model.providerID)
+  return [name, provider ? providerName(provider) : undefined, variant].filter(Boolean).join(' · ')
+}
+
+function usageSummary(usage: Record<string, unknown>, cost: number | undefined): string {
+  const input = formatCount(numberValue(usage.input))
+  const output = formatCount(numberValue(usage.output))
+  const reasoning = numberValue(usage.reasoning)
+  return `${input} in · ${output} out${reasoning ? ` · ${formatCount(reasoning)} reasoning` : ''}${cost === undefined ? '' : ` · ${formatMoney(cost)}`}`
+}
+
+function backgroundSummary(background: Record<string, unknown>, cost: number | undefined): string {
+  if (Object.keys(background).length === 0) return 'not configured'
+  const state = booleanValue(background.paused) ? 'paused' : booleanValue(background.running) ? 'running' : 'ready'
+  const queued = numberValue(background.queued) ?? 0
+  const completed = numberValue(background.completed) ?? 0
+  return `${state} · ${queued} queued · ${completed} completed${cost === undefined ? '' : ` · ${formatMoney(cost)}`}`
+}
+
+function formatCount(value: number | undefined): string {
+  if (value === undefined) return '0'
+  if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
+  if (Math.abs(value) >= 1_000) return `${(value / 1_000).toFixed(1).replace(/\.0$/, '')}K`
+  return String(value)
+}
+
+function formatMoney(value: number): string {
+  return `$${value < 0.01 && value > 0 ? value.toFixed(4) : value.toFixed(2)}`
+}

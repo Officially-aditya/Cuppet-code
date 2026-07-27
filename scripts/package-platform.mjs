@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto'
-import { chmod, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { chmod, copyFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
-import { basename, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 
 const targetArgument = process.argv.find((argument) => argument.startsWith('--target='))
 if (!targetArgument) throw new Error('--target=<rust-target> is required')
@@ -18,14 +18,28 @@ if (!configuration) throw new Error(`unsupported release target ${target}`)
 const [packageDirectory, platform, arch, libc] = configuration
 const opencodeSource = process.env.CUPPET_OPENCODE_BIN
 if (!opencodeSource) throw new Error('CUPPET_OPENCODE_BIN must point to OpenCode v1.18.4 at revision 49c69c5ed3ccf706b61b3febb43c8aaff7f8325e')
+const derivativeMarker = join(dirname(resolve(opencodeSource)), '.cuppet-derivative.json')
+let marker
+try {
+  marker = JSON.parse(await readFile(derivativeMarker))
+} catch {
+  throw new Error(`OpenCode binary is not a Cuppet derivative: missing or unreadable ${derivativeMarker}`)
+}
+if (marker.product !== 'cuppet-opencode-derivative' || marker.upstreamVersion !== '1.18.4' || marker.upstreamRevision !== '49c69c5ed3ccf706b61b3febb43c8aaff7f8325e') {
+  throw new Error('OpenCode derivative marker targets an incompatible upstream binary')
+}
 
 const output = resolve('artifacts', packageDirectory)
 await mkdir(join(output, 'bin'), { recursive: true })
 await mkdir(join(output, 'plugin'), { recursive: true })
 const files = {
   'bin/opencode': resolve(opencodeSource),
+  'bin/.cuppet-derivative.json': derivativeMarker,
   'bin/tst-daemon': resolve('target', target, 'release', 'tst-daemon'),
+  'package.json': resolve('packages', packageDirectory, 'package.json'),
   'plugin/index.js': resolve('packages/opencode-plugin/dist/index.js'),
+  'plugin/server.js': resolve('packages/opencode-plugin/dist/server.js'),
+  'plugin/tui.js': resolve('packages/opencode-plugin/dist/tui.js'),
 }
 for (const [destination, source] of Object.entries(files)) {
   const targetPath = join(output, destination)
@@ -49,11 +63,16 @@ if (platform === 'darwin') {
 const checksums = {}
 for (const relative of Object.keys(files)) checksums[relative] = await sha256(join(output, relative))
 const sourceManifest = JSON.parse(await readFile(resolve('packages', packageDirectory, 'manifest.json'), 'utf8'))
-const manifest = { ...sourceManifest, platform, arch, libc, files: checksums }
+const patchSetDigest = createHash('sha256')
+for (const name of (await readdir(resolve('patches', 'opencode'))).filter((item) => /^\d{4}-.*\.patch$/.test(item)).sort()) {
+  patchSetDigest.update(name)
+  patchSetDigest.update(await readFile(resolve('patches', 'opencode', name)))
+}
+const digest = patchSetDigest.digest('hex')
+if (marker.patchSetDigest !== digest) throw new Error('OpenCode derivative patch-set digest does not match this checkout')
+const manifest = { ...sourceManifest, platform, arch, libc, patchSetDigest: digest, files: checksums }
 await writeFile(join(output, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
 
-const sourcePackage = JSON.parse(await readFile(resolve('packages', packageDirectory, 'package.json'), 'utf8'))
-await writeFile(join(output, 'package.json'), `${JSON.stringify(sourcePackage, null, 2)}\n`)
 for (const name of ['LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md']) await copyFile(resolve(name), join(output, name))
 const cargoMetadata = JSON.parse(await capture('cargo', [
   'metadata',
@@ -65,6 +84,7 @@ const cargoMetadata = JSON.parse(await capture('cargo', [
 const softwarePackages = [
   spdxPackage('Cuppet', '0.2.0-alpha.1', 'Apache-2.0', 'SPDXRef-Cuppet'),
   spdxPackage('OpenCode', '1.18.4', 'MIT', 'SPDXRef-OpenCode'),
+  spdxPackage('Cuppet OpenCode derivative patch set', manifest.patchSetDigest, 'Apache-2.0', 'SPDXRef-Cuppet-Patches'),
   spdxPackage('zod', '3.25.76', 'MIT', 'SPDXRef-Zod'),
   ...cargoMetadata.packages.map((item, index) => spdxPackage(
     item.name,

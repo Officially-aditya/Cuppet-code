@@ -19,12 +19,19 @@ import type {
   SessionInfo,
   TokenUsage,
 } from './types.js'
-import { buildCuppetContext } from './tst/context.js'
 import { totalTokenUsage } from './usage.js'
 import type { TstClient } from './tst/client.js'
 import type { TstNotification } from './tst/client.js'
 
 const emptyUsage = (): TokenUsage => ({ input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 })
+
+type SessionEvidence = {
+  tools: Map<string, string>
+  recentSymbols: string[]
+  activeDiff: string
+  assistantBuffer: string
+  lastUserPrompt: string
+}
 
 export type ControllerSnapshot = {
   models: ModelInfo[]
@@ -74,6 +81,7 @@ export class CuppetController extends EventEmitter {
   #deferredSteer: string | undefined
   #recentSymbols: string[] = []
   #activeDiff = ''
+  #sessionEvidence = new Map<string, SessionEvidence>()
   #unsubscribe: (() => void) | undefined
   #unsubscribeTst: (() => void) | undefined
   #unsubscribeTstDisconnect: (() => void) | undefined
@@ -311,17 +319,6 @@ export class CuppetController extends EventEmitter {
       this.#background?.foregroundIdle('unavailable')
       throw error
     }
-    const model = this.#findModel(this.#primary)
-    const enriched = await buildCuppetContext(
-      this.#tstAvailable ? this.#tst : undefined,
-      session.id,
-      prompt,
-      model?.context ?? 32_000,
-      this.#recentSymbols,
-      this.#activeDiff,
-      this.#paths.projectRealpath,
-      this.#planMode,
-    ).catch(() => ({ prompt, contextTokens: 0 }))
     // Keep the last completed diff available to this request's retrieval, then
     // start a fresh verified-diff window for the foreground turn.
     this.#activeDiff = ''
@@ -332,7 +329,7 @@ export class CuppetController extends EventEmitter {
     this.#changed()
 
     try {
-      await this.#gateway.prompt(session.id, enriched.prompt, delivery)
+      await this.#gateway.prompt(session.id, prompt, delivery)
     } catch (error) {
       this.#running = false
       this.#background?.foregroundIdle(session.id)
@@ -411,7 +408,9 @@ export class CuppetController extends EventEmitter {
 
   async newSession(): Promise<SessionInfo> {
     if (!this.#primary) throw new Error('Choose a primary model first')
+    this.#saveSessionEvidence()
     this.#session = await this.#gateway.createSession(this.#primary)
+    this.#loadSessionEvidence(this.#session.id)
     this.#startUsageWindow(this.#session)
     await this.#preferences.setLastSession(this.#paths.projectID, this.#session.id)
     this.#changed()
@@ -425,9 +424,40 @@ export class CuppetController extends EventEmitter {
   async resume(sessionID: string): Promise<SessionInfo> {
     const session = await this.#gateway.getSession(sessionID)
     if (this.#primary) await this.#gateway.switchModel(sessionID, this.#primary)
+    this.#saveSessionEvidence()
     this.#session = session
+    this.#loadSessionEvidence(session.id)
     this.#startUsageWindow(session)
     await this.#preferences.setLastSession(this.#paths.projectID, sessionID)
+    this.#changed()
+    return session
+  }
+
+  /** Adopt a session selected or created by the native OpenCode TUI. */
+  async adoptSession(sessionID: string): Promise<SessionInfo> {
+    const session = await this.#gateway.getSession(sessionID)
+    if (session.agent === 'cuppet-background') return session
+    this.#saveSessionEvidence()
+    this.#session = session
+    this.#loadSessionEvidence(session.id)
+    this.#startUsageWindow(session)
+    if (session.model) {
+      const model = this.#findModel(session.model)
+      const platform = this.#platformForModel(session.model)
+      if (platform) this.#platform = platform
+      if (model && this.#modelCompatible(session.model, 'primary')) {
+        this.#primary = { ...session.model }
+        await this.#preferences.update({ platform: this.#platform, primary: this.#primary })
+        if (!this.#secondary || !this.#modelCompatible(this.#secondary, 'secondary')) {
+          const recommendation = this.recommendedSecondary()
+          if (recommendation) {
+            this.#secondary = recommendation
+            await this.#preferences.update({ secondary: recommendation })
+          }
+        }
+        if (this.#secondary && !this.#background) this.#createBackground(this.#preferences.value.backgroundPaused)
+      }
+    }
     this.#changed()
     return session
   }
@@ -486,8 +516,8 @@ export class CuppetController extends EventEmitter {
     return {
       platform: this.#platform,
       session: this.#session,
-      primary: this.#primary,
-      secondary: this.#secondary,
+      primary: this.#primary ? this.#findModel(this.#primary) ?? this.#primary : undefined,
+      secondary: this.#secondary ? this.#findModel(this.#secondary) ?? this.#secondary : undefined,
       foreground: { usage: this.#usage, cost: this.#cost, running: this.#running, steps: this.#stepCount },
       background: this.#background?.stats,
       vertex: this.#vertexDiagnostics(),
@@ -625,7 +655,11 @@ export class CuppetController extends EventEmitter {
         ? event.request.sessionID
         : undefined
     if (sessionID && this.#background?.isBackgroundSession(sessionID)) return
-    if (this.#session && sessionID && sessionID !== this.#session.id) return
+    if (sessionID && (!this.#session || sessionID !== this.#session.id)) {
+      if (!this.#interactive) return
+      await this.adoptSession(sessionID).catch(() => undefined)
+      if (!this.#session || this.#session.id !== sessionID) return
+    }
 
     if (event.type === 'text-delta') this.#assistantBuffer += event.text
     if (event.type === 'error') {
@@ -724,6 +758,31 @@ export class CuppetController extends EventEmitter {
     this.#usageBaseline = { ...session.tokens }
     this.#costBaseline = session.cost
     this.#usageSessionID = session.id
+  }
+
+  #saveSessionEvidence(): void {
+    if (!this.#session) return
+    this.#sessionEvidence.set(this.#session.id, {
+      tools: new Map(this.#tools),
+      recentSymbols: [...this.#recentSymbols],
+      activeDiff: this.#activeDiff,
+      assistantBuffer: this.#assistantBuffer,
+      lastUserPrompt: this.#lastUserPrompt,
+    })
+  }
+
+  #loadSessionEvidence(sessionID: string): void {
+    const evidence = this.#sessionEvidence.get(sessionID)
+    this.#tools = evidence ? new Map(evidence.tools) : new Map()
+    this.#recentSymbols = evidence ? [...evidence.recentSymbols] : []
+    this.#activeDiff = evidence?.activeDiff ?? ''
+    this.#assistantBuffer = evidence?.assistantBuffer ?? ''
+    this.#lastUserPrompt = evidence?.lastUserPrompt ?? ''
+  }
+
+  #platformForModel(model: ModelRef): Platform | undefined {
+    const candidates: Platform[] = ['anthropic', 'openai', 'google', 'opencode', 'vertex']
+    return candidates.find((platform) => modelMatchesPlatform(model, platform))
   }
 
   #syncUsage(session: SessionInfo): void {

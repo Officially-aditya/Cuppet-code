@@ -1,10 +1,15 @@
 # Cuppet public alpha
 
-Cuppet is an Ink terminal coding-agent supervisor backed by a pinned OpenCode
-server and a native Rust tiered-memory/code-graph daemon.
+Cuppet is a modified OpenCode 1.18.4 derivative with a native Solid/OpenTUI
+terminal client, backed by a private OpenCode server and a native Rust
+tiered-memory/code-graph daemon. The Cuppet wrapper supplies memory and
+background-agent services; the derived TUI owns the interactive transcript,
+composer, sessions, permissions, questions, models, and provider connection.
 
 The alpha pins OpenCode and `@opencode-ai/sdk` to the stable **v1.18.4** release
-at revision `49c69c5ed3ccf706b61b3febb43c8aaff7f8325e`. Provider credentials, tools,
+at revision `49c69c5ed3ccf706b61b3febb43c8aaff7f8325e`. Numbered patches live in
+[`patches/opencode/`](patches/opencode/) and are applied in a temporary detached
+worktree. Provider credentials, tools,
 sessions, model routing, diffs, permissions, compaction, and undo stay inside
 OpenCode. Cuppet stores only non-secret UI/model selections and verified
 memory records.
@@ -23,8 +28,14 @@ memory records.
 npm ci
 npm run build
 npm test
-CUPPET_OPENCODE_BIN=/path/to/opencode npm run dev
+CUPPET_OPENCODE_BIN=/path/to/patched/opencode npm run dev
 ```
+
+Build the derived runtime from a local OpenCode checkout with
+`node scripts/build-opencode.mjs --source=/path/to/opencode --output=/tmp/cuppet-opencode`.
+The source checkout must contain the pinned revision and Bun 1.3.14; the
+command applies every numbered patch in a temporary detached worktree and
+writes the hidden derivative marker beside the binary.
 
 The Rust daemon is discovered at `target/debug/tst-daemon` during development.
 Run `cuppet --doctor` for checksum, protocol, storage, provider, and graph
@@ -54,9 +65,11 @@ later.
 ## Architecture
 
 ```text
-Ink UI + Cuppet supervisor
-  ├─ OpenCode 1.18.4 + SDK catalog/auth/session APIs + SSE
+Derived OpenCode 1.18.4 TUI + Cuppet wrapper
+  ├─ private OpenCode server + native attach TUI + SDK observer
   │  └─ sessions, tools, permissions, models, diffs, auth, undo
+  ├─ Cuppet server/TUI plugins + authenticated launch-scoped Unix control socket
+  │  └─ /background, /memory, /doctor, /status, /compact, /undo, /steer integrations
   └─ tst-daemon (framed JSON-RPC 2.0 over a private Unix socket)
      └─ session STM, verified project/global LTM, Tree-sitter graph, WAL
 ```
@@ -67,7 +80,9 @@ given isolated XDG config/data/cache/state directories below
 `~/.cuppet/v2/opencode`; Cuppet never parses its credential records.
 
 Cuppet uses OpenCode's v2 APIs for the live catalog and agent registration and
-the same bundled server's stable session/provider API for turns. This preserves
+the same bundled server's stable session/provider API for turns. Interactive
+launches attach the derived native TUI to that private server; the controller
+observes and adopts sessions created by the TUI. This preserves
 the mature Google Vertex, Azure, Gemini, Anthropic, and OpenAI adapters while
 OpenCode's v2 runner supports a smaller adapter set. No provider SDK or
 credential store is implemented in Cuppet.

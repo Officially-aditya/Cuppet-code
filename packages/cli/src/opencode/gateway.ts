@@ -330,7 +330,12 @@ export class OpenCodeGateway extends EventEmitter {
     this.#sessionModels.set(sessionID, { ...model })
   }
 
-  async prompt(sessionID: string, text: string, _delivery: 'queue' | 'steer' = 'queue'): Promise<void> {
+  async prompt(
+    sessionID: string,
+    text: string,
+    _delivery: 'queue' | 'steer' = 'queue',
+    options: { ephemeralContext?: string } = {},
+  ): Promise<void> {
     const model = await this.#modelForSession(sessionID)
     ensureSuccess(
       (await this.#client.session.promptAsync({
@@ -339,7 +344,12 @@ export class OpenCodeGateway extends EventEmitter {
         model: { providerID: model.providerID, modelID: model.modelID },
         ...(model.variant ? { variant: model.variant } : {}),
         agent: this.#backgroundSessions.has(sessionID) ? 'cuppet-background' : 'cuppet',
-        parts: [{ type: 'text', text }],
+        parts: [
+          { type: 'text', text },
+          ...(options.ephemeralContext
+            ? [{ type: 'text' as const, text: options.ephemeralContext, synthetic: true }]
+            : []),
+        ],
       })) as SdkResult<unknown>,
     )
   }
@@ -624,6 +634,10 @@ export class OpenCodeEventNormalizer {
             : {}),
           ...(data.input !== undefined ? { input: data.input } : {}),
           ...(Array.isArray(data.outputPaths) ? { outputPaths: data.outputPaths.map(String) } : {}),
+          ...(() => {
+            const diff = toolCompletionDiff(data)
+            return diff ? { diff } : {}
+          })(),
           ...toolCompletionTelemetry(data),
         }]
       case 'session.diff':
@@ -674,6 +688,12 @@ export class OpenCodeEventNormalizer {
       case 'session.idle':
         if (sessionID) this.#clearSession(sessionID)
         return sessionID ? [{ type: 'idle', sessionID }] : []
+      case 'session.created':
+      case 'session.updated': {
+        const info = record(data.info ?? data.session)
+        const id = sessionID ?? (typeof info.id === 'string' ? info.id : undefined)
+        return id ? [{ type: 'session', sessionID: id }] : []
+      }
       case 'session.error':
         return [{ type: 'error', ...(sessionID ? { sessionID } : {}), message: message(data.error) }]
       default:
@@ -785,6 +805,10 @@ export class OpenCodeEventNormalizer {
         ...(() => {
           const outputPaths = extractOutputPaths(part)
           return outputPaths.length > 0 ? { outputPaths } : {}
+        })(),
+        ...(() => {
+          const diff = toolCompletionDiff(state, part)
+          return diff ? { diff } : {}
         })(),
         ...toolCompletionTelemetry(state, part),
       })
@@ -948,6 +972,20 @@ type ToolCompletionTelemetry = {
   resultCount: number
   truncated: boolean
   cacheHit: boolean
+}
+
+function toolCompletionDiff(...sources: unknown[]): string | undefined {
+  for (const source of sources.map(record)) {
+    const output = record(source.output)
+    const candidates = [
+      record(source.metadata).diff,
+      record(output.metadata).diff,
+      source.diff,
+    ]
+    const diff = candidates.find((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    if (diff) return diff.slice(0, 64 * 1024)
+  }
+  return undefined
 }
 
 /**

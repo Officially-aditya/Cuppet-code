@@ -18,3 +18,7 @@ renderer, sizing behavior, and theme colors.
 `0007-cuppet-status-command.patch` reserves the native `opencode.status`
 command ID and `/status` slash name for Cuppet's runtime, model, background,
 memory, and TST status action while hiding the superseded upstream dialog.
+
+`0008-cuppet-permission-recovery.patch` keeps native permission prompts reliable
+when the attached TUI misses an SSE event. Pending requests are reconciled from
+the private server while a session is active; Cuppet never auto-approves them.

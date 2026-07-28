@@ -1,0 +1,56 @@
+diff --git a/packages/tui/src/context/sync.tsx b/packages/tui/src/context/sync.tsx
+index d0511c518..5ce2c160a 100644
+--- a/packages/tui/src/context/sync.tsx
++++ b/packages/tui/src/context/sync.tsx
+@@ -30,3 +30,3 @@ import { useExit } from "./exit"
+ import { useArgs } from "./args"
+-import { batch, onMount } from "solid-js"
++import { batch, onCleanup, onMount } from "solid-js"
+ import path from "path"
+@@ -169,3 +169,34 @@ export const {
+     }
+-
++    let refreshingPermissions = false
++    async function refreshPermissions() {
++      if (refreshingPermissions) return
++      refreshingPermissions = true
++      try {
++        const workspace = project.workspace.current()
++        const response = await sdk.client.permission.list({ workspace })
++        const pending = response.data ?? []
++        if (permission.mode === "auto") {
++          await Promise.all(
++            pending.map((request) =>
++              sdk.client.permission.reply({
++                requestID: request.id,
++                reply: "once",
++                directory: sdk.directory,
++                workspace,
++              }),
++            ),
++          )
++          return
++        }
++        const grouped: Record<string, PermissionRequest[]> = {}
++        for (const request of pending) (grouped[request.sessionID] ??= []).push(request)
++        for (const requests of Object.values(grouped)) requests.sort((a, b) => a.id.localeCompare(b.id))
++        setStore("permission", reconcile(grouped))
++      } catch {
++        // SSE remains the primary path; polling only repairs missed permission events.
++      } finally {
++        refreshingPermissions = false
++      }
++    }
++
+     event.subscribe((event, { directory, workspace }) => {
+@@ -549,2 +581,10 @@ export const {
+       void bootstrap()
++      void refreshPermissions()
++      const timer = setInterval(() => {
++        const active = Object.values(store.session_status).some((status) => status.type !== "idle")
++        if (active || Object.values(store.permission).some((requests) => requests.length > 0)) {
++          void refreshPermissions()
++        }
++      }, 250)
++      onCleanup(() => clearInterval(timer))
+     })

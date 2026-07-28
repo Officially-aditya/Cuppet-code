@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import CuppetTuiPlugin, { formatStatus, modelSelectionSequence, uniqueModelRows } from '../src/tui.js'
+import CuppetTuiPlugin, {
+  formatDoctor,
+  formatMemory,
+  formatStatus,
+  modelSelectionSequence,
+  planMessage,
+  removedMessage,
+  uniqueModelRows,
+} from '../src/tui.js'
 
 test('native TUI model rows are unique and efforts follow model selection', () => {
   const rows = uniqueModelRows([
@@ -90,4 +98,27 @@ test('Cuppet status is formatted as a compact human-readable dialog', () => {
   assert.match(output, /healthy/)
   assert.match(output, /93 files · 2\.4K syms · 20\.5K edges/)
   assert.doesNotMatch(output, /[{}\[\]"]/)
+})
+
+test('doctor, memory, and action results never expose raw JSON', () => {
+  const doctor = formatDoctor({
+    platform: 'darwin-arm64', node: 'v22.21.0', runtimeSource: 'package',
+    opencode: { available: true, models: 254, providerCatalogSize: 172, providers: [{ connected: true }, { connected: false }] },
+    vertex: { connected: true, primaryCompatibleModels: 145 },
+    tst: { protocol: 'cuppet.tst.v1', graph: { files: 93, symbols: 2445, progress: { complete: true } } },
+    storage: { permissions: { project: { available: true }, global: { available: true } } },
+  })
+  const memory = formatMemory({ tst: {
+    project: { records: 12, wal_bytes: 2048 }, global: { records: 4, wal_bytes: 1024 },
+    stm_entries: 8, sessions: 2, recovery_warnings: [],
+    graph: { files: 93, symbols: 2445, edges: 20544, progress: { complete: true } },
+  } })
+  assert.match(doctor, /Engine\s+ready · 254 models/)
+  assert.match(doctor, /Vertex AI\s+connected · 145 coding models/)
+  assert.match(memory, /Project\s+12 records · 2 KB WAL/)
+  assert.match(memory, /Graph\s+ready · 93 files · 2\.4K syms · 20\.5K edges/)
+  assert.equal(removedMessage({ removed: 1 }), '1 memory record removed.')
+  assert.equal(removedMessage(0), 'No matching memory records found.')
+  assert.equal(planMessage({ enabled: true }), 'Plan mode enabled.')
+  assert.doesNotMatch(`${doctor}\n${memory}`, /[{}\[\]"]/)
 })

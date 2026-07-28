@@ -661,6 +661,18 @@ export class CuppetController extends EventEmitter {
       if (!this.#session || this.#session.id !== sessionID) return
     }
 
+    if (
+      event.type === 'text-delta' ||
+      event.type === 'tool-start' ||
+      event.type === 'tool-progress' ||
+      event.type === 'permission'
+    ) {
+      if (!this.#running) {
+        this.#running = true
+      }
+      this.#background?.foregroundStarted()
+    }
+
     if (event.type === 'text-delta') this.#assistantBuffer += event.text
     if (event.type === 'error') {
       this.#running = false
@@ -725,9 +737,11 @@ export class CuppetController extends EventEmitter {
         } satisfies AgentEvent)
       }
     }
-    if (event.type === 'permission' && !this.#interactive) {
-      await this.#gateway.replyPermission(event.request.sessionID, event.request.id, 'reject')
-      return
+    if (event.type === 'permission') {
+      if (!this.#interactive) {
+        await this.#gateway.replyPermission(event.request.sessionID, event.request.id, 'reject').catch(() => undefined)
+        return
+      }
     }
     if (event.type === 'idle') {
       this.#running = false

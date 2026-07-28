@@ -102,14 +102,18 @@ const CuppetTuiPlugin: TuiPluginModule = {
     if (!process.env.CUPPET_CONTROL_SOCKET || !process.env.CUPPET_CONTROL_TOKEN) return
     const client = new CuppetControlClient()
 
-    const notify = async (title: string, method: string, params: Record<string, unknown> = {}) => {
+    const action = async (
+      title: string,
+      method: string,
+      params: Record<string, unknown>,
+      message: string | ((result: unknown) => string),
+    ) => {
       try {
         const result = await client.call(method, params)
         api.ui.toast({
           title,
-          variant: 'info',
-          duration: 8_000,
-          message: formatResult(result),
+          variant: 'success',
+          message: typeof message === 'function' ? message(result) : message,
         })
       } catch (error) {
         api.ui.toast({
@@ -211,8 +215,26 @@ const CuppetTuiPlugin: TuiPluginModule = {
       }
     }
 
-    const callWithToast = (title: string, method: string, params: Record<string, unknown> = {}) => {
-      void notify(title, method, params)
+    const showReport = async (
+      title: string,
+      method: string,
+      formatter: (result: unknown) => string,
+    ) => {
+      if (!api.ui.dialog || !api.ui.DialogAlert) {
+        api.ui.toast({ title, variant: 'warning', message: 'This report dialog is unavailable.' })
+        return
+      }
+      try {
+        const result = await client.call(method)
+        api.ui.dialog.setSize?.('large')
+        api.ui.dialog.replace(() => api.ui.DialogAlert!({
+          title,
+          message: formatter(result),
+          onConfirm: () => api.ui.dialog?.clear(),
+        }))
+      } catch (error) {
+        api.ui.toast({ title, variant: 'error', message: error instanceof Error ? error.message : String(error) })
+      }
     }
 
     // Keep this layer additive. A high-priority plugin layer makes lower host
@@ -238,7 +260,7 @@ const CuppetTuiPlugin: TuiPluginModule = {
           category: 'Cuppet',
           namespace: 'palette',
           slashName: 'doctor',
-          run: () => notify('Cuppet doctor', 'doctor'),
+          run: () => showReport('Cuppet doctor', 'doctor', formatDoctor),
         },
         {
           name: 'cuppet.memory',
@@ -247,7 +269,7 @@ const CuppetTuiPlugin: TuiPluginModule = {
           category: 'Cuppet',
           namespace: 'palette',
           slashName: 'memory',
-          run: () => notify('Cuppet memory', 'status'),
+          run: () => showReport('Cuppet memory', 'status', formatMemory),
         },
         {
           name: 'cuppet.memory.remember',
@@ -262,11 +284,11 @@ const CuppetTuiPlugin: TuiPluginModule = {
               api.ui.toast({ title: 'Cuppet memory', variant: 'warning', message: 'Use: project key=value or global key=value' })
               return
             }
-            callWithToast('Cuppet memory', 'memory.remember', {
+            void action('Cuppet memory', 'memory.remember', {
               scope: (match[1] ?? 'project').toLowerCase(),
               key: match[2],
               value: match[3],
-            })
+            }, 'Preference remembered.')
           }),
         },
         {
@@ -278,7 +300,7 @@ const CuppetTuiPlugin: TuiPluginModule = {
           slashName: 'memory-forget',
           run: () => prompt('Forget preference', 'key', (value) => {
             if (!value.trim()) return
-            callWithToast('Cuppet memory', 'memory.forget', { key: value.trim() })
+            void action('Cuppet memory', 'memory.forget', { key: value.trim() }, removedMessage)
           }),
         },
         {
@@ -294,7 +316,7 @@ const CuppetTuiPlugin: TuiPluginModule = {
               api.ui.toast({ title: 'Cuppet memory', variant: 'warning', message: 'Scope must be session, project, or global.' })
               return
             }
-            callWithToast('Cuppet memory', 'memory.clear', { scope })
+            void action('Cuppet memory', 'memory.clear', { scope }, removedMessage)
           }),
         },
         {
@@ -321,7 +343,7 @@ const CuppetTuiPlugin: TuiPluginModule = {
           category: 'Cuppet',
           namespace: 'palette',
           slashName: 'background-pause',
-          run: () => notify('Cuppet background', 'background.set', { paused: true }),
+          run: () => action('Cuppet background', 'background.set', { paused: true }, 'Background enrichment paused.'),
         },
         {
           name: 'cuppet.background.resume',
@@ -330,7 +352,7 @@ const CuppetTuiPlugin: TuiPluginModule = {
           category: 'Cuppet',
           namespace: 'palette',
           slashName: 'background-resume',
-          run: () => notify('Cuppet background', 'background.set', { paused: false }),
+          run: () => action('Cuppet background', 'background.set', { paused: false }, 'Background enrichment resumed.'),
         },
         {
           name: 'cuppet.platform',
@@ -369,7 +391,7 @@ const CuppetTuiPlugin: TuiPluginModule = {
           slashName: 'steer',
           run: () => prompt('Steer session', 'instruction', (value) => {
             if (!value.trim()) return
-            callWithToast('Cuppet steer', 'session.steer', { instruction: value.trim(), interrupt: false })
+            void action('Cuppet steer', 'session.steer', { instruction: value.trim(), interrupt: false }, 'Steering instruction queued.')
           }),
         },
         {
@@ -381,7 +403,7 @@ const CuppetTuiPlugin: TuiPluginModule = {
           slashName: 'steer-interrupt',
           run: () => prompt('Interrupt and steer', 'instruction', (value) => {
             if (!value.trim()) return
-            callWithToast('Cuppet steer', 'session.steer', { instruction: value.trim(), interrupt: true })
+            void action('Cuppet steer', 'session.steer', { instruction: value.trim(), interrupt: true }, 'Session interrupted; steering instruction submitted.')
           }),
         },
         {
@@ -408,7 +430,7 @@ const CuppetTuiPlugin: TuiPluginModule = {
           category: 'Cuppet',
           namespace: 'palette',
           slashName: 'plan',
-          run: () => callWithToast('Cuppet plan', 'plan.toggle'),
+          run: () => action('Cuppet plan', 'plan.toggle', {}, planMessage),
         },
         {
           name: 'cuppet.plan.agent',
@@ -426,7 +448,7 @@ const CuppetTuiPlugin: TuiPluginModule = {
           category: 'Cuppet',
           namespace: 'palette',
           slashName: 'compact',
-          run: () => callWithToast('Cuppet compact', 'session.compact'),
+          run: () => action('Cuppet compact', 'session.compact', {}, 'Conversation and memory compacted.'),
         },
         {
           name: 'session.undo',
@@ -435,7 +457,7 @@ const CuppetTuiPlugin: TuiPluginModule = {
           category: 'Cuppet',
           namespace: 'palette',
           slashName: 'undo',
-          run: () => callWithToast('Cuppet undo', 'session.undo'),
+          run: () => action('Cuppet undo', 'session.undo', {}, 'Latest Cuppet change boundary undone.'),
         },
       ],
     })
@@ -443,11 +465,6 @@ const CuppetTuiPlugin: TuiPluginModule = {
 }
 
 export default CuppetTuiPlugin
-
-function formatResult(value: unknown): string {
-  const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2)
-  return (text || 'ok').slice(0, 4_000)
-}
 
 export function formatStatus(value: unknown): string {
   const status = record(value)
@@ -485,6 +502,60 @@ export function formatStatus(value: unknown): string {
     row('Memory', `${formatCount(numberValue(project.records))} project · ${formatCount(numberValue(global.records))} global · ${formatCount(numberValue(tst.stm_entries))} recent`),
     row('Graph', `${graphState} · ${formatCount(numberValue(graph.files))} files · ${formatCount(numberValue(graph.symbols))} syms · ${formatCount(numberValue(graph.edges))} edges`),
   ].join('\n')
+}
+
+export function formatDoctor(value: unknown): string {
+  const doctor = record(value)
+  const engine = record(doctor.opencode)
+  const providers = Array.isArray(engine.providers) ? engine.providers.map(record) : []
+  const vertex = record(doctor.vertex)
+  const tst = record(doctor.tst)
+  const graph = record(tst.graph)
+  const progress = record(graph.progress)
+  const storage = record(doctor.storage)
+  const permissions = record(storage.permissions)
+  const checks = Object.values(permissions).map(record)
+  const connected = providers.filter((provider) => booleanValue(provider.connected)).length
+  const storageReady = checks.filter((check) => booleanValue(check.available)).length
+  const tstUnavailable = tst.available === false || stringValue(tst.mode) === 'degraded'
+
+  return [
+    row('Runtime', `${stringValue(doctor.runtimeSource) ?? 'unknown'} · ${stringValue(doctor.platform) ?? 'unknown'} · Node ${stringValue(doctor.node) ?? '?'}`),
+    row('Engine', booleanValue(engine.available) ? `ready · ${formatCount(numberValue(engine.models))} models · ${formatCount(numberValue(engine.providerCatalogSize))} catalog` : 'unavailable'),
+    row('Providers', `${connected}/${providers.length} connected`),
+    row('Vertex AI', booleanValue(vertex.connected) ? `connected · ${formatCount(numberValue(vertex.primaryCompatibleModels))} coding models` : 'not connected'),
+    row('TST', tstUnavailable ? `degraded · ${stringValue(tst.reason) ?? 'daemon unavailable'}` : `healthy · ${stringValue(tst.protocol) ?? 'protocol ready'}`),
+    row('Graph', `${booleanValue(progress.complete) ? 'ready' : 'indexing'} · ${formatCount(numberValue(graph.files))} files · ${formatCount(numberValue(graph.symbols))} syms`),
+    row('Storage', `${storageReady}/${checks.length} checks passed`),
+  ].join('\n')
+}
+
+export function formatMemory(value: unknown): string {
+  const status = record(value)
+  const tst = record(status.tst)
+  const project = record(tst.project)
+  const global = record(tst.global)
+  const graph = record(tst.graph)
+  const progress = record(graph.progress)
+  const warnings = Array.isArray(tst.recovery_warnings) ? tst.recovery_warnings.length : 0
+  const degraded = stringValue(tst.mode) === 'degraded'
+  return [
+    row('TST', degraded ? `degraded · ${stringValue(tst.reason) ?? 'daemon unavailable'}` : warnings ? `${warnings} recovery warnings` : 'healthy'),
+    row('Project', `${formatCount(numberValue(project.records))} records · ${formatBytes(numberValue(project.wal_bytes))} WAL`),
+    row('Global', `${formatCount(numberValue(global.records))} records · ${formatBytes(numberValue(global.wal_bytes))} WAL`),
+    row('Recent', `${formatCount(numberValue(tst.stm_entries))} entries · ${formatCount(numberValue(tst.sessions))} sessions`),
+    row('Graph', `${booleanValue(progress.complete) ? 'ready' : 'indexing'} · ${formatCount(numberValue(graph.files))} files · ${formatCount(numberValue(graph.symbols))} syms · ${formatCount(numberValue(graph.edges))} edges`),
+  ].join('\n')
+}
+
+export function removedMessage(value: unknown): string {
+  const removed = typeof value === 'number' ? value : numberValue(record(value).removed) ?? 0
+  if (removed === 0) return 'No matching memory records found.'
+  return `${removed} memory record${removed === 1 ? '' : 's'} removed.`
+}
+
+export function planMessage(value: unknown): string {
+  return booleanValue(record(value).enabled) ? 'Plan mode enabled.' : 'Plan mode disabled.'
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -561,4 +632,11 @@ function formatCount(value: number | undefined): string {
 
 function formatMoney(value: number): string {
   return `$${value < 0.01 && value > 0 ? value.toFixed(4) : value.toFixed(2)}`
+}
+
+function formatBytes(value: number | undefined): string {
+  if (value === undefined || value === 0) return '0 B'
+  if (value >= 1_048_576) return `${(value / 1_048_576).toFixed(1).replace(/\.0$/, '')} MB`
+  if (value >= 1_024) return `${(value / 1_024).toFixed(1).replace(/\.0$/, '')} KB`
+  return `${value} B`
 }

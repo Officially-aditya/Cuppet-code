@@ -1,6 +1,6 @@
 use crate::graph::{
     CodeGraph, GraphFileList, GraphLocateResult, GraphQueryResult, GraphSearchResult, GraphStats,
-    GraphTraceResult, GraphTraceSummary, GraphTraceSummaryEdge, GraphWorkspaceInfo,
+    GraphTraceResult, GraphTraceSummary, GraphTraceSummaryEdge, GraphWorkspaceInfo, PlanProjection,
 };
 use crate::memory::{
     normalize_key, Evidence, EvidenceKind, MemoryKind, MemoryRecord, MemoryScope, Provenance,
@@ -63,10 +63,22 @@ pub struct ContextObservation {
     pub pinned: bool,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ContextMode {
+    #[default]
+    Foreground,
+    Plan,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct ContextPrepareInput {
     pub session_id: String,
     pub query: String,
+    #[serde(default, alias = "context_mode")]
+    pub mode: ContextMode,
+    #[serde(default = "default_projection_budget", alias = "projection_budget_tokens")]
+    pub projection_budget: usize,
     #[serde(default)]
     pub hints: Vec<String>,
     #[serde(default)]
@@ -80,6 +92,8 @@ pub struct ContextPrepareOutput {
     pub ltm: Vec<MemoryRecord>,
     pub graph: Vec<GraphQueryResult>,
     pub edges: Vec<GraphTraceSummaryEdge>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plan_projection: Option<PlanProjection>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -328,6 +342,8 @@ impl TstService {
             ltm,
             graph,
             edges,
+            plan_projection: (input.mode == ContextMode::Plan)
+                .then(|| self.graph.plan_projection(input.projection_budget)),
         }
     }
 
@@ -564,6 +580,10 @@ fn default_query_limit() -> usize {
     20
 }
 
+fn default_projection_budget() -> usize {
+    16_384
+}
+
 fn bounded_text(value: &str, max_chars: usize) -> String {
     value.chars().take(max_chars).collect()
 }
@@ -743,6 +763,8 @@ mod tests {
         let output = service.prepare_context(ContextPrepareInput {
             session_id: "s".into(),
             query: "Fix createTask in src/api.ts".into(),
+            mode: ContextMode::Foreground,
+            projection_budget: 0,
             hints: vec!["saveTask".into()],
             observations: vec![ContextObservation {
                 key: "turn:user-1".into(),
@@ -760,6 +782,8 @@ mod tests {
         let rejected = service.prepare_context(ContextPrepareInput {
             session_id: "s".into(),
             query: "continue".into(),
+            mode: ContextMode::Foreground,
+            projection_budget: 0,
             hints: Vec::new(),
             observations: vec![ContextObservation {
                 key: "api_key".into(),
@@ -774,6 +798,50 @@ mod tests {
             !rejected.stm.is_empty(),
             "recent STM should preserve continuity for pronouns"
         );
+    }
+
+    #[test]
+    fn plan_context_returns_ephemeral_projection_without_changing_foreground_shape() {
+        let project = tempfile::tempdir().unwrap();
+        let stores = tempfile::tempdir().unwrap();
+        fs::write(project.path().join("main.ts"), "export function main() {}\n").unwrap();
+        let mut service = TstService::open(
+            project.path(),
+            stores.path().join("project"),
+            stores.path().join("global"),
+        )
+        .unwrap();
+        for path in service.begin_graph_index() {
+            service.index_graph_path(&path);
+        }
+        service.finish_graph_index();
+
+        let foreground = service.prepare_context(ContextPrepareInput {
+            session_id: "foreground".into(),
+            query: "main".into(),
+            mode: ContextMode::Foreground,
+            projection_budget: 16_384,
+            hints: Vec::new(),
+            observations: Vec::new(),
+        });
+        assert!(foreground.plan_projection.is_none());
+
+        let plan = service.prepare_context(ContextPrepareInput {
+            session_id: "plan".into(),
+            query: "main".into(),
+            mode: ContextMode::Plan,
+            projection_budget: 16_384,
+            hints: Vec::new(),
+            observations: Vec::new(),
+        });
+        let projection = plan.plan_projection.expect("plan projection");
+        assert!(projection.complete);
+        assert_eq!(projection.coverage.indexed_files, 1);
+    }
+
+    #[test]
+    fn protocol_identity_is_v3() {
+        assert_eq!(PROTOCOL_VERSION, "cuppet.tst.v3");
     }
 
     #[test]

@@ -673,6 +673,7 @@ mod tests {
 
     #[test]
     fn token_comparison_and_redaction() {
+        assert_eq!(PROTOCOL_VERSION, "cuppet.tst.v3");
         assert!(constant_time_equal(b"abc", b"abc"));
         assert!(!constant_time_equal(b"abc", b"abd"));
         assert!(redact_error("bad sk-12345678901234567890").contains("[REDACTED]"));

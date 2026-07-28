@@ -16,7 +16,7 @@ const targets = {
 const configuration = targets[target]
 if (!configuration) throw new Error(`unsupported release target ${target}`)
 const [packageDirectory, platform, arch, libc] = configuration
-const expectedTstProtocol = 'cuppet.tst.v2'
+const expectedTstProtocol = 'cuppet.tst.v3'
 const opencodeSource = process.env.CUPPET_OPENCODE_BIN
 if (!opencodeSource) throw new Error('CUPPET_OPENCODE_BIN must point to OpenCode v1.18.4 at revision 49c69c5ed3ccf706b61b3febb43c8aaff7f8325e')
 const derivativeMarker = join(dirname(resolve(opencodeSource)), '.cuppet-derivative.json')

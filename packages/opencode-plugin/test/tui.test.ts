@@ -5,6 +5,7 @@ import CuppetTuiPlugin, {
   formatMemory,
   formatStatus,
   modelSelectionSequence,
+  nextPlanAgent,
   planMessage,
   removedMessage,
   uniqueModelRows,
@@ -73,6 +74,12 @@ test('native TUI preserves Cuppet slash commands', async () => {
   }
 })
 
+test('/plan toggles directly between native plan and build agents', () => {
+  assert.equal(nextPlanAgent('build'), 'plan')
+  assert.equal(nextPlanAgent({ name: 'plan' }), 'build')
+  assert.equal(nextPlanAgent(undefined), 'plan')
+})
+
 test('Cuppet status is formatted as a compact human-readable dialog', () => {
   const output = formatStatus({
     platform: 'vertex',
@@ -102,7 +109,7 @@ test('doctor, memory, and action results never expose raw JSON', () => {
     platform: 'darwin-arm64', node: 'v22.21.0', runtimeSource: 'package',
     opencode: { available: true, models: 254, providerCatalogSize: 172, providers: [{ connected: true }, { connected: false }] },
     vertex: { connected: true, primaryCompatibleModels: 145 },
-    tst: { protocol: 'cuppet.tst.v2', graph: { files: 93, symbols: 2445, progress: { complete: true } } },
+    tst: { protocol: 'cuppet.tst.v3', graph: { files: 93, symbols: 2445, progress: { complete: true } } },
     storage: { permissions: { project: { available: true }, global: { available: true } } },
   })
   const memory = formatMemory({ tst: {
@@ -117,5 +124,6 @@ test('doctor, memory, and action results never expose raw JSON', () => {
   assert.equal(removedMessage({ removed: 1 }), '1 memory record removed.')
   assert.equal(removedMessage(0), 'No matching memory records found.')
   assert.equal(planMessage({ enabled: true }), 'Plan mode enabled.')
+  assert.equal(planMessage({ agent: 'build', enabled: true }), 'Plan mode disabled.')
   assert.doesNotMatch(`${doctor}\n${memory}`, /[{}\[\]"]/)
 })

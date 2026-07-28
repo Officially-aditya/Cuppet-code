@@ -84,6 +84,11 @@ type TuiApi = {
   route?: {
     current?: { name?: string; params?: Record<string, unknown> }
   }
+  /** Native OpenCode agent state; supplied by the derivative TUI patch. */
+  agent?: {
+    current(): string | { id?: string; name?: string } | Promise<string | { id?: string; name?: string }>
+    set(agent: string): void | Promise<void>
+  }
   client?: {
     session?: {
       abort(input: { sessionID: string }): Promise<unknown>
@@ -419,14 +424,41 @@ const CuppetTuiPlugin: TuiPluginModule = {
         },
         {
           name: 'cuppet.plan',
-          title: 'Toggle Cuppet plan mode',
-          desc: 'Enable or disable Cuppet plan-mode budgets',
+          title: 'Switch native plan mode',
+          desc: 'Switch directly between the native plan and build agents',
           category: 'Cuppet',
           namespace: 'palette',
           slashName: 'plan',
           run: async () => {
-            await client.call('plan.toggle')
-            api.keymap.dispatchCommand('agent.list')
+            if (!api.agent?.current || !api.agent.set) {
+              api.ui.toast({
+                title: 'Cuppet plan mode',
+                variant: 'warning',
+                message: 'Native agent controls are unavailable in this TUI.',
+              })
+              return
+            }
+            try {
+              const value = await api.agent.current()
+              const current = typeof value === 'string' ? value : value.id ?? value.name ?? ''
+              const target = nextPlanAgent(current)
+              await api.agent.set(target)
+              await client.call('plan.set', {
+                agent: target,
+                ...(sessionID() ? { sessionID: sessionID() } : {}),
+              })
+              api.ui.toast({
+                title: 'Cuppet plan mode',
+                variant: 'success',
+                message: target === 'plan' ? 'Plan mode enabled.' : 'Plan mode disabled.',
+              })
+            } catch (error) {
+              api.ui.toast({
+                title: 'Cuppet plan mode',
+                variant: 'error',
+                message: error instanceof Error ? error.message : String(error),
+              })
+            }
           },
         },
         {
@@ -551,7 +583,20 @@ export function removedMessage(value: unknown): string {
 }
 
 export function planMessage(value: unknown): string {
-  return booleanValue(record(value).enabled) ? 'Plan mode enabled.' : 'Plan mode disabled.'
+  const state = record(value)
+  const enabled = state.agent === 'plan'
+    ? true
+    : state.agent === 'build'
+      ? false
+      : booleanValue(state.enabled)
+  return enabled
+    ? 'Plan mode enabled.'
+    : 'Plan mode disabled.'
+}
+
+export function nextPlanAgent(value: string | { id?: string; name?: string } | undefined): 'plan' | 'build' {
+  const current = typeof value === 'string' ? value : value?.id ?? value?.name ?? ''
+  return current === 'plan' ? 'build' : 'plan'
 }
 
 function record(value: unknown): Record<string, unknown> {

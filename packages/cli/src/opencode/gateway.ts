@@ -692,7 +692,8 @@ export class OpenCodeEventNormalizer {
       case 'session.updated': {
         const info = record(data.info ?? data.session)
         const id = sessionID ?? (typeof info.id === 'string' ? info.id : undefined)
-        return id ? [{ type: 'session', sessionID: id }] : []
+        const agent = typeof info.agent === 'string' ? info.agent : undefined
+        return id ? [{ type: 'session', sessionID: id, ...(agent ? { agent } : {}) }] : []
       }
       case 'session.error':
         return [{ type: 'error', ...(sessionID ? { sessionID } : {}), message: message(data.error) }]

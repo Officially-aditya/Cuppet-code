@@ -1,0 +1,63 @@
+diff --git a/packages/plugin/src/tui.ts b/packages/plugin/src/tui.ts
+--- a/packages/plugin/src/tui.ts
++++ b/packages/plugin/src/tui.ts
+@@ -594,5 +594,10 @@ export type TuiPluginApi = {
+     readonly current: TuiRouteCurrent
+   }
++  /** Native agent state for commands that must not open an agent picker. */
++  agent: {
++    current: () => string | undefined
++    set: (name: string) => void | Promise<void>
++  }
+   ui: {
+     Dialog: (props: TuiDialogProps) => JSX.Element
+     DialogAlert: (props: TuiDialogAlertProps) => JSX.Element
+diff --git a/packages/tui/src/plugin/adapters.tsx b/packages/tui/src/plugin/adapters.tsx
+--- a/packages/tui/src/plugin/adapters.tsx
++++ b/packages/tui/src/plugin/adapters.tsx
+@@ -35,4 +35,8 @@ type Input = {
+   renderer: TuiPluginApi["renderer"]
+   attention: TuiPluginApi["attention"]
+   Slot: TuiPluginApi["ui"]["Slot"]
++  agent: {
++    current: () => { name: string } | undefined
++    set: (name: string) => void
++  }
+ }
+@@ -203,5 +203,13 @@ export function createTuiApiAdapters(input: Input): Omit<TuiPluginApi, "lifecycle"> {
+       },
+     },
++    agent: {
++      current() {
++        return input.agent.current()?.name
++      },
++      set(name) {
++        input.agent.set(name)
++      },
++    },
+     ui: {
+       Dialog(props) {
+         return (
+diff --git a/packages/tui/src/app.tsx b/packages/tui/src/app.tsx
+--- a/packages/tui/src/app.tsx
++++ b/packages/tui/src/app.tsx
+@@ -400,6 +400,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
+       theme: themeState,
+       toast,
+       renderer,
++      agent: local.agent,
+       attention,
+       Slot: pluginRuntime.Slot,
+     }),
+diff --git a/packages/tui/src/component/prompt/index.tsx b/packages/tui/src/component/prompt/index.tsx
+--- a/packages/tui/src/component/prompt/index.tsx
++++ b/packages/tui/src/component/prompt/index.tsx
+@@ -1656,5 +1656,8 @@ export function Prompt(props: PromptProps) {
+                 )}
+               </Show>
++              <Show when={local.agent.current()?.name === "plan"}>
++                <text fg={theme.warning}>Plan mode</text>
++              </Show>
+               <Switch>
+                 <Match when={store.mode === "normal"}>
+                   <Switch>

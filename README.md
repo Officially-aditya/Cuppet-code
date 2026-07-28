@@ -102,6 +102,19 @@ tool chain and two newest turns remain verbatim. If TST is unavailable or
 cannot capture every omitted turn, Cuppet sends the full OpenCode history and
 leaves native compaction as the overflow fallback.
 
+Plan mode is native OpenCode plan mode. `/plan` switches directly between the
+current plan and build agents; it does not open the agent picker. While plan is
+active, TST v3 produces an ephemeral workspace projection containing the
+indexed directory tree, compact module dependencies, important symbol
+signatures, coverage totals, and omission counts. The model-facing plan block
+uses at most 12% of usable context (capped at 16K tokens): 70% projection, 15%
+query-specific graph, 10% STM, and 5% verified LTM. A complete projection is
+the primary map and prevents redundant explorer tasks. Unfinished indexing,
+budget omissions, or TST failure are stated explicitly and preserve explorer
+fallback. Synthetic context is never persisted in the transcript. The native
+footer shows the warning-colored `Plan mode` label only while the actual native
+agent is plan, including after resizing or session changes.
+
 ## OpenCode vs Cuppet coding benchmark
 
 The repository includes a tool-driven A/B benchmark for comparing the official

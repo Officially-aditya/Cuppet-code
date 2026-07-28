@@ -11,7 +11,7 @@ const runtimeDirectories = {
   'linux-arm64': 'runtime-linux-arm64-gnu',
   'linux-x64': 'runtime-linux-x64-gnu',
 }
-const expectedTstProtocol = 'cuppet.tst.v2'
+const expectedTstProtocol = 'cuppet.tst.v3'
 
 const runtimeDirectory = runtimeDirectories[`${process.platform}-${process.arch}`]
 if (!runtimeDirectory) throw new Error(`unsupported platform ${process.platform}-${process.arch}`)

@@ -12,6 +12,7 @@ test('read-only tool client authenticates and uses length-framed JSON-RPC', asyn
   const directory = await mkdtemp(join(temporaryRoot, 'cuppet-plugin-rpc-'))
   const socketPath = join(directory, 'tst.sock')
   const methods: string[] = []
+  let contextParameters: Record<string, unknown> | undefined
   const server = createServer((socket) => {
     let buffered = Buffer.alloc(0)
     socket.on('data', (chunk: Buffer) => {
@@ -27,7 +28,9 @@ test('read-only tool client authenticates and uses length-framed JSON-RPC', asyn
         buffered = buffered.subarray(length + 4)
         methods.push(request.method)
         if (request.method === 'initialize') assert.equal(request.params.token, 'a'.repeat(64))
-        const result = request.method === 'memory.query'
+        const result = request.method === 'context.prepare'
+          ? (contextParameters = request.params, { stm: [], ltm: [], graph: [], edges: [], plan_projection: undefined })
+          : request.method === 'memory.query'
           ? { stm: [], ltm: [{ key: 'style' }], graph: [] }
           : request.method === 'graph.locate'
             ? {
@@ -39,7 +42,7 @@ test('read-only tool client authenticates and uses length-framed JSON-RPC', asyn
               ? { query: 'dueDate', direction: 'both', depth: 2, edges: [], truncated: false }
               : request.method.startsWith('graph.')
                 ? { query: 'dueDate', nodes: [], text_matches: [], paths: [], root: '/tmp/project' }
-                : { protocol: 'cuppet.tst.v2' }
+                : { protocol: 'cuppet.tst.v3' }
         const payload = Buffer.from(JSON.stringify({ jsonrpc: '2.0', id: request.id, result }))
         const header = Buffer.alloc(4)
         header.writeUInt32BE(payload.length)
@@ -65,6 +68,15 @@ test('read-only tool client authenticates and uses length-framed JSON-RPC', asyn
     const result = await new TstToolClient(socketPath, 'a'.repeat(64)).query('session', 'style', 20)
     assert.deepEqual(result, { stm: [], ltm: [{ key: 'style' }], graph: [] })
     const client = new TstToolClient(socketPath, 'a'.repeat(64))
+    await client.prepareContext('session', 'plan this', ['api.ts'], [], 'plan', 20_000)
+    assert.deepEqual(contextParameters, {
+      session_id: 'session',
+      query: 'plan this',
+      mode: 'plan',
+      projection_budget: 16_384,
+      hints: ['api.ts'],
+      observations: [],
+    })
     await client.graphSearch('dueDate', 'games/task-tracker', 10)
     await client.graphLocate('dueDate', 'games/task-tracker', 10)
     await client.graphList('games/task-tracker', 10)
@@ -95,6 +107,8 @@ test('read-only tool client authenticates and uses length-framed JSON-RPC', asyn
     assert.deepEqual(methods, [
       'initialize',
       'memory.query',
+      'initialize',
+      'context.prepare',
       'initialize',
       'graph.search',
       'initialize',

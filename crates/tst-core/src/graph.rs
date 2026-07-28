@@ -3,7 +3,7 @@ use ignore::gitignore::Gitignore;
 use ignore::WalkBuilder;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tree_sitter::{InputEdit, Language, Node, Parser, Point, Tree};
@@ -78,6 +78,61 @@ pub struct GraphStats {
     pub symbols: usize,
     pub edges: usize,
     pub progress: IndexProgress,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct PlanCoverage {
+    pub indexing_complete: bool,
+    pub indexed_files: usize,
+    pub indexed_modules: usize,
+    pub indexed_symbols: usize,
+    pub indexed_dependencies: usize,
+    pub included_files: usize,
+    pub included_modules: usize,
+    pub included_symbols: usize,
+    pub included_dependencies: usize,
+}
+
+#[derive(Clone, Debug, Default, Serialize, PartialEq, Eq)]
+pub struct PlanOmissions {
+    pub files: usize,
+    pub modules: usize,
+    pub symbols: usize,
+    pub dependencies: usize,
+    pub unfinished_files: usize,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct PlanModule {
+    pub path: String,
+    pub imports: Vec<String>,
+    pub exports: Vec<String>,
+    pub implementations: Vec<String>,
+    pub tests: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct PlanSymbol {
+    pub path: String,
+    pub name: String,
+    pub kind: String,
+    pub signature: String,
+    pub line: usize,
+    pub column: usize,
+}
+
+/// Ephemeral, deterministic, model-facing workspace projection.  `files` is
+/// a compact directory tree (directory entries end in `/` and file entries
+/// retain their relative leaf name); modules and symbols are deliberately
+/// small projections rather than raw graph nodes or edges.
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct PlanProjection {
+    pub complete: bool,
+    pub coverage: PlanCoverage,
+    pub files: Vec<String>,
+    pub modules: Vec<PlanModule>,
+    pub symbols: Vec<PlanSymbol>,
+    pub omissions: PlanOmissions,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -214,6 +269,7 @@ pub struct CodeGraph {
     sources: HashMap<String, Vec<u8>>,
     gitignores: Vec<Gitignore>,
     progress: IndexProgress,
+    top_level_symbols: HashSet<String>,
     seen_in_build: HashSet<String>,
     in_build: bool,
 }
@@ -231,6 +287,7 @@ impl CodeGraph {
             trees: HashMap::new(),
             sources: HashMap::new(),
             progress: IndexProgress::default(),
+            top_level_symbols: HashSet::new(),
             seen_in_build: HashSet::new(),
             in_build: false,
         })
@@ -263,6 +320,7 @@ impl CodeGraph {
         };
         self.nodes = snapshot.nodes;
         self.files = snapshot.files;
+        self.top_level_symbols.clear();
         self.rebuild_edges();
         self.progress.discovered = self.files.len();
         self.progress.indexed = self.files.len();
@@ -307,7 +365,8 @@ impl CodeGraph {
 
     pub fn index_build_path(&mut self, path: &Path) {
         match self.index_file(path) {
-            Ok(_) => self.progress.indexed += 1,
+            Ok(Some(_)) => self.progress.indexed += 1,
+            Ok(None) => self.progress.skipped += 1,
             Err(_) => self.progress.skipped += 1,
         }
     }
@@ -471,6 +530,8 @@ impl CodeGraph {
             &mut parsed,
             &mut self.nodes,
             &mut occurrence,
+            &mut self.top_level_symbols,
+            true,
         );
         self.files.insert(relative.clone(), parsed);
         self.trees.insert(relative.clone(), tree);
@@ -501,6 +562,7 @@ impl CodeGraph {
     fn remove_file_nodes(&mut self, relative: &str) {
         if let Some(file) = self.files.remove(relative) {
             for id in file.node_ids {
+                self.top_level_symbols.remove(&id);
                 self.nodes.remove(&id);
             }
         }
@@ -852,6 +914,181 @@ impl CodeGraph {
         }
     }
 
+    /// Build a deterministic, ephemeral workspace projection for plan mode.
+    /// The budget is expressed in model tokens and is capped here as a second
+    /// line of defence even when a caller is buggy or stale.
+    pub fn plan_projection(&self, budget_tokens: usize) -> PlanProjection {
+        let budget_tokens = budget_tokens.min(16_384);
+        let budget_chars = budget_tokens.saturating_mul(4);
+        let mut paths: Vec<String> = self.files.keys().cloned().collect();
+        paths.sort();
+        let file_tree = compress_file_tree(&paths);
+        let (all_modules, indexed_dependencies) = self.plan_modules();
+        let all_symbols = self.plan_symbols();
+
+        let mut remaining = budget_chars;
+        let mut files = Vec::new();
+        for line in &file_tree {
+            let cost = line.chars().count().saturating_add(1);
+            if cost > remaining {
+                break;
+            }
+            files.push(line.clone());
+            remaining = remaining.saturating_sub(cost);
+        }
+        let included_files = files
+            .iter()
+            .filter(|line| !line.trim_end().ends_with('/'))
+            .count();
+
+        let mut modules = Vec::new();
+        for module in &all_modules {
+            let cost = plan_module_text(module).chars().count().saturating_add(1);
+            if cost > remaining {
+                break;
+            }
+            modules.push(module.clone());
+            remaining = remaining.saturating_sub(cost);
+        }
+        let included_dependencies = modules.iter().map(plan_module_dependency_count).sum::<usize>();
+
+        let mut symbols = Vec::new();
+        for symbol in &all_symbols {
+            let cost = plan_symbol_text(symbol).chars().count().saturating_add(1);
+            if cost > remaining {
+                break;
+            }
+            symbols.push(symbol.clone());
+            remaining = remaining.saturating_sub(cost);
+        }
+
+        let unfinished_files = self
+            .progress
+            .discovered
+            .saturating_sub(self.progress.indexed)
+            .max(self.progress.skipped);
+        let indexing_complete = self.progress.complete
+            && self.progress.skipped == 0
+            && self.progress.discovered == self.progress.indexed;
+        let omissions = PlanOmissions {
+            files: paths.len().saturating_sub(included_files),
+            modules: all_modules.len().saturating_sub(modules.len()),
+            symbols: all_symbols.len().saturating_sub(symbols.len()),
+            dependencies: indexed_dependencies.saturating_sub(included_dependencies),
+            unfinished_files,
+        };
+        let coverage = PlanCoverage {
+            indexing_complete,
+            indexed_files: paths.len(),
+            indexed_modules: all_modules.len(),
+            indexed_symbols: all_symbols.len(),
+            indexed_dependencies,
+            included_files,
+            included_modules: modules.len(),
+            included_symbols: symbols.len(),
+            included_dependencies,
+        };
+        let complete = indexing_complete
+            && omissions.files == 0
+            && omissions.modules == 0
+            && omissions.symbols == 0
+            && omissions.dependencies == 0;
+
+        PlanProjection {
+            complete,
+            coverage,
+            files,
+            modules,
+            symbols,
+            omissions,
+        }
+    }
+
+    fn plan_modules(&self) -> (Vec<PlanModule>, usize) {
+        let mut modules = BTreeMap::<String, PlanModule>::new();
+        for path in self.files.keys() {
+            modules.insert(
+                path.clone(),
+                PlanModule {
+                    path: path.clone(),
+                    imports: Vec::new(),
+                    exports: Vec::new(),
+                    implementations: Vec::new(),
+                    tests: Vec::new(),
+                },
+            );
+        }
+
+        for edge in &self.edges {
+            let Some(from) = self.nodes.get(&edge.from) else {
+                continue;
+            };
+            let Some(module) = modules.get_mut(&from.path) else {
+                continue;
+            };
+            let Some(target) = self.nodes.get(&edge.to) else {
+                continue;
+            };
+            let target = plan_node_reference(target);
+            match &edge.kind {
+                EdgeKind::Import => push_unique(&mut module.imports, target),
+                EdgeKind::Export => push_unique(&mut module.exports, target),
+                EdgeKind::Implementation => push_unique(&mut module.implementations, target),
+                EdgeKind::Test => push_unique(&mut module.tests, target),
+                EdgeKind::Definition | EdgeKind::Reference | EdgeKind::Call => {}
+            }
+        }
+
+        let modules: Vec<PlanModule> = modules
+            .into_values()
+            .map(|mut module| {
+                module.imports.sort();
+                module.exports.sort();
+                module.implementations.sort();
+                module.tests.sort();
+                module
+            })
+            .collect();
+        let dependencies = modules.iter().map(plan_module_dependency_count).sum();
+        (modules, dependencies)
+    }
+
+    fn plan_symbols(&self) -> Vec<PlanSymbol> {
+        let mut symbols: Vec<PlanSymbol> = self
+            .nodes
+            .values()
+            .filter(|node| node.kind == GraphNodeKind::Symbol)
+            .filter(|node| {
+                let exported = node.symbol_kind.starts_with("exported_");
+                let base_kind = node.symbol_kind.trim_start_matches("exported_");
+                self.top_level_symbols.contains(&node.id) || (exported && !base_kind.contains("method"))
+            })
+            .map(|node| PlanSymbol {
+                path: node.path.clone(),
+                name: node.name.clone(),
+                kind: node.symbol_kind.trim_start_matches("exported_").into(),
+                signature: node.signature.clone(),
+                line: node.span.start_row + 1,
+                column: node.span.start_column + 1,
+            })
+            .collect();
+        symbols.sort_by(|left, right| {
+            left.path
+                .cmp(&right.path)
+                .then_with(|| left.line.cmp(&right.line))
+                .then_with(|| left.column.cmp(&right.column))
+                .then_with(|| left.name.cmp(&right.name))
+                .then_with(|| left.signature.cmp(&right.signature))
+        });
+        symbols.dedup_by(|left, right| {
+            left.path == right.path
+                && left.name == right.name
+                && left.line == right.line
+                && left.column == right.column
+        });
+        symbols
+    }
+
     pub fn trace(
         &self,
         query: &str,
@@ -1165,6 +1402,8 @@ fn collect_syntax(
     parsed: &mut ParsedFile,
     nodes: &mut HashMap<String, GraphNode>,
     occurrences: &mut HashMap<(String, String), usize>,
+    top_level_symbols: &mut HashSet<String>,
+    top_level: bool,
 ) {
     let kind = node.kind();
     if is_symbol_kind(kind) {
@@ -1196,6 +1435,9 @@ fn collect_syntax(
                         span: span(node),
                     },
                 );
+                if top_level {
+                    top_level_symbols.insert(id.clone());
+                }
                 parsed.node_ids.push(id);
             }
         }
@@ -1240,6 +1482,7 @@ fn collect_syntax(
 
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
+        let child_top_level = top_level && !is_nested_scope_kind(kind);
         collect_syntax(
             child,
             source,
@@ -1249,8 +1492,112 @@ fn collect_syntax(
             parsed,
             nodes,
             occurrences,
+            top_level_symbols,
+            child_top_level,
         );
     }
+}
+
+#[derive(Default)]
+struct FileTreeNode {
+    directories: BTreeMap<String, FileTreeNode>,
+    files: BTreeSet<String>,
+}
+
+/// Compress sorted relative paths into a stable, indentation-based directory
+/// tree.  Single-child directory chains are joined (`src/api/`) so large
+/// workspaces spend tokens on file leaves rather than repeated prefixes.
+pub fn compress_file_tree(paths: &[String]) -> Vec<String> {
+    let mut root = FileTreeNode::default();
+    for path in paths {
+        let normalized = path.replace('\\', "/");
+        let mut parts = normalized.split('/').filter(|part| !part.is_empty()).peekable();
+        let mut current = &mut root;
+        while let Some(part) = parts.next() {
+            if parts.peek().is_none() {
+                current.files.insert(part.to_owned());
+            } else {
+                current = current.directories.entry(part.to_owned()).or_default();
+            }
+        }
+    }
+
+    let mut output = Vec::new();
+    render_file_tree(&root, 0, &mut output);
+    output
+}
+
+fn render_file_tree(node: &FileTreeNode, depth: usize, output: &mut Vec<String>) {
+    for (name, child) in &node.directories {
+        let mut names = vec![name.clone()];
+        let mut current = child;
+        while current.files.is_empty() && current.directories.len() == 1 {
+            let (next_name, next) = current.directories.iter().next().expect("one directory");
+            names.push(next_name.clone());
+            current = next;
+        }
+        output.push(format!("{}{}/", "  ".repeat(depth), names.join("/")));
+        render_file_tree(current, depth + 1, output);
+    }
+    for file in &node.files {
+        output.push(format!("{}{}", "  ".repeat(depth), file));
+    }
+}
+
+fn plan_node_reference(node: &GraphNode) -> String {
+    if node.kind == GraphNodeKind::Module {
+        node.path.clone()
+    } else {
+        format!("{}::{}", node.path, node.name)
+    }
+}
+
+fn push_unique(values: &mut Vec<String>, value: String) {
+    if !values.iter().any(|existing| existing == &value) {
+        values.push(value);
+    }
+}
+
+fn plan_module_dependency_count(module: &PlanModule) -> usize {
+    module.imports.len() + module.exports.len() + module.implementations.len() + module.tests.len()
+}
+
+fn plan_module_text(module: &PlanModule) -> String {
+    format!(
+        "{}|i:{}|e:{}|m:{}|t:{}",
+        module.path,
+        module.imports.join(","),
+        module.exports.join(","),
+        module.implementations.join(","),
+        module.tests.join(","),
+    )
+}
+
+fn plan_symbol_text(symbol: &PlanSymbol) -> String {
+    format!(
+        "{}:{}:{} {} {} — {}",
+        symbol.path, symbol.line, symbol.column, symbol.kind, symbol.name, symbol.signature
+    )
+}
+
+fn is_nested_scope_kind(kind: &str) -> bool {
+    is_symbol_kind(kind)
+        || matches!(
+            kind,
+            "class_body"
+                | "interface_body"
+                | "object"
+                | "object_type"
+                | "declaration_list"
+                | "block"
+                | "statement_block"
+                | "function_body"
+                | "impl_item"
+                | "type_body"
+                | "enum_body"
+                | "trait_body"
+                | "mixin_body"
+        )
 }
 
 fn language_for_path(path: &Path) -> Option<(Language, &'static str)> {
@@ -1766,5 +2113,111 @@ mod tests {
         graph2.build().unwrap();
         assert_eq!(graph2.query("newSymbol", 5).len(), 1);
         assert!(graph2.query("oldSymbol", 5).is_empty());
+    }
+
+    #[test]
+    fn plan_projection_covers_paths_compresses_tree_and_deduplicates_dependencies() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::create_dir_all(temp.path().join("src")).unwrap();
+        fs::create_dir_all(temp.path().join("tests")).unwrap();
+        fs::write(
+            temp.path().join("src/api.ts"),
+            "import { saveTask } from './store';\nexport function createTask() { return saveTask(); }\n",
+        )
+        .unwrap();
+        fs::write(
+            temp.path().join("src/store.ts"),
+            "export function saveTask() { return true; }\n",
+        )
+        .unwrap();
+        fs::write(
+            temp.path().join("tests/api.test.ts"),
+            "import { createTask } from '../src/api';\ntest('task', () => createTask());\n",
+        )
+        .unwrap();
+
+        let mut graph = CodeGraph::new(temp.path()).unwrap();
+        graph.build().unwrap();
+        let projection = graph.plan_projection(16_384);
+        assert!(projection.complete);
+        assert_eq!(projection.coverage.indexed_files, 3);
+        assert_eq!(projection.coverage.included_files, 3);
+        assert_eq!(
+            projection.files,
+            vec![
+                "src/".to_owned(),
+                "  api.ts".to_owned(),
+                "  store.ts".to_owned(),
+                "tests/".to_owned(),
+                "  api.test.ts".to_owned(),
+            ]
+        );
+        assert_eq!(projection, graph.plan_projection(16_384));
+
+        let api = projection
+            .modules
+            .iter()
+            .find(|module| module.path == "src/api.ts")
+            .unwrap();
+        assert_eq!(api.imports, vec!["src/store.ts"]);
+        assert!(api.exports.iter().any(|value| value.contains("createTask")));
+        assert_eq!(api.imports.len(), 1);
+
+        let test_module = projection
+            .modules
+            .iter()
+            .find(|module| module.path == "tests/api.test.ts")
+            .unwrap();
+        assert_eq!(test_module.tests, vec!["src/api.ts"]);
+
+        let create_task = projection
+            .symbols
+            .iter()
+            .find(|symbol| symbol.name == "createTask")
+            .unwrap();
+        assert_eq!(create_task.path, "src/api.ts");
+        assert!(create_task.line > 0 && create_task.column > 0);
+        assert!(!create_task.signature.is_empty());
+    }
+
+    #[test]
+    fn plan_projection_reports_budget_omissions_and_unfinished_indexing() {
+        let temp = tempfile::tempdir().unwrap();
+        for (name, source) in [
+            ("one.ts", "export function one() {}"),
+            ("two.ts", "export function two() {}"),
+            ("three.ts", "export function three() {}"),
+        ] {
+            fs::write(temp.path().join(name), source).unwrap();
+        }
+        let mut graph = CodeGraph::new(temp.path()).unwrap();
+        graph.build().unwrap();
+
+        let truncated = graph.plan_projection(1);
+        assert!(!truncated.complete);
+        assert!(truncated.omissions.files > 0 || truncated.omissions.modules > 0);
+        assert!(truncated.coverage.included_files < truncated.coverage.indexed_files);
+
+        let paths = graph.begin_build();
+        graph.index_build_path(paths.first().unwrap());
+        let unfinished = graph.plan_projection(16_384);
+        assert!(!unfinished.complete);
+        assert!(!unfinished.coverage.indexing_complete);
+        assert!(unfinished.omissions.unfinished_files > 0);
+    }
+
+    #[test]
+    fn plan_projection_marks_discovered_unindexable_files_incomplete() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::write(temp.path().join("valid.ts"), "export const valid = true;\n").unwrap();
+        fs::write(temp.path().join("invalid.ts"), b"export const invalid = '\0';\n").unwrap();
+
+        let mut graph = CodeGraph::new(temp.path()).unwrap();
+        graph.build().unwrap();
+        let projection = graph.plan_projection(16_384);
+
+        assert!(!projection.complete);
+        assert!(!projection.coverage.indexing_complete);
+        assert_eq!(projection.omissions.unfinished_files, 1);
     }
 }

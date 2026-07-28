@@ -308,6 +308,19 @@ export class CuppetController extends EventEmitter {
     return this.#planMode
   }
 
+  /** Synchronize the wrapper with the agent actually selected by native TUI. */
+  syncNativeAgent(agent: string, sessionID?: string): boolean {
+    if (sessionID && this.#session && sessionID !== this.#session.id) return this.#planMode
+    const enabled = agent === 'plan'
+    const changed = this.#planMode !== enabled || this.#session?.agent !== agent
+    this.#planMode = enabled
+    if (this.#session && (!sessionID || sessionID === this.#session.id)) {
+      this.#session = { ...this.#session, agent }
+    }
+    if (changed) this.#changed()
+    return enabled
+  }
+
   get planMode(): boolean {
     return this.#planMode
   }
@@ -414,7 +427,7 @@ export class CuppetController extends EventEmitter {
     this.#saveSessionEvidence()
     this.#session = await this.#gateway.createSession(this.#primary)
     this.#loadSessionEvidence(this.#session.id)
-    this.#planMode = false
+    this.#planMode = this.#session.agent === 'plan'
     this.#startUsageWindow(this.#session)
     await this.#preferences.setLastSession(this.#paths.projectID, this.#session.id)
     this.#changed()
@@ -525,6 +538,8 @@ export class CuppetController extends EventEmitter {
       primary: this.#primary ? this.#findModel(this.#primary) ?? this.#primary : undefined,
       secondary: this.#secondary ? this.#findModel(this.#secondary) ?? this.#secondary : undefined,
       foreground: { usage: this.#usage, cost: this.#cost, running: this.#running, steps: this.#stepCount },
+      planMode: this.#planMode,
+      agent: this.#session?.agent,
       background: this.#background?.stats,
       vertex: this.#vertexDiagnostics(),
       tst,
@@ -673,6 +688,10 @@ export class CuppetController extends EventEmitter {
       if (!this.#interactive) return
       await this.adoptSession(sessionID).catch(() => undefined)
       if (!this.#session || this.#session.id !== sessionID) return
+    }
+
+    if (event.type === 'session' && event.agent && event.sessionID === this.#session?.id) {
+      this.syncNativeAgent(event.agent, event.sessionID)
     }
 
     if (

@@ -1,7 +1,9 @@
 import { createConnection, type Socket } from 'node:net'
 
 const MAX_FRAME_BYTES = 16 * 1024 * 1024
-const TST_PROTOCOL_VERSION = 'cuppet.tst.v2'
+export const TST_PROTOCOL_VERSION = 'cuppet.tst.v3'
+
+export type ContextMode = 'foreground' | 'plan'
 
 export type ContextObservation = {
   key: string
@@ -41,10 +43,14 @@ export class TstToolClient {
     query: string,
     hints: string[],
     observations: ContextObservation[],
+    mode: ContextMode = 'foreground',
+    projectionBudget = 0,
   ): Promise<unknown> {
     return this.#request('context.prepare', {
       session_id: sessionID,
       query,
+      mode,
+      projection_budget: Math.min(Math.max(Math.floor(projectionBudget), 0), 16_384),
       hints: hints.slice(0, 32),
       observations: observations.slice(0, 256),
     })

@@ -2,6 +2,14 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { OpenCodeEventNormalizer } from '../src/opencode/gateway.js'
 
+test('native session updates preserve the selected agent for controller synchronization', () => {
+  const normalizer = new OpenCodeEventNormalizer()
+  assert.deepEqual(normalizer.normalize(event('session.updated', {
+    sessionID: 'session',
+    info: { id: 'session', agent: 'plan' },
+  })), [{ type: 'session', sessionID: 'session', agent: 'plan' }])
+})
+
 test('legacy OpenCode message events stream assistant text without echoing user prompts or duplicating snapshots', () => {
   const normalizer = new OpenCodeEventNormalizer()
 

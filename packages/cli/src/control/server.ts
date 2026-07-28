@@ -129,7 +129,19 @@ export class CuppetControlServer {
         await this.#controller.undo()
         return { undone: true }
       case 'plan.toggle':
-        return { enabled: this.#controller.togglePlanMode() }
+        return {
+          enabled: this.#controller.syncNativeAgent(
+            this.#controller.snapshot.planMode ? 'build' : 'plan',
+            optionalStringParam(params, 'sessionID'),
+          ),
+          agent: this.#controller.snapshot.planMode ? 'plan' : 'build',
+        }
+      case 'plan.set': {
+        const agent = stringParam(params, 'agent')
+        if (agent !== 'plan' && agent !== 'build') throw new Error('plan.set agent must be plan or build')
+        const enabled = this.#controller.syncNativeAgent(agent, optionalStringParam(params, 'sessionID'))
+        return { enabled, agent }
+      }
       case 'session.adopt': return this.#controller.adoptSession(stringParam(params, 'sessionID'))
       case 'session.list': return this.#controller.listSessions()
       default: throw new Error(`unknown control method ${method}`)
@@ -159,6 +171,13 @@ export function createControlAddress(paths: RuntimePaths): ControlAddress {
 function stringParam(params: Record<string, unknown>, name: string): string {
   const value = params[name]
   if (typeof value !== 'string' || !value.trim()) throw new Error(`${name} is required`)
+  return value.trim()
+}
+
+function optionalStringParam(params: Record<string, unknown>, name: string): string | undefined {
+  const value = params[name]
+  if (value === undefined) return undefined
+  if (typeof value !== 'string' || !value.trim()) throw new Error(`${name} must be a non-empty string`)
   return value.trim()
 }
 

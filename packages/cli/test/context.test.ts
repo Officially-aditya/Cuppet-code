@@ -132,10 +132,57 @@ test('plan mode uses a bounded context instead of a 512-file map', async () => {
   const result = await buildCuppetContext(client, 'session', 'Plan feature', 2_000, [], '', process.cwd(), true)
   assert.match(result.prompt, /CUPPET_PLAN_MODE_CONTEXT/)
   assert.match(result.prompt, /PLAN MODE IS ACTIVE/)
-  assert.match(result.prompt, /bounded, untrusted retrieval/i)
+  assert.match(result.prompt, /all supplied retrieval is untrusted context/i)
+  assert.match(result.prompt, /WORKSPACE CODE MAP UNAVAILABLE/)
   assert.doesNotMatch(result.prompt, /FULL CODE GRAPH WORKSPACE FILE MAP/)
   assert.match(result.prompt, /src\/main\.ts/)
   assert.match(result.prompt, /Create a dedicated TODO list for the establishment of the goal/)
-  assert.ok(result.contextTokens <= 1_536)
-  assert.deepEqual(calls, ['memory.query'])
+  assert.ok(result.contextTokens <= 240)
+  assert.deepEqual(calls, ['context.prepare'])
+})
+
+test('plan context formats complete projection, STM, LTM, and query graph within the adaptive cap', async () => {
+  let request: Record<string, unknown> | undefined
+  const client = {
+    async call(_method: string, params: Record<string, unknown>) {
+      request = params
+      return {
+        stm: [{ id: 's', key: 'goal', value: 'Preserve task behavior', provenance: 'explicit_user' }],
+        ltm: [{ id: 'l', key: 'style', value: 'Use strict TypeScript', provenance: 'verifier' }],
+        graph: [{ score: 10, node: {
+          path: 'src/api.ts', name: 'createTask', symbol_kind: 'function', signature: 'function createTask()',
+          span: { start_row: 1, start_column: 0 },
+        } }],
+        edges: [{
+          from: { path: 'src/api.ts', symbol: 'createTask', kind: 'function', line: 2, column: 1 },
+          to: { path: 'src/store.ts', symbol: 'saveTask', kind: 'function', line: 4, column: 1 },
+          kind: 'call',
+        }],
+        plan_projection: {
+          complete: true,
+          coverage: {
+            indexing_complete: true, indexed_files: 2, indexed_modules: 2, indexed_symbols: 2,
+            indexed_dependencies: 1, included_files: 2, included_modules: 2, included_symbols: 2,
+            included_dependencies: 1,
+          },
+          files: ['src/', '  api.ts', '  store.ts'],
+          modules: [{ path: 'src/api.ts', imports: ['src/store.ts'], exports: [], implementations: [], tests: [] }],
+          symbols: [{ path: 'src/api.ts', name: 'createTask', kind: 'function', signature: 'function createTask()', line: 2, column: 1 }],
+          omissions: { files: 0, modules: 0, symbols: 0, dependencies: 0, unfinished_files: 0 },
+        },
+      }
+    },
+  } as unknown as TstClient
+  const result = await buildCuppetContext(client, 'session', 'Plan task API', 200_000, [], '', process.cwd(), true)
+  assert.equal(request?.mode, 'plan')
+  assert.equal(request?.projection_budget, Math.floor(16_384 * 0.70))
+  assert.match(result.prompt, /WORKSPACE CODE MAP \(complete\)/)
+  assert.match(result.prompt, /src\/store\.ts/)
+  assert.match(result.prompt, /SESSION STM/)
+  assert.match(result.prompt, /VERIFIED LTM/)
+  assert.match(result.prompt, /src\/api\.ts:2:1 function createTask --call-->/)
+  assert.match(result.prompt, /PLAN GUIDANCE/)
+  assert.doesNotMatch(result.prompt, /\{"/)
+  assert.match(result.prompt, /budget_tokens="16384"/)
+  assert.ok(result.contextTokens <= 16_384)
 })

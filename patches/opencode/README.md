@@ -44,3 +44,9 @@ canonical Cuppet slash commands instead of hidden helper action names.
 metadata before SSE/HTTP delivery so optional tool fields cannot suppress the
 native dialog. It also keeps reconciliation polling bounded while a turn is
 active.
+
+`0014-cuppet-native-plan-mode.patch` exposes native agent current/set
+operations to the Cuppet TUI plugin, makes `/plan` switch directly between
+plan and build, and adds the reactive warning-colored `Plan mode` footer label.
+The label is derived from the native agent store, so it remains correct across
+session switching and terminal resizing.

@@ -104,7 +104,7 @@ export type AgentEvent =
   | { type: 'permission'; request: PermissionRequest }
   | { type: 'usage'; sessionID: string; usage: TokenUsage; cost: number }
   | { type: 'idle'; sessionID: string }
-  | { type: 'session'; sessionID: string }
+  | { type: 'session'; sessionID: string; agent?: string }
   | { type: 'compaction'; sessionID: string; phase: 'started' | 'ended' }
   | { type: 'error'; sessionID?: string; message: string }
   | { type: 'step-limit'; sessionID: string; steps: number }

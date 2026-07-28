@@ -1,1 +1,1 @@
-{"schema":1,"platform":"darwin","arch":"arm64","libc":null,"opencodeVersion":"1.18.4","opencodeRevision":"49c69c5ed3ccf706b61b3febb43c8aaff7f8325e","sdkVersion":"1.18.4","tstProtocol":"cuppet.tst.v2","patchSetDigest":"pending","files":{}}
+{"schema":1,"platform":"darwin","arch":"arm64","libc":null,"opencodeVersion":"1.18.4","opencodeRevision":"49c69c5ed3ccf706b61b3febb43c8aaff7f8325e","sdkVersion":"1.18.4","tstProtocol":"cuppet.tst.v3","patchSetDigest":"pending","files":{}}

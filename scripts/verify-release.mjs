@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto'
 import { readdir, readFile, stat } from 'node:fs/promises'
+import { spawn } from 'node:child_process'
 import { join, resolve } from 'node:path'
 
 const root = resolve(process.argv[2] ?? 'artifacts')
+const expectedTstProtocol = 'cuppet.tst.v3'
 const expectedArgument = process.argv.find((argument) => argument.startsWith('--expected='))
 const expectedCount = Number(expectedArgument?.slice('--expected='.length) ?? 4)
 if (!Number.isInteger(expectedCount) || expectedCount < 1) throw new Error('--expected must be a positive integer')
@@ -24,7 +26,7 @@ for (const manifestPath of manifests) {
     throw new Error(`version mismatch in ${manifestPath}`)
   }
   if (!/^[a-f0-9]{64}$/.test(manifest.patchSetDigest ?? '')) throw new Error(`invalid derivative patch digest in ${manifestPath}`)
-  if (manifest.tstProtocol !== 'cuppet.tst.v2') throw new Error(`protocol mismatch in ${manifestPath}`)
+  if (manifest.tstProtocol !== expectedTstProtocol) throw new Error(`protocol mismatch in ${manifestPath}`)
   const platformKey = `${manifest.platform}-${manifest.arch}-${manifest.libc ?? 'native'}`
   if (platformKeys.has(platformKey)) throw new Error(`duplicate platform package ${platformKey}`)
   platformKeys.add(platformKey)
@@ -39,6 +41,10 @@ for (const manifestPath of manifests) {
     if (relative.startsWith('bin/') && ((await stat(path)).mode & 0o111) === 0) {
       throw new Error(`binary is not executable: ${path}`)
     }
+  }
+  const daemonProtocol = (await capture(join(directory, 'bin/tst-daemon'), ['--protocol'])).trim()
+  if (daemonProtocol !== expectedTstProtocol) {
+    throw new Error(`TST daemon protocol mismatch in ${directory}: expected ${expectedTstProtocol}, received ${daemonProtocol || 'no identity'}`)
   }
   const marker = JSON.parse(await readFile(join(directory, 'bin/.cuppet-derivative.json'), 'utf8'))
   if (
@@ -71,4 +77,18 @@ async function find(directory, name) {
     else if (entry.name === name) output.push(path)
   }
   return output
+}
+
+function capture(command, arguments_) {
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn(command, arguments_, { stdio: ['ignore', 'pipe', 'pipe'] })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', (chunk) => (stdout += chunk.toString('utf8')))
+    child.stderr.on('data', (chunk) => (stderr += chunk.toString('utf8')))
+    child.once('error', reject)
+    child.once('exit', (code) => code === 0
+      ? resolvePromise(stdout)
+      : reject(new Error(`${command} exited ${code}: ${stderr.trim()}`)))
+  })
 }

@@ -192,6 +192,38 @@ test('pending batches recover from the private project store after a restart', a
   }
 })
 
+test('turn context remains ephemeral and can create only session-scoped candidates', async () => {
+  const directory = await temporaryDirectory()
+  const gateway = new FakeGateway({ candidateScope: 'project' })
+  const tst = new FakeTst()
+  const worker = new BackgroundWorker({
+    gateway: gateway as never,
+    tst: tst as never,
+    model,
+    projectStore: directory,
+    idleDelayMs: 1,
+    cooldownMs: 0,
+  })
+  try {
+    await worker.ready()
+    await worker.recordTurnContext('foreground', 'Requirement: preserve native TUI behavior')
+    worker.foregroundIdle('foreground')
+    await waitFor(() => worker.stats.completed === 1)
+
+    const observation = tst.calls.find((call) => call.method === 'memory.observe')
+    assert.equal(observation?.params.scope, 'session', 'unverified turn context must not become project memory')
+
+    await worker.close()
+    const pending = JSON.parse(await readFile(join(directory, 'background-pending.json'), 'utf8')) as {
+      batches: unknown[]
+    }
+    assert.deepEqual(pending.batches, [], 'raw turn context must not survive a restart')
+  } finally {
+    await worker.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 class FakeGateway {
   readonly prompts: string[] = []
   readonly sessions = new Map<string, { tokens: TokenUsage; cost: number }>()
@@ -201,12 +233,20 @@ class FakeGateway {
   promptFailures: number
   invalidSchema: boolean
   createDelayMs: number
+  candidateScope: 'session' | 'project'
 
-  constructor(options: { holdWait?: boolean; promptFailures?: number; invalidSchema?: boolean; createDelayMs?: number } = {}) {
+  constructor(options: {
+    holdWait?: boolean
+    promptFailures?: number
+    invalidSchema?: boolean
+    createDelayMs?: number
+    candidateScope?: 'session' | 'project'
+  } = {}) {
     this.holdWait = options.holdWait ?? false
     this.promptFailures = options.promptFailures ?? 0
     this.invalidSchema = options.invalidSchema ?? false
     this.createDelayMs = options.createDelayMs ?? 0
+    this.candidateScope = options.candidateScope ?? 'project'
   }
 
   async createSession() {
@@ -244,7 +284,12 @@ class FakeGateway {
     return [this.invalidSchema
       ? 'not structured output'
       : JSON.stringify({
-          candidates: [{ key: 'verified signal', value: 'durable candidate', kind: 'concept_anchor' }],
+          candidates: [{
+            key: 'verified signal',
+            value: 'durable candidate',
+            kind: 'concept_anchor',
+            scope: this.candidateScope,
+          }],
         })]
   }
 
@@ -256,8 +301,10 @@ class FakeGateway {
 
 class FakeTst {
   #nextID = 0
+  readonly calls: Array<{ method: string; params: Record<string, unknown> }> = []
 
-  async call<T>(method: string): Promise<T> {
+  async call<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
+    this.calls.push({ method, params })
     if (method === 'memory.observe') return { id: `memory-${++this.#nextID}` } as T
     return { recorded: true } as T
   }

@@ -24,7 +24,7 @@ for (const manifestPath of manifests) {
     throw new Error(`version mismatch in ${manifestPath}`)
   }
   if (!/^[a-f0-9]{64}$/.test(manifest.patchSetDigest ?? '')) throw new Error(`invalid derivative patch digest in ${manifestPath}`)
-  if (manifest.tstProtocol !== 'cuppet.tst.v1') throw new Error(`protocol mismatch in ${manifestPath}`)
+  if (manifest.tstProtocol !== 'cuppet.tst.v2') throw new Error(`protocol mismatch in ${manifestPath}`)
   const platformKey = `${manifest.platform}-${manifest.arch}-${manifest.libc ?? 'native'}`
   if (platformKeys.has(platformKey)) throw new Error(`duplicate platform package ${platformKey}`)
   platformKeys.add(platformKey)

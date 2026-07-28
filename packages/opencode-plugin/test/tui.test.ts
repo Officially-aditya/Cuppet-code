@@ -26,11 +26,11 @@ test('native TUI preserves Cuppet slash commands', async () => {
   const previousToken = process.env.CUPPET_CONTROL_TOKEN
   process.env.CUPPET_CONTROL_SOCKET = '/tmp/cuppet-test-control.sock'
   process.env.CUPPET_CONTROL_TOKEN = 'test-token'
-  const layers: Array<{ commands: Array<{ slashName?: string; slashAliases?: string[] }> }> = []
+  const layers: Array<{ commands: Array<{ name?: string; slashName?: string; slashAliases?: string[] }> }> = []
   try {
     await CuppetTuiPlugin.tui({
       keymap: {
-        registerLayer(layer: { commands: Array<{ slashName?: string; slashAliases?: string[] }> }) {
+        registerLayer(layer: { commands: Array<{ name?: string; slashName?: string; slashAliases?: string[] }> }) {
           layers.push(layer)
           return () => {}
         },
@@ -53,25 +53,22 @@ test('native TUI preserves Cuppet slash commands', async () => {
     'status',
     'doctor',
     'memory',
-    'memory-remember',
-    'memory-forget',
-    'memory-clear',
     'background',
-    'background-pause',
-    'background-resume',
     'platform',
     'login',
     'model',
     'effort',
     'steer',
-    'steer-interrupt',
     'abort',
     'plan',
-    'plan-agent',
     'compact',
     'undo',
   ]) assert.ok(names.includes(name), `missing /${name}`)
-  for (const removed of ['cuppet-status', 'cuppet-compact', 'cuppet-undo']) {
+  for (const removed of [
+    'cuppet-status', 'cuppet-compact', 'cuppet-undo',
+    'memory-remember', 'memory-forget', 'memory-clear',
+    'background-pause', 'background-resume', 'steer-interrupt', 'plan-agent',
+  ]) {
     assert.equal(names.includes(removed), false, `unexpected /${removed}`)
   }
 })
@@ -105,7 +102,7 @@ test('doctor, memory, and action results never expose raw JSON', () => {
     platform: 'darwin-arm64', node: 'v22.21.0', runtimeSource: 'package',
     opencode: { available: true, models: 254, providerCatalogSize: 172, providers: [{ connected: true }, { connected: false }] },
     vertex: { connected: true, primaryCompatibleModels: 145 },
-    tst: { protocol: 'cuppet.tst.v1', graph: { files: 93, symbols: 2445, progress: { complete: true } } },
+    tst: { protocol: 'cuppet.tst.v2', graph: { files: 93, symbols: 2445, progress: { complete: true } } },
     storage: { permissions: { project: { available: true }, global: { available: true } } },
   })
   const memory = formatMemory({ tst: {

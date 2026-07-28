@@ -22,6 +22,7 @@ import type {
 import { totalTokenUsage } from './usage.js'
 import type { TstClient } from './tst/client.js'
 import type { TstNotification } from './tst/client.js'
+import { redact } from './runtime/logger.js'
 
 const emptyUsage = (): TokenUsage => ({ input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 })
 
@@ -82,6 +83,8 @@ export class CuppetController extends EventEmitter {
   #recentSymbols: string[] = []
   #activeDiff = ''
   #sessionEvidence = new Map<string, SessionEvidence>()
+  #memoryObservationFailures = 0
+  #lastMemoryObservationError: string | undefined
   #unsubscribe: (() => void) | undefined
   #unsubscribeTst: (() => void) | undefined
   #unsubscribeTstDisconnect: (() => void) | undefined
@@ -411,6 +414,7 @@ export class CuppetController extends EventEmitter {
     this.#saveSessionEvidence()
     this.#session = await this.#gateway.createSession(this.#primary)
     this.#loadSessionEvidence(this.#session.id)
+    this.#planMode = false
     this.#startUsageWindow(this.#session)
     await this.#preferences.setLastSession(this.#paths.projectID, this.#session.id)
     this.#changed()
@@ -427,6 +431,7 @@ export class CuppetController extends EventEmitter {
     this.#saveSessionEvidence()
     this.#session = session
     this.#loadSessionEvidence(session.id)
+    this.#planMode = session.agent === 'plan'
     this.#startUsageWindow(session)
     await this.#preferences.setLastSession(this.#paths.projectID, sessionID)
     this.#changed()
@@ -440,6 +445,7 @@ export class CuppetController extends EventEmitter {
     this.#saveSessionEvidence()
     this.#session = session
     this.#loadSessionEvidence(session.id)
+    this.#planMode = session.agent === 'plan'
     this.#startUsageWindow(session)
     if (session.model) {
       const model = this.#findModel(session.model)
@@ -522,6 +528,10 @@ export class CuppetController extends EventEmitter {
       background: this.#background?.stats,
       vertex: this.#vertexDiagnostics(),
       tst,
+      memoryObservations: {
+        failures: this.#memoryObservationFailures,
+        lastError: this.#lastMemoryObservationError,
+      },
     }
   }
 
@@ -568,6 +578,10 @@ export class CuppetController extends EventEmitter {
       },
       vertex: this.#vertexDiagnostics(),
       tst: this.#tstAvailable && this.#tst ? await this.#tst.call('status') : { available: false },
+      memoryObservations: {
+        failures: this.#memoryObservationFailures,
+        lastError: this.#lastMemoryObservationError,
+      },
       storage: {
         project: this.#paths.projectStore,
         opencode: this.#paths.opencode.data,
@@ -710,9 +724,10 @@ export class CuppetController extends EventEmitter {
             session_id: event.sessionID,
             key: `action:${name}:${pathStr.slice(0, 60)}`,
             value: `Executed ${name}${pathStr ? ` on ${pathStr}` : ''}`,
-            kind: 'workflow',
+            kind: 'concept_anchor',
             scope: 'session',
-          }).catch(() => undefined)
+            provenance: 'tool',
+          }).catch((error) => this.#recordMemoryObservationFailure(error))
         }
         if (isValidationTool(name, event.input)) {
           await this.#background?.recordSuccessfulValidation(event.sessionID, validationReference(name, event.input))
@@ -752,6 +767,20 @@ export class CuppetController extends EventEmitter {
         this.#syncUsage(refreshed)
       }
       if (this.#tstAvailable && this.#tst) {
+        const observation = await this.#gateway.messages(event.sessionID)
+          .then(latestTurnObservation)
+          .catch(() => undefined)
+        if (observation) {
+          await this.#tst.call('memory.observe', {
+            session_id: event.sessionID,
+            key: observation.key,
+            value: observation.value,
+            kind: 'concept_anchor',
+            scope: 'session',
+            provenance: 'model_candidate',
+          }).catch((error) => this.#recordMemoryObservationFailure(error))
+          await this.#background?.recordTurnContext(event.sessionID, observation.value)
+        }
         await this.#tst
           .call('turn.completed', { session_id: event.sessionID })
           .then(() => this.#tst?.call('flush'))
@@ -772,6 +801,12 @@ export class CuppetController extends EventEmitter {
     this.#usageBaseline = { ...session.tokens }
     this.#costBaseline = session.cost
     this.#usageSessionID = session.id
+  }
+
+  #recordMemoryObservationFailure(error: unknown): void {
+    this.#memoryObservationFailures += 1
+    this.#lastMemoryObservationError = redact(error instanceof Error ? error.message : String(error)).slice(0, 300)
+    this.#changed()
   }
 
   #saveSessionEvidence(): void {
@@ -873,6 +908,49 @@ function validationReference(name: string, input: unknown): string {
     if (typeof value[key] === 'string') return `${name}: ${value[key]}`
   }
   return name
+}
+
+function latestTurnObservation(messages: unknown[]): { key: string; value: string } | undefined {
+  const normalized = messages.map((item) => item && typeof item === 'object' ? item as Record<string, unknown> : {})
+  let userIndex = -1
+  for (let index = normalized.length - 1; index >= 0; index -= 1) {
+    const info = recordValue(normalized[index]?.info)
+    if (info.role === 'user') {
+      userIndex = index
+      break
+    }
+  }
+  if (userIndex < 0) return undefined
+  const user = normalized[userIndex]!
+  const userInfo = recordValue(user.info)
+  const request = messagePartText(user)
+  const outcome = normalized
+    .slice(userIndex + 1)
+    .filter((message) => recordValue(message.info).role === 'assistant')
+    .map(messagePartText)
+    .filter(Boolean)
+    .join(' ')
+  const value = redact([
+    request ? `Requirement: ${request}` : '',
+    outcome ? `Outcome: ${outcome}` : '',
+  ].filter(Boolean).join('\n')).replace(/\s+/g, ' ').trim().slice(0, 1_600)
+  if (!value) return undefined
+  const messageID = typeof userInfo.id === 'string' ? userInfo.id : String(userIndex)
+  return { key: `turn:${messageID}`.slice(0, 120), value }
+}
+
+function messagePartText(message: Record<string, unknown>): string {
+  if (!Array.isArray(message.parts)) return ''
+  return message.parts.flatMap((part) => {
+    const value = recordValue(part)
+    return value.type === 'text' && typeof value.text === 'string' && value.synthetic !== true
+      ? [value.text]
+      : []
+  }).join(' ')
+}
+
+function recordValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 }
 
 async function inspectPath(path: string, accessMode: number): Promise<Record<string, unknown>> {

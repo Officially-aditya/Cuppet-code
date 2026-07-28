@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { readFile, writeFile } from 'node:fs/promises'
 import { TstToolClient } from './rpc.js'
+import { transformCuppetModelContext } from './context.js'
 
 type ToolContext = { sessionID: string }
 
@@ -127,33 +128,12 @@ export const CuppetMemoryPlugin = async () => ({
       },
     },
   },
-  'experimental.chat.system.transform': async (input: unknown, output: unknown) => {
-    await injectEphemeralContext(input, output)
+  'experimental.chat.messages.transform': async (input: unknown, output: unknown) => {
+    const client = createToolClient()
+    if (typeof client === 'string') return
+    await transformCuppetModelContext(input, output, client)
   },
 })
-
-async function injectEphemeralContext(input: unknown, output: unknown): Promise<void> {
-  const request = asRecord(input)
-  const target = asRecord(output)
-  if (request.agent === 'cuppet-background') return
-  const sessionID = typeof request.sessionID === 'string' ? request.sessionID : 'unknown-session'
-  const system = Array.isArray(target.system) ? target.system : undefined
-  if (!system || system.some((item) => typeof item === 'string' && item.includes('<CUPPET_CONTEXT'))) return
-  const client = createToolClient()
-  if (typeof client === 'string') return
-  const query = typeof request.prompt === 'string' && request.prompt.trim()
-    ? request.prompt.trim()
-    : 'current workspace task'
-  const result = await client.query(sessionID, query, 20).catch(() => undefined)
-  if (!result) return
-  const serialized = JSON.stringify(result)
-  if (!serialized || serialized === '{}') return
-  const budget = request.agent === 'plan' ? 1_536 : 768
-  const availableCharacters = Math.max(0, budget * 4 - 120)
-  system.push(
-    `<CUPPET_CONTEXT trust="untrusted" ephemeral="true" budget_tokens="${budget}">\n${serialized.slice(0, availableCharacters)}\n</CUPPET_CONTEXT>`,
-  )
-}
 
 function createToolClient(): TstToolClient | string {
   const socket = process.env.CUPPET_TST_SOCKET

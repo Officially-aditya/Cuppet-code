@@ -22,3 +22,20 @@ memory, and TST status action while hiding the superseded upstream dialog.
 `0008-cuppet-permission-recovery.patch` keeps native permission prompts reliable
 when the attached TUI misses an SSE event. Pending requests are reconciled from
 the private server while a session is active; Cuppet never auto-approves them.
+
+`0009-cuppet-model-context-hook.patch` gives Cuppet a request-scoped,
+model-facing clone of foreground history together with the active session,
+agent, model, phase, and context budget. Native persistence and tool processing
+continue to use the untouched message list.
+
+`0010-cuppet-model-effort-dialog.patch` preserves the pre-migration selection
+sequence: choosing any model with advertised effort variants always opens the
+native effort dialog, even when the previous effort remains compatible.
+
+`0011-cuppet-native-mermaid.patch` connects compact Cuppet flowchart rendering
+to OpenTUI's actual transcript renderer. Unsupported Mermaid remains the
+original fenced source without data loss; Markdown tables continue through the
+native grid renderer.
+
+`0012-cuppet-canonical-command-tips.patch` keeps home-page guidance on the
+canonical Cuppet slash commands instead of hidden helper action names.

@@ -1,6 +1,15 @@
 import { createConnection, type Socket } from 'node:net'
 
 const MAX_FRAME_BYTES = 16 * 1024 * 1024
+const TST_PROTOCOL_VERSION = 'cuppet.tst.v2'
+
+export type ContextObservation = {
+  key: string
+  value: string
+  kind: 'token_statistics' | 'concept_anchor' | 'structure_pattern' | 'behavioral_claim' | 'preference'
+  provenance: 'explicit_user' | 'verifier' | 'model_candidate' | 'tool'
+  pinned?: boolean
+}
 
 type RpcResponse<T> = {
   jsonrpc: '2.0'
@@ -24,6 +33,20 @@ export class TstToolClient {
       session_id: sessionID,
       query,
       limit: Math.min(Math.max(limit, 1), 40),
+    })
+  }
+
+  async prepareContext(
+    sessionID: string,
+    query: string,
+    hints: string[],
+    observations: ContextObservation[],
+  ): Promise<unknown> {
+    return this.#request('context.prepare', {
+      session_id: sessionID,
+      query,
+      hints: hints.slice(0, 32),
+      observations: observations.slice(0, 256),
     })
   }
 
@@ -87,7 +110,12 @@ export class TstToolClient {
   async #request(method: string, params: unknown): Promise<unknown> {
     const socket = await connect(this.#socketPath)
     try {
-      await this.#call(socket, 'initialize', { token: this.#token })
+      const initialized = await this.#call(socket, 'initialize', { token: this.#token }) as { protocol?: string }
+      if (initialized.protocol !== TST_PROTOCOL_VERSION) {
+        throw new Error(
+          `TST protocol mismatch: expected ${TST_PROTOCOL_VERSION}, received ${initialized.protocol ?? 'unknown'}`,
+        )
+      }
       return await this.#call(socket, method, params)
     } finally {
       socket.destroy()

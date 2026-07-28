@@ -172,6 +172,32 @@ impl ShortTermMemory {
         scored.into_iter().take(limit).map(|(_, entry)| entry).collect()
     }
 
+    pub fn query_with_recent(
+        &mut self,
+        query: &str,
+        limit: usize,
+        recent_fallback: usize,
+    ) -> Vec<MemoryRecord> {
+        let mut result = self.query(query, limit);
+        if result.len() >= limit || recent_fallback == 0 {
+            return result;
+        }
+        let existing: std::collections::HashSet<String> =
+            result.iter().map(|record| record.id.clone()).collect();
+        let mut recent: Vec<MemoryRecord> = self
+            .entries()
+            .filter(|record| !existing.contains(&record.id))
+            .cloned()
+            .collect();
+        recent.sort_by(|left, right| right.updated_ms.cmp(&left.updated_ms));
+        result.extend(
+            recent
+                .into_iter()
+                .take(recent_fallback.min(limit.saturating_sub(result.len()))),
+        );
+        result
+    }
+
     pub fn entries(&self) -> impl Iterator<Item = &MemoryRecord> {
         self.slots.iter().filter_map(|slot| slot.entry.as_ref())
     }

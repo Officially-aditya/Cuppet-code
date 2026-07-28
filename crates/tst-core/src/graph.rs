@@ -618,7 +618,11 @@ impl CodeGraph {
         let terms: Vec<String> = query
             .to_lowercase()
             .split_whitespace()
-            .map(ToOwned::to_owned)
+            .map(|term| {
+                term.trim_matches(|c: char| !c.is_alphanumeric() && c != '/' && c != '.' && c != '_')
+                    .to_owned()
+            })
+            .filter(|term| graph_query_term(term))
             .collect();
 
         // Identify spatio-temporal active paths from query terms or known graph files
@@ -1036,6 +1040,44 @@ impl CodeGraph {
         }
         ignored
     }
+}
+
+fn graph_query_term(term: &str) -> bool {
+    if term.contains('/') || term.contains('.') || term.contains('_') {
+        return true;
+    }
+    if term.len() < 3 {
+        return false;
+    }
+    !matches!(
+        term,
+        "and"
+            | "are"
+            | "but"
+            | "can"
+            | "for"
+            | "from"
+            | "has"
+            | "have"
+            | "how"
+            | "into"
+            | "its"
+            | "not"
+            | "our"
+            | "that"
+            | "the"
+            | "then"
+            | "this"
+            | "use"
+            | "was"
+            | "what"
+            | "when"
+            | "where"
+            | "which"
+            | "with"
+            | "you"
+            | "your"
+    )
 }
 
 fn normalize_prefix(prefix: Option<&str>) -> String {
@@ -1545,6 +1587,7 @@ mod tests {
                 && edge.to.symbol == "addTask"
                 && edge.to.line > 0
         }));
+        assert!(graph.query("the and with this", 10).is_empty());
     }
 
     #[test]

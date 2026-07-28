@@ -11,8 +11,8 @@ at revision `49c69c5ed3ccf706b61b3febb43c8aaff7f8325e`. Numbered patches live in
 [`patches/opencode/`](patches/opencode/) and are applied in a temporary detached
 worktree. Provider credentials, tools,
 sessions, model routing, diffs, permissions, compaction, and undo stay inside
-OpenCode. Cuppet stores only non-secret UI/model selections and verified
-memory records.
+OpenCode. Cuppet stores non-secret UI/model selections, bounded in-memory
+session continuity records, and verified durable project/global memory.
 
 ## Requirements
 
@@ -86,6 +86,21 @@ observes and adopts sessions created by the TUI. This preserves
 the mature Google Vertex, Azure, Gemini, Anthropic, and OpenAI adapters while
 OpenCode's v2 runner supports a smaller adapter set. No provider SDK or
 credential store is implemented in Cuppet.
+
+### Model context policy
+
+The complete transcript remains in OpenCode. Before a foreground request is
+sent to a model, the derived runtime gives the Cuppet server plugin a detached
+model-facing copy. Cuppet queries TST with the actual current prompt and recent
+file/symbol hints, then prepends a bounded, untrusted block containing relevant
+session STM, verified LTM, and Tree-sitter graph nodes and dependency edges.
+The block is never written to transcript history.
+
+When verbatim history exceeds half of the model's usable context, Cuppet may
+replace only whole older turns with retrieved continuity records. The active
+tool chain and two newest turns remain verbatim. If TST is unavailable or
+cannot capture every omitted turn, Cuppet sends the full OpenCode history and
+leaves native compaction as the overflow fallback.
 
 ## OpenCode vs Cuppet coding benchmark
 

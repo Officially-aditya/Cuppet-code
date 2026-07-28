@@ -1,0 +1,96 @@
+diff --git a/packages/plugin/src/index.ts b/packages/plugin/src/index.ts
+index 5353d5553..6a9535f8b 100644
+--- a/packages/plugin/src/index.ts
++++ b/packages/plugin/src/index.ts
+@@ -280,7 +280,16 @@ export interface Hooks {
+     },
+   ) => Promise<void>
+   "experimental.chat.messages.transform"?: (
+-    input: {},
++    input: {
++      sessionID: string
++      agent: string
++      model: Model
++      phase: "foreground" | "compaction"
++      history: {
++        estimatedTokens: number
++        usableTokens: number
++      }
++    },
+     output: {
+       messages: {
+         info: Message
+diff --git a/packages/opencode/src/session/prompt.ts b/packages/opencode/src/session/prompt.ts
+index b12340e0f..859a10f7b 100644
+--- a/packages/opencode/src/session/prompt.ts
++++ b/packages/opencode/src/session/prompt.ts
+@@ -49,5 +49,7 @@ import { SessionReminders } from "./reminders"
+ import { SessionTools } from "./tools"
+ import { LLMEvent } from "@opencode-ai/llm"
++import { Token } from "@/util/token"
++import { usable } from "./overflow"
+ 
+ // @ts-ignore
+ globalThis.AI_SDK_LOG_WARNINGS = false
+@@ -1252,14 +1254,29 @@ const layer = Layer.effect(
+             if (step === 1)
+               yield* summary.summarize({ sessionID, messageID: lastUser.id }).pipe(Effect.ignore, Effect.forkIn(scope))
+ 
+-            yield* plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
++            const fullModelMsgs = yield* MessageV2.toModelMessagesEffect(msgs, model)
++            const transformed = { messages: structuredClone(msgs) }
++            yield* plugin.trigger(
++              "experimental.chat.messages.transform",
++              {
++                sessionID,
++                agent: agent.name,
++                model,
++                phase: "foreground",
++                history: {
++                  estimatedTokens: Token.estimate(JSON.stringify(fullModelMsgs)),
++                  usableTokens: usable({ cfg: yield* config.get(), model, outputTokenMax: flags.outputTokenMax }),
++                },
++              },
++              transformed,
++            )
+ 
+             const [skills, env, instructions, mcpInstructions, modelMsgs] = yield* Effect.all([
+               sys.skills(agent),
+               sys.environment(model),
+               instruction.system().pipe(Effect.orDie),
+               sys.mcp(agent, session.permission),
+-              MessageV2.toModelMessagesEffect(msgs, model),
++              MessageV2.toModelMessagesEffect(transformed.messages, model),
+             ])
+             const system = [
+               ...env,
+diff --git a/packages/opencode/src/session/compaction.ts b/packages/opencode/src/session/compaction.ts
+index 347d99e8d..b69186a2d 100644
+--- a/packages/opencode/src/session/compaction.ts
++++ b/packages/opencode/src/session/compaction.ts
+@@ -347,7 +347,24 @@ const layer = Layer.effect(
+       )
+       const nextPrompt = compacting.prompt ?? buildPrompt({ previousSummary, context: compacting.context })
+       const msgs = structuredClone(selected.head)
+-      yield* plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
++      yield* plugin.trigger(
++        "experimental.chat.messages.transform",
++        {
++          sessionID: input.sessionID,
++          agent: "compaction",
++          model,
++          phase: "compaction",
++          history: {
++            estimatedTokens: yield* estimate({ messages: selected.head, model }),
++            usableTokens: usable({
++              cfg,
++              model,
++              outputTokenMax: flags.outputTokenMax,
++            }),
++          },
++        },
++        { messages: msgs },
++      )
+       const modelMessages = yield* MessageV2.toModelMessagesEffect(msgs, model, {
+         stripMedia: true,
+         toolOutputMaxChars: TOOL_OUTPUT_MAX_CHARS,

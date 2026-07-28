@@ -1,0 +1,12 @@
+diff --git a/packages/tui/src/feature-plugins/home/tips-view.tsx b/packages/tui/src/feature-plugins/home/tips-view.tsx
+--- a/packages/tui/src/feature-plugins/home/tips-view.tsx
++++ b/packages/tui/src/feature-plugins/home/tips-view.tsx
+@@ -274,7 +274,7 @@ const TIPS: Tip[] = [
+     shortcuts.commandList()
+       ? `Toggle username display in chat via the command palette (${shortcutText(shortcuts.commandList())})`
+       : "Toggle username display in chat via the command palette",
+-  "Use {highlight}/memory-remember{/highlight} to save a project preference",
++  "Use {highlight}/memory{/highlight} to inspect or update Cuppet memory",
+   "Use {highlight}/connect{/highlight} with OpenCode Zen for curated, tested models",
+   "Commit your project's {highlight}AGENTS.md{/highlight} file to Git for team sharing",
+   "Use {highlight}/review{/highlight} to review uncommitted changes, branches, or PRs",

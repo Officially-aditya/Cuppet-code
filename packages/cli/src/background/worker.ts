@@ -26,6 +26,7 @@ const candidateSchema = z.object({
     'preference',
   ]),
   file_hashes: z.record(z.string().min(1).max(512), z.string().min(1).max(128)).optional(),
+  scope: z.enum(['session', 'project']).default('project'),
 }).strict()
 
 const outputSchema = z.object({
@@ -33,7 +34,7 @@ const outputSchema = z.object({
 }).strict()
 
 type Candidate = z.infer<typeof candidateSchema>
-type SignalKind = 'verified_diff' | 'validation'
+type SignalKind = 'verified_diff' | 'validation' | 'turn_context'
 
 type BatchSignal = {
   kind: SignalKind
@@ -203,6 +204,13 @@ export class BackgroundWorker extends EventEmitter {
     await this.#ready
     this.#recordSignal(sessionID, 'verified_diff', diff)
     await this.#persistPending()
+    this.#schedule()
+    this.emit('change', this.stats)
+  }
+
+  async recordTurnContext(sessionID: string, summary: string): Promise<void> {
+    await this.#ready
+    this.#recordSignal(sessionID, 'turn_context', summary)
     this.#schedule()
     this.emit('change', this.stats)
   }
@@ -409,10 +417,11 @@ export class BackgroundWorker extends EventEmitter {
       if (this.#isCancelled(batch)) throw new BackgroundCancelledError()
       const summary = batchSummary(batch)
       const prompt = [
-        'Canonicalize at most four short durable memory candidates from verified foreground signals.',
-        'Return JSON only: {"candidates":[{"key":"...","value":"...","kind":"concept_anchor|structure_pattern|behavioral_claim|token_statistics|preference","file_hashes":{}}]}.',
-        'Use only claims supported by the supplied signals. Do not include secrets, credentials, raw transcripts, unrestricted tool output, or unverifiable claims. Candidates are not verification evidence.',
-        `Verified signals (redacted and bounded to ${MAX_BATCH_INPUT_BYTES} bytes):\n${summary}`,
+        'Canonicalize at most four short memory candidates from the supplied bounded foreground signals.',
+        'Return JSON only: {"candidates":[{"key":"...","value":"...","kind":"concept_anchor|structure_pattern|behavioral_claim|token_statistics|preference","scope":"session|project","file_hashes":{}}]}.',
+        'Turn context may produce only session-scoped requirements, decisions, symbols, or unresolved work. Project-scoped candidates must be supported solely by verified diffs or successful validations.',
+        'Do not include secrets, credentials, raw transcripts, unrestricted tool output, or unverifiable claims. Candidates are not verification evidence.',
+        `Signals (redacted and bounded to ${MAX_BATCH_INPUT_BYTES} bytes):\n${summary}`,
       ].join('\n\n')
       if (Buffer.byteLength(prompt) > MAX_BATCH_INPUT_BYTES + 1_000) {
         throw new Error('background batch prompt exceeded its bounded input budget')
@@ -422,6 +431,7 @@ export class BackgroundWorker extends EventEmitter {
       if (this.#isCancelled(batch)) throw new BackgroundCancelledError()
       const messages = await this.#gateway.messages(session.id)
       const parsed = outputSchema.parse(findStructuredOutput(messages))
+      const hasVerifiedSignals = batch.signals.some((signal) => signal.kind !== 'turn_context')
       for (const candidate of parsed.candidates) {
         if (this.#isCancelled(batch)) throw new BackgroundCancelledError()
         const result = await tst.call<{ id: string }>('memory.observe', {
@@ -429,7 +439,7 @@ export class BackgroundWorker extends EventEmitter {
           key: candidate.key,
           value: candidate.value,
           kind: candidate.kind,
-          scope: 'project',
+          scope: candidate.scope === 'project' && hasVerifiedSignals ? 'project' : 'session',
           provenance: 'model_candidate',
           file_hashes: candidate.file_hashes ?? {},
         })
@@ -593,13 +603,14 @@ export class BackgroundWorker extends EventEmitter {
         .slice(-MAX_PERSISTED_BATCHES)
         .map((batch) => ({
           sessionID: bounded(redact(batch.sessionID), 256),
-          signals: batch.signals.slice(-MAX_SIGNALS_PER_BATCH).map((signal) => ({
+          signals: batch.signals.filter((signal) => signal.kind !== 'turn_context').slice(-MAX_SIGNALS_PER_BATCH).map((signal) => ({
             kind: signal.kind,
             summary: bounded(redact(signal.summary), MAX_SIGNAL_BYTES),
             recordedAt: signal.recordedAt,
           })),
           updatedAt: batch.updatedAt,
-        })),
+        }))
+        .filter((batch) => batch.signals.length > 0),
       cooldowns: [...this.#lastCompleted.entries()]
         .sort((left, right) => left[1] - right[1])
         .slice(-MAX_PERSISTED_BATCHES)
@@ -638,7 +649,11 @@ class AttemptFailure extends Error {
 
 function batchSummary(batch: PendingBatch): string {
   const lines = batch.signals.map((signal) => {
-    const label = signal.kind === 'verified_diff' ? 'Verified diff' : 'Successful validation'
+    const label = signal.kind === 'verified_diff'
+      ? 'Verified diff'
+      : signal.kind === 'validation'
+        ? 'Successful validation'
+        : 'Session turn context'
     return `- ${label}: ${signal.summary}`
   })
   return bounded(lines.join('\n'), MAX_BATCH_INPUT_BYTES)

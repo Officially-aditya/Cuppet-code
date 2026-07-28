@@ -15,7 +15,9 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::{broadcast, mpsc, Mutex, Notify};
 use tst_core::memory::MemoryScope;
-use tst_core::service::{EvidenceInput, ObserveInput, QueryInput, RememberInput, TstService};
+use tst_core::service::{
+    ContextPrepareInput, EvidenceInput, ObserveInput, QueryInput, RememberInput, TstService,
+};
 use tst_core::PROTOCOL_VERSION;
 
 const MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
@@ -233,7 +235,7 @@ async fn serve_connection(
                     json!({
                         "protocol": PROTOCOL_VERSION,
                         "capabilities": [
-                            "memory.observe", "memory.query", "memory.remember", "memory.forget",
+                            "memory.observe", "memory.query", "memory.remember", "memory.forget", "context.prepare",
                             "evidence.record", "graph.query", "graph.search", "graph.locate", "graph.list", "graph.workspace", "graph.trace", "graph.trace_summary", "status", "compact", "flush", "shutdown",
                             "notifications"
                         ]
@@ -297,6 +299,7 @@ fn is_known_method(method: &str) -> bool {
             | "memory.query"
             | "memory.remember"
             | "memory.forget"
+            | "context.prepare"
             | "evidence.record"
             | "graph.query"
             | "graph.search"
@@ -322,6 +325,10 @@ async fn dispatch(method: &str, params: Value, service: &Arc<Mutex<TstService>>)
         "memory.query" => {
             let input: QueryInput = serde_json::from_value(params)?;
             Ok(serde_json::to_value(service.lock().await.query(input))?)
+        }
+        "context.prepare" => {
+            let input: ContextPrepareInput = serde_json::from_value(params)?;
+            Ok(serde_json::to_value(service.lock().await.prepare_context(input))?)
         }
         "memory.remember" => {
             let input: RememberInput = serde_json::from_value(params)?;
@@ -666,6 +673,7 @@ mod tests {
         assert!(!constant_time_equal(b"abc", b"abd"));
         assert!(redact_error("bad sk-12345678901234567890").contains("[REDACTED]"));
         assert!(is_known_method("memory.query"));
+        assert!(is_known_method("context.prepare"));
         assert!(!is_known_method("filesystem.delete"));
     }
 }

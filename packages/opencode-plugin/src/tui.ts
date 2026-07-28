@@ -277,7 +277,6 @@ const CuppetTuiPlugin: TuiPluginModule = {
           desc: 'Save a project or global key=value preference in memory',
           category: 'Cuppet',
           namespace: 'palette',
-          slashName: 'memory-remember',
           run: () => prompt('Remember preference', 'project key=value', (value) => {
             const match = value.trim().match(/^(?:(project|global)\s+)?([^=\s]+)\s*=\s*(.+)$/i)
             if (!match) {
@@ -297,7 +296,6 @@ const CuppetTuiPlugin: TuiPluginModule = {
           desc: 'Remove matching Cuppet memory by key',
           category: 'Cuppet',
           namespace: 'palette',
-          slashName: 'memory-forget',
           run: () => prompt('Forget preference', 'key', (value) => {
             if (!value.trim()) return
             void action('Cuppet memory', 'memory.forget', { key: value.trim() }, removedMessage)
@@ -309,7 +307,6 @@ const CuppetTuiPlugin: TuiPluginModule = {
           desc: 'Clear session, project, or global Cuppet memory',
           category: 'Cuppet',
           namespace: 'palette',
-          slashName: 'memory-clear',
           run: () => prompt('Clear memory', 'session, project, or global', (value) => {
             const scope = value.trim().toLowerCase()
             if (scope !== 'session' && scope !== 'project' && scope !== 'global') {
@@ -342,7 +339,6 @@ const CuppetTuiPlugin: TuiPluginModule = {
           desc: 'Pause background memory enrichment',
           category: 'Cuppet',
           namespace: 'palette',
-          slashName: 'background-pause',
           run: () => action('Cuppet background', 'background.set', { paused: true }, 'Background enrichment paused.'),
         },
         {
@@ -351,7 +347,6 @@ const CuppetTuiPlugin: TuiPluginModule = {
           desc: 'Resume background memory enrichment',
           category: 'Cuppet',
           namespace: 'palette',
-          slashName: 'background-resume',
           run: () => action('Cuppet background', 'background.set', { paused: false }, 'Background enrichment resumed.'),
         },
         {
@@ -400,7 +395,6 @@ const CuppetTuiPlugin: TuiPluginModule = {
           desc: 'Interrupt the active foreground session and submit an instruction',
           category: 'Cuppet',
           namespace: 'palette',
-          slashName: 'steer-interrupt',
           run: () => prompt('Interrupt and steer', 'instruction', (value) => {
             if (!value.trim()) return
             void action('Cuppet steer', 'session.steer', { instruction: value.trim(), interrupt: true }, 'Session interrupted; steering instruction submitted.')
@@ -430,7 +424,10 @@ const CuppetTuiPlugin: TuiPluginModule = {
           category: 'Cuppet',
           namespace: 'palette',
           slashName: 'plan',
-          run: () => action('Cuppet plan', 'plan.toggle', {}, planMessage),
+          run: async () => {
+            await client.call('plan.toggle')
+            api.keymap.dispatchCommand('agent.list')
+          },
         },
         {
           name: 'cuppet.plan.agent',
@@ -438,7 +435,6 @@ const CuppetTuiPlugin: TuiPluginModule = {
           desc: 'Open the native agent picker for plan mode',
           category: 'Cuppet',
           namespace: 'palette',
-          slashName: 'plan-agent',
           run: dispatch('agent.list'),
         },
         {

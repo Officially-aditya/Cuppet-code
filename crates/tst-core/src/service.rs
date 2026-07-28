@@ -1,6 +1,6 @@
 use crate::graph::{
     CodeGraph, GraphFileList, GraphLocateResult, GraphQueryResult, GraphSearchResult, GraphStats,
-    GraphTraceResult, GraphTraceSummary, GraphWorkspaceInfo,
+    GraphTraceResult, GraphTraceSummary, GraphTraceSummaryEdge, GraphWorkspaceInfo,
 };
 use crate::memory::{
     normalize_key, Evidence, EvidenceKind, MemoryKind, MemoryRecord, MemoryScope, Provenance,
@@ -49,6 +49,37 @@ pub struct QueryOutput {
     pub stm: Vec<MemoryRecord>,
     pub ltm: Vec<MemoryRecord>,
     pub graph: Vec<GraphQueryResult>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct ContextObservation {
+    pub key: String,
+    pub value: String,
+    #[serde(default = "default_kind")]
+    pub kind: MemoryKind,
+    #[serde(default = "default_provenance")]
+    pub provenance: Provenance,
+    #[serde(default)]
+    pub pinned: bool,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct ContextPrepareInput {
+    pub session_id: String,
+    pub query: String,
+    #[serde(default)]
+    pub hints: Vec<String>,
+    #[serde(default)]
+    pub observations: Vec<ContextObservation>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ContextPrepareOutput {
+    pub observation_complete: bool,
+    pub stm: Vec<MemoryRecord>,
+    pub ltm: Vec<MemoryRecord>,
+    pub graph: Vec<GraphQueryResult>,
+    pub edges: Vec<GraphTraceSummaryEdge>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -236,6 +267,68 @@ impl TstService {
         }
         let graph = self.graph.query(&input.query, graph_limit);
         QueryOutput { stm, ltm, graph }
+    }
+
+    pub fn prepare_context(&mut self, input: ContextPrepareInput) -> ContextPrepareOutput {
+        const MAX_OBSERVATIONS: usize = 256;
+        const MAX_HINTS: usize = 32;
+        let requested = input.observations.len();
+        let mut accepted = 0usize;
+        for observation in input.observations.into_iter().take(MAX_OBSERVATIONS) {
+            let result = self.observe(ObserveInput {
+                session_id: input.session_id.clone(),
+                key: bounded_text(&observation.key, 120),
+                value: bounded_text(&observation.value, 1_600),
+                kind: observation.kind,
+                scope: MemoryScope::Session,
+                provenance: observation.provenance,
+                pinned: observation.pinned,
+                file_hashes: BTreeMap::new(),
+            });
+            if result.is_ok() {
+                accepted += 1;
+            }
+        }
+
+        let retrieval_query = std::iter::once(input.query.as_str())
+            .chain(input.hints.iter().take(MAX_HINTS).map(String::as_str))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let stm = self
+            .session(&input.session_id)
+            .query_with_recent(&retrieval_query, 8, 3);
+        let mut ltm = self.project.query(&retrieval_query, 5);
+        if ltm.len() < 5 {
+            ltm.extend(self.global.query(&retrieval_query, 5 - ltm.len()));
+        }
+        let graph = self.graph.query(&retrieval_query, 8);
+        let mut edges = Vec::new();
+        let mut edge_keys = std::collections::HashSet::new();
+        for root in graph.iter().take(2) {
+            let trace = self.graph.trace_summary(&root.node.name, "both", 1, 8).ok();
+            for edge in trace.into_iter().flat_map(|item| item.edges) {
+                let key = format!(
+                    "{}:{}:{:?}:{}:{}",
+                    edge.from.path, edge.from.symbol, edge.kind, edge.to.path, edge.to.symbol
+                );
+                if edge_keys.insert(key) {
+                    edges.push(edge);
+                }
+                if edges.len() == 8 {
+                    break;
+                }
+            }
+            if edges.len() == 8 {
+                break;
+            }
+        }
+        ContextPrepareOutput {
+            observation_complete: requested <= MAX_OBSERVATIONS && accepted == requested,
+            stm,
+            ltm,
+            graph,
+            edges,
+        }
     }
 
     pub fn forget(&mut self, session_id: &str, key: &str) -> Result<usize> {
@@ -471,6 +564,10 @@ fn default_query_limit() -> usize {
     20
 }
 
+fn bounded_text(value: &str, max_chars: usize) -> String {
+    value.chars().take(max_chars).collect()
+}
+
 fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -614,6 +711,69 @@ mod tests {
                 file_hashes: BTreeMap::new(),
             })
             .is_err());
+    }
+
+    #[test]
+    fn context_preparation_observes_turns_and_returns_recent_memory_with_graph_edges() {
+        let project = tempfile::tempdir().unwrap();
+        let stores = tempfile::tempdir().unwrap();
+        fs::create_dir(project.path().join("src")).unwrap();
+        fs::write(
+            project.path().join("src/api.ts"),
+            "import { saveTask } from './store'; export function createTask() { return saveTask(); }",
+        )
+        .unwrap();
+        fs::write(
+            project.path().join("src/store.ts"),
+            "export function saveTask() { return true; }",
+        )
+        .unwrap();
+        let mut service = TstService::open(
+            project.path(),
+            stores.path().join("project"),
+            stores.path().join("global"),
+        )
+        .unwrap();
+        let paths = service.begin_graph_index();
+        for path in paths {
+            service.index_graph_path(&path);
+        }
+        service.finish_graph_index();
+
+        let output = service.prepare_context(ContextPrepareInput {
+            session_id: "s".into(),
+            query: "Fix createTask in src/api.ts".into(),
+            hints: vec!["saveTask".into()],
+            observations: vec![ContextObservation {
+                key: "turn:user-1".into(),
+                value: "Requirement: preserve task creation".into(),
+                kind: MemoryKind::ConceptAnchor,
+                provenance: Provenance::ModelCandidate,
+                pinned: false,
+            }],
+        });
+        assert!(output.observation_complete);
+        assert_eq!(output.stm.len(), 1);
+        assert!(output.graph.iter().any(|item| item.node.name == "createTask"));
+        assert!(output.edges.iter().any(|edge| edge.to.symbol == "saveTask"));
+
+        let rejected = service.prepare_context(ContextPrepareInput {
+            session_id: "s".into(),
+            query: "continue".into(),
+            hints: Vec::new(),
+            observations: vec![ContextObservation {
+                key: "api_key".into(),
+                value: "sk-this-is-a-secret-value".into(),
+                kind: MemoryKind::ConceptAnchor,
+                provenance: Provenance::ModelCandidate,
+                pinned: false,
+            }],
+        });
+        assert!(!rejected.observation_complete);
+        assert!(
+            !rejected.stm.is_empty(),
+            "recent STM should preserve continuity for pronouns"
+        );
     }
 
     #[test]

@@ -5,5 +5,5 @@ pub mod service;
 pub mod stm;
 pub mod trie;
 
-pub const PROTOCOL_VERSION: &str = "cuppet.tst.v1";
+pub const PROTOCOL_VERSION: &str = "cuppet.tst.v2";
 pub const SNAPSHOT_SCHEMA_VERSION: u32 = 1;

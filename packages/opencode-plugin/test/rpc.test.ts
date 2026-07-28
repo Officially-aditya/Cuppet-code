@@ -39,7 +39,7 @@ test('read-only tool client authenticates and uses length-framed JSON-RPC', asyn
               ? { query: 'dueDate', direction: 'both', depth: 2, edges: [], truncated: false }
               : request.method.startsWith('graph.')
                 ? { query: 'dueDate', nodes: [], text_matches: [], paths: [], root: '/tmp/project' }
-                : { protocol: 'cuppet.tst.v1' }
+                : { protocol: 'cuppet.tst.v2' }
         const payload = Buffer.from(JSON.stringify({ jsonrpc: '2.0', id: request.id, result }))
         const header = Buffer.alloc(4)
         header.writeUInt32BE(payload.length)

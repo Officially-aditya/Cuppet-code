@@ -1,0 +1,50 @@
+diff --git a/packages/tui/src/util/cuppet-mermaid.ts b/packages/tui/src/util/cuppet-mermaid.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/tui/src/util/cuppet-mermaid.ts
+@@ -0,0 +1,25 @@
++function compact(source: string): string | undefined {
++  const lines = source.replace(/\r\n?/g, "\n").split("\n")
++  const header = lines.find((line) => /^\s*(flowchart|graph)\s+(TB|TD|BT|RL|LR)\s*$/.test(line))
++  if (!header) return undefined
++  const edges: string[] = []
++  for (const line of lines.slice(lines.indexOf(header) + 1)) {
++    const value = line.trim()
++    if (!value || value.startsWith("%%")) continue
++    const match = /^([A-Za-z][\w-]*)\s*--(?:>|\|([^|]+)\|>?)\s*([A-Za-z][\w-]*)\s*$/.exec(value)
++    if (!match) return undefined
++    edges.push(`${match[1]} ${match[2] ? `—${match[2].trim()}→` : "→"} ${match[3]}`)
++  }
++  return edges.length ? edges.join("\n") : undefined
++}
++
++/** Transform only lossless basic Mermaid flowcharts; preserve every unsupported block byte-for-byte. */
++export function compactCuppetMermaidMarkdown(markdown: string): string {
++  return markdown.replace(
++    /```mermaid[ \t]*\n([\s\S]*?)\n```/gi,
++    (block, source: string) => {
++      const rendered = compact(source)
++      return rendered ? `Cuppet flowchart\n\n${rendered}` : block
++    },
++  )
++}
+diff --git a/packages/tui/src/routes/session/index.tsx b/packages/tui/src/routes/session/index.tsx
+index e6a02763f..c4ce41598 100644
+--- a/packages/tui/src/routes/session/index.tsx
++++ b/packages/tui/src/routes/session/index.tsx
+@@ -72,5 +72,6 @@ import { formatTranscript } from "../../util/transcript"
+ import { sessionEpilogue } from "../../util/presentation"
+ import { setPreLayoutSiblingMargin } from "../../util/layout"
+ import { useTuiConfig } from "../../config"
++import { compactCuppetMermaidMarkdown } from "../../util/cuppet-mermaid"
+ import { useClipboard } from "../../context/clipboard"
+ import { nextThinkingMode, reasoningSummary, useThinkingMode, type ThinkingMode } from "../../context/thinking"
+@@ -1687,7 +1688,7 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
+           syntaxStyle={syntax()}
+           streaming={true}
+           internalBlockMode="top-level"
+-          content={props.part.text.trim()}
++          content={compactCuppetMermaidMarkdown(props.part.text.trim())}
+           tableOptions={{ style: "grid" }}
+           conceal={ctx.conceal()}
+           fg={theme.markdownText}

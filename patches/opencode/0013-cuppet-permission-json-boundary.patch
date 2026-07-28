@@ -1,0 +1,95 @@
+diff --git a/packages/opencode/src/permission/index.ts b/packages/opencode/src/permission/index.ts
+--- a/packages/opencode/src/permission/index.ts
++++ b/packages/opencode/src/permission/index.ts
+@@ -89,7 +89,7 @@ const layer = Layer.effect(
+         sessionID: request.sessionID,
+         permission: request.permission,
+         patterns: request.patterns,
+-        metadata: request.metadata,
++        metadata: jsonSafeMetadata(request.metadata),
+         always: request.always,
+         tool: request.tool,
+       }
+@@ -175,6 +175,31 @@ const layer = Layer.effect(
+   }),
+ )
+ 
++/**
++ * Permission metadata crosses both SSE and HTTP schema boundaries. Tool
++ * metadata commonly contains optional properties with `undefined` values,
++ * which are valid in process but are not JSON values and can prevent the
++ * permission dialog from ever reaching the TUI. Normalize once before a
++ * request enters the pending map so every delivery and recovery path sees the
++ * same serializable payload.
++ */
++function jsonSafeMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
++  try {
++    const encoded = JSON.stringify(metadata)
++    if (!encoded) return {}
++    const decoded = JSON.parse(encoded) as unknown
++    return decoded && typeof decoded === "object" && !Array.isArray(decoded)
++      ? (decoded as Record<string, unknown>)
++      : {}
++  } catch {
++    return Object.fromEntries(
++      Object.entries(metadata).filter(([, value]) =>
++        value === null || ["string", "number", "boolean"].includes(typeof value),
++      ),
++    )
++  }
++}
++
+ function expand(pattern: string): string {
+   if (pattern.startsWith("~/")) return os.homedir() + pattern.slice(1)
+   if (pattern === "~") return os.homedir()
+diff --git a/packages/opencode/test/permission/next.test.ts b/packages/opencode/test/permission/next.test.ts
+--- a/packages/opencode/test/permission/next.test.ts
++++ b/packages/opencode/test/permission/next.test.ts
+@@ -648,6 +648,35 @@ it.instance(
+   { git: true },
+ )
+ 
++it.instance(
++  "ask - normalizes metadata to JSON before publishing or listing",
++  () =>
++    Effect.gen(function* () {
++      const fiber = yield* ask({
++        sessionID: SessionID.make("session_test"),
++        permission: "edit",
++        patterns: ["src/example.ts"],
++        metadata: {
++          filepath: "src/example.ts",
++          files: [{ filePath: "src/example.ts", movePath: undefined }],
++        },
++        always: ["*"],
++        ruleset: [],
++      }).pipe(Effect.forkScoped)
++
++      const items = yield* waitForPending(1)
++      expect(items[0]?.metadata).toEqual({
++        filepath: "src/example.ts",
++        files: [{ filePath: "src/example.ts" }],
++      })
++      expect(() => JSON.stringify(items[0])).not.toThrow()
++
++      yield* rejectAll()
++      yield* Fiber.await(fiber)
++    }),
++  { git: true },
++)
++
+ it.instance(
+   "ask - publishes asked event",
+   () =>
+diff --git a/packages/tui/src/context/sync.tsx b/packages/tui/src/context/sync.tsx
+--- a/packages/tui/src/context/sync.tsx
++++ b/packages/tui/src/context/sync.tsx
+@@ -586,7 +586,7 @@ export const {
+         if (active || Object.values(store.permission).some((requests) => requests.length > 0)) {
+           void refreshPermissions()
+         }
+-      }, 250)
++      }, 1_000)
+       onCleanup(() => clearInterval(timer))
+     })
+ 

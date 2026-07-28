@@ -39,3 +39,8 @@ native grid renderer.
 
 `0012-cuppet-canonical-command-tips.patch` keeps home-page guidance on the
 canonical Cuppet slash commands instead of hidden helper action names.
+
+`0013-cuppet-permission-json-boundary.patch` normalizes pending permission
+metadata before SSE/HTTP delivery so optional tool fields cannot suppress the
+native dialog. It also keeps reconciliation polling bounded while a turn is
+active.

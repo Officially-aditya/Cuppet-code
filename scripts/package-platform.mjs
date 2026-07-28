@@ -16,6 +16,7 @@ const targets = {
 const configuration = targets[target]
 if (!configuration) throw new Error(`unsupported release target ${target}`)
 const [packageDirectory, platform, arch, libc] = configuration
+const expectedTstProtocol = 'cuppet.tst.v2'
 const opencodeSource = process.env.CUPPET_OPENCODE_BIN
 if (!opencodeSource) throw new Error('CUPPET_OPENCODE_BIN must point to OpenCode v1.18.4 at revision 49c69c5ed3ccf706b61b3febb43c8aaff7f8325e')
 const derivativeMarker = join(dirname(resolve(opencodeSource)), '.cuppet-derivative.json')
@@ -41,6 +42,10 @@ const files = {
   'plugin/server.js': resolve('packages/opencode-plugin/dist/server.js'),
   'plugin/tui.js': resolve('packages/opencode-plugin/dist/tui.js'),
 }
+const daemonProtocol = (await capture(files['bin/tst-daemon'], ['--protocol'])).trim()
+if (daemonProtocol !== expectedTstProtocol) {
+  throw new Error(`TST daemon protocol mismatch: expected ${expectedTstProtocol}, received ${daemonProtocol || 'no identity'}`)
+}
 for (const [destination, source] of Object.entries(files)) {
   const targetPath = join(output, destination)
   if (resolve(source) !== resolve(targetPath)) await copyFile(source, targetPath)
@@ -63,6 +68,9 @@ if (platform === 'darwin') {
 const checksums = {}
 for (const relative of Object.keys(files)) checksums[relative] = await sha256(join(output, relative))
 const sourceManifest = JSON.parse(await readFile(resolve('packages', packageDirectory, 'manifest.json'), 'utf8'))
+if (sourceManifest.tstProtocol !== expectedTstProtocol) {
+  throw new Error(`runtime source manifest protocol mismatch: expected ${expectedTstProtocol}`)
+}
 const patchSetDigest = createHash('sha256')
 for (const name of (await readdir(resolve('patches', 'opencode'))).filter((item) => /^\d{4}-.*\.patch$/.test(item)).sort()) {
   patchSetDigest.update(name)

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { access, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { access, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawn } from 'node:child_process'
@@ -10,6 +11,7 @@ const runtimeDirectories = {
   'linux-arm64': 'runtime-linux-arm64-gnu',
   'linux-x64': 'runtime-linux-x64-gnu',
 }
+const expectedTstProtocol = 'cuppet.tst.v2'
 
 const runtimeDirectory = runtimeDirectories[`${process.platform}-${process.arch}`]
 if (!runtimeDirectory) throw new Error(`unsupported platform ${process.platform}-${process.arch}`)
@@ -67,10 +69,36 @@ async function validateRuntime(root) {
       `runtime artifact is stale at ${root}; run build:opencode and package:platform before install:global`,
     )
   }
-  for (const file of expectedFiles) await access(resolve(root, file))
+  if (manifest.tstProtocol !== expectedTstProtocol) {
+    throw new Error(
+      `runtime artifact TST protocol is ${manifest.tstProtocol ?? 'missing'}; expected ${expectedTstProtocol}. Rebuild the runtime before installing`,
+    )
+  }
+  for (const file of expectedFiles) {
+    const path = resolve(root, file)
+    await access(path)
+    const actual = createHash('sha256').update(await readFile(path)).digest('hex')
+    if (actual !== manifest.files[file]) throw new Error(`runtime artifact checksum mismatch for ${file}`)
+  }
   const marker = JSON.parse(await readFile(resolve(root, 'bin/.cuppet-derivative.json'), 'utf8'))
   if (marker.product !== 'cuppet-opencode-derivative' || marker.patchSetDigest !== manifest.patchSetDigest) {
     throw new Error(`runtime derivative marker is incompatible at ${root}`)
+  }
+  const patchHash = createHash('sha256')
+  for (const name of (await readdir(resolve('patches', 'opencode')))
+    .filter((item) => /^\d{4}-.*\.patch$/.test(item))
+    .sort()) {
+    patchHash.update(name)
+    patchHash.update(await readFile(resolve('patches', 'opencode', name)))
+  }
+  if (patchHash.digest('hex') !== manifest.patchSetDigest) {
+    throw new Error('runtime artifact patch set does not match this checkout; rebuild it before installing')
+  }
+  const daemonProtocol = (await capture(resolve(root, 'bin/tst-daemon'), ['--protocol'], process.env)).trim()
+  if (daemonProtocol !== expectedTstProtocol) {
+    throw new Error(
+      `runtime TST daemon protocol mismatch: expected ${expectedTstProtocol}, received ${daemonProtocol || 'no identity'}`,
+    )
   }
 }
 

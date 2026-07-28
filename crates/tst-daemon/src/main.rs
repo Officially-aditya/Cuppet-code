@@ -73,6 +73,10 @@ async fn main() {
 }
 
 async fn run() -> Result<()> {
+    if env::args().nth(1).as_deref() == Some("--protocol") {
+        println!("{PROTOCOL_VERSION}");
+        return Ok(());
+    }
     let options = Options::parse()?;
     prepare_socket(&options.socket)?;
     let listener = UnixListener::bind(&options.socket)

@@ -230,6 +230,7 @@ test('pinned OpenCode binary exposes the v2 catalog and stable cross-provider ex
     assert.deepEqual(sessionErrors, [])
     if (tst) {
       const toolIDs = await runtime.client.tool.ids({ directory: paths.projectRealpath })
+      assert.ok(toolIDs.data?.includes('cuppet_plan'))
       assert.ok(toolIDs.data?.includes('cuppet_memory_search'))
       assert.ok(toolIDs.data?.includes('cuppet_workspace_info'))
       assert.ok(toolIDs.data?.includes('cuppet_graph_tree'))

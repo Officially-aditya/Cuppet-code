@@ -1,4 +1,5 @@
 import type { ContextObservation, TstToolClient } from './rpc.js'
+import { renderLosslessPlanContext, type LosslessPlanStore } from './lossless-plan.js'
 
 type HookInput = {
   sessionID: string
@@ -128,7 +129,8 @@ type Turn = { start: number; end: number; messages: Message[] }
 export async function transformCuppetModelContext(
   rawInput: unknown,
   rawOutput: unknown,
-  client: TstToolClient,
+  client: TstToolClient | undefined,
+  planStore?: LosslessPlanStore,
 ): Promise<void> {
   const input = asRecord(rawInput) as Partial<HookInput>
   const output = asRecord(rawOutput)
@@ -138,13 +140,24 @@ export async function transformCuppetModelContext(
     return
   }
   if (input.phase !== 'foreground' || typeof input.agent !== 'string' || input.agent === 'cuppet-background' || input.agent === 'compaction') return
-  const planMode = input.agent === 'plan'
-  const state = beginProjectionState(input.sessionID, input.agent)
+  const sessionID = input.sessionID
+  const agent = input.agent
+  const planMode = agent === 'plan'
+  const state = beginProjectionState(sessionID, agent)
   delete state.reason
   const messages = normalizeMessages(output.messages)
   if (!messages.length) return
-  const prompt = currentPrompt(messages)
-  if (!prompt) return
+  const user = currentUserMessage(messages)
+  const userPrompt = user ? messageText(user, false).trim() : ''
+  const prompt = userPrompt
+  const messageID = user && typeof user.info.id === 'string' ? user.info.id : 'current'
+  const losslessPlan = planStore
+    ? prompt
+      ? await planStore.capture({ sessionID, messageID, prompt: userPrompt, agent }).catch(() => undefined)
+      : await planStore.get(sessionID).catch(() => undefined)
+    : undefined
+  if (losslessPlan && planStore) await planStore.setAgent(sessionID, agent).catch(() => undefined)
+  if (!prompt && !losslessPlan) return
 
   const selection = selectModelHistory(messages, input.history)
   const observations = observationsFor(selection.omitted, selection.turns)
@@ -155,23 +168,25 @@ export async function transformCuppetModelContext(
     ? Math.min(16_384, Math.max(0, Math.floor(usableTokens * 0.12)))
     : 0
   const projectionBudget = planMode ? Math.floor(contextBudget * 0.70) : 0
-  const prepared = await client
-    .prepareContext(
-      input.sessionID,
-      prompt,
-      hints,
-      observations.slice(0, 256),
-      planMode ? 'plan' : 'foreground',
-      projectionBudget,
-    )
-    .then((value) => asRecord(value) as PreparedContext)
-    .catch((error) => {
-      state.available = false
-      state.complete = false
-      const message = error instanceof Error ? error.message : String(error)
-      state.reason = `TST unavailable (${message}); explorer/task fallback remains available.`
-      return {} as PreparedContext
-    })
+  const prepared = client && prompt
+    ? await client
+      .prepareContext(
+        sessionID,
+        prompt,
+        hints,
+        observations.slice(0, 256),
+        planMode ? 'plan' : 'foreground',
+        projectionBudget,
+      )
+      .then((value) => asRecord(value) as PreparedContext)
+      .catch((error) => {
+        state.available = false
+        state.complete = false
+        const message = error instanceof Error ? error.message : String(error)
+        state.reason = `TST unavailable (${message}); explorer/task fallback remains available.`
+        return {} as PreparedContext
+      })
+    : {} as PreparedContext
 
   const projection = prepared.plan_projection
   state.available = planMode && Boolean(projection)
@@ -181,15 +196,17 @@ export async function transformCuppetModelContext(
   } else {
     delete state.reason
   }
-  const block = renderCuppetContext(prepared, usableTokens, planMode, state)
+  const block = client && prompt ? renderCuppetContext(prepared, usableTokens, planMode, state) : ''
   const canTrim =
+    Boolean(client) &&
     selection.trimmed &&
     coverageComplete &&
     prepared.observation_complete === true &&
     Array.isArray(prepared.stm) &&
     prepared.stm.length > 0
   const target = canTrim ? selection.selected : messages
-  if (block) injectContext(target, input.sessionID, block)
+  if (block) injectContext(target, sessionID, block)
+  if (losslessPlan) injectLosslessPlanContext(target, sessionID, renderLosslessPlanContext(losslessPlan, agent))
   output.messages = target
 }
 
@@ -410,7 +427,7 @@ function observationsFor(omitted: Turn[], allTurns: Turn[]): ContextObservation[
     const request = messageText(user)
     const outcomes = turn.messages
       .filter((message) => message.info.role === 'assistant')
-      .map(messageText)
+      .map((message) => messageText(message))
       .filter(Boolean)
       .join(' ')
     const tools = turn.messages.flatMap((message) => message.parts)
@@ -434,26 +451,40 @@ function observationsFor(omitted: Turn[], allTurns: Turn[]): ContextObservation[
 }
 
 function retrievalHints(prompt: string, messages: Message[]): string[] {
-  const source = `${prompt}\n${messages.slice(-6).map(messageText).join('\n')}`
+  const source = `${prompt}\n${messages.slice(-6).map((message) => messageText(message)).join('\n')}`
   const paths = source.match(/(?:[A-Za-z0-9_.-]+\/)+[A-Za-z0-9_.-]+/g) ?? []
   const identifiers = source.match(/\b[A-Za-z_$][A-Za-z0-9_$]{3,}\b/g) ?? []
   return [...new Set([...paths, ...identifiers])].slice(0, 32)
 }
 
-function currentPrompt(messages: Message[]): string {
-  const user = [...messages].reverse().find((message) => message.info.role === 'user' &&
+function currentUserMessage(messages: Message[]): Message | undefined {
+  return [...messages].reverse().find((message) => message.info.role === 'user' &&
     !message.parts.some((part) => part.type === 'compaction'))
-  return user ? messageText(user).trim() : ''
 }
 
 function injectContext(messages: Message[], sessionID: string, block: string): void {
-  const user = [...messages].reverse().find((message) => message.info.role === 'user' &&
-    !message.parts.some((part) => part.type === 'compaction'))
+  const user = currentUserMessage(messages)
   if (!user) return
   const messageID = typeof user.info.id === 'string' ? user.info.id : 'current'
-  if (user.parts.some((part) => part.type === 'text' && typeof part.text === 'string' && part.text.includes('<CUPPET_'))) return
+  if (user.parts.some((part) => part.type === 'text' && typeof part.text === 'string' &&
+    (part.text.includes('<CUPPET_CONTEXT') || part.text.includes('<CUPPET_PLAN_MODE_CONTEXT')))) return
   user.parts.unshift({
     id: `cuppet-context-${messageID}`,
+    messageID,
+    sessionID,
+    type: 'text',
+    synthetic: true,
+    text: block,
+  })
+}
+
+function injectLosslessPlanContext(messages: Message[], sessionID: string, block: string): void {
+  const user = currentUserMessage(messages)
+  if (!user) return
+  const messageID = typeof user.info.id === 'string' ? user.info.id : 'current'
+  if (user.parts.some((part) => part.type === 'text' && typeof part.text === 'string' && part.text.includes('<CUPPET_LOSSLESS_PLAN'))) return
+  user.parts.unshift({
+    id: `cuppet-lossless-plan-${messageID}`,
     messageID,
     sessionID,
     type: 'text',
@@ -493,9 +524,10 @@ function reference(value: GraphReference): string {
   return `${value.path}:${value.line ?? 1}:${value.column ?? 1} ${value.kind ?? 'symbol'} ${value.symbol ?? ''}`
 }
 
-function messageText(message: Message): string {
+function messageText(message: Message, includeSynthetic = true): string {
   return message.parts
-    .filter((part) => part.type === 'text' && typeof part.text === 'string' && !part.ignored)
+    .filter((part) => part.type === 'text' && typeof part.text === 'string' && !part.ignored &&
+      (includeSynthetic || part.synthetic !== true))
     .map((part) => String(part.text))
     .join('\n')
 }

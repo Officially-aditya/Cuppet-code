@@ -36,8 +36,11 @@ test('Promise plugin registers both Cuppet agents and reloads the pinned v2 doma
   assert.equal(defaultAgent, 'cuppet')
   assert.equal(reloads, 1, 'OpenCode 1.18.4 requires an explicit reload after an async external transform')
   assert.deepEqual(agents.get('cuppet')?.permissions, foregroundPermissionRules())
-  assert.equal(agents.get('cuppet')?.steps, 64)
+  assert.equal(agents.get('cuppet')?.steps, 128)
   assert.equal(agents.get('cuppet')?.hidden, false)
+  assert.equal(agents.get('build')?.steps, 128)
+  assert.deepEqual(agents.get('build')?.permissions, foregroundPermissionRules())
+  assert.equal(agents.get('plan')?.steps, 128)
   assert.equal(agents.get('cuppet-background')?.steps, 1)
   assert.equal(agents.get('cuppet-background')?.hidden, true)
   assert.deepEqual(agents.get('cuppet-background')?.permissions, [
@@ -48,6 +51,7 @@ test('Promise plugin registers both Cuppet agents and reloads the pinned v2 doma
 test('Promise plugin exposes graph navigation tools alongside memory search', async () => {
   const plugin = await CuppetMemoryPlugin()
   assert.deepEqual(Object.keys(plugin.tool), [
+    'cuppet_plan',
     'cuppet_memory_search',
     'cuppet_workspace_info',
     'cuppet_graph_tree',

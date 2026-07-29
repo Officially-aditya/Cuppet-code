@@ -45,7 +45,7 @@ test('OpenCode permissions use real actions and ordered sensitive resource rules
 test('graph-native profile removes legacy discovery tools from the agent action space', () => {
   const profile = GRAPH_NATIVE_TOOL_PROFILE as Record<string, boolean | undefined>
   assert.equal(GRAPH_NATIVE_TOOL_PROFILE['*'], false)
-  for (const tool of ['read', 'edit', 'write', 'bash', 'todowrite', 'cuppet_graph_search', 'cuppet_graph_trace']) {
+  for (const tool of ['read', 'edit', 'write', 'bash', 'todowrite', 'cuppet_plan', 'cuppet_graph_search', 'cuppet_graph_trace']) {
     assert.equal(profile[tool], true, `${tool} must remain available`)
   }
   for (const tool of ['glob', 'grep', 'lsp', 'webfetch', 'websearch', 'task']) {

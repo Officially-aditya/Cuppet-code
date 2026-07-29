@@ -239,7 +239,7 @@ export class CuppetController extends EventEmitter {
       throw new Error(
         role === 'primary'
           ? 'The selected model does not support text coding tools'
-          : 'The selected model does not support text input and output',
+          : 'The selected secondary model does not support text coding tools required by explorer tasks',
       )
     }
     if (role === 'primary') {
@@ -982,10 +982,12 @@ async function inspectPath(path: string, accessMode: number): Promise<Record<str
   }
 }
 
-function isModelCompatible(model: ModelInfo, role: 'primary' | 'secondary'): boolean {
+function isModelCompatible(model: ModelInfo, _role: 'primary' | 'secondary'): boolean {
   const textInput = model.capabilities.input.includes('text')
   const textOutput = model.capabilities.output.includes('text')
-  return textInput && textOutput && (role === 'secondary' || model.capabilities.tools)
+  // Secondary models power native explore subagents as well as background
+  // canonicalization, so both roles must support tool calls.
+  return textInput && textOutput && model.capabilities.tools
 }
 
 function normalizeLegacyVertexReference(reference: ModelRef | undefined): ModelRef | undefined {

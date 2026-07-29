@@ -9,6 +9,7 @@ import type { RuntimePaths } from '../runtime/paths.js'
 import type { RedactedLogger } from '../runtime/logger.js'
 import { buildVariantBridge, type VariantBridge } from './variant-bridge.js'
 import { readDerivativeMarker } from '../runtime/derivative.js'
+import type { ModelRef } from '../types.js'
 
 export type OpenCodeRuntime = {
   url: string
@@ -38,6 +39,7 @@ type StartOptions = {
   binary: string
   paths: RuntimePaths
   logger: RedactedLogger
+  secondaryModel?: ModelRef
   plugin?: string
   tuiPlugin?: string
   control?: { socket: string; token: string }
@@ -47,6 +49,19 @@ type StartOptions = {
   graphFirstGate?: boolean
   graphOnlySearch?: boolean
   graphNativeProfile?: boolean
+}
+
+/** OpenCode resolves a subagent's configured model independently of its parent session. */
+export function exploreAgentModelConfig(model: ModelRef | undefined): {
+  model?: string
+  variant?: string
+} {
+  if (!model) return {}
+  const providerID = model.providerID === 'vertex' ? 'google-vertex' : model.providerID
+  return {
+    model: `${providerID}/${model.modelID}`,
+    ...(model.variant ? { variant: model.variant } : {}),
+  }
 }
 
 // OpenCode's foreground agent normally inherits the full built-in tool set.
@@ -126,6 +141,9 @@ export async function startOpenCodeServer(options: StartOptions): Promise<OpenCo
         steps: DEFAULT_STEP_LIMIT,
         maxSteps: DEFAULT_STEP_LIMIT,
       },
+      // Explorer tasks get their own OpenCode subagent session, so pin them
+      // to Cuppet's selected secondary model rather than inheriting primary.
+      explore: exploreAgentModelConfig(options.secondaryModel),
       cuppet: {
         description: 'Cuppet foreground coding agent',
         mode: 'primary',

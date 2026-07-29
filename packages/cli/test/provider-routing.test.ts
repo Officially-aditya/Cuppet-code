@@ -71,7 +71,7 @@ test('legacy Vertex selections migrate to the live OpenCode provider and use the
   )
   assert.deepEqual(
     controller.modelsForPlatform('vertex', 'secondary').map((item) => item.modelID),
-    ['gemini-test', 'summary-test'],
+    ['gemini-test'],
   )
   assert.deepEqual(controller.modelsForPlatform('google', 'primary').map((item) => item.modelID), ['gemini-api-test'])
 

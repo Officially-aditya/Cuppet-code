@@ -63,6 +63,7 @@ async function main(): Promise<void> {
       ...(assets.tuiPlugin ? { tuiPlugin: assets.tuiPlugin } : {}),
       control: controlAddress,
       ...(tst ? { tst: { socket: tst.socket, token: tst.token } } : {}),
+      ...(preferences.value.secondary ? { secondaryModel: preferences.value.secondary } : {}),
       ...(preferences.value.vertexProject ? { vertexProject: preferences.value.vertexProject } : {}),
     })
     const gateway = new OpenCodeGateway(opencode.client, paths.projectRealpath)

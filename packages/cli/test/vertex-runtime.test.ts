@@ -3,7 +3,22 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { resolveVertexEnvironment } from '../src/opencode/server.js'
+import { exploreAgentModelConfig, resolveVertexEnvironment } from '../src/opencode/server.js'
+
+test('the native explore agent uses the configured secondary model and variant', () => {
+  assert.deepEqual(exploreAgentModelConfig({
+    providerID: 'openai',
+    modelID: 'gpt-secondary',
+    variant: 'low',
+  }), {
+    model: 'openai/gpt-secondary',
+    variant: 'low',
+  })
+  assert.deepEqual(exploreAgentModelConfig({ providerID: 'vertex', modelID: 'gemini-test' }), {
+    model: 'google-vertex/gemini-test',
+  })
+  assert.deepEqual(exploreAgentModelConfig(undefined), {})
+})
 
 test('Vertex runtime passes through a readable explicit ADC path and canonical settings', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'cuppet-vertex-explicit-'))

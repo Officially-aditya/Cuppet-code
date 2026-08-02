@@ -239,7 +239,7 @@ export class CuppetController extends EventEmitter {
       throw new Error(
         role === 'primary'
           ? 'The selected model does not support text coding tools'
-          : 'The selected secondary model does not support text coding tools required by explorer tasks',
+          : 'The selected secondary model does not support text coding tools required by subagent tasks',
       )
     }
     if (role === 'primary') {
@@ -985,7 +985,7 @@ async function inspectPath(path: string, accessMode: number): Promise<Record<str
 function isModelCompatible(model: ModelInfo, _role: 'primary' | 'secondary'): boolean {
   const textInput = model.capabilities.input.includes('text')
   const textOutput = model.capabilities.output.includes('text')
-  // Secondary models power native explore subagents as well as background
+  // Secondary models power native Task subagents as well as background
   // canonicalization, so both roles must support tool calls.
   return textInput && textOutput && model.capabilities.tools
 }

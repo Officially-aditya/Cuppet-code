@@ -206,6 +206,26 @@ impl ShortTermMemory {
         self.slots.iter_mut().filter_map(|slot| slot.entry.as_mut())
     }
 
+    /// Replace the unpinned portion of the session atomically.
+    ///
+    /// The refresh path deliberately stages a complete STM in a separate
+    /// value.  If the staged value cannot fit (or a future invariant check
+    /// fails), the caller keeps the original STM byte-for-byte unchanged.
+    pub fn replace_unpinned(&mut self, entries: Vec<MemoryRecord>) -> Result<(), StmError> {
+        let pinned: Vec<MemoryRecord> = self.entries().filter(|entry| entry.pinned).cloned().collect();
+
+        let mut staged = Self::new(self.session_id.clone(), self.capacity());
+        for entry in pinned.into_iter().chain(entries) {
+            staged.insert_exact(entry)?;
+        }
+        *self = staged;
+        Ok(())
+    }
+
+    pub fn pinned_entries(&self) -> impl Iterator<Item = &MemoryRecord> {
+        self.entries().filter(|entry| entry.pinned)
+    }
+
     pub fn remove(&mut self, key: &str) -> bool {
         let normalized = normalize_key(key);
         let Some(reference) = self.index.remove(&normalized) else {
@@ -230,6 +250,31 @@ impl ShortTermMemory {
 
     pub fn capacity(&self) -> usize {
         self.slots.len()
+    }
+
+    fn insert_exact(&mut self, mut entry: MemoryRecord) -> Result<(), StmError> {
+        entry.normalized_key = normalize_key(&entry.key);
+        if self.index.contains_key(&entry.normalized_key) {
+            return Ok(());
+        }
+        let Some(target) = self.slots.iter().position(|slot| slot.entry.is_none()) else {
+            return Err(StmError::AllSlotsPinned);
+        };
+        let generation = self.next_generation;
+        self.next_generation = self.next_generation.saturating_add(1);
+        let normalized = entry.normalized_key.clone();
+        self.slots[target] = Slot {
+            generation,
+            entry: Some(entry),
+        };
+        self.index.insert(
+            normalized,
+            SlotRef {
+                index: target,
+                generation,
+            },
+        );
+        Ok(())
     }
 }
 
@@ -293,5 +338,27 @@ mod tests {
         stm.decay(0.98);
         let after = stm.query("key", 1).remove(0).score;
         assert!((after - 0.588).abs() < 0.0001);
+    }
+
+    #[test]
+    fn replacement_preserves_pins_and_is_atomic_when_staged_entries_do_not_fit() {
+        let mut stm = ShortTermMemory::new("s", 2);
+        stm.upsert(record("pinned", 1.0, true, 1)).unwrap();
+        stm.upsert(record("old", 0.2, false, 2)).unwrap();
+
+        stm.replace_unpinned(vec![record("pinned", 0.1, true, 3), record("new", 0.9, false, 4)])
+            .unwrap();
+        let keys: Vec<String> = stm.entries().map(|entry| entry.key.clone()).collect();
+        assert!(keys.iter().any(|key| key == "pinned"));
+        assert!(keys.iter().any(|key| key == "new"));
+        assert!(!keys.iter().any(|key| key == "old"));
+
+        let before: Vec<String> = stm.entries().map(|entry| entry.id.clone()).collect();
+        assert_eq!(
+            stm.replace_unpinned(vec![record("one", 0.5, false, 5), record("two", 0.5, false, 6)]),
+            Err(StmError::AllSlotsPinned)
+        );
+        let after: Vec<String> = stm.entries().map(|entry| entry.id.clone()).collect();
+        assert_eq!(before, after);
     }
 }

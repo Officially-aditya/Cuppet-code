@@ -1,0 +1,2943 @@
+{
+  "schema": 1,
+  "status": "completed",
+  "createdAt": "2026-08-01T14:08:04.163Z",
+  "updatedAt": "2026-08-01T14:52:40.029Z",
+  "model": {
+    "providerID": "openai",
+    "modelID": "gpt-5.6-luna",
+    "variant": "low"
+  },
+  "opencodeVersion": "1.18.4",
+  "officialBinary": "/private/tmp/cuppet-opencode-official-1.18.4/node_modules/opencode-darwin-arm64/bin/opencode",
+  "fixture": {
+    "hash": "3a82376018e6ca518477985ad55f87717ba87e4ed0cfdbb4c7eb188b0615f692",
+    "files": [
+      "README.md",
+      "projects/README.md"
+    ]
+  },
+  "tasks": [
+    "landing-page",
+    "todo-list-app",
+    "calculator-web-app",
+    "survey-form",
+    "personal-blog",
+    "business-portfolio",
+    "quiz-game",
+    "meme-generator",
+    "address-book",
+    "e-library"
+  ],
+  "design": "Two fresh workspaces and two foreground sessions. The arms alternate task order, but each arm receives all ten prompts in one persistent session. Official OpenCode uses the unpatched upstream server; Cuppet uses the live plugin and TST path. Every task is evaluated immediately with hidden file, behavior-contract, syntax, network, and scope checks.",
+  "checkpoint": {
+    "lastEvent": "benchmark-completed",
+    "error": "task acceptance checks failed"
+  },
+  "arms": {
+    "opencode": {
+      "arm": "opencode",
+      "workspace": "/private/tmp/cuppet-10-task-X9Jll2/opencode/workspace",
+      "runtimeRoot": "/private/tmp/cuppet-10-task-X9Jll2/opencode/runtime",
+      "sessionID": "ses_04258b64cffeA6icazfJ8PS1Jt",
+      "promptCount": 10,
+      "tasks": [
+        {
+          "index": 1,
+          "slug": "landing-page",
+          "title": "Responsive product landing page",
+          "success": true,
+          "promptStartedAt": "2026-08-01T14:08:15.177Z",
+          "promptCompletedAt": "2026-08-01T14:11:13.913Z",
+          "agentDurationMs": 178727,
+          "evaluationDurationMs": 4,
+          "endToEndDurationMs": 178731,
+          "usage": {
+            "input": 25475,
+            "output": 7162,
+            "reasoning": 112,
+            "cacheRead": 130048,
+            "cacheWrite": 0,
+            "totalModel": 32749,
+            "totalWithCache": 162797,
+            "eventCount": 11,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 25475,
+              "output": 7162,
+              "reasoning": 112,
+              "cacheRead": 130048,
+              "cacheWrite": 0,
+              "totalModel": 32749,
+              "totalWithCache": 162797
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 25475,
+            "output": 7162,
+            "reasoning": 112,
+            "cacheRead": 130048,
+            "cacheWrite": 0,
+            "totalModel": 32749,
+            "totalWithCache": 162797
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 14,
+          "permissionRequests": 6,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 15,
+            "totalChecks": 15,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:semantic header": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:navigation": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:main content": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:hero content": {
+                "passed": true,
+                "detail": "index.html: found 7, expected at least 1"
+              },
+              "pattern:primary CTA": {
+                "passed": true,
+                "detail": "index.html: found 4, expected at least 1"
+              },
+              "pattern:feature section": {
+                "passed": true,
+                "detail": "index.html: found 14, expected at least 1"
+              },
+              "pattern:contact or footer": {
+                "passed": true,
+                "detail": "index.html: found 8, expected at least 1"
+              },
+              "pattern:CSS variables": {
+                "passed": true,
+                "detail": "styles.css: found 8, expected at least 2"
+              },
+              "pattern:responsive breakpoint": {
+                "passed": true,
+                "detail": "styles.css: found 1, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 25, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              }
+            },
+            "files": [
+              "README.md",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {}
+          },
+          "finalMessage": "Created `projects/landing-page` with exactly: - `index.html` - `styles.css` - `README.md` Includes responsive layout, semantic navigation, hero CTA, features, testimonial, pricing, contact/footer, accessible labels, visible focus styles, CSS variables, and fully local assets/content. Verified no remote references and no diff issues."
+        },
+        {
+          "index": 2,
+          "slug": "todo-list-app",
+          "title": "Persistent todo list app",
+          "success": true,
+          "promptStartedAt": "2026-08-01T14:16:00.980Z",
+          "promptCompletedAt": "2026-08-01T14:17:39.899Z",
+          "agentDurationMs": 98876,
+          "evaluationDurationMs": 38,
+          "endToEndDurationMs": 98914,
+          "usage": {
+            "input": 12411,
+            "output": 4502,
+            "reasoning": 75,
+            "cacheRead": 162816,
+            "cacheWrite": 0,
+            "totalModel": 16988,
+            "totalWithCache": 179804,
+            "eventCount": 8,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 12411,
+              "output": 4502,
+              "reasoning": 75,
+              "cacheRead": 162816,
+              "cacheWrite": 0,
+              "totalModel": 16988,
+              "totalWithCache": 179804
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 37886,
+            "output": 11664,
+            "reasoning": 187,
+            "cacheRead": 292864,
+            "cacheWrite": 0,
+            "totalModel": 49737,
+            "totalWithCache": 342601
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 11,
+          "permissionRequests": 4,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 16,
+            "totalChecks": 16,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:todo input": {
+                "passed": true,
+                "detail": "index.html: found 2, expected at least 1"
+              },
+              "pattern:todo list container": {
+                "passed": true,
+                "detail": "index.html: found 3, expected at least 1"
+              },
+              "pattern:filter controls": {
+                "passed": true,
+                "detail": "index.html: found 8, expected at least 1"
+              },
+              "pattern:local persistence": {
+                "passed": true,
+                "detail": "app.js: found 2, expected at least 2"
+              },
+              "pattern:event listeners": {
+                "passed": true,
+                "detail": "app.js: found 5, expected at least 2"
+              },
+              "pattern:completion behavior": {
+                "passed": true,
+                "detail": "app.js: found 13, expected at least 1"
+              },
+              "pattern:delete behavior": {
+                "passed": true,
+                "detail": "app.js: found 3, expected at least 1"
+              },
+              "pattern:filter behavior": {
+                "passed": true,
+                "detail": "app.js: found 28, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 9, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 35
+              }
+            }
+          },
+          "finalMessage": "Created `projects/todo-list-app` with exactly: - `index.html` - `styles.css` - `app.js` - `README.md` Implemented add, complete, delete, filtering, clear completed, accurate counts, localStorage persistence, accessible controls, empty states, keyboard focus styles, and responsive layout. Verified JavaScript syntax, interactions, file count, and diff formatting."
+        },
+        {
+          "index": 3,
+          "slug": "calculator-web-app",
+          "title": "Keyboard-friendly calculator",
+          "success": true,
+          "promptStartedAt": "2026-08-01T14:17:39.911Z",
+          "promptCompletedAt": "2026-08-01T14:19:20.641Z",
+          "agentDurationMs": 100682,
+          "evaluationDurationMs": 44,
+          "endToEndDurationMs": 100726,
+          "usage": {
+            "input": 11693,
+            "output": 3903,
+            "reasoning": 186,
+            "cacheRead": 219136,
+            "cacheWrite": 0,
+            "totalModel": 15782,
+            "totalWithCache": 234918,
+            "eventCount": 8,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 11693,
+              "output": 3903,
+              "reasoning": 186,
+              "cacheRead": 219136,
+              "cacheWrite": 0,
+              "totalModel": 15782,
+              "totalWithCache": 234918
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 49579,
+            "output": 15567,
+            "reasoning": 373,
+            "cacheRead": 512000,
+            "cacheWrite": 0,
+            "totalModel": 65519,
+            "totalWithCache": 577519
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 11,
+          "permissionRequests": 4,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 16,
+            "totalChecks": 16,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:calculator display": {
+                "passed": true,
+                "detail": "index.html: found 4, expected at least 1"
+              },
+              "pattern:digit buttons": {
+                "passed": true,
+                "detail": "index.html: found 10, expected at least 4"
+              },
+              "pattern:operator controls": {
+                "passed": true,
+                "detail": "index.html: found 19, expected at least 1"
+              },
+              "pattern:equals and clear": {
+                "passed": true,
+                "detail": "index.html: found 5, expected at least 2"
+              },
+              "pattern:event listeners": {
+                "passed": true,
+                "detail": "app.js: found 2, expected at least 2"
+              },
+              "pattern:keyboard support": {
+                "passed": true,
+                "detail": "app.js: found 1, expected at least 1"
+              },
+              "pattern:arithmetic logic": {
+                "passed": true,
+                "detail": "app.js: found 62, expected at least 1"
+              },
+              "pattern:zero guard": {
+                "passed": true,
+                "detail": "app.js: found 11, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 4, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 38
+              }
+            }
+          },
+          "finalMessage": "Created `projects/calculator-web-app` with exactly: - `index.html` - `styles.css` - `app.js` - `README.md` Implemented calculator operations, decimals, clear/delete, keyboard shortcuts, accessible live display, responsive keypad, focus states, malformed-input guards, and division-by-zero handling. Verified JavaScript syntax, edge-case logic, file count, and diff formatting."
+        },
+        {
+          "index": 4,
+          "slug": "survey-form",
+          "title": "Accessible survey form",
+          "success": true,
+          "promptStartedAt": "2026-08-01T14:23:33.705Z",
+          "promptCompletedAt": "2026-08-01T14:25:35.803Z",
+          "agentDurationMs": 122051,
+          "evaluationDurationMs": 44,
+          "endToEndDurationMs": 122095,
+          "usage": {
+            "input": 12805,
+            "output": 5076,
+            "reasoning": 372,
+            "cacheRead": 275456,
+            "cacheWrite": 0,
+            "totalModel": 18253,
+            "totalWithCache": 293709,
+            "eventCount": 8,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 12805,
+              "output": 5076,
+              "reasoning": 372,
+              "cacheRead": 275456,
+              "cacheWrite": 0,
+              "totalModel": 18253,
+              "totalWithCache": 293709
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 62384,
+            "output": 20643,
+            "reasoning": 745,
+            "cacheRead": 787456,
+            "cacheWrite": 0,
+            "totalModel": 83772,
+            "totalWithCache": 871228
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 11,
+          "permissionRequests": 4,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 18,
+            "totalChecks": 18,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:form element": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:labels": {
+                "passed": true,
+                "detail": "index.html: found 13, expected at least 3"
+              },
+              "pattern:required controls": {
+                "passed": true,
+                "detail": "index.html: found 5, expected at least 3"
+              },
+              "pattern:email field": {
+                "passed": true,
+                "detail": "index.html: found 8, expected at least 1"
+              },
+              "pattern:rating choice": {
+                "passed": true,
+                "detail": "index.html: found 13, expected at least 1"
+              },
+              "pattern:select field": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:checkbox group": {
+                "passed": true,
+                "detail": "index.html: found 4, expected at least 1"
+              },
+              "pattern:success state": {
+                "passed": true,
+                "detail": "index.html: found 4, expected at least 1"
+              },
+              "pattern:prevent default": {
+                "passed": true,
+                "detail": "app.js: found 1, expected at least 1"
+              },
+              "pattern:validation handling": {
+                "passed": true,
+                "detail": "app.js: found 16, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 13, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 39
+              }
+            }
+          },
+          "finalMessage": "Created `projects/survey-form` with exactly: - `index.html` - `styles.css` - `app.js` - `README.md` Implemented accessible fields, native constraints, inline validation, required rating and consent, responsive styling, keyboard focus states, local `preventDefault` submission, reset behavior, and a clear success state. Verified validation paths, no network behavior, JavaScript syntax, file scope, and diff formatting."
+        },
+        {
+          "index": 5,
+          "slug": "personal-blog",
+          "title": "Personal blog with local search",
+          "success": true,
+          "promptStartedAt": "2026-08-01T14:25:35.820Z",
+          "promptCompletedAt": "2026-08-01T14:28:07.156Z",
+          "agentDurationMs": 151287,
+          "evaluationDurationMs": 43,
+          "endToEndDurationMs": 151330,
+          "usage": {
+            "input": 16103,
+            "output": 6895,
+            "reasoning": 100,
+            "cacheRead": 392704,
+            "cacheWrite": 0,
+            "totalModel": 23098,
+            "totalWithCache": 415802,
+            "eventCount": 9,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 16103,
+              "output": 6895,
+              "reasoning": 100,
+              "cacheRead": 392704,
+              "cacheWrite": 0,
+              "totalModel": 23098,
+              "totalWithCache": 415802
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 78487,
+            "output": 27538,
+            "reasoning": 845,
+            "cacheRead": 1180160,
+            "cacheWrite": 0,
+            "totalModel": 106870,
+            "totalWithCache": 1287030
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 12,
+          "permissionRequests": 5,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 15,
+            "totalChecks": 15,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:blog navigation": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:author introduction": {
+                "passed": true,
+                "detail": "index.html: found 17, expected at least 1"
+              },
+              "pattern:article cards": {
+                "passed": true,
+                "detail": "index.html: found 3, expected at least 3"
+              },
+              "pattern:article dates": {
+                "passed": true,
+                "detail": "index.html: found 13, expected at least 3"
+              },
+              "pattern:article tags": {
+                "passed": true,
+                "detail": "index.html: found 11, expected at least 1"
+              },
+              "pattern:search control": {
+                "passed": true,
+                "detail": "index.html: found 15, expected at least 1"
+              },
+              "pattern:local filtering": {
+                "passed": true,
+                "detail": "app.js: found 4, expected at least 2"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 9, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 37
+              }
+            }
+          },
+          "finalMessage": "Created `projects/personal-blog` with exactly: - `index.html` - `styles.css` - `app.js` - `README.md` Included semantic navigation, author introduction, three article cards, local search and tag filtering, accessible controls, empty state, responsive layout, focus styles, and self-contained content. Verified the filtering script, anchor links, JavaScript syntax, file scope, and diff formatting."
+        },
+        {
+          "index": 6,
+          "slug": "business-portfolio",
+          "title": "Business portfolio website",
+          "success": true,
+          "promptStartedAt": "2026-08-01T14:32:18.405Z",
+          "promptCompletedAt": "2026-08-01T14:35:13.546Z",
+          "agentDurationMs": 175091,
+          "evaluationDurationMs": 47,
+          "endToEndDurationMs": 175138,
+          "usage": {
+            "input": 19738,
+            "output": 7624,
+            "reasoning": 171,
+            "cacheRead": 498176,
+            "cacheWrite": 0,
+            "totalModel": 27533,
+            "totalWithCache": 525709,
+            "eventCount": 9,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 19738,
+              "output": 7624,
+              "reasoning": 171,
+              "cacheRead": 498176,
+              "cacheWrite": 0,
+              "totalModel": 27533,
+              "totalWithCache": 525709
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 98225,
+            "output": 35162,
+            "reasoning": 1016,
+            "cacheRead": 1678336,
+            "cacheWrite": 0,
+            "totalModel": 134403,
+            "totalWithCache": 1812739
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 12,
+          "permissionRequests": 5,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 15,
+            "totalChecks": 15,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:business hero": {
+                "passed": true,
+                "detail": "index.html: found 13, expected at least 1"
+              },
+              "pattern:services": {
+                "passed": true,
+                "detail": "index.html: found 9, expected at least 1"
+              },
+              "pattern:case studies": {
+                "passed": true,
+                "detail": "index.html: found 3, expected at least 1"
+              },
+              "pattern:three portfolio items": {
+                "passed": true,
+                "detail": "index.html: found 23, expected at least 3"
+              },
+              "pattern:contact path": {
+                "passed": true,
+                "detail": "index.html: found 23, expected at least 1"
+              },
+              "pattern:theme or form behavior": {
+                "passed": true,
+                "detail": "app.js: found 22, expected at least 2"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 20, expected at least 1"
+              },
+              "pattern:focus styles": {
+                "passed": true,
+                "detail": "styles.css: found 3, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 37
+              }
+            }
+          },
+          "finalMessage": "Created `projects/business-portfolio` with exactly: - `index.html` - `styles.css` - `app.js` - `README.md` Included hero CTA, services, process-style capabilities, three projects, metrics, about section, contact form, responsive navigation, theme toggle with persistence, local validation, accessible labels, and focus styles. Verified JavaScript syntax, page structure, local-only behavior, file scope, and diff formatting."
+        },
+        {
+          "index": 7,
+          "slug": "quiz-game",
+          "title": "Interactive quiz game",
+          "success": true,
+          "promptStartedAt": "2026-08-01T14:35:13.570Z",
+          "promptCompletedAt": "2026-08-01T14:37:36.380Z",
+          "agentDurationMs": 142762,
+          "evaluationDurationMs": 45,
+          "endToEndDurationMs": 142807,
+          "usage": {
+            "input": 17489,
+            "output": 5956,
+            "reasoning": 189,
+            "cacheRead": 687104,
+            "cacheWrite": 0,
+            "totalModel": 23634,
+            "totalWithCache": 710738,
+            "eventCount": 10,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 17489,
+              "output": 5956,
+              "reasoning": 189,
+              "cacheRead": 687104,
+              "cacheWrite": 0,
+              "totalModel": 23634,
+              "totalWithCache": 710738
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 115714,
+            "output": 41118,
+            "reasoning": 1205,
+            "cacheRead": 2365440,
+            "cacheWrite": 0,
+            "totalModel": 158037,
+            "totalWithCache": 2523477
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 13,
+          "permissionRequests": 6,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 17,
+            "totalChecks": 17,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:quiz shell": {
+                "passed": true,
+                "detail": "index.html: found 28, expected at least 1"
+              },
+              "pattern:answer controls": {
+                "passed": true,
+                "detail": "index.html: found 4, expected at least 1"
+              },
+              "pattern:score display": {
+                "passed": true,
+                "detail": "index.html: found 12, expected at least 1"
+              },
+              "pattern:next and restart controls": {
+                "passed": true,
+                "detail": "index.html: found 5, expected at least 2"
+              },
+              "pattern:question data": {
+                "passed": true,
+                "detail": "app.js: found 3, expected at least 1"
+              },
+              "pattern:at least five questions": {
+                "passed": true,
+                "detail": "app.js: found 31, expected at least 5"
+              },
+              "pattern:score state": {
+                "passed": true,
+                "detail": "app.js: found 28, expected at least 1"
+              },
+              "pattern:event listeners": {
+                "passed": true,
+                "detail": "app.js: found 4, expected at least 2"
+              },
+              "pattern:next flow": {
+                "passed": true,
+                "detail": "app.js: found 24, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 11, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 35
+              }
+            }
+          },
+          "finalMessage": "Created `projects/quiz-game` with exactly: - `index.html` - `styles.css` - `app.js` - `README.md` Implemented start flow, five local questions, answer locking, feedback, progress, scoring, next-question flow, final results, restart, responsive layout, and focus states. Verified state transitions, double-answer prevention, restart behavior, accessibility attributes, JavaScript syntax, file scope, and diff formatting."
+        },
+        {
+          "index": 8,
+          "slug": "meme-generator",
+          "title": "Local meme generator",
+          "success": false,
+          "promptStartedAt": "2026-08-01T14:40:15.918Z",
+          "promptCompletedAt": "2026-08-01T14:43:11.516Z",
+          "agentDurationMs": 175546,
+          "evaluationDurationMs": 49,
+          "endToEndDurationMs": 175595,
+          "usage": {
+            "input": 19116,
+            "output": 7222,
+            "reasoning": 397,
+            "cacheRead": 887296,
+            "cacheWrite": 0,
+            "totalModel": 26735,
+            "totalWithCache": 914031,
+            "eventCount": 11,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 19116,
+              "output": 7222,
+              "reasoning": 397,
+              "cacheRead": 887296,
+              "cacheWrite": 0,
+              "totalModel": 26735,
+              "totalWithCache": 914031
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 134830,
+            "output": 48340,
+            "reasoning": 1602,
+            "cacheRead": 3252736,
+            "cacheWrite": 0,
+            "totalModel": 184772,
+            "totalWithCache": 3437508
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 16,
+          "permissionRequests": 6,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 15,
+            "totalChecks": 16,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:image input": {
+                "passed": true,
+                "detail": "index.html: found 9, expected at least 1"
+              },
+              "pattern:top and bottom text": {
+                "passed": false,
+                "detail": "index.html: found 1, expected at least 2"
+              },
+              "pattern:preview surface": {
+                "passed": true,
+                "detail": "index.html: found 8, expected at least 1"
+              },
+              "pattern:download control": {
+                "passed": true,
+                "detail": "index.html: found 6, expected at least 1"
+              },
+              "pattern:file handling": {
+                "passed": true,
+                "detail": "app.js: found 22, expected at least 1"
+              },
+              "pattern:live updates": {
+                "passed": true,
+                "detail": "app.js: found 16, expected at least 2"
+              },
+              "pattern:canvas or download implementation": {
+                "passed": true,
+                "detail": "app.js: found 24, expected at least 2"
+              },
+              "pattern:reset behavior": {
+                "passed": true,
+                "detail": "app.js: found 6, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 11, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 39
+              }
+            }
+          },
+          "finalMessage": "Created `projects/meme-generator` with exactly: - `index.html` - `styles.css` - `app.js` - `README.md` Implemented local image selection, built-in placeholder, live canvas preview, readable text overlays, reset, actual PNG download, responsive layout, accessibility labels, and focus styles. Verified file input, text update, reset, download paths, JavaScript syntax, file scope, and no network references.",
+          "error": "task acceptance checks failed"
+        },
+        {
+          "index": 9,
+          "slug": "address-book",
+          "title": "Persistent address book",
+          "success": true,
+          "promptStartedAt": "2026-08-01T14:43:11.544Z",
+          "promptCompletedAt": "2026-08-01T14:45:49.358Z",
+          "agentDurationMs": 157721,
+          "evaluationDurationMs": 54,
+          "endToEndDurationMs": 157775,
+          "usage": {
+            "input": 18894,
+            "output": 6811,
+            "reasoning": 154,
+            "cacheRead": 934912,
+            "cacheWrite": 0,
+            "totalModel": 25859,
+            "totalWithCache": 960771,
+            "eventCount": 10,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 18894,
+              "output": 6811,
+              "reasoning": 154,
+              "cacheRead": 934912,
+              "cacheWrite": 0,
+              "totalModel": 25859,
+              "totalWithCache": 960771
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 153724,
+            "output": 55151,
+            "reasoning": 1756,
+            "cacheRead": 4187648,
+            "cacheWrite": 0,
+            "totalModel": 210631,
+            "totalWithCache": 4398279
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 15,
+          "permissionRequests": 6,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 17,
+            "totalChecks": 17,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:contact form": {
+                "passed": true,
+                "detail": "index.html: found 3, expected at least 1"
+              },
+              "pattern:contact fields": {
+                "passed": true,
+                "detail": "index.html: found 30, expected at least 4"
+              },
+              "pattern:search control": {
+                "passed": true,
+                "detail": "index.html: found 5, expected at least 1"
+              },
+              "pattern:favorite filter": {
+                "passed": true,
+                "detail": "index.html: found 3, expected at least 1"
+              },
+              "pattern:contact list": {
+                "passed": true,
+                "detail": "index.html: found 12, expected at least 1"
+              },
+              "pattern:local persistence": {
+                "passed": true,
+                "detail": "app.js: found 2, expected at least 2"
+              },
+              "pattern:CRUD behavior": {
+                "passed": true,
+                "detail": "app.js: found 35, expected at least 3"
+              },
+              "pattern:search behavior": {
+                "passed": true,
+                "detail": "app.js: found 20, expected at least 2"
+              },
+              "pattern:favorite behavior": {
+                "passed": true,
+                "detail": "app.js: found 22, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 16, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 40
+              }
+            }
+          },
+          "finalMessage": "Created `projects/address-book` with exactly: - `index.html` - `styles.css` - `app.js` - `README.md` Implemented contact CRUD, search, categories, favorites filtering, localStorage persistence, validation, empty states, responsive cards, and accessible controls. Verified CRUD, search, persistence, favorite behavior, malformed stored data handling, JavaScript syntax, file scope, and diff formatting."
+        },
+        {
+          "index": 10,
+          "slug": "e-library",
+          "title": "Searchable e-library",
+          "success": true,
+          "promptStartedAt": "2026-08-01T14:49:40.401Z",
+          "promptCompletedAt": "2026-08-01T14:52:40.002Z",
+          "agentDurationMs": 179551,
+          "evaluationDurationMs": 48,
+          "endToEndDurationMs": 179599,
+          "usage": {
+            "input": 18739,
+            "output": 7638,
+            "reasoning": 290,
+            "cacheRead": 957952,
+            "cacheWrite": 0,
+            "totalModel": 26667,
+            "totalWithCache": 984619,
+            "eventCount": 9,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 18739,
+              "output": 7638,
+              "reasoning": 290,
+              "cacheRead": 957952,
+              "cacheWrite": 0,
+              "totalModel": 26667,
+              "totalWithCache": 984619
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 172463,
+            "output": 62789,
+            "reasoning": 2046,
+            "cacheRead": 5145600,
+            "cacheWrite": 0,
+            "totalModel": 237298,
+            "totalWithCache": 5382898
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 12,
+          "permissionRequests": 5,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 18,
+            "totalChecks": 18,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:library shell": {
+                "passed": true,
+                "detail": "index.html: found 12, expected at least 1"
+              },
+              "pattern:search control": {
+                "passed": true,
+                "detail": "index.html: found 6, expected at least 1"
+              },
+              "pattern:category filter": {
+                "passed": true,
+                "detail": "index.html: found 7, expected at least 1"
+              },
+              "pattern:details control": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:reading list control": {
+                "passed": true,
+                "detail": "index.html: found 4, expected at least 1"
+              },
+              "pattern:book data": {
+                "passed": true,
+                "detail": "app.js: found 31, expected at least 1"
+              },
+              "pattern:at least six books": {
+                "passed": true,
+                "detail": "app.js: found 6, expected at least 6"
+              },
+              "pattern:search/filter behavior": {
+                "passed": true,
+                "detail": "app.js: found 15, expected at least 2"
+              },
+              "pattern:local persistence": {
+                "passed": true,
+                "detail": "app.js: found 4, expected at least 2"
+              },
+              "pattern:reading status behavior": {
+                "passed": true,
+                "detail": "app.js: found 65, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 12, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 34
+              }
+            }
+          },
+          "finalMessage": "Created `projects/e-library` with exactly: - `index.html` - `styles.css` - `app.js` - `README.md` Included six local books, search, category filtering, reading-list view, book details dialog, reading/finished state progression, localStorage persistence, empty states, responsive cards, and accessible controls. Verified search, filtering, details, persistence, reading-state behavior, JavaScript syntax, file scope, and diff formatting."
+        }
+      ],
+      "finalSessionUsage": {
+        "input": 172463,
+        "output": 62789,
+        "reasoning": 2046,
+        "cacheRead": 5145600,
+        "cacheWrite": 0,
+        "totalModel": 237298,
+        "totalWithCache": 5382898
+      },
+      "totalDurationMs": 1482710,
+      "errors": [
+        "task acceptance checks failed"
+      ],
+      "summary": {
+        "tasks": 10,
+        "completedPrompts": 10,
+        "successes": 9,
+        "successRate": 0.9,
+        "totalAgentDurationMs": 1482294,
+        "totalEndToEndDurationMs": 1482710,
+        "medianTaskDurationMs": 154552.5,
+        "totalUsage": {
+          "input": 172463,
+          "output": 62789,
+          "reasoning": 2046,
+          "cacheRead": 5145600,
+          "cacheWrite": 0,
+          "totalModel": 237298,
+          "totalWithCache": 5382898
+        },
+        "totalReportedCost": 0,
+        "costReported": false,
+        "compactions": 0,
+        "compactionTasks": 0,
+        "totalToolCalls": 127,
+        "totalPermissionRequests": 51,
+        "rejectedPermissions": 0,
+        "totalEvaluationChecks": 163,
+        "passedEvaluationChecks": 162,
+        "cacheShare": 0.9675703352893713
+      }
+    },
+    "cuppet": {
+      "arm": "cuppet",
+      "workspace": "/private/tmp/cuppet-10-task-X9Jll2/cuppet/workspace",
+      "runtimeRoot": "/private/tmp/cuppet-10-task-X9Jll2/cuppet/runtime",
+      "sessionID": "ses_042588ecfffeWzVGbfIZl32AEb",
+      "promptCount": 10,
+      "tasks": [
+        {
+          "index": 1,
+          "slug": "landing-page",
+          "title": "Responsive product landing page",
+          "success": true,
+          "promptStartedAt": "2026-08-01T14:11:13.932Z",
+          "promptCompletedAt": "2026-08-01T14:14:17.139Z",
+          "agentDurationMs": 183234,
+          "evaluationDurationMs": 2,
+          "endToEndDurationMs": 183236,
+          "usage": {
+            "input": 31008,
+            "output": 8421,
+            "reasoning": 170,
+            "cacheRead": 193024,
+            "cacheWrite": 0,
+            "totalModel": 39599,
+            "totalWithCache": 232623,
+            "eventCount": 14,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 31008,
+              "output": 8421,
+              "reasoning": 170,
+              "cacheRead": 193024,
+              "cacheWrite": 0,
+              "totalModel": 39599,
+              "totalWithCache": 232623
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 31008,
+            "output": 8421,
+            "reasoning": 170,
+            "cacheRead": 193024,
+            "cacheWrite": 0,
+            "totalModel": 39599,
+            "totalWithCache": 232623
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 17,
+          "permissionRequests": 6,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 15,
+            "totalChecks": 15,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:semantic header": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:navigation": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:main content": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:hero content": {
+                "passed": true,
+                "detail": "index.html: found 7, expected at least 1"
+              },
+              "pattern:primary CTA": {
+                "passed": true,
+                "detail": "index.html: found 4, expected at least 1"
+              },
+              "pattern:feature section": {
+                "passed": true,
+                "detail": "index.html: found 17, expected at least 1"
+              },
+              "pattern:contact or footer": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:CSS variables": {
+                "passed": true,
+                "detail": "styles.css: found 11, expected at least 2"
+              },
+              "pattern:responsive breakpoint": {
+                "passed": true,
+                "detail": "styles.css: found 1, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 23, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              }
+            },
+            "files": [
+              "README.md",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {}
+          },
+          "finalMessage": "Created `projects/landing-page` with exactly: - `index.html` - `styles.css` - `README.md` Includes semantic sections, responsive layout, CSS variables, mobile breakpoint, accessible labels, visible focus states, inline CSS artwork, and no remote assets or dependencies. Verified only the requested directory was modified."
+        },
+        {
+          "index": 2,
+          "slug": "todo-list-app",
+          "title": "Persistent todo list app",
+          "success": true,
+          "promptStartedAt": "2026-08-01T14:14:17.155Z",
+          "promptCompletedAt": "2026-08-01T14:16:00.961Z",
+          "agentDurationMs": 103761,
+          "evaluationDurationMs": 43,
+          "endToEndDurationMs": 103804,
+          "usage": {
+            "input": 47766,
+            "output": 4496,
+            "reasoning": 155,
+            "cacheRead": 193024,
+            "cacheWrite": 0,
+            "totalModel": 52417,
+            "totalWithCache": 245441,
+            "eventCount": 9,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 47766,
+              "output": 4496,
+              "reasoning": 155,
+              "cacheRead": 193024,
+              "cacheWrite": 0,
+              "totalModel": 52417,
+              "totalWithCache": 245441
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 78774,
+            "output": 12917,
+            "reasoning": 325,
+            "cacheRead": 386048,
+            "cacheWrite": 0,
+            "totalModel": 92016,
+            "totalWithCache": 478064
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 12,
+          "permissionRequests": 4,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 16,
+            "totalChecks": 16,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:todo input": {
+                "passed": true,
+                "detail": "index.html: found 2, expected at least 1"
+              },
+              "pattern:todo list container": {
+                "passed": true,
+                "detail": "index.html: found 3, expected at least 1"
+              },
+              "pattern:filter controls": {
+                "passed": true,
+                "detail": "index.html: found 8, expected at least 1"
+              },
+              "pattern:local persistence": {
+                "passed": true,
+                "detail": "app.js: found 2, expected at least 2"
+              },
+              "pattern:event listeners": {
+                "passed": true,
+                "detail": "app.js: found 4, expected at least 2"
+              },
+              "pattern:completion behavior": {
+                "passed": true,
+                "detail": "app.js: found 18, expected at least 1"
+              },
+              "pattern:delete behavior": {
+                "passed": true,
+                "detail": "app.js: found 3, expected at least 1"
+              },
+              "pattern:filter behavior": {
+                "passed": true,
+                "detail": "app.js: found 36, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 9, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 38
+              }
+            }
+          },
+          "finalMessage": "Built and inspected `projects/todo-list-app` with: - `index.html` - `styles.css` - `app.js` - `README.md` Implemented add, complete, delete, filtering, clear completed, accurate counts, localStorage persistence, accessibility labels, keyboard-friendly controls, empty states, and responsive styling."
+        },
+        {
+          "index": 3,
+          "slug": "calculator-web-app",
+          "title": "Keyboard-friendly calculator",
+          "success": true,
+          "promptStartedAt": "2026-08-01T14:19:20.666Z",
+          "promptCompletedAt": "2026-08-01T14:21:11.195Z",
+          "agentDurationMs": 110477,
+          "evaluationDurationMs": 46,
+          "endToEndDurationMs": 110523,
+          "usage": {
+            "input": 219153,
+            "output": 4217,
+            "reasoning": 264,
+            "cacheRead": 87552,
+            "cacheWrite": 0,
+            "totalModel": 223634,
+            "totalWithCache": 311186,
+            "eventCount": 9,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 219153,
+              "output": 4217,
+              "reasoning": 264,
+              "cacheRead": 87552,
+              "cacheWrite": 0,
+              "totalModel": 223634,
+              "totalWithCache": 311186
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 297927,
+            "output": 17134,
+            "reasoning": 589,
+            "cacheRead": 473600,
+            "cacheWrite": 0,
+            "totalModel": 315650,
+            "totalWithCache": 789250
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 12,
+          "permissionRequests": 6,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 16,
+            "totalChecks": 16,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:calculator display": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:digit buttons": {
+                "passed": true,
+                "detail": "index.html: found 15, expected at least 4"
+              },
+              "pattern:operator controls": {
+                "passed": true,
+                "detail": "index.html: found 15, expected at least 1"
+              },
+              "pattern:equals and clear": {
+                "passed": true,
+                "detail": "index.html: found 4, expected at least 2"
+              },
+              "pattern:event listeners": {
+                "passed": true,
+                "detail": "app.js: found 2, expected at least 2"
+              },
+              "pattern:keyboard support": {
+                "passed": true,
+                "detail": "app.js: found 1, expected at least 1"
+              },
+              "pattern:arithmetic logic": {
+                "passed": true,
+                "detail": "app.js: found 53, expected at least 1"
+              },
+              "pattern:zero guard": {
+                "passed": true,
+                "detail": "app.js: found 12, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 3, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 40
+              }
+            }
+          },
+          "finalMessage": "Built `projects/calculator-web-app` with: - `index.html` - `styles.css` - `app.js` - `README.md` Includes responsive keypad, keyboard shortcuts, accessible expression/result display, guarded operations, division-by-zero handling, delete, clear, equals, visible focus states, and no dependencies or remote assets. JavaScript syntax and edge-case paths were inspected."
+        },
+        {
+          "index": 4,
+          "slug": "survey-form",
+          "title": "Accessible survey form",
+          "success": true,
+          "promptStartedAt": "2026-08-01T14:21:11.214Z",
+          "promptCompletedAt": "2026-08-01T14:23:33.683Z",
+          "agentDurationMs": 142421,
+          "evaluationDurationMs": 44,
+          "endToEndDurationMs": 142465,
+          "usage": {
+            "input": 290145,
+            "output": 5561,
+            "reasoning": 625,
+            "cacheRead": 168448,
+            "cacheWrite": 0,
+            "totalModel": 296331,
+            "totalWithCache": 464779,
+            "eventCount": 11,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 290145,
+              "output": 5561,
+              "reasoning": 625,
+              "cacheRead": 168448,
+              "cacheWrite": 0,
+              "totalModel": 296331,
+              "totalWithCache": 464779
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 588072,
+            "output": 22695,
+            "reasoning": 1214,
+            "cacheRead": 642048,
+            "cacheWrite": 0,
+            "totalModel": 611981,
+            "totalWithCache": 1254029
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 17,
+          "permissionRequests": 9,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 18,
+            "totalChecks": 18,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:form element": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:labels": {
+                "passed": true,
+                "detail": "index.html: found 14, expected at least 3"
+              },
+              "pattern:required controls": {
+                "passed": true,
+                "detail": "index.html: found 6, expected at least 3"
+              },
+              "pattern:email field": {
+                "passed": true,
+                "detail": "index.html: found 8, expected at least 1"
+              },
+              "pattern:rating choice": {
+                "passed": true,
+                "detail": "index.html: found 14, expected at least 1"
+              },
+              "pattern:select field": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:checkbox group": {
+                "passed": true,
+                "detail": "index.html: found 5, expected at least 1"
+              },
+              "pattern:success state": {
+                "passed": true,
+                "detail": "index.html: found 4, expected at least 1"
+              },
+              "pattern:prevent default": {
+                "passed": true,
+                "detail": "app.js: found 1, expected at least 1"
+              },
+              "pattern:validation handling": {
+                "passed": true,
+                "detail": "app.js: found 16, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 8, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 37
+              }
+            }
+          },
+          "finalMessage": "Built `projects/survey-form` with: - `index.html` - `styles.css` - `app.js` - `README.md` Includes labeled fields, required rating and consent, select, checkbox group, textarea with character count, native validation, inline feedback, keyboard-accessible controls, responsive styling, no-network submission handling, and a clear success state. Validation paths and JavaScript syntax were inspected."
+        },
+        {
+          "index": 5,
+          "slug": "personal-blog",
+          "title": "Personal blog with local search",
+          "success": true,
+          "promptStartedAt": "2026-08-01T14:28:07.180Z",
+          "promptCompletedAt": "2026-08-01T14:30:29.603Z",
+          "agentDurationMs": 142422,
+          "evaluationDurationMs": 44,
+          "endToEndDurationMs": 142466,
+          "usage": {
+            "input": 318088,
+            "output": 6128,
+            "reasoning": 106,
+            "cacheRead": 77824,
+            "cacheWrite": 0,
+            "totalModel": 324322,
+            "totalWithCache": 402146,
+            "eventCount": 8,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 318088,
+              "output": 6128,
+              "reasoning": 106,
+              "cacheRead": 77824,
+              "cacheWrite": 0,
+              "totalModel": 324322,
+              "totalWithCache": 402146
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 906160,
+            "output": 28823,
+            "reasoning": 1320,
+            "cacheRead": 719872,
+            "cacheWrite": 0,
+            "totalModel": 936303,
+            "totalWithCache": 1656175
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 11,
+          "permissionRequests": 5,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 15,
+            "totalChecks": 15,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:blog navigation": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:author introduction": {
+                "passed": true,
+                "detail": "index.html: found 12, expected at least 1"
+              },
+              "pattern:article cards": {
+                "passed": true,
+                "detail": "index.html: found 3, expected at least 3"
+              },
+              "pattern:article dates": {
+                "passed": true,
+                "detail": "index.html: found 13, expected at least 3"
+              },
+              "pattern:article tags": {
+                "passed": true,
+                "detail": "index.html: found 16, expected at least 1"
+              },
+              "pattern:search control": {
+                "passed": true,
+                "detail": "index.html: found 13, expected at least 1"
+              },
+              "pattern:local filtering": {
+                "passed": true,
+                "detail": "app.js: found 5, expected at least 2"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 6, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 36
+              }
+            }
+          },
+          "finalMessage": "Built `projects/personal-blog` with: - `index.html` - `styles.css` - `app.js` - `README.md` Includes semantic navigation, author intro, three article cards, local search and tag filtering, accessible controls, empty state, about/contact sections, responsive layout, focus styles, and no remote assets or dependencies. JavaScript syntax and filtering behavior were inspected."
+        },
+        {
+          "index": 6,
+          "slug": "business-portfolio",
+          "title": "Business portfolio website",
+          "success": false,
+          "promptStartedAt": "2026-08-01T14:30:29.624Z",
+          "promptCompletedAt": "2026-08-01T14:32:18.376Z",
+          "agentDurationMs": 108704,
+          "evaluationDurationMs": 46,
+          "endToEndDurationMs": 108750,
+          "usage": {
+            "input": 377674,
+            "output": 4379,
+            "reasoning": 135,
+            "cacheRead": 77824,
+            "cacheWrite": 0,
+            "totalModel": 382188,
+            "totalWithCache": 460012,
+            "eventCount": 8,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 377674,
+              "output": 4379,
+              "reasoning": 135,
+              "cacheRead": 77824,
+              "cacheWrite": 0,
+              "totalModel": 382188,
+              "totalWithCache": 460012
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 1283834,
+            "output": 33202,
+            "reasoning": 1455,
+            "cacheRead": 797696,
+            "cacheWrite": 0,
+            "totalModel": 1318491,
+            "totalWithCache": 2116187
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 11,
+          "permissionRequests": 5,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 14,
+            "totalChecks": 15,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:business hero": {
+                "passed": true,
+                "detail": "index.html: found 3, expected at least 1"
+              },
+              "pattern:services": {
+                "passed": true,
+                "detail": "index.html: found 5, expected at least 1"
+              },
+              "pattern:case studies": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:three portfolio items": {
+                "passed": true,
+                "detail": "index.html: found 4, expected at least 3"
+              },
+              "pattern:contact path": {
+                "passed": true,
+                "detail": "index.html: found 7, expected at least 1"
+              },
+              "pattern:theme or form behavior": {
+                "passed": true,
+                "detail": "app.js: found 12, expected at least 2"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 15, expected at least 1"
+              },
+              "pattern:focus styles": {
+                "passed": true,
+                "detail": "styles.css: found 6, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 37
+              }
+            }
+          },
+          "finalMessage": "Built `projects/business-portfolio` with: - `index.html` - `styles.css` - `app.js` - `README.md` Includes hero CTA, services, capabilities, three-project portfolio grid, testimonials and metrics, about section, contact validation, local theme toggle, responsive layout, accessible labels, visible focus styles, and no dependencies or network calls.",
+          "error": "task acceptance checks failed"
+        },
+        {
+          "index": 7,
+          "slug": "quiz-game",
+          "title": "Interactive quiz game",
+          "success": true,
+          "promptStartedAt": "2026-08-01T14:37:36.415Z",
+          "promptCompletedAt": "2026-08-01T14:38:59.757Z",
+          "agentDurationMs": 83292,
+          "evaluationDurationMs": 47,
+          "endToEndDurationMs": 83339,
+          "usage": {
+            "input": 380722,
+            "output": 2898,
+            "reasoning": 75,
+            "cacheRead": 68096,
+            "cacheWrite": 0,
+            "totalModel": 383695,
+            "totalWithCache": 451791,
+            "eventCount": 7,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 380722,
+              "output": 2898,
+              "reasoning": 75,
+              "cacheRead": 68096,
+              "cacheWrite": 0,
+              "totalModel": 383695,
+              "totalWithCache": 451791
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 1664556,
+            "output": 36100,
+            "reasoning": 1530,
+            "cacheRead": 865792,
+            "cacheWrite": 0,
+            "totalModel": 1702186,
+            "totalWithCache": 2567978
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 10,
+          "permissionRequests": 5,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 17,
+            "totalChecks": 17,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:quiz shell": {
+                "passed": true,
+                "detail": "index.html: found 16, expected at least 1"
+              },
+              "pattern:answer controls": {
+                "passed": true,
+                "detail": "index.html: found 4, expected at least 1"
+              },
+              "pattern:score display": {
+                "passed": true,
+                "detail": "index.html: found 6, expected at least 1"
+              },
+              "pattern:next and restart controls": {
+                "passed": true,
+                "detail": "index.html: found 4, expected at least 2"
+              },
+              "pattern:question data": {
+                "passed": true,
+                "detail": "app.js: found 3, expected at least 1"
+              },
+              "pattern:at least five questions": {
+                "passed": true,
+                "detail": "app.js: found 19, expected at least 5"
+              },
+              "pattern:score state": {
+                "passed": true,
+                "detail": "app.js: found 24, expected at least 1"
+              },
+              "pattern:event listeners": {
+                "passed": true,
+                "detail": "app.js: found 4, expected at least 2"
+              },
+              "pattern:next flow": {
+                "passed": true,
+                "detail": "app.js: found 7, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 4, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 36
+              }
+            }
+          },
+          "finalMessage": "Built `projects/quiz-game` with: - `index.html` - `styles.css` - `app.js` - `README.md` Includes five local questions, start and results states, answer feedback, progress, scoring, next-question flow, restart, double-answer protection, responsive layout, keyboard-friendly buttons, visible focus styles, and no dependencies or network calls. State transitions and edge cases were inspected."
+        },
+        {
+          "index": 8,
+          "slug": "meme-generator",
+          "title": "Local meme generator",
+          "success": false,
+          "promptStartedAt": "2026-08-01T14:38:59.782Z",
+          "promptCompletedAt": "2026-08-01T14:40:15.885Z",
+          "agentDurationMs": 76051,
+          "evaluationDurationMs": 47,
+          "endToEndDurationMs": 76098,
+          "usage": {
+            "input": 417879,
+            "output": 2586,
+            "reasoning": 127,
+            "cacheRead": 68096,
+            "cacheWrite": 0,
+            "totalModel": 420592,
+            "totalWithCache": 488688,
+            "eventCount": 7,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 417879,
+              "output": 2586,
+              "reasoning": 127,
+              "cacheRead": 68096,
+              "cacheWrite": 0,
+              "totalModel": 420592,
+              "totalWithCache": 488688
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 2082435,
+            "output": 38686,
+            "reasoning": 1657,
+            "cacheRead": 933888,
+            "cacheWrite": 0,
+            "totalModel": 2122778,
+            "totalWithCache": 3056666
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 10,
+          "permissionRequests": 5,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 15,
+            "totalChecks": 16,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:image input": {
+                "passed": true,
+                "detail": "index.html: found 7, expected at least 1"
+              },
+              "pattern:top and bottom text": {
+                "passed": false,
+                "detail": "index.html: found 1, expected at least 2"
+              },
+              "pattern:preview surface": {
+                "passed": true,
+                "detail": "index.html: found 7, expected at least 1"
+              },
+              "pattern:download control": {
+                "passed": true,
+                "detail": "index.html: found 2, expected at least 1"
+              },
+              "pattern:file handling": {
+                "passed": true,
+                "detail": "app.js: found 20, expected at least 1"
+              },
+              "pattern:live updates": {
+                "passed": true,
+                "detail": "app.js: found 16, expected at least 2"
+              },
+              "pattern:canvas or download implementation": {
+                "passed": true,
+                "detail": "app.js: found 9, expected at least 2"
+              },
+              "pattern:reset behavior": {
+                "passed": true,
+                "detail": "app.js: found 3, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 4, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 34
+              }
+            }
+          },
+          "finalMessage": "Built `projects/meme-generator` with: - `index.html` - `styles.css` - `app.js` - `README.md` Includes local image selection, built-in placeholder, live canvas text preview, reset, local PNG download, responsive styling, accessible labels, focus states, and no network requests or dependencies. File input, text updates, reset, download, and JavaScript syntax were inspected.",
+          "error": "task acceptance checks failed"
+        },
+        {
+          "index": 9,
+          "slug": "address-book",
+          "title": "Persistent address book",
+          "success": true,
+          "promptStartedAt": "2026-08-01T14:45:49.405Z",
+          "promptCompletedAt": "2026-08-01T14:48:08.461Z",
+          "agentDurationMs": 139002,
+          "evaluationDurationMs": 47,
+          "endToEndDurationMs": 139049,
+          "usage": {
+            "input": 604998,
+            "output": 5047,
+            "reasoning": 356,
+            "cacheRead": 87552,
+            "cacheWrite": 0,
+            "totalModel": 610401,
+            "totalWithCache": 697953,
+            "eventCount": 9,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 604998,
+              "output": 5047,
+              "reasoning": 356,
+              "cacheRead": 87552,
+              "cacheWrite": 0,
+              "totalModel": 610401,
+              "totalWithCache": 697953
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 2687433,
+            "output": 43733,
+            "reasoning": 2013,
+            "cacheRead": 1021440,
+            "cacheWrite": 0,
+            "totalModel": 2733179,
+            "totalWithCache": 3754619
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 16,
+          "permissionRequests": 8,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 17,
+            "totalChecks": 17,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:contact form": {
+                "passed": true,
+                "detail": "index.html: found 2, expected at least 1"
+              },
+              "pattern:contact fields": {
+                "passed": true,
+                "detail": "index.html: found 16, expected at least 4"
+              },
+              "pattern:search control": {
+                "passed": true,
+                "detail": "index.html: found 6, expected at least 1"
+              },
+              "pattern:favorite filter": {
+                "passed": true,
+                "detail": "index.html: found 2, expected at least 1"
+              },
+              "pattern:contact list": {
+                "passed": true,
+                "detail": "index.html: found 8, expected at least 1"
+              },
+              "pattern:local persistence": {
+                "passed": true,
+                "detail": "app.js: found 2, expected at least 2"
+              },
+              "pattern:CRUD behavior": {
+                "passed": true,
+                "detail": "app.js: found 21, expected at least 3"
+              },
+              "pattern:search behavior": {
+                "passed": true,
+                "detail": "app.js: found 17, expected at least 2"
+              },
+              "pattern:favorite behavior": {
+                "passed": true,
+                "detail": "app.js: found 12, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 7, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 35
+              }
+            }
+          },
+          "finalMessage": "Built `projects/address-book` with: - `index.html` - `styles.css` - `app.js` - `README.md` Includes add/edit/delete, search, favorites filtering, localStorage persistence, required-field validation, empty state, responsive contact cards, accessible controls, and visible focus states. CRUD, search, persistence, favorites, and JavaScript syntax were inspected."
+        },
+        {
+          "index": 10,
+          "slug": "e-library",
+          "title": "Searchable e-library",
+          "success": false,
+          "promptStartedAt": "2026-08-01T14:48:08.492Z",
+          "promptCompletedAt": "2026-08-01T14:49:40.360Z",
+          "agentDurationMs": 91821,
+          "evaluationDurationMs": 45,
+          "endToEndDurationMs": 91866,
+          "usage": {
+            "input": 522395,
+            "output": 3408,
+            "reasoning": 115,
+            "cacheRead": 68096,
+            "cacheWrite": 0,
+            "totalModel": 525918,
+            "totalWithCache": 594014,
+            "eventCount": 7,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 522395,
+              "output": 3408,
+              "reasoning": 115,
+              "cacheRead": 68096,
+              "cacheWrite": 0,
+              "totalModel": 525918,
+              "totalWithCache": 594014
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 3209828,
+            "output": 47141,
+            "reasoning": 2128,
+            "cacheRead": 1089536,
+            "cacheWrite": 0,
+            "totalModel": 3259097,
+            "totalWithCache": 4348633
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 10,
+          "permissionRequests": 5,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 17,
+            "totalChecks": 18,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:library shell": {
+                "passed": true,
+                "detail": "index.html: found 5, expected at least 1"
+              },
+              "pattern:search control": {
+                "passed": true,
+                "detail": "index.html: found 5, expected at least 1"
+              },
+              "pattern:category filter": {
+                "passed": true,
+                "detail": "index.html: found 4, expected at least 1"
+              },
+              "pattern:details control": {
+                "passed": true,
+                "detail": "index.html: found 4, expected at least 1"
+              },
+              "pattern:reading list control": {
+                "passed": true,
+                "detail": "index.html: found 4, expected at least 1"
+              },
+              "pattern:book data": {
+                "passed": true,
+                "detail": "app.js: found 17, expected at least 1"
+              },
+              "pattern:at least six books": {
+                "passed": false,
+                "detail": "app.js: found 1, expected at least 6"
+              },
+              "pattern:search/filter behavior": {
+                "passed": true,
+                "detail": "app.js: found 6, expected at least 2"
+              },
+              "pattern:local persistence": {
+                "passed": true,
+                "detail": "app.js: found 2, expected at least 2"
+              },
+              "pattern:reading status behavior": {
+                "passed": true,
+                "detail": "app.js: found 19, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 8, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 32
+              }
+            }
+          },
+          "finalMessage": "Built `projects/e-library` with: - `index.html` - `styles.css` - `app.js` - `README.md` Includes six local books, search, category filtering, details modal, reading-status actions, saved shelf persisted in `localStorage`, accessible controls, empty states, responsive cards, and no dependencies or network calls. Search, filtering, details, persistence, and JavaScript syntax were inspected.",
+          "error": "task acceptance checks failed"
+        }
+      ],
+      "finalSessionUsage": {
+        "input": 3209828,
+        "output": 47141,
+        "reasoning": 2128,
+        "cacheRead": 1089536,
+        "cacheWrite": 0,
+        "totalModel": 3259097,
+        "totalWithCache": 4348633
+      },
+      "totalDurationMs": 1181596,
+      "errors": [
+        "task acceptance checks failed",
+        "task acceptance checks failed",
+        "task acceptance checks failed"
+      ],
+      "summary": {
+        "tasks": 10,
+        "completedPrompts": 10,
+        "successes": 7,
+        "successRate": 0.7,
+        "totalAgentDurationMs": 1181185,
+        "totalEndToEndDurationMs": 1181596,
+        "medianTaskDurationMs": 109636.5,
+        "totalUsage": {
+          "input": 3209828,
+          "output": 47141,
+          "reasoning": 2128,
+          "cacheRead": 1089536,
+          "cacheWrite": 0,
+          "totalModel": 3259097,
+          "totalWithCache": 4348633
+        },
+        "totalReportedCost": 0,
+        "costReported": false,
+        "compactions": 0,
+        "compactionTasks": 0,
+        "totalToolCalls": 126,
+        "totalPermissionRequests": 58,
+        "rejectedPermissions": 0,
+        "totalEvaluationChecks": 163,
+        "passedEvaluationChecks": 160,
+        "cacheShare": 0.2534179473987315
+      }
+    }
+  },
+  "summary": {
+    "opencode": {
+      "tasks": 10,
+      "completedPrompts": 10,
+      "successes": 9,
+      "successRate": 0.9,
+      "totalAgentDurationMs": 1482294,
+      "totalEndToEndDurationMs": 1482710,
+      "medianTaskDurationMs": 154552.5,
+      "totalUsage": {
+        "input": 172463,
+        "output": 62789,
+        "reasoning": 2046,
+        "cacheRead": 5145600,
+        "cacheWrite": 0,
+        "totalModel": 237298,
+        "totalWithCache": 5382898
+      },
+      "totalReportedCost": 0,
+      "costReported": false,
+      "compactions": 0,
+      "compactionTasks": 0,
+      "totalToolCalls": 127,
+      "totalPermissionRequests": 51,
+      "rejectedPermissions": 0,
+      "totalEvaluationChecks": 163,
+      "passedEvaluationChecks": 162,
+      "cacheShare": 0.9675703352893713
+    },
+    "cuppet": {
+      "tasks": 10,
+      "completedPrompts": 10,
+      "successes": 7,
+      "successRate": 0.7,
+      "totalAgentDurationMs": 1181185,
+      "totalEndToEndDurationMs": 1181596,
+      "medianTaskDurationMs": 109636.5,
+      "totalUsage": {
+        "input": 3209828,
+        "output": 47141,
+        "reasoning": 2128,
+        "cacheRead": 1089536,
+        "cacheWrite": 0,
+        "totalModel": 3259097,
+        "totalWithCache": 4348633
+      },
+      "totalReportedCost": 0,
+      "costReported": false,
+      "compactions": 0,
+      "compactionTasks": 0,
+      "totalToolCalls": 126,
+      "totalPermissionRequests": 58,
+      "rejectedPermissions": 0,
+      "totalEvaluationChecks": 163,
+      "passedEvaluationChecks": 160,
+      "cacheShare": 0.2534179473987315
+    },
+    "comparison": {
+      "baseline": "opencode",
+      "candidate": "cuppet",
+      "successDelta": -0.20000000000000007,
+      "agentTimeReduction": 0.20313716442217267,
+      "endToEndTimeReduction": 0.20308354297199047,
+      "uncachedInputReduction": -17.611690623496056,
+      "totalModelTokenReduction": -12.734194978465895,
+      "cacheReadDelta": -4056064,
+      "cacheShareDelta": -0.7141523878906397,
+      "compactionDelta": 0,
+      "evaluationDelta": -2,
+      "reportedCostAvailable": false
+    }
+  }
+}

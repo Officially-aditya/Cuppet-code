@@ -37,6 +37,11 @@ type StreamPart = {
   emitted: number
 }
 
+export type OpenCodeGatewayAgents = {
+  foreground?: string
+  background?: string
+}
+
 /**
  * OpenCode 1.18.4 exposes the complete live catalog through v2, but its new
  * native runner only implements a subset of the provider adapters. The stable
@@ -51,12 +56,16 @@ export class OpenCodeGateway extends EventEmitter {
   readonly #sessionModels = new Map<string, ModelRef>()
   readonly #backgroundSessions = new Set<string>()
   readonly #oauthAttempts = new Map<string, OAuthAttempt>()
+  readonly #foregroundAgent: string
+  readonly #backgroundAgent: string
   #eventTask?: Promise<void>
 
-  constructor(client: Client, directory: string) {
+  constructor(client: Client, directory: string, agents: OpenCodeGatewayAgents = {}) {
     super()
     this.#client = client
     this.#directory = directory
+    this.#foregroundAgent = agents.foreground ?? 'cuppet'
+    this.#backgroundAgent = agents.background ?? 'cuppet-background'
   }
 
   startEvents(): void {
@@ -297,7 +306,7 @@ export class OpenCodeGateway extends EventEmitter {
     const result = unwrap(
       (await this.#client.session.create({
         directory: this.#directory,
-        agent: background ? 'cuppet-background' : 'cuppet',
+        agent: background ? this.#backgroundAgent : this.#foregroundAgent,
         model: toSessionModel(model),
         permission: background ? backgroundPermissions() : foregroundPermissions(graphFirstGate, graphOnlySearch, graphNativeProfile),
       })) as SdkResult<LegacySession>,
@@ -343,7 +352,7 @@ export class OpenCodeGateway extends EventEmitter {
         directory: this.#directory,
         model: { providerID: model.providerID, modelID: model.modelID },
         ...(model.variant ? { variant: model.variant } : {}),
-        agent: this.#backgroundSessions.has(sessionID) ? 'cuppet-background' : 'cuppet',
+        agent: this.#backgroundSessions.has(sessionID) ? this.#backgroundAgent : this.#foregroundAgent,
         parts: [
           { type: 'text', text },
           ...(options.ephemeralContext

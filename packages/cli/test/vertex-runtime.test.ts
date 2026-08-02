@@ -3,10 +3,10 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { exploreAgentModelConfig, resolveVertexEnvironment } from '../src/opencode/server.js'
+import { taskSubagentModelConfig, resolveVertexEnvironment } from '../src/opencode/server.js'
 
-test('the native explore agent uses the configured secondary model and variant', () => {
-  assert.deepEqual(exploreAgentModelConfig({
+test('native Task subagents use the configured secondary model and variant', () => {
+  assert.deepEqual(taskSubagentModelConfig({
     providerID: 'openai',
     modelID: 'gpt-secondary',
     variant: 'low',
@@ -14,10 +14,10 @@ test('the native explore agent uses the configured secondary model and variant',
     model: 'openai/gpt-secondary',
     variant: 'low',
   })
-  assert.deepEqual(exploreAgentModelConfig({ providerID: 'vertex', modelID: 'gemini-test' }), {
+  assert.deepEqual(taskSubagentModelConfig({ providerID: 'vertex', modelID: 'gemini-test' }), {
     model: 'google-vertex/gemini-test',
   })
-  assert.deepEqual(exploreAgentModelConfig(undefined), {})
+  assert.deepEqual(taskSubagentModelConfig(undefined), {})
 })
 
 test('Vertex runtime passes through a readable explicit ADC path and canonical settings', async () => {

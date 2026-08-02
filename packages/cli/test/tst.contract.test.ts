@@ -14,7 +14,7 @@ const binaryPath = binary
     : resolve(import.meta.dirname, '../../..', binary)
   : undefined
 
-test('native daemon authenticates, persists verified memory, compacts, and restarts', { skip: !binary }, async () => {
+test('native daemon retains ranked session history, persists verified memory, compacts, and restarts', { skip: !binary }, async () => {
   const root = process.platform === 'darwin' ? '/private/tmp' : tmpdir()
   const directory = await mkdtemp(join(root, 'cuppet-tst-contract-'))
   const projectStore = join(directory, 'project-store')
@@ -45,6 +45,106 @@ test('native daemon authenticates, persists verified memory, compacts, and resta
       limit: 10,
     })
     assert.equal(query.ltm[0]?.key, 'formatting preference')
+    await first.client.call('memory.observe', {
+      session_id: 'session-1',
+      key: 'pinned constraint',
+      value: 'Never remove the public API boundary',
+      kind: 'concept_anchor',
+      scope: 'session',
+      provenance: 'explicit_user',
+      pinned: true,
+    })
+    const refreshed = await first.client.call<{
+      records: Array<{ key?: string }>
+      paths: string[]
+      eviction: { retained: number }
+    }>('stm.refresh', {
+      session_id: 'session-1',
+      query: 'packages/cli/src/tst/context.ts',
+      prompt: 'Keep packages/cli/src/tst/context.ts bounded',
+      requirements: [{
+        key: 'file requirement',
+        value: 'Preserve packages/cli/src/tst/context.ts',
+        paths: ['packages/cli/src/tst/context.ts'],
+        explicit: true,
+      }],
+      explicit_paths: ['packages/cli/src/tst/context.ts'],
+      file_evidence: [{ path: 'packages/cli/src/tst/context.ts', explicit: true }],
+    })
+    assert.ok(refreshed.records.length > 0)
+    assert.ok(refreshed.paths.includes('packages/cli/src/tst/context.ts'))
+    assert.ok(refreshed.eviction.retained > 0)
+
+    const retainedHistory = await first.client.call<{
+      records: Array<{ key?: string; value?: string; pinned?: boolean }>
+      paths: string[]
+      eviction: {
+        retained: number
+        evicted_file_anchors: number
+        evicted_constraints: number
+        pinned_preserved: number
+      }
+    }>('stm.refresh', {
+      session_id: 'session-1',
+      query: 'Task.name src/important.ts src/validated.ts',
+      prompt: 'Rename Task.title to Task.name; preserve the public API and do not modify src/unrelated.ts.',
+      requirements: [{
+        key: 'rename requirement',
+        value: 'Rename Task.title to Task.name in src/important.ts',
+        paths: ['src/important.ts'],
+        explicit: true,
+      }],
+      outcomes: [{
+        key: 'validation outcome',
+        value: 'Validation passed for src/validated.ts',
+        paths: ['src/validated.ts'],
+        validated: true,
+      }],
+      constraints: Array.from({ length: 20 }, (_, index) => ({
+        key: `constraint-${index}`,
+        value: `Preserve constraint ${index} and the public API`,
+      })),
+      candidates: Array.from({ length: 40 }, (_, index) => ({
+        key: `noise-anchor-${index}`,
+        value: `Unrelated candidate src/noise-${index}.ts`,
+        paths: [`src/noise-${index}.ts`],
+      })),
+      explicit_paths: ['src/important.ts'],
+      tool_paths: ['src/touched.ts'],
+      validated_paths: ['src/validated.ts'],
+      file_evidence: [
+        { path: 'src/important.ts', explicit: true },
+        { path: 'src/touched.ts', tool_touched: true },
+        { path: 'src/validated.ts', validated: true },
+      ],
+    })
+    const historyText = retainedHistory.records
+      .map((record) => `${record.key ?? ''} ${record.value ?? ''}`)
+      .join('\n')
+    assert.match(historyText, /Rename Task\.title to Task\.name/)
+    assert.match(historyText, /Validation passed for src\/validated\.ts/)
+    assert.ok(retainedHistory.paths.includes('src/important.ts'))
+    assert.ok(retainedHistory.paths.includes('src/validated.ts'))
+    assert.ok(retainedHistory.paths.includes('src/touched.ts'))
+    assert.ok(retainedHistory.eviction.evicted_file_anchors > 0)
+    assert.ok(retainedHistory.eviction.evicted_constraints > 0)
+    assert.ok(retainedHistory.eviction.pinned_preserved >= 1)
+    assert.ok(retainedHistory.eviction.retained <= 49)
+    assert.ok(retainedHistory.records.some((record) => record.pinned && record.key === 'pinned constraint'))
+
+    const stmOnly = await first.client.call<{
+      ltm: unknown[]
+      graph: unknown[]
+      stm: Array<{ key?: string }>
+    }>('context.prepare', {
+      session_id: 'session-1',
+      query: 'Task.name src/important.ts',
+      mode: 'stm_only',
+      observations: [],
+    })
+    assert.deepEqual(stmOnly.ltm, [])
+    assert.deepEqual(stmOnly.graph, [])
+    assert.ok(stmOnly.stm.some((record) => record.key === 'rename requirement'))
     await waitForGraph(first.client)
     const located = await first.client.call<{
       matches: Array<{ path: string; symbol: string; kind: string; line: number; column: number; content_hash?: string }>

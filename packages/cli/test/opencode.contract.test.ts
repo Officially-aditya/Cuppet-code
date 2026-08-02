@@ -73,11 +73,14 @@ test('pinned OpenCode binary exposes the v2 catalog and stable cross-provider ex
     assert.ok(legacyCuppet, 'the Cuppet agent should also be visible to the stable provider/session engine')
     assert.ok(legacyCuppet.permission.some((rule) => rule.permission === 'read' && rule.pattern === '*' && rule.action === 'allow'))
     assert.ok(legacyCuppet.permission.some((rule) => rule.permission === 'edit' && rule.pattern === '*' && rule.action === 'ask'))
-    const legacyExplore = legacyAgents.data?.find((agent) => agent.name === 'explore')
-    assert.deepEqual(legacyExplore?.model, {
+    const expectedSubagentModel = {
       providerID: 'cuppet-contract',
       modelID: 'contract-model',
-    }, 'the native explorer must use the configured secondary model')
+    }
+    for (const name of ['general', 'explore', 'cuppet-background']) {
+      const agent = legacyAgents.data?.find((candidate) => candidate.name === name)
+      assert.deepEqual(agent?.model, expectedSubagentModel, `${name} must use the configured secondary model`)
+    }
     const models = await runtime.client.v2.model.list({ location: { directory: paths.projectRealpath } })
     assert.equal(models.response.status, 200)
     const catalog = (models.data as {

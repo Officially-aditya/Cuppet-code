@@ -28,6 +28,12 @@ model-facing clone of foreground history together with the active session,
 agent, model, phase, and context budget. Native persistence and tool processing
 continue to use the untouched message list.
 
+`0015-cuppet-stm-only-compaction.patch` carries the opt-in STM-only compaction
+directive through the request-scoped hook. A successful directive is written
+through the native compaction-record path without summary-model generation;
+refresh failures stop before transcript mutation. With the flag disabled, the
+native summarization path remains unchanged.
+
 `0010-cuppet-model-effort-dialog.patch` preserves the pre-migration selection
 sequence: choosing any model with advertised effort variants always opens the
 native effort dialog, even when the previous effort remains compatible.

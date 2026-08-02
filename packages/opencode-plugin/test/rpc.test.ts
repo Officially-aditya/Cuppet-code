@@ -13,6 +13,7 @@ test('read-only tool client authenticates and uses length-framed JSON-RPC', asyn
   const socketPath = join(directory, 'tst.sock')
   const methods: string[] = []
   let contextParameters: Record<string, unknown> | undefined
+  let refreshParameters: Record<string, unknown> | undefined
   const server = createServer((socket) => {
     let buffered = Buffer.alloc(0)
     socket.on('data', (chunk: Buffer) => {
@@ -30,6 +31,8 @@ test('read-only tool client authenticates and uses length-framed JSON-RPC', asyn
         if (request.method === 'initialize') assert.equal(request.params.token, 'a'.repeat(64))
         const result = request.method === 'context.prepare'
           ? (contextParameters = request.params, { stm: [], ltm: [], graph: [], edges: [], plan_projection: undefined })
+          : request.method === 'stm.refresh'
+            ? (refreshParameters = request.params, { records: [], paths: [], eviction_stats: {} })
           : request.method === 'memory.query'
           ? { stm: [], ltm: [{ key: 'style' }], graph: [] }
           : request.method === 'graph.locate'
@@ -77,6 +80,26 @@ test('read-only tool client authenticates and uses length-framed JSON-RPC', asyn
       hints: ['api.ts'],
       observations: [],
     })
+    await client.turnCompleted('session')
+    assert.deepEqual(methods.at(-2), 'initialize')
+    assert.equal(methods.at(-1), 'turn.completed')
+    const refreshResult = await client.refreshStm({
+      session_id: 'session',
+      query: 'src/task.ts',
+      prompt: 'preserve src/task.ts',
+      requirements: ['preserve the API'],
+      explicit_paths: ['src/task.ts'],
+      file_evidence: [{ path: 'src/task.ts', validated: true }],
+    })
+    assert.deepEqual(refreshResult, { records: [], paths: [], eviction_stats: {} })
+    assert.deepEqual(refreshParameters, {
+      session_id: 'session',
+      query: 'src/task.ts',
+      prompt: 'preserve src/task.ts',
+      requirements: ['preserve the API'],
+      explicit_paths: ['src/task.ts'],
+      file_evidence: [{ path: 'src/task.ts', validated: true }],
+    })
     await client.graphSearch('dueDate', 'games/task-tracker', 10)
     await client.graphLocate('dueDate', 'games/task-tracker', 10)
     await client.graphList('games/task-tracker', 10)
@@ -109,6 +132,10 @@ test('read-only tool client authenticates and uses length-framed JSON-RPC', asyn
       'memory.query',
       'initialize',
       'context.prepare',
+      'initialize',
+      'turn.completed',
+      'initialize',
+      'stm.refresh',
       'initialize',
       'graph.search',
       'initialize',

@@ -1,0 +1,219 @@
+{
+  "schema": 1,
+  "experiment": "ab-stm-compaction",
+  "createdAt": "2026-08-01T07:13:51.964Z",
+  "updatedAt": "2026-08-01T07:14:01.292Z",
+  "project": "/Users/addy/Downloads/cuppet",
+  "configuration": {
+    "experiment": "ab-stm-compaction",
+    "repeats": 1,
+    "model": {
+      "providerID": "openai",
+      "modelID": "gpt-5.6-luna"
+    },
+    "fixtureHash": "29024cebadb5f7ddd1563a7c2030bdeb8870e55c61fb5bc35fc586160560bf29",
+    "patchSetDigest": "72072eebc2ad32b4ea522ce9c90b802bf847bf5a0a68e6eda6f802ada66f0939",
+    "armOrders": [
+      [
+        "control",
+        "stm_only"
+      ]
+    ],
+    "phases": 3
+  },
+  "audit": {
+    "checkpoint": "/Users/addy/Downloads/cuppet/benchmarks/results/ab-stm-compaction-2026-08-01T07-13-51-964Z-aca450.checkpoint.json",
+    "eventLog": "/Users/addy/Downloads/cuppet/benchmarks/results/ab-stm-compaction-2026-08-01T07-13-51-964Z-aca450.events.ndjson",
+    "partialJson": "/Users/addy/Downloads/cuppet/benchmarks/results/ab-stm-compaction-2026-08-01T07-13-51-964Z-aca450.partial.json",
+    "partialMarkdown": "/Users/addy/Downloads/cuppet/benchmarks/results/ab-stm-compaction-2026-08-01T07-13-51-964Z-aca450.partial.md",
+    "root": "/private/tmp/cuppet-stm-compaction-z3Xm73",
+    "lastEvent": "arm.1.stm_only.finished",
+    "heartbeatAt": "2026-08-01T07:14:01.292Z"
+  },
+  "summary": {
+    "control": {
+      "trials": 1,
+      "successes": 0,
+      "correctnessRate": 0,
+      "medianContextTokens": 0,
+      "medianCompactionTokens": 0,
+      "medianTotalInputTokens": 0,
+      "medianLatencyMs": 4728,
+      "medianCost": 0,
+      "medianFilePrecision": 0,
+      "medianFileRecall": 0,
+      "meanConstraintRecall": 0,
+      "meanStmSize": 0,
+      "failures": [
+        "Model not found: openai/gpt-5.6-luna. Did you mean: gpt-5.6-luna, gpt-5.6-luna-pro, gpt-5.6-luna-fast?",
+        "ProviderModelNotFoundError: Model not found: openai/gpt-5.6-luna. Did you mean: gpt-5.6-luna, gpt-5.6-luna-pro, gpt-5.6-luna-fast?\n    at <anonymous> (/$bunfs/root/chunk-4zf2wb7m.js:439:92342)\n    at SessionPrompt.getModel (/$bunfs/root/chunk-yhm62j9e.js:1096:11488)\n    at SessionPrompt.getModel (definition) (/$bunfs/root/chunk-yhm62j9e.js:1096:908)\n    at SessionPrompt.run (/$bunfs/root/chunk-yhm62j9e.js:1096:15585)\n    at SessionPrompt.run (definition) (/$bunfs/root/chunk-yhm62j9e.js:1096:10504)\n    at SessionRunState.ensureRunning (/$bunfs/root/chunk-yhm62j9e.js:1096:15554)\n    at SessionRunState.ensureRunning (definition) (/$bunfs/root/chunk-yhm62j9e.js:2:8179)\n    at SessionPrompt.loop (/$bunfs/root/chunk-yhm62j9e.js:1096:10226)\n    at SessionPrompt.loop (definition) (/$bunfs/root/chunk-yhm62j9e.js:1096:15490)\n    at SessionPrompt.prompt (/$bunfs/root/chunk-gxkpbdax.js:4:13492)\n    at SessionPrompt.prompt (definition) (/$bunfs/root/chunk-yhm62j9e.js:1096:9844)",
+        "Unexpected server error. Check server logs for details."
+      ]
+    },
+    "stm_only": {
+      "trials": 1,
+      "successes": 0,
+      "correctnessRate": 0,
+      "medianContextTokens": 0,
+      "medianCompactionTokens": 0,
+      "medianTotalInputTokens": 0,
+      "medianLatencyMs": 4412,
+      "medianCost": 0,
+      "medianFilePrecision": 0,
+      "medianFileRecall": 0,
+      "meanConstraintRecall": 0,
+      "meanStmSize": 0,
+      "failures": [
+        "Model not found: openai/gpt-5.6-luna. Did you mean: gpt-5.6-luna, gpt-5.6-luna-pro, gpt-5.6-luna-fast?",
+        "ProviderModelNotFoundError: Model not found: openai/gpt-5.6-luna. Did you mean: gpt-5.6-luna, gpt-5.6-luna-pro, gpt-5.6-luna-fast?\n    at <anonymous> (/$bunfs/root/chunk-4zf2wb7m.js:439:92342)\n    at SessionPrompt.getModel (/$bunfs/root/chunk-yhm62j9e.js:1096:11488)\n    at SessionPrompt.getModel (definition) (/$bunfs/root/chunk-yhm62j9e.js:1096:908)\n    at SessionPrompt.run (/$bunfs/root/chunk-yhm62j9e.js:1096:15585)\n    at SessionPrompt.run (definition) (/$bunfs/root/chunk-yhm62j9e.js:1096:10504)\n    at SessionRunState.ensureRunning (/$bunfs/root/chunk-yhm62j9e.js:1096:15554)\n    at SessionRunState.ensureRunning (definition) (/$bunfs/root/chunk-yhm62j9e.js:2:8179)\n    at SessionPrompt.loop (/$bunfs/root/chunk-yhm62j9e.js:1096:10226)\n    at SessionPrompt.loop (definition) (/$bunfs/root/chunk-yhm62j9e.js:1096:15490)\n    at SessionPrompt.prompt (/$bunfs/root/chunk-gxkpbdax.js:4:13492)\n    at SessionPrompt.prompt (definition) (/$bunfs/root/chunk-yhm62j9e.js:1096:9844)",
+        "Unexpected server error. Check server logs for details."
+      ]
+    },
+    "comparison": {
+      "noCorrectnessRegression": true,
+      "criticalChecksPass": false,
+      "medianContextCostReduction": 0,
+      "worthwhile": false
+    }
+  },
+  "completedTrials": [
+    {
+      "repeat": 1,
+      "arm": "control",
+      "workspace": "/private/tmp/cuppet-stm-compaction-z3Xm73/workspaces/control-1",
+      "runtimeRoot": "/private/tmp/cuppet-stm-compaction-z3Xm73/runtimes/control-1",
+      "sessionID": "ses_043d3e1d8ffe9iy62cuFXuV1a5",
+      "success": false,
+      "correctness": {
+        "passed": false,
+        "checks": {},
+        "hiddenTests": {}
+      },
+      "retainedFilePrecision": 0,
+      "retainedFileRecall": 0,
+      "constraintRecall": 0,
+      "stmSize": 0,
+      "injectedTokens": 0,
+      "compactionTokens": 0,
+      "totalInputTokens": 0,
+      "latencyMs": 4728,
+      "cost": 0,
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "compactions": 0,
+      "stmRefreshes": 0,
+      "failures": [
+        "Model not found: openai/gpt-5.6-luna. Did you mean: gpt-5.6-luna, gpt-5.6-luna-pro, gpt-5.6-luna-fast?",
+        "ProviderModelNotFoundError: Model not found: openai/gpt-5.6-luna. Did you mean: gpt-5.6-luna, gpt-5.6-luna-pro, gpt-5.6-luna-fast?\n    at <anonymous> (/$bunfs/root/chunk-4zf2wb7m.js:439:92342)\n    at SessionPrompt.getModel (/$bunfs/root/chunk-yhm62j9e.js:1096:11488)\n    at SessionPrompt.getModel (definition) (/$bunfs/root/chunk-yhm62j9e.js:1096:908)\n    at SessionPrompt.run (/$bunfs/root/chunk-yhm62j9e.js:1096:15585)\n    at SessionPrompt.run (definition) (/$bunfs/root/chunk-yhm62j9e.js:1096:10504)\n    at SessionRunState.ensureRunning (/$bunfs/root/chunk-yhm62j9e.js:1096:15554)\n    at SessionRunState.ensureRunning (definition) (/$bunfs/root/chunk-yhm62j9e.js:2:8179)\n    at SessionPrompt.loop (/$bunfs/root/chunk-yhm62j9e.js:1096:10226)\n    at SessionPrompt.loop (definition) (/$bunfs/root/chunk-yhm62j9e.js:1096:15490)\n    at SessionPrompt.prompt (/$bunfs/root/chunk-gxkpbdax.js:4:13492)\n    at SessionPrompt.prompt (definition) (/$bunfs/root/chunk-yhm62j9e.js:1096:9844)",
+        "Unexpected server error. Check server logs for details."
+      ],
+      "telemetry": {
+        "arm": "control",
+        "repeat": 1,
+        "phases": [
+          {
+            "phase": 1,
+            "promptMs": 1010
+          },
+          {
+            "phase": 1,
+            "at": "2026-08-01T07:13:56.775Z",
+            "tokens": {
+              "input": 0,
+              "output": 0,
+              "reasoning": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "cost": 0
+          }
+        ],
+        "compactionEvents": [
+          {
+            "phase": "started",
+            "at": "2026-08-01T07:13:56.780Z"
+          }
+        ],
+        "stmRefreshEvents": []
+      },
+      "error": "Unexpected server error. Check server logs for details.",
+      "finishedAt": "2026-08-01T07:13:56.794Z"
+    },
+    {
+      "repeat": 1,
+      "arm": "stm_only",
+      "workspace": "/private/tmp/cuppet-stm-compaction-z3Xm73/workspaces/stm_only-1",
+      "runtimeRoot": "/private/tmp/cuppet-stm-compaction-z3Xm73/runtimes/stm_only-1",
+      "sessionID": "ses_043d3d06cffezw2uaGwPHwd6uq",
+      "success": false,
+      "correctness": {
+        "passed": false,
+        "checks": {},
+        "hiddenTests": {}
+      },
+      "retainedFilePrecision": 0,
+      "retainedFileRecall": 0,
+      "constraintRecall": 0,
+      "stmSize": 0,
+      "injectedTokens": 0,
+      "compactionTokens": 0,
+      "totalInputTokens": 0,
+      "latencyMs": 4412,
+      "cost": 0,
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "compactions": 0,
+      "stmRefreshes": 0,
+      "failures": [
+        "Model not found: openai/gpt-5.6-luna. Did you mean: gpt-5.6-luna, gpt-5.6-luna-pro, gpt-5.6-luna-fast?",
+        "ProviderModelNotFoundError: Model not found: openai/gpt-5.6-luna. Did you mean: gpt-5.6-luna, gpt-5.6-luna-pro, gpt-5.6-luna-fast?\n    at <anonymous> (/$bunfs/root/chunk-4zf2wb7m.js:439:92342)\n    at SessionPrompt.getModel (/$bunfs/root/chunk-yhm62j9e.js:1096:11488)\n    at SessionPrompt.getModel (definition) (/$bunfs/root/chunk-yhm62j9e.js:1096:908)\n    at SessionPrompt.run (/$bunfs/root/chunk-yhm62j9e.js:1096:15585)\n    at SessionPrompt.run (definition) (/$bunfs/root/chunk-yhm62j9e.js:1096:10504)\n    at SessionRunState.ensureRunning (/$bunfs/root/chunk-yhm62j9e.js:1096:15554)\n    at SessionRunState.ensureRunning (definition) (/$bunfs/root/chunk-yhm62j9e.js:2:8179)\n    at SessionPrompt.loop (/$bunfs/root/chunk-yhm62j9e.js:1096:10226)\n    at SessionPrompt.loop (definition) (/$bunfs/root/chunk-yhm62j9e.js:1096:15490)\n    at SessionPrompt.prompt (/$bunfs/root/chunk-gxkpbdax.js:4:13492)\n    at SessionPrompt.prompt (definition) (/$bunfs/root/chunk-yhm62j9e.js:1096:9844)",
+        "Unexpected server error. Check server logs for details."
+      ],
+      "telemetry": {
+        "arm": "stm_only",
+        "repeat": 1,
+        "phases": [
+          {
+            "phase": 1,
+            "promptMs": 1015
+          },
+          {
+            "phase": 1,
+            "at": "2026-08-01T07:14:01.239Z",
+            "tokens": {
+              "input": 0,
+              "output": 0,
+              "reasoning": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "cost": 0
+          }
+        ],
+        "compactionEvents": [
+          {
+            "phase": "started",
+            "at": "2026-08-01T07:14:01.244Z"
+          }
+        ],
+        "stmRefreshEvents": []
+      },
+      "error": "Unexpected server error. Check server logs for details.",
+      "finishedAt": "2026-08-01T07:14:01.253Z"
+    }
+  ],
+  "error": {
+    "message": "Unexpected server error. Check server logs for details.",
+    "stack": "Error: Unexpected server error. Check server logs for details.\n    at ensureSuccess (/Users/addy/Downloads/cuppet/packages/cli/src/opencode/gateway.ts:1082:27)\n    at OpenCodeGateway.compact (/Users/addy/Downloads/cuppet/packages/cli/src/opencode/gateway.ts:404:5)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async runArm (/Users/addy/Downloads/cuppet/scripts/ab-stm-compaction.ts:352:9)\n    at async main (/Users/addy/Downloads/cuppet/scripts/ab-stm-compaction.ts:196:23)"
+  }
+}

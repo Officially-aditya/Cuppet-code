@@ -1,0 +1,7 @@
+{"at":"2026-08-02T08:58:59.000Z","event":"fixture-created"}
+{"at":"2026-08-02T08:58:59.887Z","event":"opencode-runtime-created"}
+{"at":"2026-08-02T08:58:59.889Z","event":"opencode-session-created"}
+{"at":"2026-08-02T08:59:09.874Z","event":"cuppet-runtime-created"}
+{"at":"2026-08-02T08:59:09.876Z","event":"cuppet-session-created"}
+{"at":"2026-08-02T08:59:09.886Z","event":"opencode-landing-page-prompt-started"}
+{"at":"2026-08-02T08:59:17.338Z","event":"SIGINT"}

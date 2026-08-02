@@ -91,10 +91,14 @@ credential store is implemented in Cuppet.
 
 The complete transcript remains in OpenCode. Before a foreground request is
 sent to a model, the derived runtime gives the Cuppet server plugin a detached
-model-facing copy. Cuppet queries TST with the actual current prompt and recent
-file/symbol hints, then prepends a bounded, untrusted block containing relevant
-session STM, verified LTM, and Tree-sitter graph nodes and dependency edges.
-The block is never written to transcript history.
+model-facing copy. At the start of each user turn, Cuppet queries TST with the
+actual prompt and recent file/symbol hints, then appends one bounded, untrusted
+block containing relevant session STM, verified LTM, and Tree-sitter graph
+nodes and dependency edges after that user's prompt. The exact rendered block
+is memoized by user-message ID and replayed at the same message position for
+every later model step and whenever that turn reappears in history, so a new
+task cannot invalidate the entire provider-cache prefix. The block is never
+written to transcript history.
 
 When verbatim history exceeds half of the model's usable context, Cuppet may
 replace only whole older turns with retrieved continuity records. The active

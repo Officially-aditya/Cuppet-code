@@ -28,6 +28,47 @@ Environment controls:
 - `CUPPET_AB_TASK_OFFSET=N` selects a later contiguous task window when a
   longer run must be split into independently persisted reports.
 
+## Experimental STM-only compaction A/B
+
+Run the five-repeat paired compaction experiment with:
+
+```bash
+npm run eval:ab:stm-compaction
+```
+
+Set `CUPPET_AB_MODEL=provider/model` to pin the model and
+`CUPPET_STM_COMPACTION_REPEATS=1` through `5` for a pilot. The control arm
+keeps native summarization and the current STM/LTM/graph context; the
+opt-in arm refreshes STM, bypasses summary generation, and injects only STM
+file anchors and bounded constraints. Checkpoints, atomic partial reports,
+and the append-only audit log are written under `benchmarks/results/`.
+
+To resume an interrupted run, pass its absolute checkpoint path:
+
+```bash
+CUPPET_STM_COMPACTION_RESUME=/absolute/path/to/run.checkpoint.json \
+npm run eval:ab:stm-compaction
+```
+
+Completed `(repeat, arm)` pairs are skipped and an active interrupted arm is
+rerun. Workspaces and runtime stores remain until the final JSON and Markdown
+reports have both been written.
+
+The primary STM correctness check is deterministic and does not depend on a
+model completing an edit. It seeds requirements, outcomes, explicit and
+validated file evidence, pinned history, unrelated anchors, and excess
+constraints, then verifies the retained records, paths, pruning bounds, and
+STM-only LTM/graph exclusion through the real daemon:
+
+```bash
+CUPPET_TEST_TST_BIN=target/debug/tst-daemon \
+node --import tsx --test packages/cli/test/tst.contract.test.ts
+```
+
+The model-driven task run remains a secondary end-to-end smoke test for
+downstream usefulness and token/latency effects; a task failure does not by
+itself identify a retention failure.
+
 To exercise code-graph persistence as part of the same paired navigation
 evaluation, run:
 

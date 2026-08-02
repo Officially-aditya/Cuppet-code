@@ -3,7 +3,7 @@ import { createConnection, type Socket } from 'node:net'
 const MAX_FRAME_BYTES = 16 * 1024 * 1024
 export const TST_PROTOCOL_VERSION = 'cuppet.tst.v3'
 
-export type ContextMode = 'foreground' | 'plan'
+export type ContextMode = 'foreground' | 'plan' | 'stm_only' | 'stm_events'
 
 export type ContextObservation = {
   key: string
@@ -11,6 +11,29 @@ export type ContextObservation = {
   kind: 'token_statistics' | 'concept_anchor' | 'structure_pattern' | 'behavioral_claim' | 'preference'
   provenance: 'explicit_user' | 'verifier' | 'model_candidate' | 'tool'
   pinned?: boolean
+}
+
+export type StmRefreshCandidate = {
+  key: string
+  value: string
+  kind?: ContextObservation['kind']
+  provenance?: ContextObservation['provenance']
+  pinned?: boolean
+  file_hashes?: Record<string, string>
+  paths?: string[]
+  explicit?: boolean
+  validated?: boolean
+  tool_touched?: boolean
+  graph_relevance?: number
+}
+
+export type StmFileEvidence = {
+  path: string
+  hash?: string
+  explicit?: boolean
+  validated?: boolean
+  tool_touched?: boolean
+  graph_relevant?: boolean
 }
 
 type RpcResponse<T> = {
@@ -56,10 +79,53 @@ export class TstToolClient {
     })
   }
 
+  async turnCompleted(sessionID: string): Promise<unknown> {
+    return this.#request('turn.completed', { session_id: sessionID })
+  }
+
+  async refreshStm(input: {
+    session_id: string
+    query?: string
+    prompt?: string
+    requirements?: Array<Record<string, unknown> | string>
+    outcomes?: Array<Record<string, unknown> | string>
+    constraints?: Array<Record<string, unknown> | string>
+    observations?: Array<Record<string, unknown> | string>
+    candidates?: Array<Record<string, unknown> | string>
+    explicit_paths?: string[]
+    tool_paths?: string[]
+    validated_paths?: string[]
+    graph_paths?: string[]
+    file_evidence?: Array<Record<string, unknown>>
+  }): Promise<unknown> {
+    return this.#request('stm.refresh', {
+      ...input,
+      query: input.query?.slice(0, 6_000),
+      prompt: input.prompt?.slice(0, 6_000),
+      requirements: input.requirements?.slice(0, 64),
+      outcomes: input.outcomes?.slice(0, 64),
+      constraints: input.constraints?.slice(0, 64),
+      observations: input.observations?.slice(0, 64),
+      candidates: input.candidates?.slice(0, 64),
+      explicit_paths: input.explicit_paths?.slice(0, 128),
+      tool_paths: input.tool_paths?.slice(0, 128),
+      validated_paths: input.validated_paths?.slice(0, 128),
+      graph_paths: input.graph_paths?.slice(0, 128),
+      file_evidence: input.file_evidence?.slice(0, 128),
+    })
+  }
+
   async graphSearch(pattern: string, prefix?: string, limit = 40): Promise<unknown> {
     return this.#request('graph.search', {
       pattern,
       ...(prefix ? { prefix } : {}),
+      limit: Math.min(Math.max(limit, 1), 128),
+    })
+  }
+
+  async graphQuery(query: string, limit = 20): Promise<unknown> {
+    return this.#request('graph.query', {
+      query,
       limit: Math.min(Math.max(limit, 1), 128),
     })
   }

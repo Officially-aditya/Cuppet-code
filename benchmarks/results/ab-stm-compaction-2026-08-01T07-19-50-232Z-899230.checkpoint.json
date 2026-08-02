@@ -1,0 +1,167 @@
+{
+  "schema": 1,
+  "runID": "ab-stm-compaction-2026-08-01T07-19-50-232Z-899230",
+  "createdAt": "2026-08-01T07:19:50.233Z",
+  "updatedAt": "2026-08-01T07:21:37.993Z",
+  "config": {
+    "experiment": "ab-stm-compaction",
+    "repeats": 1,
+    "model": {
+      "providerID": "openai",
+      "modelID": "gpt-5.6-luna"
+    },
+    "fixtureHash": "29024cebadb5f7ddd1563a7c2030bdeb8870e55c61fb5bc35fc586160560bf29",
+    "patchSetDigest": "72072eebc2ad32b4ea522ce9c90b802bf847bf5a0a68e6eda6f802ada66f0939",
+    "armOrders": [
+      [
+        "control",
+        "stm_only"
+      ]
+    ],
+    "phases": 3
+  },
+  "paths": {
+    "root": "/private/tmp/cuppet-stm-compaction-T0JKFo",
+    "checkpoint": "/Users/addy/Downloads/cuppet/benchmarks/results/ab-stm-compaction-2026-08-01T07-19-50-232Z-899230.checkpoint.json",
+    "eventLog": "/Users/addy/Downloads/cuppet/benchmarks/results/ab-stm-compaction-2026-08-01T07-19-50-232Z-899230.events.ndjson",
+    "partialJson": "/Users/addy/Downloads/cuppet/benchmarks/results/ab-stm-compaction-2026-08-01T07-19-50-232Z-899230.partial.json",
+    "partialMarkdown": "/Users/addy/Downloads/cuppet/benchmarks/results/ab-stm-compaction-2026-08-01T07-19-50-232Z-899230.partial.md"
+  },
+  "completedTrials": [
+    {
+      "repeat": 1,
+      "arm": "control",
+      "workspace": "/private/tmp/cuppet-stm-compaction-T0JKFo/workspaces/control-1",
+      "runtimeRoot": "/private/tmp/cuppet-stm-compaction-T0JKFo/runtimes/control-1",
+      "sessionID": "ses_043ce4d3fffeMRZtFMW4qhCmzd",
+      "success": false,
+      "correctness": {
+        "passed": false,
+        "checks": {
+          "modelUsesName": false,
+          "storeUsesName": false,
+          "apiUsesName": false,
+          "displayUsesName": false,
+          "testsUseName": false
+        },
+        "hiddenTests": {
+          "unrelatedUnchanged": true,
+          "publicFactoryStillExists": true,
+          "storeBoundaryStillExists": true
+        }
+      },
+      "retainedFilePrecision": 0,
+      "retainedFileRecall": 0,
+      "constraintRecall": 0,
+      "stmSize": 0,
+      "injectedTokens": 0,
+      "compactionTokens": 7297,
+      "totalInputTokens": 30648,
+      "latencyMs": 102560,
+      "cost": 0,
+      "usage": {
+        "input": 30648,
+        "output": 2707,
+        "reasoning": 606,
+        "cacheRead": 100864,
+        "cacheWrite": 0
+      },
+      "compactions": 2,
+      "stmRefreshes": 0,
+      "failures": [],
+      "telemetry": {
+        "arm": "control",
+        "repeat": 1,
+        "phases": [
+          {
+            "phase": 1,
+            "promptMs": 29337
+          },
+          {
+            "phase": 1,
+            "at": "2026-08-01T07:20:30.826Z",
+            "tokens": {
+              "input": 15175,
+              "output": 764,
+              "reasoning": 364,
+              "cacheRead": 35328,
+              "cacheWrite": 0
+            },
+            "cost": 0
+          },
+          {
+            "phase": 2,
+            "promptMs": 26319
+          },
+          {
+            "phase": 2,
+            "at": "2026-08-01T07:21:09.941Z",
+            "tokens": {
+              "input": 24562,
+              "output": 1982,
+              "reasoning": 524,
+              "cacheRead": 80384,
+              "cacheWrite": 0
+            },
+            "cost": 0
+          },
+          {
+            "phase": 3,
+            "promptMs": 12178
+          },
+          {
+            "phase": 3,
+            "at": "2026-08-01T07:21:32.891Z",
+            "tokens": {
+              "input": 30648,
+              "output": 2707,
+              "reasoning": 606,
+              "cacheRead": 100864,
+              "cacheWrite": 0
+            },
+            "cost": 0
+          }
+        ],
+        "compactionEvents": [
+          {
+            "phase": "started",
+            "at": "2026-08-01T07:20:30.831Z"
+          },
+          {
+            "phase": "ended",
+            "at": "2026-08-01T07:20:42.593Z"
+          },
+          {
+            "phase": "started",
+            "at": "2026-08-01T07:21:09.944Z"
+          },
+          {
+            "phase": "ended",
+            "at": "2026-08-01T07:21:19.697Z"
+          }
+        ],
+        "stmRefreshEvents": [],
+        "retentionPaths": [],
+        "retentionRecords": []
+      },
+      "finishedAt": "2026-08-01T07:21:32.895Z"
+    }
+  ],
+  "telemetry": {
+    "lastEvent": "arm.1.stm_only.session_created",
+    "activeTrial": {}
+  },
+  "lastEvent": "arm.1.stm_only.session_created",
+  "heartbeatAt": "2026-08-01T07:21:37.993Z",
+  "activeTrial": {
+    "repeat": 1,
+    "arm": "stm_only",
+    "workspace": "/private/tmp/cuppet-stm-compaction-T0JKFo/workspaces/stm_only-1",
+    "runtimeRoot": "/private/tmp/cuppet-stm-compaction-T0JKFo/runtimes/stm_only-1",
+    "stage": "session_created",
+    "startedAt": "2026-08-01T07:21:32.927Z",
+    "heartbeatAt": "2026-08-01T07:21:37.993Z",
+    "telemetry": {},
+    "sessionID": "ses_043ccd450ffeHVZkXphk0gwrB4"
+  }
+}

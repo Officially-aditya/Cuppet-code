@@ -1,0 +1,71 @@
+{
+  "schema": 1,
+  "createdAt": "2026-08-01T09:28:58.933Z",
+  "updatedAt": "2026-08-01T09:29:07.309Z",
+  "status": "running",
+  "model": {
+    "providerID": "openai",
+    "modelID": "gpt-5.6-luna",
+    "variant": "low"
+  },
+  "fixtureHash": "3a82376018e6ca518477985ad55f87717ba87e4ed0cfdbb4c7eb188b0615f692",
+  "tasks": [
+    "landing-page",
+    "todo-list-app",
+    "calculator-web-app",
+    "survey-form",
+    "personal-blog",
+    "business-portfolio",
+    "quiz-game",
+    "meme-generator",
+    "address-book",
+    "e-library"
+  ],
+  "arms": {
+    "opencode": {
+      "arm": "opencode",
+      "workspace": "/private/tmp/cuppet-10-task-ZvC59d/opencode/workspace",
+      "runtimeRoot": "/private/tmp/cuppet-10-task-ZvC59d/opencode/runtime",
+      "sessionID": "ses_04358396bffePThwu0O5WaDwhx",
+      "promptCount": 0,
+      "tasks": [],
+      "finalSessionUsage": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalModel": 0,
+        "totalWithCache": 0
+      },
+      "totalDurationMs": 0,
+      "errors": []
+    },
+    "cuppet": {
+      "arm": "cuppet",
+      "workspace": "/private/tmp/cuppet-10-task-ZvC59d/cuppet/workspace",
+      "runtimeRoot": "/private/tmp/cuppet-10-task-ZvC59d/cuppet/runtime",
+      "sessionID": "ses_043581c21ffeajT65JuoA0qrAc",
+      "promptCount": 0,
+      "tasks": [],
+      "finalSessionUsage": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalModel": 0,
+        "totalWithCache": 0
+      },
+      "totalDurationMs": 0,
+      "errors": []
+    }
+  },
+  "lastEvent": "opencode-landing-page-prompt-started",
+  "active": {
+    "arm": "opencode",
+    "task": "landing-page",
+    "index": 0,
+    "phase": "prompt-started"
+  }
+}

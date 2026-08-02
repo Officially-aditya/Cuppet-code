@@ -1,0 +1,785 @@
+{
+  "schema": 1,
+  "createdAt": "2026-08-01T21:15:40.719Z",
+  "project": "/Users/addy/Downloads/cuppet",
+  "task": "Rename Task.dueDate to deadline, add priority-aware indexed filtering, reject past deadlines, and fix deadline-loss plus stale-index bugs.",
+  "model": {
+    "providerID": "openai",
+    "modelID": "gpt-5.6-sol",
+    "variant": "max"
+  },
+  "kernel": {
+    "name": "official OpenCode",
+    "version": "1.18.4"
+  },
+  "design": "paired fresh repository copies; identical task/model/tools/permissions; Cuppet adds bounded TST context; arm order alternates; hidden suite is generated outside trial workspaces; mutations are isolated per trial",
+  "repeats": 1,
+  "permissions": {
+    "allowExternalDirectory": true,
+    "graphFirstGate": false,
+    "graphOnlySearch": false,
+    "rejectedPermissions": 0,
+    "graphGateRejections": 0,
+    "unexpectedRejectedPermissions": 0,
+    "blockedFileSearchRequests": 0,
+    "graphRedirectMessages": 0,
+    "blockedFileSearchCalls": 0,
+    "blockedBashRequests": 0
+  },
+  "summary": {
+    "opencode": {
+      "trials": 1,
+      "successes": 1,
+      "completionRate": 1,
+      "meanAcceptanceScore": 1,
+      "medianLatencyMs": 578541,
+      "medianUncachedInputTokens": 93814,
+      "medianTotalModelTokens": 114048,
+      "medianCost": 0,
+      "medianSuccessfulLatencyMs": 578541,
+      "medianSuccessfulUncachedInputTokens": 93814,
+      "medianSuccessfulTotalModelTokens": 114048,
+      "medianSuccessfulCost": 0,
+      "totalCost": 0,
+      "meanToolCalls": 94,
+      "meanPermissionRequests": 10,
+      "rejectedPermissions": 0,
+      "medianContextTokens": 0,
+      "costPerAcceptancePoint": 0,
+      "hop1OrLess": 1,
+      "hop2": 1,
+      "regression": 1
+    },
+    "cuppet": {
+      "trials": 0,
+      "successes": 0,
+      "completionRate": 0,
+      "meanAcceptanceScore": 0,
+      "medianLatencyMs": 0,
+      "medianUncachedInputTokens": 0,
+      "medianTotalModelTokens": 0,
+      "medianCost": 0,
+      "medianSuccessfulLatencyMs": 0,
+      "medianSuccessfulUncachedInputTokens": 0,
+      "medianSuccessfulTotalModelTokens": 0,
+      "medianSuccessfulCost": 0,
+      "totalCost": 0,
+      "meanToolCalls": 0,
+      "meanPermissionRequests": 0,
+      "rejectedPermissions": 0,
+      "medianContextTokens": 0,
+      "costPerAcceptancePoint": 0,
+      "hop1OrLess": 0,
+      "hop2": 0,
+      "regression": 0
+    },
+    "comparison": {
+      "completionRateDelta": -1,
+      "acceptanceScoreDelta": -1,
+      "latencyReduction": 1,
+      "costReduction": 0,
+      "totalCostDelta": 0,
+      "uncachedInputReduction": 1,
+      "totalModelTokenReduction": 1,
+      "costPerAcceptancePointReduction": 0,
+      "successfulLatencyReduction": 1,
+      "successfulInputReduction": 1,
+      "successfulTotalModelTokenReduction": 1,
+      "successfulCostReduction": 0,
+      "hop1OrLessDelta": -1,
+      "hop2Delta": -1,
+      "regressionDelta": -1
+    }
+  },
+  "trials": [
+    {
+      "repeat": 1,
+      "arm": "opencode",
+      "workspace": "<removed after evaluation>",
+      "sessionID": "ses_040da1204ffeRMRFxXINj1NKrK",
+      "success": true,
+      "acceptanceScore": 1,
+      "contextTokens": 0,
+      "contextEnabled": false,
+      "instructionMode": "opencode",
+      "instructionApplied": null,
+      "durationMs": 578541,
+      "usage": {
+        "input": 93814,
+        "output": 9538,
+        "reasoning": 10696,
+        "cacheRead": 885760,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 93814,
+      "totalModelTokens": 114048,
+      "cost": 0,
+      "toolCalls": 94,
+      "toolCounts": {
+        "todowrite": 5,
+        "cuppet_workspace_info": 1,
+        "cuppet_graph_tree": 1,
+        "cuppet_plan": 12,
+        "cuppet_graph_search": 12,
+        "cuppet_graph_trace": 23,
+        "read": 21,
+        "glob": 1,
+        "grep": 7,
+        "apply_patch": 3,
+        "bash": 8
+      },
+      "firstToolName": "todowrite",
+      "graphSearchCalls": 37,
+      "graphOutputBytes": 43086,
+      "graphToolTrace": [
+        {
+          "name": "cuppet_workspace_info",
+          "input": {
+            "limit": 200
+          },
+          "outputBytes": 801,
+          "resultCount": 105,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_tree",
+          "input": {
+            "prefix": "games/task-tracker",
+            "limit": 500
+          },
+          "outputBytes": 736,
+          "resultCount": 16,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "dueDate",
+            "prefix": "games/task-tracker",
+            "limit": 500
+          },
+          "outputBytes": 1144,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "deadline",
+            "prefix": "games/task-tracker",
+            "limit": 500
+          },
+          "outputBytes": 63,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "priority",
+            "prefix": "games/task-tracker",
+            "limit": 500
+          },
+          "outputBytes": 1293,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "index",
+            "prefix": "games/task-tracker",
+            "limit": 500
+          },
+          "outputBytes": 1231,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "games/task-tracker/src/cli/commands.ts:execute",
+            "direction": "outbound",
+            "depth": 6,
+            "limit": 300
+          },
+          "outputBytes": 0,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "games/task-tracker/src/api/routes.ts",
+            "direction": "outbound",
+            "depth": 5,
+            "limit": 300
+          },
+          "outputBytes": 0,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "games/task-tracker/src/api/handlers.ts:listAllTasks",
+            "direction": "outbound",
+            "depth": 5,
+            "limit": 300
+          },
+          "outputBytes": 0,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "games/task-tracker/src/api/handlers.ts:createTask",
+            "direction": "outbound",
+            "depth": 5,
+            "limit": 300
+          },
+          "outputBytes": 0,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "games/task-tracker/src/api/handlers.ts:completeTask",
+            "direction": "outbound",
+            "depth": 5,
+            "limit": 300
+          },
+          "outputBytes": 0,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "games/task-tracker/src/query/taskQueries.ts:listFilteredTasks",
+            "direction": "outbound",
+            "depth": 5,
+            "limit": 300
+          },
+          "outputBytes": 0,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "games/task-tracker/src/store/taskStore.ts:setStatus",
+            "direction": "outbound",
+            "depth": 5,
+            "limit": 300
+          },
+          "outputBytes": 0,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "games/task-tracker/src/store/taskIndex.ts:queryTaskIds",
+            "direction": "inbound",
+            "depth": 5,
+            "limit": 300
+          },
+          "outputBytes": 0,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "games/task-tracker/src/cli/commands.ts:execute",
+            "direction": "callees",
+            "depth": 6,
+            "limit": 300
+          },
+          "outputBytes": 2402,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "games/task-tracker/src/store/taskIndex.ts:queryTaskIds",
+            "direction": "callers",
+            "depth": 5,
+            "limit": 300
+          },
+          "outputBytes": 2402,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "games/task-tracker/src/api/handlers.ts:createTask",
+            "direction": "callees",
+            "depth": 5,
+            "limit": 300
+          },
+          "outputBytes": 2402,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "games/task-tracker/src/api/routes.ts",
+            "direction": "callees",
+            "depth": 5,
+            "limit": 300
+          },
+          "outputBytes": 1049,
+          "resultCount": 5,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "games/task-tracker/src/api/handlers.ts:listAllTasks",
+            "direction": "callees",
+            "depth": 5,
+            "limit": 300
+          },
+          "outputBytes": 2402,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "games/task-tracker/src/query/taskQueries.ts:listFilteredTasks",
+            "direction": "callees",
+            "depth": 5,
+            "limit": 300
+          },
+          "outputBytes": 2402,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "games/task-tracker/src/api/handlers.ts:completeTask",
+            "direction": "callees",
+            "depth": 5,
+            "limit": 300
+          },
+          "outputBytes": 2402,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "games/task-tracker/src/store/taskStore.ts:setStatus",
+            "direction": "callees",
+            "depth": 5,
+            "limit": 300
+          },
+          "outputBytes": 2402,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "createTaskHandler",
+            "prefix": "games/task-tracker",
+            "limit": 100
+          },
+          "outputBytes": 324,
+          "resultCount": 4,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "listTasksHandler",
+            "prefix": "games/task-tracker",
+            "limit": 100
+          },
+          "outputBytes": 235,
+          "resultCount": 3,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "listAllTasks",
+            "prefix": "games/task-tracker",
+            "limit": 100
+          },
+          "outputBytes": 391,
+          "resultCount": 5,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "listFilteredTasks",
+            "prefix": "games/task-tracker",
+            "limit": 100
+          },
+          "outputBytes": 468,
+          "resultCount": 6,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "queryTaskIds",
+            "prefix": "games/task-tracker",
+            "limit": 100
+          },
+          "outputBytes": 342,
+          "resultCount": 4,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "setStatus",
+            "prefix": "games/task-tracker",
+            "limit": 100
+          },
+          "outputBytes": 450,
+          "resultCount": 6,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "updateTaskIndex",
+            "prefix": "games/task-tracker",
+            "limit": 100
+          },
+          "outputBytes": 344,
+          "resultCount": 4,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "addTask",
+            "prefix": "games/task-tracker",
+            "limit": 100
+          },
+          "outputBytes": 587,
+          "resultCount": 8,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "games/task-tracker/src/cli/commands.ts:7:8",
+            "direction": "callees",
+            "depth": 6,
+            "limit": 500
+          },
+          "outputBytes": 2402,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "games/task-tracker/src/store/taskIndex.ts:22:8",
+            "direction": "callers",
+            "depth": 5,
+            "limit": 200
+          },
+          "outputBytes": 2402,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "games/task-tracker/src/query/taskQueries.ts:7:8",
+            "direction": "callees",
+            "depth": 4,
+            "limit": 200
+          },
+          "outputBytes": 2402,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "games/task-tracker/src/api/handlers.ts:11:8",
+            "direction": "callees",
+            "depth": 4,
+            "limit": 200
+          },
+          "outputBytes": 2402,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "games/task-tracker/src/api/handlers.ts:7:8",
+            "direction": "callees",
+            "depth": 4,
+            "limit": 200
+          },
+          "outputBytes": 2402,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "games/task-tracker/src/api/handlers.ts:19:8",
+            "direction": "callees",
+            "depth": 4,
+            "limit": 200
+          },
+          "outputBytes": 2402,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "games/task-tracker/src/store/taskStore.ts:31:8",
+            "direction": "callees",
+            "depth": 4,
+            "limit": 200
+          },
+          "outputBytes": 2402,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        }
+      ],
+      "graphBeforeWorkspace": false,
+      "firstToolMs": 12558,
+      "firstGraphMs": 18271,
+      "firstWorkspaceToolMs": 12558,
+      "firstWorkspaceToolName": "todowrite",
+      "firstSearchMs": 35455,
+      "firstEditMs": 12558,
+      "firstBashMs": 397361,
+      "permissionRequests": 10,
+      "rejectedPermissions": 0,
+      "graphGateRejections": 0,
+      "unexpectedRejectedPermissions": 0,
+      "blockedFileSearchRequests": 0,
+      "graphRedirectMessages": 0,
+      "blockedFileSearchCalls": 0,
+      "blockedBashRequests": 0,
+      "graphGateEnabled": false,
+      "graphPreflightPassed": true,
+      "permissionActions": [
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-QHhEfp/opencode-1/games/task-tracker/src/core/task.ts",
+            "private/tmp/cttr-QHhEfp/opencode-1/games/task-tracker/src/core/taskFactory.ts",
+            "private/tmp/cttr-QHhEfp/opencode-1/games/task-tracker/src/store/taskStore.ts",
+            "private/tmp/cttr-QHhEfp/opencode-1/games/task-tracker/src/store/taskIndex.ts",
+            "private/tmp/cttr-QHhEfp/opencode-1/games/task-tracker/src/cli/parser.ts",
+            "private/tmp/cttr-QHhEfp/opencode-1/games/task-tracker/src/cli/commands.ts",
+            "private/tmp/cttr-QHhEfp/opencode-1/games/task-tracker/src/cli/main.ts",
+            "private/tmp/cttr-QHhEfp/opencode-1/games/task-tracker/src/format/display.ts",
+            "private/tmp/cttr-QHhEfp/opencode-1/games/task-tracker/src/format/compact.ts",
+            "private/tmp/cttr-QHhEfp/opencode-1/games/task-tracker/test/fixtures.ts",
+            "private/tmp/cttr-QHhEfp/opencode-1/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "git status --short"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "git diff -- games/task-tracker"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-QHhEfp/opencode-1/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        }
+      ],
+      "answer": "I’m inventorying the fixture and its code graph first, then I’ll trace the create, list/filter, and update/index paths before touching files. I’ll preserve the named exports and confine changes to `games/task-tracker/` plus any root script verification only.\nThe fixture is already partially seeded with priority and filter types, but the real boundaries confirm both defects: `addTask` strips the date before storage, and `updateTask` snapshots the index before mutation. I’m narrowing the graph traces to exact symbols now so the patch follows the existing CLI-to-handler-to-query/index flow rather than replacing the module structure.\nI’ll make one coherent refactor: rename the model and CLI date surface to `deadline`, make stored tasks always carry a defaulted priority, preserve deadlines at insertion, and refresh the index only after updates. I’ll also expand the fixture tests at those boundaries, including all three filters, mutation-driven reindexing, invalid priority, and malformed/past/future deadline cases.\nI’ll now rename the field and CLI option, make stored tasks always carry a normalized priority, and move index refresh to after store mutation. I’ll retain the existing routing/query chain, strengthen tests at the direct store and CLI/API boundaries, and verify status, priority, and tag reindexing rather than adding a parallel filtering path.\nThe refactor is applied with no remaining `dueDate` or `--due-date` references in the fixture. The store now indexes the fully built task and reindexes only after mutations; I’m moving to the three required validations and will address any type or behavioral failures.\nAll required commands pass. I’m doing the final boundary audit now: confirming only fixture files changed, checking the complete diff for accidental API/export regressions, and recording the exact command outputs for the final report.\nThe audit found one coverage gap, not an implementation failure: the direct `addTask` test checked the returned deadline but not the persisted read-back. I’m tightening that assertion and routing the stale-index assertions through the preserved `listAllTasks` API so the tests cover the exact public paths named in the task.\nImplemented deadline renaming, required/default priority, indexed filtering, deadline validation, and both store/index defect fixes. Named APIs and aliases remain intact.\n\n**Changed Files**\n- `games/task-tracker/src/core/task.ts`\n- `games/task-tracker/src/core/taskFactory.ts`\n- `games/task-tracker/src/store/taskStore.ts`\n- `games/task-tracker/src/store/taskIndex.ts`\n- `games/task-tracker/src/cli/parser.ts`\n- `games/task-tracker/src/cli/commands.ts`\n- `games/task-tracker/src/cli/main.ts`\n- `games/task-tracker/src/format/display.ts`\n- `games/task-tracker/src/format/compact.ts`\n- `games/task-tracker/test/fixtures.ts`\n- `games/task-tracker/test/task-tracker.test.ts`\n\n**Validation**\n- `npm run task-tracker:test`: passed, 9/9 tests.\n- `npm run task-tracker:typecheck`: passed with no diagnostics.\n- `npm run task-tracker:run -- --help`: passed; shows `--deadline`, `--priority`, `--status`, and `--tag`.\n- Final search found no remaining `dueDate` or `--due-date` references.",
+      "evaluation": {
+        "acceptanceScore": 1,
+        "passedChecks": 8,
+        "totalChecks": 8,
+        "success": true,
+        "checks": {
+          "fixtureShape": {
+            "passed": true,
+            "detail": "all seeded cross-file fixture files remain present"
+          },
+          "npmScripts": {
+            "passed": true,
+            "detail": "all task-tracker scripts exist"
+          },
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and priority with no dueDate token remaining"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines and invalid priorities rejected; future deadline and default priority accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → query/store/index paths preserve fields and refresh filters"
+          },
+          "targetedTests": {
+            "passed": true,
+            "detail": "passed in 487 ms"
+          },
+          "typecheck": {
+            "passed": true,
+            "detail": "passed in 729 ms"
+          },
+          "cliSmoke": {
+            "passed": true,
+            "detail": "passed in 429 ms"
+          }
+        },
+        "hopScores": {
+          "hop1OrLess": {
+            "passed": 2,
+            "total": 2,
+            "score": 1
+          },
+          "hop2": {
+            "passed": 1,
+            "total": 1,
+            "score": 1
+          },
+          "regression": {
+            "passed": 3,
+            "total": 3,
+            "score": 1
+          }
+        },
+        "hidden": {
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and priority with no dueDate token remaining"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines and invalid priorities rejected; future deadline and default priority accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → query/store/index paths preserve fields and refresh filters"
+          }
+        },
+        "targetedTest": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 487,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:test\n> node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n[PASS] validate accepts a well-formed future deadline and priority\n[PASS] validate rejects malformed and past deadlines and invalid priorities\n[PASS] store supports create, read, update, and delete\n[PASS] new tasks default priority to normal\n[PASS] API handlers create and list tasks\n[PASS] CLI parser and command formatter work together\n[PASS] CLI list uses indexed status, priority, and tag filters\n[PASS] task updates refresh indexed status, priority, and tags\n[PASS] compact output includes priority and deadline\n",
+          "stderr": ""
+        },
+        "typecheck": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 729,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\n",
+          "stderr": ""
+        },
+        "cliSmoke": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 429,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\nTask Tracker CLI\n\nUsage:\n  task-tracker add <title> [--deadline ISO] [--priority low|normal|high]\n  task-tracker list [--status STATUS] [--priority PRIORITY] [--tag TAG]\n  task-tracker show <id>\n  task-tracker done <id>\n\n",
+          "stderr": ""
+        }
+      }
+    }
+  ]
+}

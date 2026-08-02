@@ -46,6 +46,13 @@ function userMessage(id: string, text: string) {
   }
 }
 
+function syntheticText(messages: any[]): string {
+  return String(messages
+    .flatMap((message) => message.parts ?? [])
+    .filter((part) => part.synthetic === true && typeof part.text === 'string')
+    .at(-1)?.text)
+}
+
 test('lossless plans preserve preambles and full phase detail while restoring omitted todo phases', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'cuppet-lossless-plan-'))
   try {
@@ -127,7 +134,7 @@ test('native /plan and build turns share the same canonical plan instead of coll
     history: { estimatedTokens: 1, usableTokens: 20_000 },
   }, planOutput, undefined, store)
 
-  const planContext = String(planOutput.messages[0]?.parts[0]?.text)
+  const planContext = syntheticText(planOutput.messages)
   assert.match(planContext, /<CUPPET_LOSSLESS_PLAN canonical="true" agent="plan"/)
   assert.match(planContext, /CANONICAL IMPLEMENTATION PLAN/)
 
@@ -138,7 +145,7 @@ test('native /plan and build turns share the same canonical plan instead of coll
     phase: 'foreground',
     history: { estimatedTokens: 1, usableTokens: 20_000 },
   }, buildOutput, undefined, store)
-  const buildContext = String(buildOutput.messages[0]?.parts[0]?.text)
+  const buildContext = syntheticText(buildOutput.messages)
   assert.match(buildContext, /<CUPPET_LOSSLESS_PLAN canonical="true" agent="build"/)
   assert.match(buildContext, /P01/)
 
@@ -154,7 +161,7 @@ test('native /plan and build turns share the same canonical plan instead of coll
     phase: 'foreground',
     history: { estimatedTokens: 1, usableTokens: 20_000 },
   }, reminderOnlyOutput, undefined, store)
-  assert.match(String(reminderOnlyOutput.messages[0]?.parts[0]?.text), /CUPPET_LOSSLESS_PLAN/)
+  assert.match(syntheticText(reminderOnlyOutput.messages), /CUPPET_LOSSLESS_PLAN/)
 
   const plan = await store.get('native-plan-session')
   assert.ok(plan)

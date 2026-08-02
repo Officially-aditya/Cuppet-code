@@ -16,7 +16,7 @@ use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::{broadcast, mpsc, Mutex, Notify};
 use tst_core::memory::MemoryScope;
 use tst_core::service::{
-    ContextPrepareInput, EvidenceInput, ObserveInput, QueryInput, RememberInput, TstService,
+    ContextPrepareInput, EvidenceInput, ObserveInput, QueryInput, RememberInput, StmRefreshInput, TstService,
 };
 use tst_core::PROTOCOL_VERSION;
 
@@ -239,7 +239,7 @@ async fn serve_connection(
                     json!({
                         "protocol": PROTOCOL_VERSION,
                         "capabilities": [
-                            "memory.observe", "memory.query", "memory.remember", "memory.forget", "context.prepare",
+                            "memory.observe", "memory.query", "memory.remember", "memory.forget", "context.prepare", "turn.completed", "stm.refresh",
                             "evidence.record", "graph.query", "graph.search", "graph.locate", "graph.list", "graph.workspace", "graph.trace", "graph.trace_summary", "status", "compact", "flush", "shutdown",
                             "notifications"
                         ]
@@ -304,6 +304,7 @@ fn is_known_method(method: &str) -> bool {
             | "memory.remember"
             | "memory.forget"
             | "context.prepare"
+            | "stm.refresh"
             | "evidence.record"
             | "graph.query"
             | "graph.search"
@@ -333,6 +334,10 @@ async fn dispatch(method: &str, params: Value, service: &Arc<Mutex<TstService>>)
         "context.prepare" => {
             let input: ContextPrepareInput = serde_json::from_value(params)?;
             Ok(serde_json::to_value(service.lock().await.prepare_context(input))?)
+        }
+        "stm.refresh" => {
+            let input: StmRefreshInput = serde_json::from_value(params)?;
+            Ok(serde_json::to_value(service.lock().await.refresh_stm(input)?)?)
         }
         "memory.remember" => {
             let input: RememberInput = serde_json::from_value(params)?;
@@ -433,6 +438,7 @@ fn notification_for(method: &str, result: Value) -> Option<RpcNotification> {
         "memory.observe" | "memory.remember" | "memory.forget" | "evidence.record" | "turn.completed" => {
             "memory.changed"
         }
+        "stm.refresh" => "stm.refreshed",
         "compact" | "flush" => "health",
         "shutdown" => "health.shutdown",
         _ => return None,
@@ -679,6 +685,7 @@ mod tests {
         assert!(redact_error("bad sk-12345678901234567890").contains("[REDACTED]"));
         assert!(is_known_method("memory.query"));
         assert!(is_known_method("context.prepare"));
+        assert!(is_known_method("stm.refresh"));
         assert!(!is_known_method("filesystem.delete"));
     }
 }

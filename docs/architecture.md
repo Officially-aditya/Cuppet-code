@@ -17,7 +17,12 @@ The server plugin exposes memory and graph tools and performs observation hooks.
 The TUI plugin registers Cuppet command-palette entries. Both use the
 launch-scoped, authenticated Unix socket; it is never bound to a network
 interface. Context retrieval is delivered as an ephemeral synthetic prompt part
-while the ordinary persisted user message remains unchanged.
+after the current user's persisted prompt while the ordinary persisted
+transcript remains unchanged. The first retrieval result for a user-message ID
+is memoized and replayed at that same message position on every subsequent
+model step; a new user-message ID closes the previous TST foreground turn
+before retrieval begins. This keeps request context stable for provider-cache
+prefixes without persisting synthetic material.
 
 The pinned derivative passes request-scoped session, agent, model, phase, and
 context-budget metadata to the plugin together with a cloned model-facing
@@ -38,6 +43,13 @@ History selection is adaptive and affects only that clone; OpenCode's
 transcript, permission state, tool loop, undo boundaries, and native compaction
 records are never rewritten by Cuppet. Projection state is bounded per session
 and cleared on agent changes, compaction, disposal, and eviction.
+
+The opt-in STM-only compaction experiment adds `stm.refresh` and
+`context.prepare(mode: "stm_only")`. Refresh stages a ranked STM replacement,
+preserves pinned records, never promotes to LTM, and returns bounded file
+anchors plus constraints. Its derivative compaction path writes the native
+compaction record directly from that context; refresh failure aborts before any
+transcript mutation. The native summarization path remains the default.
 
 The native `/plan` command switches directly between the current native plan and
 build agents and synchronizes Cuppet's controller through `plan.set`; it does

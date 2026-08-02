@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "runID": "ab-stm-compaction-2026-08-01T07-16-07-437Z-406b0c",
+  "createdAt": "2026-08-01T07:16:07.438Z",
+  "updatedAt": "2026-08-01T07:16:47.867Z",
+  "config": {
+    "experiment": "ab-stm-compaction",
+    "repeats": 1,
+    "model": {
+      "providerID": "openai",
+      "modelID": "gpt-5.6-luna"
+    },
+    "fixtureHash": "29024cebadb5f7ddd1563a7c2030bdeb8870e55c61fb5bc35fc586160560bf29",
+    "patchSetDigest": "72072eebc2ad32b4ea522ce9c90b802bf847bf5a0a68e6eda6f802ada66f0939",
+    "armOrders": [
+      [
+        "control",
+        "stm_only"
+      ]
+    ],
+    "phases": 3
+  },
+  "paths": {
+    "root": "/private/tmp/cuppet-stm-compaction-HLCznR",
+    "checkpoint": "/Users/addy/Downloads/cuppet/benchmarks/results/ab-stm-compaction-2026-08-01T07-16-07-437Z-406b0c.checkpoint.json",
+    "eventLog": "/Users/addy/Downloads/cuppet/benchmarks/results/ab-stm-compaction-2026-08-01T07-16-07-437Z-406b0c.events.ndjson",
+    "partialJson": "/Users/addy/Downloads/cuppet/benchmarks/results/ab-stm-compaction-2026-08-01T07-16-07-437Z-406b0c.partial.json",
+    "partialMarkdown": "/Users/addy/Downloads/cuppet/benchmarks/results/ab-stm-compaction-2026-08-01T07-16-07-437Z-406b0c.partial.md"
+  },
+  "completedTrials": [],
+  "telemetry": {
+    "lastEvent": "arm.1.control.compaction_1.completed",
+    "activeTrial": {}
+  },
+  "lastEvent": "arm.1.control.compaction_1.completed",
+  "heartbeatAt": "2026-08-01T07:16:47.867Z",
+  "activeTrial": {
+    "repeat": 1,
+    "arm": "control",
+    "workspace": "/private/tmp/cuppet-stm-compaction-HLCznR/workspaces/control-1",
+    "runtimeRoot": "/private/tmp/cuppet-stm-compaction-HLCznR/runtimes/control-1",
+    "stage": "compaction_start",
+    "startedAt": "2026-08-01T07:16:07.528Z",
+    "heartbeatAt": "2026-08-01T07:16:47.867Z",
+    "telemetry": {},
+    "sessionID": "ses_043d1ca3effehbfdWRfNZOkizA",
+    "promptPhase": 1,
+    "compaction": 1
+  }
+}

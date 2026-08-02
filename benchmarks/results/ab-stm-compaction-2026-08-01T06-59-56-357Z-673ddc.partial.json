@@ -1,0 +1,404 @@
+{
+  "schema": 1,
+  "experiment": "ab-stm-compaction",
+  "createdAt": "2026-08-01T06:59:56.358Z",
+  "updatedAt": "2026-08-01T07:01:07.054Z",
+  "project": "/Users/addy/Downloads/cuppet",
+  "configuration": {
+    "experiment": "ab-stm-compaction",
+    "repeats": 5,
+    "model": {
+      "providerID": "openai",
+      "modelID": "gpt-5.6-sol",
+      "variant": "max"
+    },
+    "fixtureHash": "29024cebadb5f7ddd1563a7c2030bdeb8870e55c61fb5bc35fc586160560bf29",
+    "patchSetDigest": "0f053a69149c6c278f796ca4735c27c0add2be5f96299b2db6f3f5c8eaa29edf",
+    "armOrders": [
+      [
+        "control",
+        "stm_only"
+      ],
+      [
+        "stm_only",
+        "control"
+      ],
+      [
+        "control",
+        "stm_only"
+      ],
+      [
+        "stm_only",
+        "control"
+      ],
+      [
+        "control",
+        "stm_only"
+      ]
+    ],
+    "phases": 3
+  },
+  "audit": {
+    "checkpoint": "/Users/addy/Downloads/cuppet/benchmarks/results/ab-stm-compaction-2026-08-01T06-59-56-357Z-673ddc.checkpoint.json",
+    "eventLog": "/Users/addy/Downloads/cuppet/benchmarks/results/ab-stm-compaction-2026-08-01T06-59-56-357Z-673ddc.events.ndjson",
+    "partialJson": "/Users/addy/Downloads/cuppet/benchmarks/results/ab-stm-compaction-2026-08-01T06-59-56-357Z-673ddc.partial.json",
+    "partialMarkdown": "/Users/addy/Downloads/cuppet/benchmarks/results/ab-stm-compaction-2026-08-01T06-59-56-357Z-673ddc.partial.md",
+    "root": "/private/tmp/cuppet-stm-compaction-yEfMmQ",
+    "lastEvent": "arm.4.stm_only.finished",
+    "heartbeatAt": "2026-08-01T07:01:07.054Z"
+  },
+  "summary": {
+    "control": {
+      "trials": 3,
+      "successes": 0,
+      "correctnessRate": 0,
+      "medianContextTokens": 0,
+      "medianCompactionTokens": 0,
+      "medianTotalInputTokens": 0,
+      "medianLatencyMs": 10069,
+      "medianCost": 0,
+      "medianFilePrecision": 0,
+      "medianFileRecall": 0,
+      "meanConstraintRecall": 0,
+      "meanStmSize": 0,
+      "failures": [
+        "Timed out waiting for TST daemon: TST protocol mismatch: expected cuppet.tst.v3, received cuppet.tst.v1",
+        "Timed out waiting for TST daemon: TST protocol mismatch: expected cuppet.tst.v3, received cuppet.tst.v1",
+        "Timed out waiting for TST daemon: TST protocol mismatch: expected cuppet.tst.v3, received cuppet.tst.v1"
+      ]
+    },
+    "stm_only": {
+      "trials": 4,
+      "successes": 0,
+      "correctnessRate": 0,
+      "medianContextTokens": 0,
+      "medianCompactionTokens": 0,
+      "medianTotalInputTokens": 0,
+      "medianLatencyMs": 10066.5,
+      "medianCost": 0,
+      "medianFilePrecision": 0,
+      "medianFileRecall": 0,
+      "meanConstraintRecall": 0,
+      "meanStmSize": 0,
+      "failures": [
+        "Timed out waiting for TST daemon: TST protocol mismatch: expected cuppet.tst.v3, received cuppet.tst.v1",
+        "Timed out waiting for TST daemon: TST protocol mismatch: expected cuppet.tst.v3, received cuppet.tst.v1",
+        "Timed out waiting for TST daemon: TST protocol mismatch: expected cuppet.tst.v3, received cuppet.tst.v1",
+        "Timed out waiting for TST daemon: TST protocol mismatch: expected cuppet.tst.v3, received cuppet.tst.v1"
+      ]
+    },
+    "comparison": {
+      "noCorrectnessRegression": true,
+      "criticalChecksPass": false,
+      "medianContextCostReduction": 0,
+      "worthwhile": false
+    }
+  },
+  "completedTrials": [
+    {
+      "repeat": 1,
+      "arm": "control",
+      "workspace": "/private/tmp/cuppet-stm-compaction-yEfMmQ/workspaces/control-1",
+      "runtimeRoot": "/private/tmp/cuppet-stm-compaction-yEfMmQ/runtimes/control-1",
+      "sessionID": "",
+      "success": false,
+      "correctness": {
+        "passed": false,
+        "checks": {},
+        "hiddenTests": {}
+      },
+      "retainedFilePrecision": 0,
+      "retainedFileRecall": 0,
+      "constraintRecall": 0,
+      "stmSize": 0,
+      "injectedTokens": 0,
+      "compactionTokens": 0,
+      "totalInputTokens": 0,
+      "latencyMs": 10092,
+      "cost": 0,
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "compactions": 0,
+      "stmRefreshes": 0,
+      "failures": [
+        "Timed out waiting for TST daemon: TST protocol mismatch: expected cuppet.tst.v3, received cuppet.tst.v1"
+      ],
+      "telemetry": {
+        "arm": "control",
+        "repeat": 1,
+        "phases": [],
+        "compactionEvents": [],
+        "stmRefreshEvents": []
+      },
+      "error": "Timed out waiting for TST daemon: TST protocol mismatch: expected cuppet.tst.v3, received cuppet.tst.v1",
+      "finishedAt": "2026-08-01T07:00:06.581Z"
+    },
+    {
+      "repeat": 1,
+      "arm": "stm_only",
+      "workspace": "/private/tmp/cuppet-stm-compaction-yEfMmQ/workspaces/stm_only-1",
+      "runtimeRoot": "/private/tmp/cuppet-stm-compaction-yEfMmQ/runtimes/stm_only-1",
+      "sessionID": "",
+      "success": false,
+      "correctness": {
+        "passed": false,
+        "checks": {},
+        "hiddenTests": {}
+      },
+      "retainedFilePrecision": 0,
+      "retainedFileRecall": 0,
+      "constraintRecall": 0,
+      "stmSize": 0,
+      "injectedTokens": 0,
+      "compactionTokens": 0,
+      "totalInputTokens": 0,
+      "latencyMs": 10065,
+      "cost": 0,
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "compactions": 0,
+      "stmRefreshes": 0,
+      "failures": [
+        "Timed out waiting for TST daemon: TST protocol mismatch: expected cuppet.tst.v3, received cuppet.tst.v1"
+      ],
+      "telemetry": {
+        "arm": "stm_only",
+        "repeat": 1,
+        "phases": [],
+        "compactionEvents": [],
+        "stmRefreshEvents": []
+      },
+      "error": "Timed out waiting for TST daemon: TST protocol mismatch: expected cuppet.tst.v3, received cuppet.tst.v1",
+      "finishedAt": "2026-08-01T07:00:16.657Z"
+    },
+    {
+      "repeat": 2,
+      "arm": "stm_only",
+      "workspace": "/private/tmp/cuppet-stm-compaction-yEfMmQ/workspaces/stm_only-2",
+      "runtimeRoot": "/private/tmp/cuppet-stm-compaction-yEfMmQ/runtimes/stm_only-2",
+      "sessionID": "",
+      "success": false,
+      "correctness": {
+        "passed": false,
+        "checks": {},
+        "hiddenTests": {}
+      },
+      "retainedFilePrecision": 0,
+      "retainedFileRecall": 0,
+      "constraintRecall": 0,
+      "stmSize": 0,
+      "injectedTokens": 0,
+      "compactionTokens": 0,
+      "totalInputTokens": 0,
+      "latencyMs": 10066,
+      "cost": 0,
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "compactions": 0,
+      "stmRefreshes": 0,
+      "failures": [
+        "Timed out waiting for TST daemon: TST protocol mismatch: expected cuppet.tst.v3, received cuppet.tst.v1"
+      ],
+      "telemetry": {
+        "arm": "stm_only",
+        "repeat": 2,
+        "phases": [],
+        "compactionEvents": [],
+        "stmRefreshEvents": []
+      },
+      "error": "Timed out waiting for TST daemon: TST protocol mismatch: expected cuppet.tst.v3, received cuppet.tst.v1",
+      "finishedAt": "2026-08-01T07:00:26.736Z"
+    },
+    {
+      "repeat": 2,
+      "arm": "control",
+      "workspace": "/private/tmp/cuppet-stm-compaction-yEfMmQ/workspaces/control-2",
+      "runtimeRoot": "/private/tmp/cuppet-stm-compaction-yEfMmQ/runtimes/control-2",
+      "sessionID": "",
+      "success": false,
+      "correctness": {
+        "passed": false,
+        "checks": {},
+        "hiddenTests": {}
+      },
+      "retainedFilePrecision": 0,
+      "retainedFileRecall": 0,
+      "constraintRecall": 0,
+      "stmSize": 0,
+      "injectedTokens": 0,
+      "compactionTokens": 0,
+      "totalInputTokens": 0,
+      "latencyMs": 10064,
+      "cost": 0,
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "compactions": 0,
+      "stmRefreshes": 0,
+      "failures": [
+        "Timed out waiting for TST daemon: TST protocol mismatch: expected cuppet.tst.v3, received cuppet.tst.v1"
+      ],
+      "telemetry": {
+        "arm": "control",
+        "repeat": 2,
+        "phases": [],
+        "compactionEvents": [],
+        "stmRefreshEvents": []
+      },
+      "error": "Timed out waiting for TST daemon: TST protocol mismatch: expected cuppet.tst.v3, received cuppet.tst.v1",
+      "finishedAt": "2026-08-01T07:00:36.811Z"
+    },
+    {
+      "repeat": 3,
+      "arm": "control",
+      "workspace": "/private/tmp/cuppet-stm-compaction-yEfMmQ/workspaces/control-3",
+      "runtimeRoot": "/private/tmp/cuppet-stm-compaction-yEfMmQ/runtimes/control-3",
+      "sessionID": "",
+      "success": false,
+      "correctness": {
+        "passed": false,
+        "checks": {},
+        "hiddenTests": {}
+      },
+      "retainedFilePrecision": 0,
+      "retainedFileRecall": 0,
+      "constraintRecall": 0,
+      "stmSize": 0,
+      "injectedTokens": 0,
+      "compactionTokens": 0,
+      "totalInputTokens": 0,
+      "latencyMs": 10069,
+      "cost": 0,
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "compactions": 0,
+      "stmRefreshes": 0,
+      "failures": [
+        "Timed out waiting for TST daemon: TST protocol mismatch: expected cuppet.tst.v3, received cuppet.tst.v1"
+      ],
+      "telemetry": {
+        "arm": "control",
+        "repeat": 3,
+        "phases": [],
+        "compactionEvents": [],
+        "stmRefreshEvents": []
+      },
+      "error": "Timed out waiting for TST daemon: TST protocol mismatch: expected cuppet.tst.v3, received cuppet.tst.v1",
+      "finishedAt": "2026-08-01T07:00:46.891Z"
+    },
+    {
+      "repeat": 3,
+      "arm": "stm_only",
+      "workspace": "/private/tmp/cuppet-stm-compaction-yEfMmQ/workspaces/stm_only-3",
+      "runtimeRoot": "/private/tmp/cuppet-stm-compaction-yEfMmQ/runtimes/stm_only-3",
+      "sessionID": "",
+      "success": false,
+      "correctness": {
+        "passed": false,
+        "checks": {},
+        "hiddenTests": {}
+      },
+      "retainedFilePrecision": 0,
+      "retainedFileRecall": 0,
+      "constraintRecall": 0,
+      "stmSize": 0,
+      "injectedTokens": 0,
+      "compactionTokens": 0,
+      "totalInputTokens": 0,
+      "latencyMs": 10071,
+      "cost": 0,
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "compactions": 0,
+      "stmRefreshes": 0,
+      "failures": [
+        "Timed out waiting for TST daemon: TST protocol mismatch: expected cuppet.tst.v3, received cuppet.tst.v1"
+      ],
+      "telemetry": {
+        "arm": "stm_only",
+        "repeat": 3,
+        "phases": [],
+        "compactionEvents": [],
+        "stmRefreshEvents": []
+      },
+      "error": "Timed out waiting for TST daemon: TST protocol mismatch: expected cuppet.tst.v3, received cuppet.tst.v1",
+      "finishedAt": "2026-08-01T07:00:56.974Z"
+    },
+    {
+      "repeat": 4,
+      "arm": "stm_only",
+      "workspace": "/private/tmp/cuppet-stm-compaction-yEfMmQ/workspaces/stm_only-4",
+      "runtimeRoot": "/private/tmp/cuppet-stm-compaction-yEfMmQ/runtimes/stm_only-4",
+      "sessionID": "",
+      "success": false,
+      "correctness": {
+        "passed": false,
+        "checks": {},
+        "hiddenTests": {}
+      },
+      "retainedFilePrecision": 0,
+      "retainedFileRecall": 0,
+      "constraintRecall": 0,
+      "stmSize": 0,
+      "injectedTokens": 0,
+      "compactionTokens": 0,
+      "totalInputTokens": 0,
+      "latencyMs": 10067,
+      "cost": 0,
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0
+      },
+      "compactions": 0,
+      "stmRefreshes": 0,
+      "failures": [
+        "Timed out waiting for TST daemon: TST protocol mismatch: expected cuppet.tst.v3, received cuppet.tst.v1"
+      ],
+      "telemetry": {
+        "arm": "stm_only",
+        "repeat": 4,
+        "phases": [],
+        "compactionEvents": [],
+        "stmRefreshEvents": []
+      },
+      "error": "Timed out waiting for TST daemon: TST protocol mismatch: expected cuppet.tst.v3, received cuppet.tst.v1",
+      "finishedAt": "2026-08-01T07:01:07.054Z"
+    }
+  ],
+  "error": {
+    "message": "Timed out waiting for TST daemon: TST protocol mismatch: expected cuppet.tst.v3, received cuppet.tst.v1",
+    "stack": "Error: Timed out waiting for TST daemon: TST protocol mismatch: expected cuppet.tst.v3, received cuppet.tst.v1\n    at waitForClient (/Users/addy/Downloads/cuppet/packages/cli/src/tst/supervisor.ts:92:9)\n    at async startTstDaemon (/Users/addy/Downloads/cuppet/packages/cli/src/tst/supervisor.ts:40:20)\n    at async runArm (/Users/addy/Downloads/cuppet/scripts/ab-stm-compaction.ts:287:11)\n    at async main (/Users/addy/Downloads/cuppet/scripts/ab-stm-compaction.ts:196:23)"
+  }
+}

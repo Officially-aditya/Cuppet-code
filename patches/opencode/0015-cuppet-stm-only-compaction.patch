@@ -1,0 +1,93 @@
+diff --git a/packages/plugin/src/index.ts b/packages/plugin/src/index.ts
+--- a/packages/plugin/src/index.ts
++++ b/packages/plugin/src/index.ts
+@@ -289,12 +289,25 @@ export interface Hooks {
+       history: {
+         estimatedTokens: number
+         usableTokens: number
+       }
++      compaction?: {
++        mode: "native" | "stm_only"
++        prompt?: string
++        directive?: string
++      }
+     },
+     output: {
+       messages: {
+         info: Message
+         parts: Part[]
+       }[]
++      cuppetCompaction?: {
++        mode: "stm_only"
++        abort: boolean
++        directive: string
++        error?: string
++      }
++      compactionDirective?: string
++      cuppetCompactionAbort?: boolean
+     },
+   ) => Promise<void>
+diff --git a/packages/opencode/src/session/compaction.ts b/packages/opencode/src/session/compaction.ts
+--- a/packages/opencode/src/session/compaction.ts
++++ b/packages/opencode/src/session/compaction.ts
+@@ -347,6 +347,12 @@
+       )
+       const nextPrompt = compacting.prompt ?? buildPrompt({ previousSummary, context: compacting.context })
+       const msgs = structuredClone(selected.head)
++      const transformed = { messages: msgs, cuppetCompaction: undefined as {
++        mode: "stm_only"
++        abort: boolean
++        directive: string
++        error?: string
++      } | undefined }
+       yield* plugin.trigger(
+         "experimental.chat.messages.transform",
+         {
+@@ -362,10 +368,21 @@
+               outputTokenMax: flags.outputTokenMax,
+             }),
+           },
+-        },
+-        { messages: msgs },
++          compaction: {
++            mode: process.env.CUPPET_STM_ONLY_COMPACTION === "1" ? "stm_only" : "native",
++            prompt: nextPrompt,
++          },
++        },
++        transformed,
+       )
+-      const modelMessages = yield* MessageV2.toModelMessagesEffect(msgs, model, {
++      if (transformed.cuppetCompaction?.abort) {
++        yield* Effect.logWarning("STM-only compaction aborted before transcript mutation", {
++          sessionID: input.sessionID,
++          error: transformed.cuppetCompaction.error,
++        })
++        return "stop"
++      }
++      const modelMessages = yield* MessageV2.toModelMessagesEffect(transformed.messages, model, {
+         stripMedia: true,
+         toolOutputMaxChars: TOOL_OUTPUT_MAX_CHARS,
+       })
+@@ -396,4 +413,22 @@
+           created: Date.now(),
+         },
+       }
++      if (transformed.cuppetCompaction?.mode === "stm_only") {
++        msg.finish = "stop"
++        yield* session.updateMessage(msg)
++        yield* session.updatePart({
++          id: PartID.ascending(),
++          messageID: msg.id,
++          sessionID: input.sessionID,
++          type: "text",
++          synthetic: true,
++          text: transformed.cuppetCompaction.directive,
++          time: {
++            start: Date.now(),
++            end: Date.now(),
++          },
++        })
++        yield* events.publish(Event.Compacted, { sessionID: input.sessionID })
++        return "continue"
++      }
+       yield* session.updateMessage(msg)

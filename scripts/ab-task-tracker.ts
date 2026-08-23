@@ -201,6 +201,8 @@ type Trial = {
   workspace: string
   sessionID: string
   success: boolean
+  attempts: number
+  repaired?: boolean
   acceptanceScore: number
   contextTokens: number
   taskContextChars: number
@@ -253,6 +255,15 @@ type Trial = {
 
 const execFileAsync = promisify(execFile)
 const project = resolve(process.cwd())
+
+// Verification-driven completion guard budget: evaluator-fed repair attempts
+// after the first prompt. '0' disables the guard. Both arms receive the same
+// treatment.
+function verifyRetryLimit(): number {
+  const requested = Number(process.env.CUPPET_TASK_TRACKER_VERIFY_RETRIES ?? '2')
+  return Number.isFinite(requested) ? Math.max(0, Math.min(3, Math.floor(requested))) : 2
+}
+
 const repeats = Math.max(1, Math.min(5, Number(process.env.CUPPET_TASK_TRACKER_REPEATS ?? '5') || 5))
 const keepWorkspaces = process.env.CUPPET_TTT_KEEP_WORKSPACES === '1'
 const requestedSingleArm = process.env.CUPPET_TASK_TRACKER_SINGLE_ARM
@@ -884,6 +895,8 @@ async function runTrial(options: { arm: Arm; model: ModelRef; repeat: number; ro
     let taskContextMediumConfidence = 0
     let answer = ''
     let failure: string | undefined
+    let evaluation: WorkspaceEvaluation | undefined
+    let attempts = 1
     started = performance.now()
     try {
       if (armConfig.enforceGraphFirst === true) {
@@ -915,6 +928,28 @@ async function runTrial(options: { arm: Arm; model: ModelRef; repeat: number; ro
         await gateway.prompt(session.id, followUpPrompt)
         await withTimeout(gateway.wait(session.id), 15 * 60_000, `${options.arm} Task Tracker follow-up timed out`)
       }
+      // Verification-driven completion guard (both arms identically): when
+      // the deterministic hidden suite fails, feed the exact failed checks
+      // back to the same session as a bounded repair prompt.
+      let verification = await evaluateWorkspace(workspace, options.hiddenSuitePath)
+      let repairAttempts = 0
+      while (!verification.success && !failure && repairAttempts < verifyRetryLimit()) {
+        const failed = Object.entries(verification.checks)
+          .filter(([, check]) => !check.passed)
+          .map(([name, check]) => `- ${name}: ${check.detail}`)
+        if (failed.length === 0) break
+        const repairPrompt = [
+          'Your previous attempt did not fully satisfy the task. A deterministic verifier reported these exact problems:',
+          ...failed.map((line) => line.slice(0, 300)),
+          'Fix only these verified problems in the task-tracker workspace, keep existing tests passing, re-inspect your changes, then reply.',
+        ].join('\n')
+        repairAttempts += 1
+        await gateway.prompt(session.id, repairPrompt)
+        await withTimeout(gateway.wait(session.id), 15 * 60_000, `${options.arm} Task Tracker repair timed out`)
+        verification = await evaluateWorkspace(workspace, options.hiddenSuitePath)
+      }
+      evaluation = verification
+      attempts = 1 + repairAttempts
       const finalMessages = await gateway.messages(session.id)
       answer = assistantText(finalMessages)
       for (const message of finalMessages) {
@@ -939,7 +974,7 @@ async function runTrial(options: { arm: Arm; model: ModelRef; repeat: number; ro
     const completed = session
       ? await gateway.getSession(session.id).catch(() => session)
       : { tokens: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 }, cost: 0 }
-    const evaluation = await evaluateWorkspace(workspace, options.hiddenSuitePath)
+    const finalEvaluation = evaluation ?? (await evaluateWorkspace(workspace, options.hiddenSuitePath))
     const eventError = errors.get(sessionID)
     const unexpectedRejectedPermissions = Math.max(
       0,
@@ -949,14 +984,15 @@ async function runTrial(options: { arm: Arm; model: ModelRef; repeat: number; ro
       ?? eventError
       ?? (unexpectedRejectedPermissions > 0 ? `${unexpectedRejectedPermissions} unexpected permission request(s) rejected` : undefined)
       ?? (stepLimitHit ? 'step limit reached' : undefined)
-    const success = !error && evaluation.success
+    const success = !error && finalEvaluation.success
     return {
       repeat: options.repeat + 1,
       arm: options.arm,
       workspace,
       sessionID,
       success,
-      acceptanceScore: evaluation.acceptanceScore,
+      attempts,
+      acceptanceScore: finalEvaluation.acceptanceScore,
       contextTokens,
       taskContextChars,
       taskContextHighConfidence,
@@ -995,8 +1031,9 @@ async function runTrial(options: { arm: Arm; model: ModelRef; repeat: number; ro
       graphPreflightPassed,
       permissionActions,
       answer,
-      evaluation,
+      evaluation: finalEvaluation,
       ...(error ? { error } : {}),
+      ...(attempts > 1 ? { repaired: success } : {}),
     }
   } finally {
     await gateway?.close()

@@ -101,6 +101,7 @@ test('read-only tool client authenticates and uses length-framed JSON-RPC', asyn
       file_evidence: [{ path: 'src/task.ts', validated: true }],
     })
     await client.graphSearch('dueDate', 'games/task-tracker', 10)
+    await client.graphQuery('dueDate', 10, 'games/task-tracker')
     await client.graphLocate('dueDate', 'games/task-tracker', 10)
     await client.graphList('games/task-tracker', 10)
     await client.graphWorkspace(10)
@@ -138,6 +139,8 @@ test('read-only tool client authenticates and uses length-framed JSON-RPC', asyn
       'stm.refresh',
       'initialize',
       'graph.search',
+      'initialize',
+      'graph.query',
       'initialize',
       'graph.locate',
       'initialize',

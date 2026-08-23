@@ -123,9 +123,10 @@ export class TstToolClient {
     })
   }
 
-  async graphQuery(query: string, limit = 20): Promise<unknown> {
+  async graphQuery(query: string, limit = 20, prefix?: string): Promise<unknown> {
     return this.#request('graph.query', {
       query,
+      ...(prefix ? { prefix } : {}),
       limit: Math.min(Math.max(limit, 1), 128),
     })
   }

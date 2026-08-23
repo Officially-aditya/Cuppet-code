@@ -26,6 +26,8 @@
     "eval:ab:weather-codex-cuppet": "node --import tsx scripts/ab-weather-codex-cuppet.ts",
     "eval:ab:weather-opencode-cuppet": "CUPPET_WEATHER_ARMS=opencode,cuppet CUPPET_WEATHER_LABEL=opencode-cuppet node --import tsx scripts/ab-weather-codex-cuppet.ts",
     "eval:ab:opencode-cuppet-10-tasks": "node --import tsx scripts/ab-opencode-cuppet-10-tasks.ts",
+    "eval:ab:hard": "node --import tsx scripts/ab-opencode-cuppet-hard-tasks.ts",
+    "eval:ab:marathon": "node --import tsx scripts/ab-opencode-cuppet-marathon.ts",
     "game:test": "node --import tsx games/tic-tac-toe/test/game.test.ts",
     "game:typecheck": "tsc --noEmit --project games/tic-tac-toe/tsconfig.json",
     "game:play": "node --import tsx games/tic-tac-toe/src/cli.ts",

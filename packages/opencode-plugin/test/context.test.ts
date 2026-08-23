@@ -9,6 +9,7 @@ import {
   renderGraphCapsuleContext,
   renderStmEventContext,
   renderStmOnlyContext,
+  parseTaskSpec,
   selectCurrentTurnHistory,
   selectModelHistory,
   transformCuppetModelContext,
@@ -163,6 +164,61 @@ test('background and compaction requests are not transformed', async () => {
     history: { estimatedTokens: 1, usableTokens: 1 },
   }, output, client as never)
   assert.equal(calls, 0)
+})
+
+test('model-facing prefix stays byte-identical across steps and turns for stable provider caching', async () => {
+  clearCuppetContextState()
+  let prepared = 0
+  const client = {
+    async prepareContext() {
+      prepared += 1
+      return {
+        observation_complete: true,
+        stm: [{ key: 'continuity', value: `Keep the API stable (${prepared})`, provenance: 'model_candidate', evidence: [] }],
+        ltm: [], graph: [], edges: [],
+      }
+    },
+    async turnCompleted() {},
+  }
+  const options = {
+    sessionID: 'cache-prefix-session', agent: 'cuppet', phase: 'foreground',
+    history: { estimatedTokens: 1, usableTokens: 100_000 },
+  }
+
+  const stepOne = { messages: [...turn(0), ...turn(1), ...turn(2), {
+    info: { id: 'user-3', role: 'user' },
+    parts: [{ type: 'text', text: 'Build feature three' }],
+  }] }
+  await transformCuppetModelContext(options, stepOne, client as never)
+  const renderedStepOne = stepOne.messages.map((message) => JSON.stringify(message))
+
+  // Mid-turn: assistant/tool parts accumulate; every prior message must stay byte-identical.
+  const stepTwo = { messages: structuredClone(stepOne.messages).concat([{
+    info: { id: 'assistant-tool-3', role: 'assistant', parentID: 'user-3', finish: 'tool-calls' },
+    parts: [{ type: 'text', text: 'running tools' }],
+  }]) }
+  await transformCuppetModelContext(options, stepTwo, client as never)
+  const renderedStepTwo = stepTwo.messages.map((message) => JSON.stringify(message))
+  assert.equal(renderedStepTwo.length, renderedStepOne.length + 1)
+  renderedStepOne.forEach((rendered, index) => {
+    assert.equal(renderedStepTwo[index], rendered, `message ${index} must be byte-identical across steps`)
+  })
+  assert.equal(prepared, 1, 'mid-turn steps must replay the memoized block without new retrieval')
+
+  // Next user turn: prior turns (including their replayed blocks) must remain unchanged.
+  const nextTurn = { messages: [...structuredClone(stepOne.messages), {
+    info: { id: 'assistant-3', role: 'assistant', parentID: 'user-3', finish: 'stop' },
+    parts: [{ type: 'text', text: 'outcome 3' }],
+  }, ...turn(4, 'Build feature four')] }
+  await transformCuppetModelContext(options, nextTurn, client as never)
+  const renderedNext = nextTurn.messages.map((message) => JSON.stringify(message))
+  assert.equal(renderedNext.length, renderedStepOne.length + 3)
+  renderedStepOne.forEach((rendered, index) => {
+    assert.equal(renderedNext[index], rendered, `message ${index} must be byte-identical into the next turn`)
+  })
+  assert.equal(prepared, 2, 'a new user message triggers exactly one fresh retrieval')
+  assert.match(syntheticText(nextTurn.messages.filter((message) => message.info.id === 'user-4')), /Keep the API stable \(2\)/)
+  clearCuppetContextState()
 })
 
 test('plan retrieval receives a larger bounded context without raw JSON', () => {
@@ -379,6 +435,23 @@ test('source capsule includes selected workspace code and remains bounded', asyn
   }
 })
 
+test('task parser creates a hard extensionless directory scope and classifies task intent', () => {
+  const create = parseTaskSpec('Build projects/todo-list-app with accessible localStorage persistence. Fix obvious issues before replying. Include semantic header/nav and contact/footer.')
+  assert.equal(create.type, 'create')
+  assert.deepEqual(create.scope, ['projects/todo-list-app'])
+  assert.deepEqual(create.scopePrefixes, ['projects/todo-list-app'])
+  assert.ok(!create.scope.includes('header/nav'))
+  assert.ok(!create.scope.includes('contact/footer'))
+  assert.ok(create.entities.includes('localStorage'))
+  assert.ok(create.constraints.includes('accessible'))
+
+  const refactor = parseTaskSpec('Refactor src/taskStore.ts and preserve existing behavior.')
+  assert.equal(refactor.type, 'refactor')
+  assert.deepEqual(refactor.scope, ['src/taskStore.ts'])
+  assert.deepEqual(refactor.scopePrefixes, ['src'])
+  assert.ok(refactor.constraints.includes('preserve-existing-behavior'))
+})
+
 test('compiled context projects the active turn and requests structured STM events', async () => {
   const previousCompiler = process.env.CUPPET_CONTEXT_COMPILER_AB
   const previousRoot = process.env.CUPPET_PROJECT_ROOT
@@ -431,8 +504,10 @@ test('task context ranks explicit source as high confidence and graph relationsh
   process.env.CUPPET_PROJECT_ROOT = resolve(process.cwd(), '../..')
   clearCuppetContextState()
   const output = { messages: turn(0, 'Update packages/opencode-plugin/src/context.ts to add deadline filtering around transformCuppetModelContext.') }
+  const prefixes: string[] = []
   const client = {
-    async graphQuery() {
+    async graphQuery(_query: string, _limit: number, prefix?: string) {
+      if (prefix) prefixes.push(prefix)
       return [{
         node: {
           path: 'packages/opencode-plugin/src/context.ts',
@@ -474,12 +549,13 @@ test('task context ranks explicit source as high confidence and graph relationsh
       history: { estimatedTokens: 80_000, usableTokens: 100_000 },
     }, output, client as never)
     const context = syntheticText(output.messages)
-    assert.match(context, /^<CUPPET_TASK_CONTEXT mode="ranked_evidence"/)
+    assert.match(context, /^<CUPPET_TASK_CONTEXT mode="scoped_ranked_evidence"/)
     assert.match(context, /HIGH-CONFIDENCE SOURCE/)
     assert.match(context, /FILE packages\/opencode-plugin\/src\/context\.ts/)
     assert.match(context, /MEDIUM-CONFIDENCE HYPOTHESES/)
     assert.match(context, /packages\/opencode-plugin\/src\/rpc\.ts/)
     assert.doesNotMatch(context, /TREE-SITTER CODE GRAPH|SESSION CONTINUITY \(STM\)/)
+    assert.deepEqual(prefixes, ['packages/opencode-plugin/src'])
   } finally {
     if (previousTaskContext === undefined) delete process.env.CUPPET_TASK_CONTEXT_AB
     else process.env.CUPPET_TASK_CONTEXT_AB = previousTaskContext

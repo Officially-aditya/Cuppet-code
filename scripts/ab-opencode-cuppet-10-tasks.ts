@@ -58,6 +58,7 @@ type TaskUsage = UsageStats & {
   eventCount: number
   sessionDelta: UsageStats
   cost: number
+  steps?: UsageStep[]
 }
 
 type UsageStats = {
@@ -70,6 +71,15 @@ type UsageStats = {
   totalWithCache: number
 }
 
+type UsageStep = UsageStats & {
+  gapSeconds?: number
+}
+
+// Provider prompt caches commonly evict after a few idle minutes. Steps that
+// follow an idle gap longer than this are excluded from the adjusted cache-hit
+// share so arm-idle eviction is not attributed to either context strategy.
+const CACHE_IDLE_GAP_SECONDS = 180
+
 type TaskResult = {
   index: number
   slug: string
@@ -80,6 +90,9 @@ type TaskResult = {
   agentDurationMs: number
   evaluationDurationMs: number
   endToEndDurationMs: number
+  attempts: number
+  firstAttemptSuccess: boolean
+  repaired: boolean
   usage: TaskUsage
   cumulativeSessionUsage: UsageStats
   compaction: {
@@ -92,7 +105,21 @@ type TaskResult = {
   rejectedPermissions: number
   evaluation: TaskEvaluation
   finalMessage: string
+  taskContext?: TaskContextTelemetry
   error?: string
+}
+
+type TaskContextTelemetry = {
+  type: string
+  scope: string[]
+  scopeState: string
+  entities: string[]
+  actions: string[]
+  constraints: string[]
+  selectedPaths: string[]
+  highConfidence: number
+  mediumConfidence: number
+  contextChars: number
 }
 
 type ArmReport = {
@@ -115,8 +142,9 @@ type Checkpoint = {
   model: ModelRef
   fixtureHash: string
   tasks: string[]
+  selectionSeed?: string
   arms: Partial<Record<Arm, ArmReport>>
-  active?: { arm: Arm; task: string; index: number; phase: string }
+  active?: Partial<Record<Arm, { task: string; index: number; phase: string }>>
   lastEvent: string
   error?: string
 }
@@ -137,12 +165,15 @@ type LiveArm = {
   sessionID: string
   current?: TaskTelemetry
   permissions: Set<string>
+  lastUsageAt?: number
   errors: string[]
   report: ArmReport
 }
 
+type UsageSample = TokenUsage & { at: number }
+
 type TaskTelemetry = {
-  usageEvents: TokenUsage[]
+  usageEvents: UsageSample[]
   costs: number[]
   compaction: Array<{ phase: 'started' | 'ended'; at: string }>
   toolCalls: number
@@ -154,7 +185,22 @@ type TaskTelemetry = {
 
 const execFile = promisify(execFileCallback)
 const project = resolve(process.cwd())
-const model: ModelRef = {
+// CUPPET_AB_MODEL=provider/model and CUPPET_AB_VARIANT select the pair's
+// model, matching the other A/B harnesses; default stays gpt-5.6-luna@low.
+function parseRequestedModel(): ModelRef | undefined {
+  const requested = process.env.CUPPET_AB_MODEL?.trim()
+  if (!requested) return undefined
+  const slash = requested.indexOf('/')
+  if (slash <= 0 || slash === requested.length - 1) throw new Error('CUPPET_AB_MODEL must be provider/model')
+  const variant = process.env.CUPPET_AB_VARIANT?.trim()
+  return {
+    providerID: requested.slice(0, slash),
+    modelID: requested.slice(slash + 1),
+    ...(variant ? { variant } : {}),
+  }
+}
+
+const model: ModelRef = parseRequestedModel() ?? {
   providerID: 'openai',
   modelID: 'gpt-5.6-luna',
   variant: 'low',
@@ -163,7 +209,9 @@ const timeoutMs = 15 * 60_000
 const officialOpenCodeBinary = process.env.CUPPET_OFFICIAL_OPENCODE_BIN
   ?? '/private/tmp/cuppet-opencode-official-1.18.4/node_modules/opencode-darwin-arm64/bin/opencode'
 const keepWorkspaces = process.env.CUPPET_10_TASK_KEEP_WORKSPACES !== '0'
-const taskContextEnabled = process.env.CUPPET_TASK_CONTEXT_AB === '1'
+// Task-conditioned relevance is the default context mode; set
+// CUPPET_TASK_CONTEXT_AB=0 to benchmark the plain bounded projection.
+const taskContextEnabled = process.env.CUPPET_TASK_CONTEXT_AB !== '0'
 const cuppetContextMode = taskContextEnabled
   ? 'task-conditioned-relevance'
   : process.env.CUPPET_GRAPH_CAPSULE_ONLY === '1'
@@ -256,7 +304,7 @@ const allTasks: Task[] = [
       { name: 'blog navigation', file: 'index.html', pattern: /<nav\b/i },
       { name: 'author introduction', file: 'index.html', pattern: /about|author|hello|bio/i },
       { name: 'article cards', file: 'index.html', pattern: /<article\b/i, min: 3 },
-      { name: 'article dates', file: 'index.html', pattern: /<time\b|202[0-9]|date/i, min: 3 },
+      { name: 'article dates', file: 'index.html', pattern: /<time\b|datetime=|202[0-9]|\bdate\b|\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\b/i, min: 3 },
       { name: 'article tags', file: 'index.html', pattern: /tag|category/i },
       { name: 'search control', file: 'index.html', pattern: /type\s*=\s*["']search|search|filter/i },
       { name: 'local filtering', file: 'app.js', pattern: /filter\s*\(|includes\s*\(|addEventListener/i, min: 2 },
@@ -271,7 +319,7 @@ const allTasks: Task[] = [
     patterns: [
       { name: 'business hero', file: 'index.html', pattern: /hero|<h1\b/i },
       { name: 'services', file: 'index.html', pattern: /services|capabilities|what we do/i },
-      { name: 'case studies', file: 'index.html', pattern: /portfolio|case stud|projects/i },
+      { name: 'case studies', file: 'index.html', pattern: /case[\s-]*stud|portfolio|projects?|our work|selected work/i },
       { name: 'three portfolio items', file: 'index.html', pattern: /project|case-study|portfolio-card/i, min: 3 },
       { name: 'contact path', file: 'index.html', pattern: /contact|<form\b|mailto:/i },
       { name: 'theme or form behavior', file: 'app.js', pattern: /theme|dark|submit|preventDefault|addEventListener/i, min: 2 },
@@ -304,7 +352,7 @@ const allTasks: Task[] = [
     requiredFiles: ['index.html', 'styles.css', 'app.js', 'README.md'],
     patterns: [
       { name: 'image input', file: 'index.html', pattern: /type\s*=\s*["']file|image|upload/i },
-      { name: 'top and bottom text', file: 'index.html', pattern: /top.*text|bottom.*text|caption/i, min: 2 },
+      { name: 'top and bottom text', file: 'index.html', pattern: /top[\s-]*text|bottom[\s-]*text|text[\s-]*(?:top|bottom)|caption/i, min: 2 },
       { name: 'preview surface', file: 'index.html', pattern: /<canvas\b|preview|meme-preview/i },
       { name: 'download control', file: 'index.html', pattern: /download|save/i },
       { name: 'file handling', file: 'app.js', pattern: /FileReader|files\[|createObjectURL|image/i },
@@ -361,7 +409,32 @@ const taskOffset = Number.isFinite(requestedTaskOffset)
 const taskLimit = Number.isFinite(requestedTaskLimit)
   ? Math.max(1, Math.min(allTasks.length - taskOffset, Math.floor(requestedTaskLimit)))
   : allTasks.length - taskOffset
-const tasks = allTasks.slice(taskOffset, taskOffset + taskLimit)
+const taskSelectionSeed = process.env.CUPPET_10_TASK_SEED?.trim() || undefined
+const tasks = taskSelectionSeed
+  ? selectRandomTasks(allTasks, taskLimit, taskSelectionSeed)
+  : allTasks.slice(taskOffset, taskOffset + taskLimit)
+
+function selectRandomTasks(values: Task[], limit: number, seed: string): Task[] {
+  let state = 0x811c9dc5
+  for (const character of seed) {
+    state ^= character.charCodeAt(0)
+    state = Math.imul(state, 0x01000193)
+  }
+  const shuffled = [...values]
+  const next = () => {
+    state += 0x6d2b79f5
+    let value = Math.imul(state ^ (state >>> 15), 1 | state)
+    value ^= value + Math.imul(value ^ (value >>> 7), 61 | value)
+    return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296
+  }
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const target = Math.floor(next() * (index + 1))
+    const current = shuffled[index]!
+    shuffled[index] = shuffled[target]!
+    shuffled[target] = current
+  }
+  return shuffled.slice(0, Math.min(limit, shuffled.length))
+}
 
 const fixture = {
   'README.md': '# Ten-project sequential benchmark\n\nThe agent must build ten independent local web projects in order.\n',
@@ -405,6 +478,7 @@ async function main(): Promise<void> {
     model,
     fixtureHash: initialHash,
     tasks: tasks.map((task) => task.slug),
+    ...(taskSelectionSeed ? { selectionSeed: taskSelectionSeed } : {}),
     arms: {},
     lastEvent: 'fixture-created',
   }
@@ -442,16 +516,22 @@ async function main(): Promise<void> {
     }
 
     for (let index = 0; index < tasks.length; index += 1) {
-      const orderForTask: Arm[] = index % 2 === 0 ? ['opencode', 'cuppet'] : ['cuppet', 'opencode']
       const task = tasks[index]!
-      for (const arm of orderForTask) {
-        const runtime = live.get(arm)
-        if (!runtime) throw new Error(`${arm} runtime is unavailable`)
-        process.stdout.write(`[${index + 1}/${tasks.length}] ${task.slug} · ${arm}\n`)
-        await runTask(runtime, task, index, checkpoint, persist)
-        checkpoint.arms[arm] = runtime.report
-        await persist(`${arm}-${task.slug}-completed`)
-      }
+      process.stdout.write(`[${index + 1}/${tasks.length}] ${task.slug} · opencode+cuppet\n`)
+      // Both arms receive the same prompt at the same moment. Concurrent arms
+      // keep each session warm while the other works, so neither arm's provider
+      // prompt cache is evicted by idle time and latency stays comparable.
+      const outcomes = await Promise.allSettled(
+        order.map(async (arm) => {
+          const runtime = live.get(arm)
+          if (!runtime) throw new Error(`${arm} runtime is unavailable`)
+          await runTask(runtime, task, index, checkpoint, persist)
+          checkpoint.arms[arm] = runtime.report
+          await persist(`${arm}-${task.slug}-completed`)
+        }),
+      )
+      const failure = outcomes.find((outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected')
+      if (failure) throw failure.reason
     }
 
     checkpoint.status = 'completed'
@@ -504,7 +584,11 @@ async function startArm(
       plugin: assets.plugin!,
       tst: { socket: tst.socket, token: tst.token },
       ...(taskContextEnabled
-        ? { taskContext: true, instructions: [DEFAULT_CUPPET_INSTRUCTION, TASK_CONTEXT_INSTRUCTION] }
+        ? {
+            taskContext: true,
+            taskContextTracePath: join(paths.runtime, 'task-context.ndjson'),
+            instructions: [DEFAULT_CUPPET_INSTRUCTION, TASK_CONTEXT_INSTRUCTION],
+          }
         : {}),
     })
     gateway = new OpenCodeGateway(opencode.client, workspace)
@@ -561,7 +645,9 @@ async function startArm(
     if (!current) return
     current.eventTypes[event.type] = (current.eventTypes[event.type] ?? 0) + 1
     if (event.type === 'usage') {
-      current.usageEvents.push({ ...event.usage })
+      const at = Date.now()
+      runtime.lastUsageAt = at
+      current.usageEvents.push({ at, ...event.usage })
       current.costs.push(event.cost)
     }
     if (event.type === 'tool-start') current.toolCalls += 1
@@ -586,6 +672,22 @@ async function startArm(
   return runtime
 }
 
+// Verification-driven completion guard budget: how many evaluator-fed repair
+// attempts a task may receive after its first prompt. '0' disables the guard.
+function verifyRetryLimit(): number {
+  const requested = Number(process.env.CUPPET_10_TASK_VERIFY_RETRIES ?? '2')
+  return Number.isFinite(requested) ? Math.max(0, Math.min(3, Math.floor(requested))) : 2
+}
+
+function repairPromptFor(task: Task, evaluation: TaskEvaluation): string {
+  const failed = Object.entries(evaluation.checks).filter(([, check]) => !check.passed)
+  return [
+    'Your previous attempt did not fully satisfy the task. A deterministic verifier reported these exact problems:',
+    ...failed.map(([name, check]) => `- ${name}: ${compact(check.detail, 240)}`),
+    `Fix only these verified problems inside projects/${task.slug}. Change nothing else, re-inspect your work against every point above, then reply.`,
+  ].join('\n')
+}
+
 async function runTask(
   runtime: LiveArm,
   task: Task,
@@ -595,6 +697,7 @@ async function runTask(
 ): Promise<void> {
   const beforeOutsideHash = await hashWorkspaceExcept(runtime.workspace, task.slug)
   const before = await runtime.gateway.getSession(runtime.sessionID)
+  const contextTraceBefore = await readTaskContextTrace(runtime.paths.runtime)
   const telemetry: TaskTelemetry = {
     usageEvents: [],
     costs: [],
@@ -606,29 +709,61 @@ async function runTask(
     errors: [],
   }
   runtime.current = telemetry
-  checkpoint.active = { arm: runtime.arm, task: task.slug, index, phase: 'prompt-started' }
+  checkpoint.active = { ...checkpoint.active, [runtime.arm]: { task: task.slug, index, phase: 'prompt-started' } }
   await persist(`${runtime.arm}-${task.slug}-prompt-started`)
   const promptStartedAt = new Date().toISOString()
   const started = performance.now()
   let failure: string | undefined
-  try {
-    await runtime.gateway.prompt(runtime.sessionID, task.prompt)
-    await withTimeout(runtime.gateway.wait(runtime.sessionID), timeoutMs, `${runtime.arm}/${task.slug} timed out`)
-  } catch (error) {
-    failure = error instanceof Error ? error.message : String(error)
-    await runtime.gateway.interrupt(runtime.sessionID).catch(() => undefined)
+  const sendAndSettle = async (prompt: string): Promise<boolean> => {
+    try {
+      await runtime.gateway.prompt(runtime.sessionID, prompt)
+      await withTimeout(runtime.gateway.wait(runtime.sessionID), timeoutMs, `${runtime.arm}/${task.slug} timed out`)
+      return true
+    } catch (error) {
+      failure = error instanceof Error ? error.message : String(error)
+      await runtime.gateway.interrupt(runtime.sessionID).catch(() => undefined)
+      return false
+    }
   }
-  await delay(200)
+
+  // Verification-driven completion guard: after each attempt the deterministic
+  // evaluator decides whether the turn may end. Failed requirements are fed
+  // back verbatim as a bounded repair prompt, for both arms identically.
+  const verifyRetries = verifyRetryLimit()
+  let attempts = 0
+  let firstAttemptSuccess = false
+  let evaluation: TaskEvaluation | undefined
+  let evaluationDurationMs = 0
+  while (attempts <= verifyRetries) {
+    const prompt = attempts === 0 ? task.prompt : repairPromptFor(task, evaluation!)
+    attempts += 1
+    checkpoint.active = { ...checkpoint.active, [runtime.arm]: { task: task.slug, index, phase: `attempt-${attempts}` } }
+    if (attempts > 1) await persist(`${runtime.arm}-${task.slug}-repair-started`)
+    if (!await sendAndSettle(prompt)) break
+    await delay(200)
+    const evaluationStarted = performance.now()
+    evaluation = await evaluateTask(runtime.workspace, task, beforeOutsideHash)
+    evaluationDurationMs += Math.round(performance.now() - evaluationStarted)
+    if (attempts === 1) firstAttemptSuccess = evaluation.success
+    if (evaluation.success || failure) break
+    await persist(`${runtime.arm}-${task.slug}-repair-needed`)
+  }
+  if (!evaluation) {
+    const evaluationStarted = performance.now()
+    evaluation = await evaluateTask(runtime.workspace, task, beforeOutsideHash)
+    evaluationDurationMs += Math.round(performance.now() - evaluationStarted)
+  }
   const agentDurationMs = Math.round(performance.now() - started)
   const after = await runtime.gateway.getSession(runtime.sessionID).catch(() => before)
-  const evaluationStarted = performance.now()
-  const evaluation = await evaluateTask(runtime.workspace, task, beforeOutsideHash)
-  const evaluationDurationMs = Math.round(performance.now() - evaluationStarted)
+  const contextTraceAfter = await readTaskContextTrace(runtime.paths.runtime)
+  const taskContext = contextTraceAfter[contextTraceBefore.length]
   const usageFromEvents = usageFromEventList(telemetry.usageEvents, telemetry.costs)
   const sessionDelta = subtractUsage(after.tokens, before.tokens)
+  const steps = buildUsageSteps(telemetry.usageEvents, runtime.lastUsageAt)
   const usage: TaskUsage = {
     ...(usageFromEvents.eventCount > 0 ? usageFromEvents : { ...sessionDelta, eventCount: 0, cost: Math.max(0, after.cost - before.cost) }),
     sessionDelta,
+    ...(steps.length > 0 ? { steps } : {}),
   }
   const error = failure ?? telemetry.errors[0] ?? (!evaluation.success ? 'task acceptance checks failed' : undefined)
   const result: TaskResult = {
@@ -641,6 +776,9 @@ async function runTask(
     agentDurationMs,
     evaluationDurationMs,
     endToEndDurationMs: agentDurationMs + evaluationDurationMs,
+    attempts,
+    firstAttemptSuccess,
+    repaired: attempts > 1 && !firstAttemptSuccess && !error,
     usage,
     cumulativeSessionUsage: usageFromCuppet(after.tokens),
     compaction: {
@@ -653,6 +791,7 @@ async function runTask(
     rejectedPermissions: telemetry.rejectedPermissions,
     evaluation,
     finalMessage: compact(await latestAssistantText(runtime.gateway, runtime.sessionID), 4_000),
+    ...(taskContext ? { taskContext } : {}),
     ...(error ? { error: compact(error, 1_000) } : {}),
   }
   runtime.report.tasks.push(result)
@@ -661,8 +800,35 @@ async function runTask(
   runtime.report.totalDurationMs = runtime.report.tasks.reduce((sum, item) => sum + item.endToEndDurationMs, 0)
   if (error) runtime.report.errors.push(error)
   runtime.current = undefined
-  checkpoint.active = undefined
+  if (checkpoint.active) delete checkpoint.active[runtime.arm]
   await persist(`${runtime.arm}-${task.slug}-evaluated`, error)
+}
+
+async function readTaskContextTrace(runtimeDirectory: string): Promise<TaskContextTelemetry[]> {
+  try {
+    const source = await readFile(join(runtimeDirectory, 'task-context.ndjson'), 'utf8')
+    return source.split(/\r?\n/).filter(Boolean).flatMap((line) => {
+      try {
+        const value = JSON.parse(line) as Record<string, unknown>
+        return [{
+          type: typeof value.type === 'string' ? value.type : 'unknown',
+          scope: Array.isArray(value.scope) ? value.scope.filter((item): item is string => typeof item === 'string') : [],
+          scopeState: typeof value.scope_state === 'string' ? value.scope_state : 'unknown',
+          entities: Array.isArray(value.entities) ? value.entities.filter((item): item is string => typeof item === 'string') : [],
+          actions: Array.isArray(value.actions) ? value.actions.filter((item): item is string => typeof item === 'string') : [],
+          constraints: Array.isArray(value.constraints) ? value.constraints.filter((item): item is string => typeof item === 'string') : [],
+          selectedPaths: Array.isArray(value.selected_paths) ? value.selected_paths.filter((item): item is string => typeof item === 'string') : [],
+          highConfidence: typeof value.high_confidence === 'number' ? value.high_confidence : 0,
+          mediumConfidence: typeof value.medium_confidence === 'number' ? value.medium_confidence : 0,
+          contextChars: typeof value.context_chars === 'number' ? value.context_chars : 0,
+        }]
+      } catch {
+        return []
+      }
+    })
+  } catch {
+    return []
+  }
 }
 
 async function evaluateTask(workspace: string, task: Task, beforeOutsideHash: string): Promise<TaskEvaluation> {
@@ -888,7 +1054,7 @@ function buildReport(checkpoint: Checkpoint, status: 'partial' | 'completed'): A
     officialBinary: officialOpenCodeBinary,
     fixture: { hash: checkpoint.fixtureHash, files: Object.keys(fixture) },
     tasks: checkpoint.tasks,
-    design: `Two fresh workspaces and two foreground sessions. The arms alternate task order, but each arm receives the same ${tasks.length} prompt(s) in one persistent session. Official OpenCode uses the unpatched upstream server; Cuppet uses the live plugin and TST path. Every task is evaluated immediately with hidden file, behavior-contract, syntax, network, and scope checks.`,
+    design: `Two fresh workspaces and two foreground sessions. Both arms receive the same ${tasks.length} prompt(s) concurrently in one persistent session each, keeping both provider prompt caches warm so idle eviction cannot bias either arm. Official OpenCode uses the unpatched upstream server; Cuppet uses the live plugin and TST path. Every task is evaluated immediately with hidden file, behavior-contract, syntax, network, and scope checks. Per-step token samples include idle gaps; cache share excluding steps after gaps over ${CACHE_IDLE_GAP_SECONDS}s is reported as idle-adjusted.`,
     checkpoint: {
       lastEvent: checkpoint.lastEvent,
       active: checkpoint.active,
@@ -924,13 +1090,38 @@ type ArmSummary = {
   rejectedPermissions: number
   totalEvaluationChecks: number
   passedEvaluationChecks: number
+  firstAttemptSuccesses: number
+  repairedTasks: number
   cacheShare: number
+  cacheFullMisses: number
+  cacheMissInputTokens: number
+  adjustedCacheShare: number
 }
 
 function summarizeArm(report: ArmReport | undefined): ArmSummary {
   const values = report?.tasks ?? []
   const usage = values.reduce((sum, task) => addUsage(sum, task.usage), zeroUsage())
   const costs = values.map((task) => task.usage.cost)
+  let sawStep = false
+  let adjusted = { input: 0, cacheRead: 0 }
+  let fullMisses = 0
+  let missInputTokens = 0
+  for (const task of values) {
+    for (const step of task.usage.steps ?? []) {
+      if (!sawStep) {
+        sawStep = true
+        continue
+      }
+      if (step.cacheRead === 0 && step.input > 0) {
+        fullMisses += 1
+        missInputTokens += step.input
+      }
+      if (step.gapSeconds !== undefined && step.gapSeconds <= CACHE_IDLE_GAP_SECONDS) {
+        adjusted.input += step.input
+        adjusted.cacheRead += step.cacheRead
+      }
+    }
+  }
   return {
     tasks: tasks.length,
     completedPrompts: values.length,
@@ -949,7 +1140,12 @@ function summarizeArm(report: ArmReport | undefined): ArmSummary {
     rejectedPermissions: values.reduce((sum, task) => sum + task.rejectedPermissions, 0),
     totalEvaluationChecks: values.reduce((sum, task) => sum + task.evaluation.totalChecks, 0),
     passedEvaluationChecks: values.reduce((sum, task) => sum + task.evaluation.passedChecks, 0),
+    firstAttemptSuccesses: values.filter((task) => task.firstAttemptSuccess).length,
+    repairedTasks: values.filter((task) => task.repaired).length,
     cacheShare: usage.input + usage.cacheRead === 0 ? 0 : usage.cacheRead / (usage.input + usage.cacheRead),
+    cacheFullMisses: fullMisses,
+    cacheMissInputTokens: missInputTokens,
+    adjustedCacheShare: adjusted.input + adjusted.cacheRead === 0 ? 0 : adjusted.cacheRead / (adjusted.input + adjusted.cacheRead),
   }
 }
 
@@ -966,6 +1162,10 @@ function compareSummaries(baseline: ArmSummary, candidate: ArmSummary): AnyRecor
     cacheShareDelta: candidate.cacheShare - baseline.cacheShare,
     compactionDelta: candidate.compactions - baseline.compactions,
     evaluationDelta: candidate.passedEvaluationChecks - baseline.passedEvaluationChecks,
+    firstAttemptDelta: candidate.firstAttemptSuccesses - baseline.firstAttemptSuccesses,
+    repairDelta: candidate.repairedTasks - baseline.repairedTasks,
+    cacheFullMissDelta: candidate.cacheFullMisses - baseline.cacheFullMisses,
+    adjustedCacheShareDelta: candidate.adjustedCacheShare - baseline.adjustedCacheShare,
     reportedCostAvailable: baseline.costReported || candidate.costReported,
   }
 }
@@ -993,16 +1193,19 @@ function renderMarkdown(report: AnyRecord): string {
     const cuppetEval = asRecord(cuppetValue.evaluation)
     const officialUsage = asRecord(official.usage)
     const cuppetUsage = asRecord(cuppetValue.usage)
-    return `| ${task.slug} | ${official.success ? 'pass' : 'fail'} (${officialEval.passedChecks ?? 0}/${officialEval.totalChecks ?? 0}) | ${cuppetValue.success ? 'pass' : 'fail'} (${cuppetEval.passedChecks ?? 0}/${cuppetEval.totalChecks ?? 0}) | ${official.agentDurationMs ?? 0} ms | ${cuppetValue.agentDurationMs ?? 0} ms | ${officialUsage.input ?? 0} / ${officialUsage.cacheRead ?? 0} | ${cuppetUsage.input ?? 0} / ${cuppetUsage.cacheRead ?? 0} | ${asRecord(official.compaction).count ?? 0} / ${asRecord(cuppetValue.compaction).count ?? 0} |`
+    const officialCell = `${official.success ? 'pass' : 'fail'}${official.repaired ? '*' : ''} (${officialEval.passedChecks ?? 0}/${officialEval.totalChecks ?? 0})`
+    const cuppetCell = `${cuppetValue.success ? 'pass' : 'fail'}${cuppetValue.repaired ? '*' : ''} (${cuppetEval.passedChecks ?? 0}/${cuppetEval.totalChecks ?? 0})`
+    return `| ${task.slug} | ${officialCell} | ${cuppetCell} | ${official.agentDurationMs ?? 0} ms | ${cuppetValue.agentDurationMs ?? 0} ms | ${officialUsage.input ?? 0} / ${officialUsage.cacheRead ?? 0} | ${cuppetUsage.input ?? 0} / ${cuppetUsage.cacheRead ?? 0} | ${asRecord(official.compaction).count ?? 0} / ${asRecord(cuppetValue.compaction).count ?? 0} |`
   })
   return [
     `# OpenCode vs Cuppet: ${tasks.length} sequential web project${tasks.length === 1 ? '' : 's'}`,
     '',
     `- Status: ${String(report.status)}`,
     `- Created: ${String(report.createdAt)}`,
-    '- Model: `openai/gpt-5.6-luna`, variant: `low`',
+    `- Model: \`${model.providerID}/${model.modelID}\`${model.variant ? `, variant: \`${model.variant}\`` : ''}`,
     `- Cuppet context mode: \`${cuppetContextMode}\``,
-    `- Each arm used one persistent foreground session and received the same ${tasks.length} prompt${tasks.length === 1 ? '' : 's'} in the same order. Arms were alternated between tasks.`,
+    ...(taskSelectionSeed ? [`- Random task selection seed: \`${taskSelectionSeed}\` (${tasks.map((task) => task.slug).join(', ')})`] : []),
+    `- Each arm used one persistent foreground session and received the same ${tasks.length} prompt${tasks.length === 1 ? '' : 's'} in the same order. Arms ran concurrently for each task so neither provider prompt cache is evicted by idle time.`,
     '',
     '| Aggregate metric | OpenCode | Cuppet | Candidate minus baseline |',
     '|---|---:|---:|---:|',
@@ -1012,6 +1215,10 @@ function renderMarkdown(report: AnyRecord): string {
     `| Uncached input tokens | ${asRecord(opencode.totalUsage).input ?? 0} | ${asRecord(cuppet.totalUsage).input ?? 0} | ${(numberValue(comparison.uncachedInputReduction) * 100).toFixed(1)}% |`,
     `| Cache-read tokens | ${asRecord(opencode.totalUsage).cacheRead ?? 0} | ${asRecord(cuppet.totalUsage).cacheRead ?? 0} | ${numberValue(comparison.cacheReadDelta)} |`,
     `| Cache share | ${(numberValue(opencode.cacheShare) * 100).toFixed(1)}% | ${(numberValue(cuppet.cacheShare) * 100).toFixed(1)}% | ${(numberValue(comparison.cacheShareDelta) * 100).toFixed(1)} pp |`,
+    `| Cache share (idle-adjusted, ≤${CACHE_IDLE_GAP_SECONDS}s gaps) | ${(numberValue(opencode.adjustedCacheShare) * 100).toFixed(1)}% | ${(numberValue(cuppet.adjustedCacheShare) * 100).toFixed(1)}% | ${(numberValue(comparison.adjustedCacheShareDelta) * 100).toFixed(1)} pp |`,
+    `| Correct on first attempt | ${opencode.firstAttemptSuccesses ?? 0} | ${cuppet.firstAttemptSuccesses ?? 0} | ${comparison.firstAttemptDelta ?? 0} |`,
+    `| Repair-recovered tasks | ${opencode.repairedTasks ?? 0} | ${cuppet.repairedTasks ?? 0} | ${comparison.repairDelta ?? 0} |`,
+    `| Full cache-miss steps (excl. first) | ${opencode.cacheFullMisses ?? 0} | ${cuppet.cacheFullMisses ?? 0} | ${comparison.cacheFullMissDelta ?? 0} |`,
     `| Total model tokens | ${asRecord(opencode.totalUsage).totalModel ?? 0} | ${asRecord(cuppet.totalUsage).totalModel ?? 0} | ${(numberValue(comparison.totalModelTokenReduction) * 100).toFixed(1)}% |`,
     `| Compactions | ${opencode.compactions ?? 0} | ${cuppet.compactions ?? 0} | ${comparison.compactionDelta ?? 0} |`,
     `| Evaluation checks | ${opencode.passedEvaluationChecks ?? 0}/${opencode.totalEvaluationChecks ?? 0} | ${cuppet.passedEvaluationChecks ?? 0}/${cuppet.totalEvaluationChecks ?? 0} | ${comparison.evaluationDelta ?? 0} |`,
@@ -1021,11 +1228,12 @@ function renderMarkdown(report: AnyRecord): string {
     ...rows,
     '',
     'Cache-read tokens are reported separately from uncached input. Reported cost is only meaningful if the provider returns a nonzero cost; token counts alone are not a price calculation.',
+    `* = recovered by the verification guard: after a failed attempt, the deterministic evaluator fed exact failed checks back to the same session (up to ${verifyRetryLimit()} repairs per task, both arms identically).`,
     '',
   ].join('\n')
 }
 
-function usageFromEventList(events: TokenUsage[], costs: number[]): TaskUsage {
+function usageFromEventList(events: UsageSample[], costs: number[]): TaskUsage {
   const usage = events.reduce<UsageStats>((sum, value) => addUsage(sum, usageFromCuppet(value)), zeroUsage())
   return {
     ...usage,
@@ -1033,6 +1241,14 @@ function usageFromEventList(events: TokenUsage[], costs: number[]): TaskUsage {
     cost: costs.reduce((sum, value) => sum + value, 0),
     sessionDelta: zeroUsage(),
   }
+}
+
+function buildUsageSteps(events: UsageSample[], priorAt: number | undefined): UsageStep[] {
+  return events.map((sample, index) => {
+    const previousAt = index > 0 ? events[index - 1]!.at : priorAt
+    const gapSeconds = previousAt === undefined ? undefined : Math.max(0, Math.round((sample.at - previousAt) / 1000))
+    return { gapSeconds, ...usageFromCuppet(sample) }
+  })
 }
 
 function usageFromCuppet(value: TokenUsage): UsageStats {

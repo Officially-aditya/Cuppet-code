@@ -1,0 +1,24 @@
+{"at":"2026-08-03T06:07:32.285Z","event":"fixture-created"}
+{"at":"2026-08-03T06:07:33.167Z","event":"opencode-runtime-created"}
+{"at":"2026-08-03T06:07:33.169Z","event":"opencode-session-created"}
+{"at":"2026-08-03T06:07:37.971Z","event":"cuppet-runtime-created"}
+{"at":"2026-08-03T06:07:37.972Z","event":"cuppet-session-created"}
+{"at":"2026-08-03T06:07:37.979Z","event":"opencode-landing-page-prompt-started"}
+{"at":"2026-08-03T06:07:39.752Z","event":"opencode-landing-page-evaluated","error":"Token refresh failed: 401"}
+{"at":"2026-08-03T06:07:39.754Z","event":"opencode-landing-page-completed"}
+{"at":"2026-08-03T06:07:39.760Z","event":"cuppet-landing-page-prompt-started"}
+{"at":"2026-08-03T06:07:40.612Z","event":"cuppet-landing-page-evaluated","error":"Token refresh failed: 401"}
+{"at":"2026-08-03T06:07:40.614Z","event":"cuppet-landing-page-completed"}
+{"at":"2026-08-03T06:07:40.618Z","event":"cuppet-address-book-prompt-started"}
+{"at":"2026-08-03T06:07:41.262Z","event":"cuppet-address-book-evaluated","error":"Token refresh failed: 401"}
+{"at":"2026-08-03T06:07:41.264Z","event":"cuppet-address-book-completed"}
+{"at":"2026-08-03T06:07:41.269Z","event":"opencode-address-book-prompt-started"}
+{"at":"2026-08-03T06:07:42.016Z","event":"opencode-address-book-evaluated","error":"Token refresh failed: 401"}
+{"at":"2026-08-03T06:07:42.018Z","event":"opencode-address-book-completed"}
+{"at":"2026-08-03T06:07:42.022Z","event":"opencode-survey-form-prompt-started"}
+{"at":"2026-08-03T06:07:42.662Z","event":"opencode-survey-form-evaluated","error":"Token refresh failed: 401"}
+{"at":"2026-08-03T06:07:42.664Z","event":"opencode-survey-form-completed"}
+{"at":"2026-08-03T06:07:42.670Z","event":"cuppet-survey-form-prompt-started"}
+{"at":"2026-08-03T06:07:43.469Z","event":"cuppet-survey-form-evaluated","error":"Token refresh failed: 401"}
+{"at":"2026-08-03T06:07:43.471Z","event":"cuppet-survey-form-completed"}
+{"at":"2026-08-03T06:07:43.472Z","event":"benchmark-completed"}

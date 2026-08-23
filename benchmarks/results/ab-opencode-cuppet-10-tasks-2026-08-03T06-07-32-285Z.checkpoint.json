@@ -1,0 +1,910 @@
+{
+  "schema": 1,
+  "createdAt": "2026-08-03T06:07:32.285Z",
+  "updatedAt": "2026-08-03T06:07:43.472Z",
+  "status": "completed",
+  "model": {
+    "providerID": "openai",
+    "modelID": "gpt-5.6-luna",
+    "variant": "low"
+  },
+  "fixtureHash": "4463b948dba0b6cb08bb15ff0ad354282aa148c16477c286a8ce2a4342fa97f5",
+  "tasks": [
+    "landing-page",
+    "address-book",
+    "survey-form"
+  ],
+  "selectionSeed": "20260803-relevance-v1",
+  "arms": {
+    "opencode": {
+      "arm": "opencode",
+      "workspace": "/private/tmp/cuppet-10-task-sxHSxE/opencode/workspace",
+      "runtimeRoot": "/private/tmp/cuppet-10-task-sxHSxE/opencode/runtime",
+      "sessionID": "ses_039c3eed9ffem0N63120k4grUd",
+      "promptCount": 3,
+      "tasks": [
+        {
+          "index": 1,
+          "slug": "landing-page",
+          "title": "Responsive product landing page",
+          "success": false,
+          "promptStartedAt": "2026-08-03T06:07:37.980Z",
+          "promptCompletedAt": "2026-08-03T06:07:39.747Z",
+          "agentDurationMs": 1757,
+          "evaluationDurationMs": 2,
+          "endToEndDurationMs": 1759,
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0,
+            "eventCount": 0,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 0,
+              "output": 0,
+              "reasoning": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalModel": 0,
+              "totalWithCache": 0
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 0,
+          "permissionRequests": 0,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 2,
+            "totalChecks": 15,
+            "checks": {
+              "file:index.html": {
+                "passed": false,
+                "detail": "index.html is missing"
+              },
+              "file:styles.css": {
+                "passed": false,
+                "detail": "styles.css is missing"
+              },
+              "file:README.md": {
+                "passed": false,
+                "detail": "README.md is missing"
+              },
+              "pattern:semantic header": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:navigation": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:main content": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:hero content": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:primary CTA": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:feature section": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:contact or footer": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:CSS variables": {
+                "passed": false,
+                "detail": "styles.css: found 0, expected at least 2"
+              },
+              "pattern:responsive breakpoint": {
+                "passed": false,
+                "detail": "styles.css: found 0, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": false,
+                "detail": "styles.css: found 0, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              }
+            },
+            "files": [],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {}
+          },
+          "finalMessage": "",
+          "error": "Token refresh failed: 401"
+        },
+        {
+          "index": 2,
+          "slug": "address-book",
+          "title": "Persistent address book",
+          "success": false,
+          "promptStartedAt": "2026-08-03T06:07:41.271Z",
+          "promptCompletedAt": "2026-08-03T06:07:42.013Z",
+          "agentDurationMs": 736,
+          "evaluationDurationMs": 1,
+          "endToEndDurationMs": 737,
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0,
+            "eventCount": 0,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 0,
+              "output": 0,
+              "reasoning": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalModel": 0,
+              "totalWithCache": 0
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 0,
+          "permissionRequests": 0,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 2,
+            "totalChecks": 16,
+            "checks": {
+              "file:index.html": {
+                "passed": false,
+                "detail": "index.html is missing"
+              },
+              "file:styles.css": {
+                "passed": false,
+                "detail": "styles.css is missing"
+              },
+              "file:app.js": {
+                "passed": false,
+                "detail": "app.js is missing"
+              },
+              "file:README.md": {
+                "passed": false,
+                "detail": "README.md is missing"
+              },
+              "pattern:contact form": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:contact fields": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 4"
+              },
+              "pattern:search control": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:favorite filter": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:contact list": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:local persistence": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 2"
+              },
+              "pattern:CRUD behavior": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 3"
+              },
+              "pattern:search behavior": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 2"
+              },
+              "pattern:favorite behavior": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": false,
+                "detail": "styles.css: found 0, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              }
+            },
+            "files": [],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {}
+          },
+          "finalMessage": "",
+          "error": "Token refresh failed: 401"
+        },
+        {
+          "index": 3,
+          "slug": "survey-form",
+          "title": "Accessible survey form",
+          "success": false,
+          "promptStartedAt": "2026-08-03T06:07:42.024Z",
+          "promptCompletedAt": "2026-08-03T06:07:42.659Z",
+          "agentDurationMs": 629,
+          "evaluationDurationMs": 1,
+          "endToEndDurationMs": 630,
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0,
+            "eventCount": 0,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 0,
+              "output": 0,
+              "reasoning": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalModel": 0,
+              "totalWithCache": 0
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 0,
+          "permissionRequests": 0,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 2,
+            "totalChecks": 17,
+            "checks": {
+              "file:index.html": {
+                "passed": false,
+                "detail": "index.html is missing"
+              },
+              "file:styles.css": {
+                "passed": false,
+                "detail": "styles.css is missing"
+              },
+              "file:app.js": {
+                "passed": false,
+                "detail": "app.js is missing"
+              },
+              "file:README.md": {
+                "passed": false,
+                "detail": "README.md is missing"
+              },
+              "pattern:form element": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:labels": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 3"
+              },
+              "pattern:required controls": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 3"
+              },
+              "pattern:email field": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:rating choice": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:select field": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:checkbox group": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:success state": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:prevent default": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 1"
+              },
+              "pattern:validation handling": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": false,
+                "detail": "styles.css: found 0, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              }
+            },
+            "files": [],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {}
+          },
+          "finalMessage": "",
+          "error": "Token refresh failed: 401"
+        }
+      ],
+      "finalSessionUsage": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalModel": 0,
+        "totalWithCache": 0
+      },
+      "totalDurationMs": 3126,
+      "errors": [
+        "Token refresh failed: 401",
+        "Token refresh failed: 401",
+        "Token refresh failed: 401"
+      ]
+    },
+    "cuppet": {
+      "arm": "cuppet",
+      "workspace": "/private/tmp/cuppet-10-task-sxHSxE/cuppet/workspace",
+      "runtimeRoot": "/private/tmp/cuppet-10-task-sxHSxE/cuppet/runtime",
+      "sessionID": "ses_039c3dc15ffeJ5DWIM60gxUWls",
+      "promptCount": 3,
+      "tasks": [
+        {
+          "index": 1,
+          "slug": "landing-page",
+          "title": "Responsive product landing page",
+          "success": false,
+          "promptStartedAt": "2026-08-03T06:07:39.762Z",
+          "promptCompletedAt": "2026-08-03T06:07:40.607Z",
+          "agentDurationMs": 839,
+          "evaluationDurationMs": 1,
+          "endToEndDurationMs": 840,
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0,
+            "eventCount": 0,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 0,
+              "output": 0,
+              "reasoning": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalModel": 0,
+              "totalWithCache": 0
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 0,
+          "permissionRequests": 0,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 2,
+            "totalChecks": 15,
+            "checks": {
+              "file:index.html": {
+                "passed": false,
+                "detail": "index.html is missing"
+              },
+              "file:styles.css": {
+                "passed": false,
+                "detail": "styles.css is missing"
+              },
+              "file:README.md": {
+                "passed": false,
+                "detail": "README.md is missing"
+              },
+              "pattern:semantic header": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:navigation": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:main content": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:hero content": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:primary CTA": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:feature section": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:contact or footer": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:CSS variables": {
+                "passed": false,
+                "detail": "styles.css: found 0, expected at least 2"
+              },
+              "pattern:responsive breakpoint": {
+                "passed": false,
+                "detail": "styles.css: found 0, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": false,
+                "detail": "styles.css: found 0, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              }
+            },
+            "files": [],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {}
+          },
+          "finalMessage": "",
+          "taskContext": {
+            "type": "create",
+            "scope": [
+              "projects/landing-page"
+            ],
+            "scopeState": "new",
+            "entities": [
+              "product",
+              "install",
+              "reference",
+              "index",
+              "styles",
+              "README",
+              "semantic",
+              "header",
+              "hero",
+              "section",
+              "with"
+            ],
+            "actions": [],
+            "constraints": [
+              "local-only",
+              "accessible",
+              "scope-limited",
+              "exact-file-set",
+              "responsive"
+            ],
+            "selectedPaths": [],
+            "highConfidence": 0,
+            "mediumConfidence": 0,
+            "contextChars": 1019
+          },
+          "error": "Token refresh failed: 401"
+        },
+        {
+          "index": 2,
+          "slug": "address-book",
+          "title": "Persistent address book",
+          "success": false,
+          "promptStartedAt": "2026-08-03T06:07:40.620Z",
+          "promptCompletedAt": "2026-08-03T06:07:41.256Z",
+          "agentDurationMs": 630,
+          "evaluationDurationMs": 1,
+          "endToEndDurationMs": 631,
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0,
+            "eventCount": 0,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 0,
+              "output": 0,
+              "reasoning": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalModel": 0,
+              "totalWithCache": 0
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 0,
+          "permissionRequests": 0,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 2,
+            "totalChecks": 16,
+            "checks": {
+              "file:index.html": {
+                "passed": false,
+                "detail": "index.html is missing"
+              },
+              "file:styles.css": {
+                "passed": false,
+                "detail": "styles.css is missing"
+              },
+              "file:app.js": {
+                "passed": false,
+                "detail": "app.js is missing"
+              },
+              "file:README.md": {
+                "passed": false,
+                "detail": "README.md is missing"
+              },
+              "pattern:contact form": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:contact fields": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 4"
+              },
+              "pattern:search control": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:favorite filter": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:contact list": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:local persistence": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 2"
+              },
+              "pattern:CRUD behavior": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 3"
+              },
+              "pattern:search behavior": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 2"
+              },
+              "pattern:favorite behavior": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": false,
+                "detail": "styles.css: found 0, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              }
+            },
+            "files": [],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {}
+          },
+          "finalMessage": "",
+          "taskContext": {
+            "type": "create",
+            "scope": [
+              "projects/address-book"
+            ],
+            "scopeState": "new",
+            "entities": [
+              "index",
+              "styles",
+              "README",
+              "with",
+              "adding",
+              "contact",
+              "name",
+              "email",
+              "phone",
+              "category",
+              "editing",
+              "deleting"
+            ],
+            "actions": [],
+            "constraints": [
+              "dependency-free",
+              "local-only",
+              "accessible",
+              "scope-limited",
+              "responsive"
+            ],
+            "selectedPaths": [],
+            "highConfidence": 0,
+            "mediumConfidence": 0,
+            "contextChars": 1024
+          },
+          "error": "Token refresh failed: 401"
+        },
+        {
+          "index": 3,
+          "slug": "survey-form",
+          "title": "Accessible survey form",
+          "success": false,
+          "promptStartedAt": "2026-08-03T06:07:42.671Z",
+          "promptCompletedAt": "2026-08-03T06:07:43.465Z",
+          "agentDurationMs": 788,
+          "evaluationDurationMs": 1,
+          "endToEndDurationMs": 789,
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0,
+            "eventCount": 0,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 0,
+              "output": 0,
+              "reasoning": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalModel": 0,
+              "totalWithCache": 0
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 0,
+          "permissionRequests": 0,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 2,
+            "totalChecks": 17,
+            "checks": {
+              "file:index.html": {
+                "passed": false,
+                "detail": "index.html is missing"
+              },
+              "file:styles.css": {
+                "passed": false,
+                "detail": "styles.css is missing"
+              },
+              "file:app.js": {
+                "passed": false,
+                "detail": "app.js is missing"
+              },
+              "file:README.md": {
+                "passed": false,
+                "detail": "README.md is missing"
+              },
+              "pattern:form element": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:labels": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 3"
+              },
+              "pattern:required controls": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 3"
+              },
+              "pattern:email field": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:rating choice": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:select field": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:checkbox group": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:success state": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:prevent default": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 1"
+              },
+              "pattern:validation handling": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": false,
+                "detail": "styles.css: found 0, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              }
+            },
+            "files": [],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {}
+          },
+          "finalMessage": "",
+          "taskContext": {
+            "type": "create",
+            "scope": [
+              "projects/survey-form"
+            ],
+            "scopeState": "new",
+            "entities": [
+              "index",
+              "styles",
+              "README",
+              "labeled",
+              "name",
+              "email",
+              "fields",
+              "required",
+              "rating",
+              "choice",
+              "select",
+              "field"
+            ],
+            "actions": [],
+            "constraints": [
+              "accessible",
+              "scope-limited",
+              "responsive"
+            ],
+            "selectedPaths": [],
+            "highConfidence": 0,
+            "mediumConfidence": 0,
+            "contextChars": 993
+          },
+          "error": "Token refresh failed: 401"
+        }
+      ],
+      "finalSessionUsage": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalModel": 0,
+        "totalWithCache": 0
+      },
+      "totalDurationMs": 2260,
+      "errors": [
+        "Token refresh failed: 401",
+        "Token refresh failed: 401",
+        "Token refresh failed: 401"
+      ]
+    }
+  },
+  "lastEvent": "benchmark-completed",
+  "error": "Token refresh failed: 401"
+}

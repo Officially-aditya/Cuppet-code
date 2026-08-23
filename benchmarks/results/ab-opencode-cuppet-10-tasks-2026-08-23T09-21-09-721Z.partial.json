@@ -1,0 +1,1591 @@
+{
+  "schema": 1,
+  "status": "partial",
+  "createdAt": "2026-08-23T09:21:09.722Z",
+  "updatedAt": "2026-08-23T10:06:23.214Z",
+  "model": {
+    "providerID": "opencode",
+    "modelID": "x-preview-f-free"
+  },
+  "cuppetContextMode": "task-conditioned-relevance",
+  "opencodeVersion": "1.18.4",
+  "officialBinary": "/private/tmp/cuppet-opencode-official-1.18.4/node_modules/opencode-darwin-arm64/bin/opencode",
+  "fixture": {
+    "hash": "825e116e633562fcfe2e6ce29204a5e6ac768e29e3be8f8accb363d668154b1f",
+    "files": [
+      "README.md",
+      "projects/README.md"
+    ]
+  },
+  "tasks": [
+    "landing-page",
+    "todo-list-app",
+    "calculator-web-app",
+    "survey-form",
+    "personal-blog",
+    "business-portfolio",
+    "quiz-game",
+    "meme-generator"
+  ],
+  "design": "Two fresh workspaces and two foreground sessions. Both arms receive the same 8 prompt(s) concurrently in one persistent session each, keeping both provider prompt caches warm so idle eviction cannot bias either arm. Official OpenCode uses the unpatched upstream server; Cuppet uses the live plugin and TST path. Every task is evaluated immediately with hidden file, behavior-contract, syntax, network, and scope checks. Per-step token samples include idle gaps; cache share excluding steps after gaps over 180s is reported as idle-adjusted.",
+  "checkpoint": {
+    "lastEvent": "opencode-survey-form-completed",
+    "active": {
+      "cuppet": {
+        "task": "survey-form",
+        "index": 3,
+        "phase": "attempt-1"
+      }
+    },
+    "error": "cuppet/calculator-web-app timed out"
+  },
+  "arms": {
+    "opencode": {
+      "arm": "opencode",
+      "workspace": "/private/tmp/cuppet-10-task-fRjPi3/opencode/workspace",
+      "runtimeRoot": "/private/tmp/cuppet-10-task-fRjPi3/opencode/runtime",
+      "sessionID": "ses_fd2137916ffeUIltUspc6XJvrZ",
+      "promptCount": 4,
+      "tasks": [
+        {
+          "index": 1,
+          "slug": "landing-page",
+          "title": "Responsive product landing page",
+          "success": true,
+          "promptStartedAt": "2026-08-23T09:21:16.454Z",
+          "promptCompletedAt": "2026-08-23T09:28:17.740Z",
+          "agentDurationMs": 421277,
+          "evaluationDurationMs": 15,
+          "endToEndDurationMs": 421292,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "usage": {
+            "input": 33300,
+            "output": 14660,
+            "reasoning": 1197,
+            "cacheRead": 269824,
+            "cacheWrite": 0,
+            "totalModel": 49157,
+            "totalWithCache": 318981,
+            "eventCount": 11,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 33300,
+              "output": 14660,
+              "reasoning": 1197,
+              "cacheRead": 269824,
+              "cacheWrite": 0,
+              "totalModel": 49157,
+              "totalWithCache": 318981
+            },
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 12054,
+                "output": 134,
+                "reasoning": 31,
+                "cacheRead": 128,
+                "cacheWrite": 0,
+                "totalModel": 12219,
+                "totalWithCache": 12347
+              },
+              {
+                "gapSeconds": 6,
+                "input": 256,
+                "output": 66,
+                "reasoning": 21,
+                "cacheRead": 12160,
+                "cacheWrite": 0,
+                "totalModel": 343,
+                "totalWithCache": 12503
+              },
+              {
+                "gapSeconds": 134,
+                "input": 165,
+                "output": 6184,
+                "reasoning": 860,
+                "cacheRead": 12416,
+                "cacheWrite": 0,
+                "totalModel": 7209,
+                "totalWithCache": 19625
+              },
+              {
+                "gapSeconds": 76,
+                "input": 0,
+                "output": 0,
+                "reasoning": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 0,
+                "totalWithCache": 0
+              },
+              {
+                "gapSeconds": 77,
+                "input": 12539,
+                "output": 5390,
+                "reasoning": 75,
+                "cacheRead": 19584,
+                "cacheWrite": 0,
+                "totalModel": 18004,
+                "totalWithCache": 37588
+              },
+              {
+                "gapSeconds": 16,
+                "input": 5533,
+                "output": 555,
+                "reasoning": 3,
+                "cacheRead": 32064,
+                "cacheWrite": 0,
+                "totalModel": 6091,
+                "totalWithCache": 38155
+              },
+              {
+                "gapSeconds": 25,
+                "input": 596,
+                "output": 908,
+                "reasoning": 33,
+                "cacheRead": 37568,
+                "cacheWrite": 0,
+                "totalModel": 1537,
+                "totalWithCache": 39105
+              },
+              {
+                "gapSeconds": 30,
+                "input": 477,
+                "output": 514,
+                "reasoning": 95,
+                "cacheRead": 38144,
+                "cacheWrite": 0,
+                "totalModel": 1086,
+                "totalWithCache": 39230
+              },
+              {
+                "gapSeconds": 17,
+                "input": 697,
+                "output": 573,
+                "reasoning": 44,
+                "cacheRead": 38592,
+                "cacheWrite": 0,
+                "totalModel": 1314,
+                "totalWithCache": 39906
+              },
+              {
+                "gapSeconds": 6,
+                "input": 704,
+                "output": 104,
+                "reasoning": 35,
+                "cacheRead": 39232,
+                "cacheWrite": 0,
+                "totalModel": 843,
+                "totalWithCache": 40075
+              },
+              {
+                "gapSeconds": 27,
+                "input": 279,
+                "output": 232,
+                "reasoning": 0,
+                "cacheRead": 39936,
+                "cacheWrite": 0,
+                "totalModel": 511,
+                "totalWithCache": 40447
+              }
+            ]
+          },
+          "cumulativeSessionUsage": {
+            "input": 33300,
+            "output": 14660,
+            "reasoning": 1197,
+            "cacheRead": 269824,
+            "cacheWrite": 0,
+            "totalModel": 49157,
+            "totalWithCache": 318981
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 12,
+          "permissionRequests": 7,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 15,
+            "totalChecks": 15,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:semantic header": {
+                "passed": true,
+                "detail": "index.html: found 4, expected at least 1"
+              },
+              "pattern:navigation": {
+                "passed": true,
+                "detail": "index.html: found 4, expected at least 1"
+              },
+              "pattern:main content": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:hero content": {
+                "passed": true,
+                "detail": "index.html: found 10, expected at least 1"
+              },
+              "pattern:primary CTA": {
+                "passed": true,
+                "detail": "index.html: found 10, expected at least 1"
+              },
+              "pattern:feature section": {
+                "passed": true,
+                "detail": "index.html: found 23, expected at least 1"
+              },
+              "pattern:contact or footer": {
+                "passed": true,
+                "detail": "index.html: found 24, expected at least 1"
+              },
+              "pattern:CSS variables": {
+                "passed": true,
+                "detail": "styles.css: found 37, expected at least 2"
+              },
+              "pattern:responsive breakpoint": {
+                "passed": true,
+                "detail": "styles.css: found 3, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 23, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              }
+            },
+            "files": [
+              "README.md",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {}
+          },
+          "finalMessage": "Done. `projects/landing-page/` contains exactly `index.html`, `styles.css`, and `README.md` — nothing else touched. - **Page**: fictional product \"Lumina\" with semantic header/nav, hero (headline, primary CTA, stats), 6-card features grid, testimonials + wordmarks, 3-tier pricing with highlighted plan, contact section with labeled form, and footer. - **Accessibility**: skip link, landmarks, one h1 with logical heading order, visible `:focus-visible` outlines everywhere, `aria-hidden` decorative SVGs, AA contrast, `prefers-reduced-motion` respected. - **CSS**: full variable token system in `:root`, responsive grids with `clamp()` type; breakpoints at 960px (2-col collapse) and 720px mobile (stacked centered nav, single column). - **Verified**: HTML parses clean (no unclosed tags/duplicate ids/broken anchors), CSS braces balanced, all `var()` tokens defined after fixing a missing `--space-1`, zero remote references. Open `index.html` directly in a browser to view."
+        },
+        {
+          "index": 2,
+          "slug": "todo-list-app",
+          "title": "Persistent todo list app",
+          "success": false,
+          "promptStartedAt": "2026-08-23T09:29:51.676Z",
+          "promptCompletedAt": "2026-08-23T09:44:51.986Z",
+          "agentDurationMs": 900292,
+          "evaluationDurationMs": 17,
+          "endToEndDurationMs": 900309,
+          "attempts": 1,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0,
+            "eventCount": 0,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 0,
+              "output": 0,
+              "reasoning": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalModel": 0,
+              "totalWithCache": 0
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 33300,
+            "output": 14660,
+            "reasoning": 1197,
+            "cacheRead": 269824,
+            "cacheWrite": 0,
+            "totalModel": 49157,
+            "totalWithCache": 318981
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 0,
+          "permissionRequests": 0,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 2,
+            "totalChecks": 15,
+            "checks": {
+              "file:index.html": {
+                "passed": false,
+                "detail": "index.html is missing"
+              },
+              "file:styles.css": {
+                "passed": false,
+                "detail": "styles.css is missing"
+              },
+              "file:app.js": {
+                "passed": false,
+                "detail": "app.js is missing"
+              },
+              "file:README.md": {
+                "passed": false,
+                "detail": "README.md is missing"
+              },
+              "pattern:todo input": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:todo list container": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:filter controls": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:local persistence": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 2"
+              },
+              "pattern:event listeners": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 2"
+              },
+              "pattern:completion behavior": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 1"
+              },
+              "pattern:delete behavior": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 1"
+              },
+              "pattern:filter behavior": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": false,
+                "detail": "styles.css: found 0, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              }
+            },
+            "files": [],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {}
+          },
+          "finalMessage": "Done. `projects/landing-page/` contains exactly `index.html`, `styles.css`, and `README.md` — nothing else touched. - **Page**: fictional product \"Lumina\" with semantic header/nav, hero (headline, primary CTA, stats), 6-card features grid, testimonials + wordmarks, 3-tier pricing with highlighted plan, contact section with labeled form, and footer. - **Accessibility**: skip link, landmarks, one h1 with logical heading order, visible `:focus-visible` outlines everywhere, `aria-hidden` decorative SVGs, AA contrast, `prefers-reduced-motion` respected. - **CSS**: full variable token system in `:root`, responsive grids with `clamp()` type; breakpoints at 960px (2-col collapse) and 720px mobile (stacked centered nav, single column). - **Verified**: HTML parses clean (no unclosed tags/duplicate ids/broken anchors), CSS braces balanced, all `var()` tokens defined after fixing a missing `--space-1`, zero remote references. Open `index.html` directly in a browser to view.",
+          "error": "opencode/todo-list-app timed out"
+        },
+        {
+          "index": 3,
+          "slug": "calculator-web-app",
+          "title": "Keyboard-friendly calculator",
+          "success": false,
+          "promptStartedAt": "2026-08-23T09:44:52.026Z",
+          "promptCompletedAt": "2026-08-23T09:59:52.472Z",
+          "agentDurationMs": 900411,
+          "evaluationDurationMs": 20,
+          "endToEndDurationMs": 900431,
+          "attempts": 1,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0,
+            "eventCount": 0,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 0,
+              "output": 0,
+              "reasoning": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalModel": 0,
+              "totalWithCache": 0
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 33300,
+            "output": 14660,
+            "reasoning": 1197,
+            "cacheRead": 269824,
+            "cacheWrite": 0,
+            "totalModel": 49157,
+            "totalWithCache": 318981
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 0,
+          "permissionRequests": 0,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 2,
+            "totalChecks": 15,
+            "checks": {
+              "file:index.html": {
+                "passed": false,
+                "detail": "index.html is missing"
+              },
+              "file:styles.css": {
+                "passed": false,
+                "detail": "styles.css is missing"
+              },
+              "file:app.js": {
+                "passed": false,
+                "detail": "app.js is missing"
+              },
+              "file:README.md": {
+                "passed": false,
+                "detail": "README.md is missing"
+              },
+              "pattern:calculator display": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:digit buttons": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 4"
+              },
+              "pattern:operator controls": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:equals and clear": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 2"
+              },
+              "pattern:event listeners": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 2"
+              },
+              "pattern:keyboard support": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 1"
+              },
+              "pattern:arithmetic logic": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 1"
+              },
+              "pattern:zero guard": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": false,
+                "detail": "styles.css: found 0, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              }
+            },
+            "files": [],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {}
+          },
+          "finalMessage": "Done. `projects/landing-page/` contains exactly `index.html`, `styles.css`, and `README.md` — nothing else touched. - **Page**: fictional product \"Lumina\" with semantic header/nav, hero (headline, primary CTA, stats), 6-card features grid, testimonials + wordmarks, 3-tier pricing with highlighted plan, contact section with labeled form, and footer. - **Accessibility**: skip link, landmarks, one h1 with logical heading order, visible `:focus-visible` outlines everywhere, `aria-hidden` decorative SVGs, AA contrast, `prefers-reduced-motion` respected. - **CSS**: full variable token system in `:root`, responsive grids with `clamp()` type; breakpoints at 960px (2-col collapse) and 720px mobile (stacked centered nav, single column). - **Verified**: HTML parses clean (no unclosed tags/duplicate ids/broken anchors), CSS braces balanced, all `var()` tokens defined after fixing a missing `--space-1`, zero remote references. Open `index.html` directly in a browser to view.",
+          "error": "opencode/calculator-web-app timed out"
+        },
+        {
+          "index": 4,
+          "slug": "survey-form",
+          "title": "Accessible survey form",
+          "success": true,
+          "promptStartedAt": "2026-08-23T09:59:52.733Z",
+          "promptCompletedAt": "2026-08-23T10:06:23.183Z",
+          "agentDurationMs": 390430,
+          "evaluationDurationMs": 203,
+          "endToEndDurationMs": 390633,
+          "attempts": 2,
+          "firstAttemptSuccess": false,
+          "repaired": true,
+          "usage": {
+            "input": 18901,
+            "output": 12859,
+            "reasoning": 1949,
+            "cacheRead": 563584,
+            "cacheWrite": 0,
+            "totalModel": 33709,
+            "totalWithCache": 597293,
+            "eventCount": 12,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 18901,
+              "output": 12859,
+              "reasoning": 1949,
+              "cacheRead": 563584,
+              "cacheWrite": 0,
+              "totalModel": 33709,
+              "totalWithCache": 597293
+            },
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 0,
+                "output": 0,
+                "reasoning": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 0,
+                "totalWithCache": 0
+              },
+              {
+                "gapSeconds": 111,
+                "input": 2383,
+                "output": 3942,
+                "reasoning": 1223,
+                "cacheRead": 40768,
+                "cacheWrite": 0,
+                "totalModel": 7548,
+                "totalWithCache": 48316
+              },
+              {
+                "gapSeconds": 27,
+                "input": 5189,
+                "output": 1302,
+                "reasoning": 0,
+                "cacheRead": 43136,
+                "cacheWrite": 0,
+                "totalModel": 6491,
+                "totalWithCache": 49627
+              },
+              {
+                "gapSeconds": 30,
+                "input": 1316,
+                "output": 1163,
+                "reasoning": 37,
+                "cacheRead": 48320,
+                "cacheWrite": 0,
+                "totalModel": 2516,
+                "totalWithCache": 50836
+              },
+              {
+                "gapSeconds": 34,
+                "input": 1245,
+                "output": 2154,
+                "reasoning": 0,
+                "cacheRead": 49600,
+                "cacheWrite": 0,
+                "totalModel": 3399,
+                "totalWithCache": 52999
+              },
+              {
+                "gapSeconds": 18,
+                "input": 2192,
+                "output": 641,
+                "reasoning": 0,
+                "cacheRead": 50816,
+                "cacheWrite": 0,
+                "totalModel": 2833,
+                "totalWithCache": 53649
+              },
+              {
+                "gapSeconds": 41,
+                "input": 666,
+                "output": 1291,
+                "reasoning": 460,
+                "cacheRead": 52992,
+                "cacheWrite": 0,
+                "totalModel": 2417,
+                "totalWithCache": 55409
+              },
+              {
+                "gapSeconds": 12,
+                "input": 1785,
+                "output": 312,
+                "reasoning": 0,
+                "cacheRead": 53632,
+                "cacheWrite": 0,
+                "totalModel": 2097,
+                "totalWithCache": 55729
+              },
+              {
+                "gapSeconds": 7,
+                "input": 377,
+                "output": 199,
+                "reasoning": 0,
+                "cacheRead": 55360,
+                "cacheWrite": 0,
+                "totalModel": 576,
+                "totalWithCache": 55936
+              },
+              {
+                "gapSeconds": 24,
+                "input": 264,
+                "output": 1126,
+                "reasoning": 35,
+                "cacheRead": 55680,
+                "cacheWrite": 0,
+                "totalModel": 1425,
+                "totalWithCache": 57105
+              },
+              {
+                "gapSeconds": 12,
+                "input": 1468,
+                "output": 288,
+                "reasoning": 92,
+                "cacheRead": 55936,
+                "cacheWrite": 0,
+                "totalModel": 1848,
+                "totalWithCache": 57784
+              },
+              {
+                "gapSeconds": 17,
+                "input": 2016,
+                "output": 441,
+                "reasoning": 102,
+                "cacheRead": 57344,
+                "cacheWrite": 0,
+                "totalModel": 2559,
+                "totalWithCache": 59903
+              }
+            ]
+          },
+          "cumulativeSessionUsage": {
+            "input": 52201,
+            "output": 27519,
+            "reasoning": 3146,
+            "cacheRead": 833408,
+            "cacheWrite": 0,
+            "totalModel": 82866,
+            "totalWithCache": 916274
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 11,
+          "permissionRequests": 10,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 18,
+            "totalChecks": 18,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:form element": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:labels": {
+                "passed": true,
+                "detail": "index.html: found 14, expected at least 3"
+              },
+              "pattern:required controls": {
+                "passed": true,
+                "detail": "index.html: found 11, expected at least 3"
+              },
+              "pattern:email field": {
+                "passed": true,
+                "detail": "index.html: found 11, expected at least 1"
+              },
+              "pattern:rating choice": {
+                "passed": true,
+                "detail": "index.html: found 33, expected at least 1"
+              },
+              "pattern:select field": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:checkbox group": {
+                "passed": true,
+                "detail": "index.html: found 5, expected at least 1"
+              },
+              "pattern:success state": {
+                "passed": true,
+                "detail": "index.html: found 10, expected at least 1"
+              },
+              "pattern:prevent default": {
+                "passed": true,
+                "detail": "app.js: found 1, expected at least 1"
+              },
+              "pattern:validation handling": {
+                "passed": true,
+                "detail": "app.js: found 43, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 3, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 168
+              }
+            }
+          },
+          "finalMessage": "All verified problems are fixed. `projects/survey-form/` now contains all four files: - **Verifier patterns — all pass**: `<form>` (1), labels (14), required controls (11), `type=\"email\"`, rating radio group (5 options), `<select>`, checkbox group (4 features + consent), success-state markup, `preventDefault()` in app.js, validation handling via `checkValidity()`/`ValidityState`, and `@media` responsive layout. - **Form contents**: labeled name/email, required rating radios in a fieldset, usage select, feature checkboxes, textarea, required consent, submit button with privacy note. - **Validation paths inspected end-to-end**: empty/short name, empty/malformed email, no rating (shared error wired via `data-error-id` — this was a real bug I found and fixed), unselected option, unchecked consent, live re-validation as fields are fixed, focus moved to first invalid control, success panel revealed with summary after a valid submit, and full reset via \"Submit another response\". - **Checks run**: HTML parses clean (no tag errors, one real `id=\"rating-error\"` — the duplicate flag was a false positive matching `data-error-id`), label/aria-describedby targets resolve, CSS braces balanced with no undefined variables, `node --check` passes, zero network references, and `git status` confirms only `projects/survey-form/` was added."
+        }
+      ],
+      "finalSessionUsage": {
+        "input": 52201,
+        "output": 27519,
+        "reasoning": 3146,
+        "cacheRead": 833408,
+        "cacheWrite": 0,
+        "totalModel": 82866,
+        "totalWithCache": 916274
+      },
+      "totalDurationMs": 2612665,
+      "errors": [
+        "opencode/todo-list-app timed out",
+        "opencode/calculator-web-app timed out"
+      ],
+      "summary": {
+        "tasks": 8,
+        "completedPrompts": 4,
+        "successes": 2,
+        "successRate": 0.5,
+        "totalAgentDurationMs": 2612410,
+        "totalEndToEndDurationMs": 2612665,
+        "medianTaskDurationMs": 660800.5,
+        "totalUsage": {
+          "input": 52201,
+          "output": 27519,
+          "reasoning": 3146,
+          "cacheRead": 833408,
+          "cacheWrite": 0,
+          "totalModel": 82866,
+          "totalWithCache": 916274
+        },
+        "totalReportedCost": 0,
+        "costReported": false,
+        "compactions": 0,
+        "compactionTasks": 0,
+        "totalToolCalls": 23,
+        "totalPermissionRequests": 17,
+        "rejectedPermissions": 0,
+        "totalEvaluationChecks": 63,
+        "passedEvaluationChecks": 37,
+        "firstAttemptSuccesses": 1,
+        "repairedTasks": 1,
+        "cacheShare": 0.9410563804116715,
+        "cacheFullMisses": 0,
+        "cacheMissInputTokens": 0,
+        "adjustedCacheShare": 0.9540350824968773
+      }
+    },
+    "cuppet": {
+      "arm": "cuppet",
+      "workspace": "/private/tmp/cuppet-10-task-fRjPi3/cuppet/workspace",
+      "runtimeRoot": "/private/tmp/cuppet-10-task-fRjPi3/cuppet/runtime",
+      "sessionID": "ses_fd213638bffeu7bXmA2vzbN0GC",
+      "promptCount": 3,
+      "tasks": [
+        {
+          "index": 1,
+          "slug": "landing-page",
+          "title": "Responsive product landing page",
+          "success": true,
+          "promptStartedAt": "2026-08-23T09:21:16.442Z",
+          "promptCompletedAt": "2026-08-23T09:29:51.628Z",
+          "agentDurationMs": 515178,
+          "evaluationDurationMs": 3,
+          "endToEndDurationMs": 515181,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "usage": {
+            "input": 56071,
+            "output": 19792,
+            "reasoning": 3609,
+            "cacheRead": 319808,
+            "cacheWrite": 0,
+            "totalModel": 79472,
+            "totalWithCache": 399280,
+            "eventCount": 12,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 56071,
+              "output": 19792,
+              "reasoning": 3609,
+              "cacheRead": 319808,
+              "cacheWrite": 0,
+              "totalModel": 79472,
+              "totalWithCache": 399280
+            },
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 14659,
+                "output": 130,
+                "reasoning": 24,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 14813,
+                "totalWithCache": 14813
+              },
+              {
+                "gapSeconds": 193,
+                "input": 14778,
+                "output": 5311,
+                "reasoning": 2939,
+                "cacheRead": 128,
+                "cacheWrite": 0,
+                "totalModel": 23028,
+                "totalWithCache": 23156
+              },
+              {
+                "gapSeconds": 65,
+                "input": 8315,
+                "output": 4755,
+                "reasoning": 0,
+                "cacheRead": 14848,
+                "cacheWrite": 0,
+                "totalModel": 13070,
+                "totalWithCache": 27918
+              },
+              {
+                "gapSeconds": 82,
+                "input": 4823,
+                "output": 5593,
+                "reasoning": 52,
+                "cacheRead": 23104,
+                "cacheWrite": 0,
+                "totalModel": 10468,
+                "totalWithCache": 33572
+              },
+              {
+                "gapSeconds": 19,
+                "input": 5677,
+                "output": 361,
+                "reasoning": 0,
+                "cacheRead": 27904,
+                "cacheWrite": 0,
+                "totalModel": 6038,
+                "totalWithCache": 33942
+              },
+              {
+                "gapSeconds": 23,
+                "input": 415,
+                "output": 695,
+                "reasoning": 11,
+                "cacheRead": 33536,
+                "cacheWrite": 0,
+                "totalModel": 1121,
+                "totalWithCache": 34657
+              },
+              {
+                "gapSeconds": 35,
+                "input": 1541,
+                "output": 812,
+                "reasoning": 366,
+                "cacheRead": 33920,
+                "cacheWrite": 0,
+                "totalModel": 2719,
+                "totalWithCache": 36639
+              },
+              {
+                "gapSeconds": 11,
+                "input": 1201,
+                "output": 351,
+                "reasoning": 39,
+                "cacheRead": 35456,
+                "cacheWrite": 0,
+                "totalModel": 1591,
+                "totalWithCache": 37047
+              },
+              {
+                "gapSeconds": 13,
+                "input": 304,
+                "output": 202,
+                "reasoning": 38,
+                "cacheRead": 36608,
+                "cacheWrite": 0,
+                "totalModel": 544,
+                "totalWithCache": 37152
+              },
+              {
+                "gapSeconds": 21,
+                "input": 296,
+                "output": 615,
+                "reasoning": 26,
+                "cacheRead": 36864,
+                "cacheWrite": 0,
+                "totalModel": 937,
+                "totalWithCache": 37801
+              },
+              {
+                "gapSeconds": 24,
+                "input": 3245,
+                "output": 622,
+                "reasoning": 79,
+                "cacheRead": 37120,
+                "cacheWrite": 0,
+                "totalModel": 3946,
+                "totalWithCache": 41066
+              },
+              {
+                "gapSeconds": 16,
+                "input": 817,
+                "output": 345,
+                "reasoning": 35,
+                "cacheRead": 40320,
+                "cacheWrite": 0,
+                "totalModel": 1197,
+                "totalWithCache": 41517
+              }
+            ]
+          },
+          "cumulativeSessionUsage": {
+            "input": 56071,
+            "output": 19792,
+            "reasoning": 3609,
+            "cacheRead": 319808,
+            "cacheWrite": 0,
+            "totalModel": 79472,
+            "totalWithCache": 399280
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 13,
+          "permissionRequests": 12,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 15,
+            "totalChecks": 15,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:semantic header": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:navigation": {
+                "passed": true,
+                "detail": "index.html: found 2, expected at least 1"
+              },
+              "pattern:main content": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:hero content": {
+                "passed": true,
+                "detail": "index.html: found 6, expected at least 1"
+              },
+              "pattern:primary CTA": {
+                "passed": true,
+                "detail": "index.html: found 12, expected at least 1"
+              },
+              "pattern:feature section": {
+                "passed": true,
+                "detail": "index.html: found 12, expected at least 1"
+              },
+              "pattern:contact or footer": {
+                "passed": true,
+                "detail": "index.html: found 15, expected at least 1"
+              },
+              "pattern:CSS variables": {
+                "passed": true,
+                "detail": "styles.css: found 21, expected at least 2"
+              },
+              "pattern:responsive breakpoint": {
+                "passed": true,
+                "detail": "styles.css: found 3, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 33, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              }
+            },
+            "files": [
+              "README.md",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {}
+          },
+          "finalMessage": "Done. `projects/landing-page/` contains exactly `index.html`, `styles.css`, and `README.md` — a self-contained \"Beacon\" product page (no JS, no network, only inline SVG/data-URI assets). Verification passed: - **Structure**: balanced tags, all `id`/`for`/`aria-labelledby`/anchor references resolve, exactly one `h1`, semantic landmarks (`header`/`nav`/`main`/`section`/`figure`/`footer`) - **Sections**: skip link + sticky nav, hero with headline/CTA/stats + pure-CSS app mockup, 6-card features, testimonials with star rating and logo row, 3-tier pricing (featured plan), contact form + footer nav - **Accessibility**: labeled navs and form fields, `role=\"img\"` star rating with text alternative, visible `:focus-visible` rings on light and dark surfaces, `prefers-reduced-motion` support - **CSS**: design tokens in `:root`, breakpoints at 960px/640px, fluid `clamp()` type; fixed during inspection — removed an unused utility, an `!important`, dead chart vars, and styled the previously unstyled `.proof` hook - **Hygiene**: no remote URLs (grep clean), root files untouched (`git status` shows only the new directory)",
+          "taskContext": {
+            "type": "create",
+            "scope": [
+              "projects/landing-page"
+            ],
+            "scopeState": "new",
+            "entities": [
+              "product",
+              "install",
+              "reference",
+              "index",
+              "styles",
+              "README",
+              "semantic",
+              "header",
+              "hero",
+              "section",
+              "with"
+            ],
+            "actions": [],
+            "constraints": [
+              "local-only",
+              "accessible",
+              "scope-limited",
+              "exact-file-set",
+              "responsive"
+            ],
+            "selectedPaths": [],
+            "highConfidence": 0,
+            "mediumConfidence": 0,
+            "contextChars": 1019
+          }
+        },
+        {
+          "index": 2,
+          "slug": "todo-list-app",
+          "title": "Persistent todo list app",
+          "success": false,
+          "promptStartedAt": "2026-08-23T09:29:51.661Z",
+          "promptCompletedAt": "2026-08-23T09:44:51.988Z",
+          "agentDurationMs": 900307,
+          "evaluationDurationMs": 7,
+          "endToEndDurationMs": 900314,
+          "attempts": 1,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0,
+            "eventCount": 0,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 0,
+              "output": 0,
+              "reasoning": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalModel": 0,
+              "totalWithCache": 0
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 56071,
+            "output": 19792,
+            "reasoning": 3609,
+            "cacheRead": 319808,
+            "cacheWrite": 0,
+            "totalModel": 79472,
+            "totalWithCache": 399280
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 0,
+          "permissionRequests": 0,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 2,
+            "totalChecks": 15,
+            "checks": {
+              "file:index.html": {
+                "passed": false,
+                "detail": "index.html is missing"
+              },
+              "file:styles.css": {
+                "passed": false,
+                "detail": "styles.css is missing"
+              },
+              "file:app.js": {
+                "passed": false,
+                "detail": "app.js is missing"
+              },
+              "file:README.md": {
+                "passed": false,
+                "detail": "README.md is missing"
+              },
+              "pattern:todo input": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:todo list container": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:filter controls": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:local persistence": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 2"
+              },
+              "pattern:event listeners": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 2"
+              },
+              "pattern:completion behavior": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 1"
+              },
+              "pattern:delete behavior": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 1"
+              },
+              "pattern:filter behavior": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": false,
+                "detail": "styles.css: found 0, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              }
+            },
+            "files": [],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {}
+          },
+          "finalMessage": "Done. `projects/landing-page/` contains exactly `index.html`, `styles.css`, and `README.md` — a self-contained \"Beacon\" product page (no JS, no network, only inline SVG/data-URI assets). Verification passed: - **Structure**: balanced tags, all `id`/`for`/`aria-labelledby`/anchor references resolve, exactly one `h1`, semantic landmarks (`header`/`nav`/`main`/`section`/`figure`/`footer`) - **Sections**: skip link + sticky nav, hero with headline/CTA/stats + pure-CSS app mockup, 6-card features, testimonials with star rating and logo row, 3-tier pricing (featured plan), contact form + footer nav - **Accessibility**: labeled navs and form fields, `role=\"img\"` star rating with text alternative, visible `:focus-visible` rings on light and dark surfaces, `prefers-reduced-motion` support - **CSS**: design tokens in `:root`, breakpoints at 960px/640px, fluid `clamp()` type; fixed during inspection — removed an unused utility, an `!important`, dead chart vars, and styled the previously unstyled `.proof` hook - **Hygiene**: no remote URLs (grep clean), root files untouched (`git status` shows only the new directory)",
+          "taskContext": {
+            "type": "create",
+            "scope": [
+              "projects/todo-list-app"
+            ],
+            "scopeState": "new",
+            "entities": [
+              "dependency-free",
+              "free",
+              "index",
+              "styles",
+              "README",
+              "user",
+              "mark",
+              "active",
+              "completed",
+              "items"
+            ],
+            "actions": [
+              "list",
+              "delete",
+              "filter"
+            ],
+            "constraints": [
+              "dependency-free",
+              "local-only",
+              "accessible",
+              "scope-limited",
+              "responsive"
+            ],
+            "selectedPaths": [],
+            "highConfidence": 0,
+            "mediumConfidence": 0,
+            "contextChars": 1018
+          },
+          "error": "cuppet/todo-list-app timed out"
+        },
+        {
+          "index": 3,
+          "slug": "calculator-web-app",
+          "title": "Keyboard-friendly calculator",
+          "success": false,
+          "promptStartedAt": "2026-08-23T09:44:52.024Z",
+          "promptCompletedAt": "2026-08-23T09:59:52.682Z",
+          "agentDurationMs": 900616,
+          "evaluationDurationMs": 4,
+          "endToEndDurationMs": 900620,
+          "attempts": 1,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0,
+            "eventCount": 0,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 0,
+              "output": 0,
+              "reasoning": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalModel": 0,
+              "totalWithCache": 0
+            }
+          },
+          "cumulativeSessionUsage": {
+            "input": 56071,
+            "output": 19792,
+            "reasoning": 3609,
+            "cacheRead": 319808,
+            "cacheWrite": 0,
+            "totalModel": 79472,
+            "totalWithCache": 399280
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 0,
+          "permissionRequests": 0,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 2,
+            "totalChecks": 15,
+            "checks": {
+              "file:index.html": {
+                "passed": false,
+                "detail": "index.html is missing"
+              },
+              "file:styles.css": {
+                "passed": false,
+                "detail": "styles.css is missing"
+              },
+              "file:app.js": {
+                "passed": false,
+                "detail": "app.js is missing"
+              },
+              "file:README.md": {
+                "passed": false,
+                "detail": "README.md is missing"
+              },
+              "pattern:calculator display": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:digit buttons": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 4"
+              },
+              "pattern:operator controls": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 1"
+              },
+              "pattern:equals and clear": {
+                "passed": false,
+                "detail": "index.html: found 0, expected at least 2"
+              },
+              "pattern:event listeners": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 2"
+              },
+              "pattern:keyboard support": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 1"
+              },
+              "pattern:arithmetic logic": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 1"
+              },
+              "pattern:zero guard": {
+                "passed": false,
+                "detail": "app.js: found 0, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": false,
+                "detail": "styles.css: found 0, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              }
+            },
+            "files": [],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {}
+          },
+          "finalMessage": "Done. `projects/landing-page/` contains exactly `index.html`, `styles.css`, and `README.md` — a self-contained \"Beacon\" product page (no JS, no network, only inline SVG/data-URI assets). Verification passed: - **Structure**: balanced tags, all `id`/`for`/`aria-labelledby`/anchor references resolve, exactly one `h1`, semantic landmarks (`header`/`nav`/`main`/`section`/`figure`/`footer`) - **Sections**: skip link + sticky nav, hero with headline/CTA/stats + pure-CSS app mockup, 6-card features, testimonials with star rating and logo row, 3-tier pricing (featured plan), contact form + footer nav - **Accessibility**: labeled navs and form fields, `role=\"img\"` star rating with text alternative, visible `:focus-visible` rings on light and dark surfaces, `prefers-reduced-motion` support - **CSS**: design tokens in `:root`, breakpoints at 960px/640px, fluid `clamp()` type; fixed during inspection — removed an unused utility, an `!important`, dead chart vars, and styled the previously unstyled `.proof` hook - **Hygiene**: no remote URLs (grep clean), root files untouched (`git status` shows only the new directory)",
+          "taskContext": {
+            "type": "create",
+            "scope": [
+              "projects/calculator-web-app"
+            ],
+            "scopeState": "new",
+            "entities": [
+              "index",
+              "styles",
+              "README",
+              "with",
+              "digits",
+              "decimal",
+              "input",
+              "addition",
+              "subtraction",
+              "multiplication",
+              "division",
+              "equals"
+            ],
+            "actions": [
+              "delete"
+            ],
+            "constraints": [
+              "dependency-free",
+              "local-only",
+              "accessible",
+              "scope-limited",
+              "responsive"
+            ],
+            "selectedPaths": [],
+            "highConfidence": 0,
+            "mediumConfidence": 0,
+            "contextChars": 1035
+          },
+          "error": "cuppet/calculator-web-app timed out"
+        }
+      ],
+      "finalSessionUsage": {
+        "input": 56071,
+        "output": 19792,
+        "reasoning": 3609,
+        "cacheRead": 319808,
+        "cacheWrite": 0,
+        "totalModel": 79472,
+        "totalWithCache": 399280
+      },
+      "totalDurationMs": 2316115,
+      "errors": [
+        "cuppet/todo-list-app timed out",
+        "cuppet/calculator-web-app timed out"
+      ],
+      "summary": {
+        "tasks": 8,
+        "completedPrompts": 3,
+        "successes": 1,
+        "successRate": 0.3333333333333333,
+        "totalAgentDurationMs": 2316101,
+        "totalEndToEndDurationMs": 2316115,
+        "medianTaskDurationMs": 900314,
+        "totalUsage": {
+          "input": 56071,
+          "output": 19792,
+          "reasoning": 3609,
+          "cacheRead": 319808,
+          "cacheWrite": 0,
+          "totalModel": 79472,
+          "totalWithCache": 399280
+        },
+        "totalReportedCost": 0,
+        "costReported": false,
+        "compactions": 0,
+        "compactionTasks": 0,
+        "totalToolCalls": 13,
+        "totalPermissionRequests": 12,
+        "rejectedPermissions": 0,
+        "totalEvaluationChecks": 45,
+        "passedEvaluationChecks": 19,
+        "firstAttemptSuccesses": 1,
+        "repairedTasks": 0,
+        "cacheShare": 0.8508269948573877,
+        "cacheFullMisses": 0,
+        "cacheMissInputTokens": 0,
+        "adjustedCacheShare": 0.9230929156776798
+      }
+    }
+  },
+  "summary": {
+    "opencode": {
+      "tasks": 8,
+      "completedPrompts": 4,
+      "successes": 2,
+      "successRate": 0.5,
+      "totalAgentDurationMs": 2612410,
+      "totalEndToEndDurationMs": 2612665,
+      "medianTaskDurationMs": 660800.5,
+      "totalUsage": {
+        "input": 52201,
+        "output": 27519,
+        "reasoning": 3146,
+        "cacheRead": 833408,
+        "cacheWrite": 0,
+        "totalModel": 82866,
+        "totalWithCache": 916274
+      },
+      "totalReportedCost": 0,
+      "costReported": false,
+      "compactions": 0,
+      "compactionTasks": 0,
+      "totalToolCalls": 23,
+      "totalPermissionRequests": 17,
+      "rejectedPermissions": 0,
+      "totalEvaluationChecks": 63,
+      "passedEvaluationChecks": 37,
+      "firstAttemptSuccesses": 1,
+      "repairedTasks": 1,
+      "cacheShare": 0.9410563804116715,
+      "cacheFullMisses": 0,
+      "cacheMissInputTokens": 0,
+      "adjustedCacheShare": 0.9540350824968773
+    },
+    "cuppet": {
+      "tasks": 8,
+      "completedPrompts": 3,
+      "successes": 1,
+      "successRate": 0.3333333333333333,
+      "totalAgentDurationMs": 2316101,
+      "totalEndToEndDurationMs": 2316115,
+      "medianTaskDurationMs": 900314,
+      "totalUsage": {
+        "input": 56071,
+        "output": 19792,
+        "reasoning": 3609,
+        "cacheRead": 319808,
+        "cacheWrite": 0,
+        "totalModel": 79472,
+        "totalWithCache": 399280
+      },
+      "totalReportedCost": 0,
+      "costReported": false,
+      "compactions": 0,
+      "compactionTasks": 0,
+      "totalToolCalls": 13,
+      "totalPermissionRequests": 12,
+      "rejectedPermissions": 0,
+      "totalEvaluationChecks": 45,
+      "passedEvaluationChecks": 19,
+      "firstAttemptSuccesses": 1,
+      "repairedTasks": 0,
+      "cacheShare": 0.8508269948573877,
+      "cacheFullMisses": 0,
+      "cacheMissInputTokens": 0,
+      "adjustedCacheShare": 0.9230929156776798
+    },
+    "comparison": {
+      "baseline": "opencode",
+      "candidate": "cuppet",
+      "successDelta": -0.16666666666666669,
+      "agentTimeReduction": 0.113423620335246,
+      "endToEndTimeReduction": 0.1135047929987197,
+      "uncachedInputReduction": -0.07413651079481236,
+      "totalModelTokenReduction": 0.04095769072961166,
+      "cacheReadDelta": -513600,
+      "cacheShareDelta": -0.09022938555428384,
+      "compactionDelta": 0,
+      "evaluationDelta": -18,
+      "firstAttemptDelta": 0,
+      "repairDelta": -1,
+      "cacheFullMissDelta": 0,
+      "adjustedCacheShareDelta": -0.03094216681919748,
+      "reportedCostAvailable": false
+    }
+  }
+}

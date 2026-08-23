@@ -1,0 +1,2339 @@
+{
+  "schema": 1,
+  "createdAt": "2026-08-23T17:46:45.969Z",
+  "model": {
+    "providerID": "opencode",
+    "modelID": "x-preview-f-free"
+  },
+  "fixtureFiles": 22,
+  "fixtureHash": "435a99496a598928083a53c0246a01fba3b389c7b66f9a27f4d19d5def6bf25c",
+  "artifacts": "/private/tmp/cuppet-hard-LnvDov",
+  "arms": {
+    "opencode": {
+      "arm": "opencode",
+      "workspace": "/private/tmp/cuppet-hard-LnvDov/opencode/workspace",
+      "sessionID": "ses_fd059edb6ffe6BJ4gZXAD2a64t",
+      "tasks": [
+        {
+          "index": 1,
+          "slug": "deep-rename-grand-total",
+          "title": "Rename internal total without changing the wire format",
+          "success": true,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "agentDurationMs": 114774,
+          "endToEndDurationMs": 114774,
+          "usage": {
+            "input": 33011,
+            "output": 2715,
+            "reasoning": 496,
+            "cacheRead": 227136,
+            "cacheWrite": 0,
+            "totalModel": 36222,
+            "totalWithCache": 263358,
+            "eventCount": 16,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 12205,
+                "output": 57,
+                "reasoning": 4,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 12266,
+                "totalWithCache": 12266
+              },
+              {
+                "gapSeconds": 4,
+                "input": 12442,
+                "output": 129,
+                "reasoning": 18,
+                "cacheRead": 128,
+                "cacheWrite": 0,
+                "totalModel": 12589,
+                "totalWithCache": 12717
+              },
+              {
+                "gapSeconds": 2,
+                "input": 1013,
+                "output": 51,
+                "reasoning": 0,
+                "cacheRead": 12544,
+                "cacheWrite": 0,
+                "totalModel": 1064,
+                "totalWithCache": 13608
+              },
+              {
+                "gapSeconds": 4,
+                "input": 784,
+                "output": 86,
+                "reasoning": 29,
+                "cacheRead": 13504,
+                "cacheWrite": 0,
+                "totalModel": 899,
+                "totalWithCache": 14403
+              },
+              {
+                "gapSeconds": 6,
+                "input": 1173,
+                "output": 89,
+                "reasoning": 45,
+                "cacheRead": 14272,
+                "cacheWrite": 0,
+                "totalModel": 1307,
+                "totalWithCache": 15579
+              },
+              {
+                "gapSeconds": 23,
+                "input": 313,
+                "output": 441,
+                "reasoning": 59,
+                "cacheRead": 15424,
+                "cacheWrite": 0,
+                "totalModel": 813,
+                "totalWithCache": 16237
+              },
+              {
+                "gapSeconds": 5,
+                "input": 446,
+                "output": 133,
+                "reasoning": 0,
+                "cacheRead": 15680,
+                "cacheWrite": 0,
+                "totalModel": 579,
+                "totalWithCache": 16259
+              },
+              {
+                "gapSeconds": 4,
+                "input": 209,
+                "output": 60,
+                "reasoning": 18,
+                "cacheRead": 16064,
+                "cacheWrite": 0,
+                "totalModel": 287,
+                "totalWithCache": 16351
+              },
+              {
+                "gapSeconds": 5,
+                "input": 181,
+                "output": 67,
+                "reasoning": 24,
+                "cacheRead": 16256,
+                "cacheWrite": 0,
+                "totalModel": 272,
+                "totalWithCache": 16528
+              },
+              {
+                "gapSeconds": 4,
+                "input": 183,
+                "output": 91,
+                "reasoning": 0,
+                "cacheRead": 16384,
+                "cacheWrite": 0,
+                "totalModel": 274,
+                "totalWithCache": 16658
+              },
+              {
+                "gapSeconds": 6,
+                "input": 211,
+                "output": 160,
+                "reasoning": 49,
+                "cacheRead": 16512,
+                "cacheWrite": 0,
+                "totalModel": 420,
+                "totalWithCache": 16932
+              },
+              {
+                "gapSeconds": 10,
+                "input": 881,
+                "output": 202,
+                "reasoning": 50,
+                "cacheRead": 16704,
+                "cacheWrite": 0,
+                "totalModel": 1133,
+                "totalWithCache": 17837
+              },
+              {
+                "gapSeconds": 5,
+                "input": 496,
+                "output": 125,
+                "reasoning": 22,
+                "cacheRead": 17536,
+                "cacheWrite": 0,
+                "totalModel": 643,
+                "totalWithCache": 18179
+              },
+              {
+                "gapSeconds": 10,
+                "input": 205,
+                "output": 335,
+                "reasoning": 56,
+                "cacheRead": 17984,
+                "cacheWrite": 0,
+                "totalModel": 596,
+                "totalWithCache": 18580
+              },
+              {
+                "gapSeconds": 9,
+                "input": 1853,
+                "output": 283,
+                "reasoning": 50,
+                "cacheRead": 18176,
+                "cacheWrite": 0,
+                "totalModel": 2186,
+                "totalWithCache": 20362
+              },
+              {
+                "gapSeconds": 12,
+                "input": 416,
+                "output": 406,
+                "reasoning": 72,
+                "cacheRead": 19968,
+                "cacheWrite": 0,
+                "totalModel": 894,
+                "totalWithCache": 20862
+              }
+            ]
+          },
+          "toolCalls": 24,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 7,
+            "totalChecks": 7,
+            "checks": {
+              "file:src/models/order.ts": {
+                "passed": true,
+                "detail": "exists"
+              },
+              "file:src/api/handlers.ts": {
+                "passed": true,
+                "detail": "exists"
+              },
+              "pattern:grandTotal in model": {
+                "passed": true,
+                "detail": "src/models/order.ts: found 2"
+              },
+              "pattern:payload keeps total key": {
+                "passed": true,
+                "detail": "src/api/handlers.ts: found 6"
+              },
+              "pattern:no legacy totalAmount anywhere": {
+                "passed": true,
+                "detail": "clean"
+              },
+              "behavior:verifier": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:smoke-test": {
+                "passed": true,
+                "detail": "ok"
+              }
+            }
+          },
+          "finalMessage": ""
+        },
+        {
+          "index": 2,
+          "slug": "feature-discount-end-to-end",
+          "title": "Thread discount codes through the entire stack",
+          "success": false,
+          "attempts": 3,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "agentDurationMs": 523951,
+          "endToEndDurationMs": 523951,
+          "usage": {
+            "input": 24897,
+            "output": 12993,
+            "reasoning": 4287,
+            "cacheRead": 1076928,
+            "cacheWrite": 0,
+            "totalModel": 42177,
+            "totalWithCache": 1119105,
+            "eventCount": 34,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 694,
+                "output": 100,
+                "reasoning": 12,
+                "cacheRead": 20352,
+                "cacheWrite": 0,
+                "totalModel": 806,
+                "totalWithCache": 21158
+              },
+              {
+                "gapSeconds": 3,
+                "input": 290,
+                "output": 51,
+                "reasoning": 0,
+                "cacheRead": 20992,
+                "cacheWrite": 0,
+                "totalModel": 341,
+                "totalWithCache": 21333
+              },
+              {
+                "gapSeconds": 21,
+                "input": 310,
+                "output": 320,
+                "reasoning": 171,
+                "cacheRead": 21248,
+                "cacheWrite": 0,
+                "totalModel": 801,
+                "totalWithCache": 22049
+              },
+              {
+                "gapSeconds": 4,
+                "input": 786,
+                "output": 53,
+                "reasoning": 0,
+                "cacheRead": 21504,
+                "cacheWrite": 0,
+                "totalModel": 839,
+                "totalWithCache": 22343
+              },
+              {
+                "gapSeconds": 4,
+                "input": 577,
+                "output": 52,
+                "reasoning": 0,
+                "cacheRead": 22272,
+                "cacheWrite": 0,
+                "totalModel": 629,
+                "totalWithCache": 22901
+              },
+              {
+                "gapSeconds": 55,
+                "input": 390,
+                "output": 1511,
+                "reasoning": 794,
+                "cacheRead": 22848,
+                "cacheWrite": 0,
+                "totalModel": 2695,
+                "totalWithCache": 25543
+              },
+              {
+                "gapSeconds": 3,
+                "input": 2535,
+                "output": 22,
+                "reasoning": 7,
+                "cacheRead": 23232,
+                "cacheWrite": 0,
+                "totalModel": 2564,
+                "totalWithCache": 25796
+              },
+              {
+                "gapSeconds": 19,
+                "input": 325,
+                "output": 851,
+                "reasoning": 158,
+                "cacheRead": 25728,
+                "cacheWrite": 0,
+                "totalModel": 1334,
+                "totalWithCache": 27062
+              },
+              {
+                "gapSeconds": 20,
+                "input": 1028,
+                "output": 201,
+                "reasoning": 0,
+                "cacheRead": 26048,
+                "cacheWrite": 0,
+                "totalModel": 1229,
+                "totalWithCache": 27277
+              },
+              {
+                "gapSeconds": 4,
+                "input": 219,
+                "output": 196,
+                "reasoning": 0,
+                "cacheRead": 27072,
+                "cacheWrite": 0,
+                "totalModel": 415,
+                "totalWithCache": 27487
+              },
+              {
+                "gapSeconds": 5,
+                "input": 237,
+                "output": 145,
+                "reasoning": 0,
+                "cacheRead": 27264,
+                "cacheWrite": 0,
+                "totalModel": 382,
+                "totalWithCache": 27646
+              },
+              {
+                "gapSeconds": 9,
+                "input": 198,
+                "output": 249,
+                "reasoning": 10,
+                "cacheRead": 27456,
+                "cacheWrite": 0,
+                "totalModel": 457,
+                "totalWithCache": 27913
+              },
+              {
+                "gapSeconds": 8,
+                "input": 273,
+                "output": 211,
+                "reasoning": 25,
+                "cacheRead": 27648,
+                "cacheWrite": 0,
+                "totalModel": 509,
+                "totalWithCache": 28157
+              },
+              {
+                "gapSeconds": 12,
+                "input": 298,
+                "output": 433,
+                "reasoning": 41,
+                "cacheRead": 27904,
+                "cacheWrite": 0,
+                "totalModel": 772,
+                "totalWithCache": 28676
+              },
+              {
+                "gapSeconds": 24,
+                "input": 645,
+                "output": 526,
+                "reasoning": 310,
+                "cacheRead": 28160,
+                "cacheWrite": 0,
+                "totalModel": 1481,
+                "totalWithCache": 29641
+              },
+              {
+                "gapSeconds": 15,
+                "input": 1049,
+                "output": 223,
+                "reasoning": 98,
+                "cacheRead": 28800,
+                "cacheWrite": 0,
+                "totalModel": 1370,
+                "totalWithCache": 30170
+              },
+              {
+                "gapSeconds": 23,
+                "input": 1853,
+                "output": 693,
+                "reasoning": 140,
+                "cacheRead": 29824,
+                "cacheWrite": 0,
+                "totalModel": 2686,
+                "totalWithCache": 32510
+              },
+              {
+                "gapSeconds": 70,
+                "input": 1003,
+                "output": 1573,
+                "reasoning": 993,
+                "cacheRead": 31616,
+                "cacheWrite": 0,
+                "totalModel": 3569,
+                "totalWithCache": 35185
+              },
+              {
+                "gapSeconds": 8,
+                "input": 3196,
+                "output": 421,
+                "reasoning": 0,
+                "cacheRead": 32576,
+                "cacheWrite": 0,
+                "totalModel": 3617,
+                "totalWithCache": 36193
+              },
+              {
+                "gapSeconds": 4,
+                "input": 420,
+                "output": 71,
+                "reasoning": 0,
+                "cacheRead": 35712,
+                "cacheWrite": 0,
+                "totalModel": 491,
+                "totalWithCache": 36203
+              },
+              {
+                "gapSeconds": 6,
+                "input": 115,
+                "output": 266,
+                "reasoning": 0,
+                "cacheRead": 36096,
+                "cacheWrite": 0,
+                "totalModel": 381,
+                "totalWithCache": 36477
+              },
+              {
+                "gapSeconds": 3,
+                "input": 331,
+                "output": 64,
+                "reasoning": 0,
+                "cacheRead": 36160,
+                "cacheWrite": 0,
+                "totalModel": 395,
+                "totalWithCache": 36555
+              },
+              {
+                "gapSeconds": 11,
+                "input": 83,
+                "output": 198,
+                "reasoning": 0,
+                "cacheRead": 36480,
+                "cacheWrite": 0,
+                "totalModel": 281,
+                "totalWithCache": 36761
+              },
+              {
+                "gapSeconds": 6,
+                "input": 225,
+                "output": 337,
+                "reasoning": 0,
+                "cacheRead": 36544,
+                "cacheWrite": 0,
+                "totalModel": 562,
+                "totalWithCache": 37106
+              },
+              {
+                "gapSeconds": 3,
+                "input": 378,
+                "output": 70,
+                "reasoning": 0,
+                "cacheRead": 36736,
+                "cacheWrite": 0,
+                "totalModel": 448,
+                "totalWithCache": 37184
+              },
+              {
+                "gapSeconds": 16,
+                "input": 136,
+                "output": 514,
+                "reasoning": 31,
+                "cacheRead": 37056,
+                "cacheWrite": 0,
+                "totalModel": 681,
+                "totalWithCache": 37737
+              },
+              {
+                "gapSeconds": 6,
+                "input": 676,
+                "output": 186,
+                "reasoning": 0,
+                "cacheRead": 37184,
+                "cacheWrite": 0,
+                "totalModel": 862,
+                "totalWithCache": 38046
+              },
+              {
+                "gapSeconds": 14,
+                "input": 1680,
+                "output": 482,
+                "reasoning": 74,
+                "cacheRead": 37824,
+                "cacheWrite": 0,
+                "totalModel": 2236,
+                "totalWithCache": 40060
+              },
+              {
+                "gapSeconds": 101,
+                "input": 682,
+                "output": 1938,
+                "reasoning": 1311,
+                "cacheRead": 39488,
+                "cacheWrite": 0,
+                "totalModel": 3931,
+                "totalWithCache": 43419
+              },
+              {
+                "gapSeconds": 7,
+                "input": 3221,
+                "output": 276,
+                "reasoning": 0,
+                "cacheRead": 40128,
+                "cacheWrite": 0,
+                "totalModel": 3497,
+                "totalWithCache": 43625
+              },
+              {
+                "gapSeconds": 5,
+                "input": 386,
+                "output": 109,
+                "reasoning": 15,
+                "cacheRead": 43328,
+                "cacheWrite": 0,
+                "totalModel": 510,
+                "totalWithCache": 43838
+              },
+              {
+                "gapSeconds": 5,
+                "input": 134,
+                "output": 208,
+                "reasoning": 0,
+                "cacheRead": 43712,
+                "cacheWrite": 0,
+                "totalModel": 342,
+                "totalWithCache": 44054
+              },
+              {
+                "gapSeconds": 4,
+                "input": 294,
+                "output": 113,
+                "reasoning": 0,
+                "cacheRead": 43840,
+                "cacheWrite": 0,
+                "totalModel": 407,
+                "totalWithCache": 44247
+              },
+              {
+                "gapSeconds": 15,
+                "input": 230,
+                "output": 330,
+                "reasoning": 97,
+                "cacheRead": 44096,
+                "cacheWrite": 0,
+                "totalModel": 657,
+                "totalWithCache": 44753
+              }
+            ]
+          },
+          "toolCalls": 39,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 7,
+            "totalChecks": 8,
+            "checks": {
+              "file:src/services/pricing.ts": {
+                "passed": true,
+                "detail": "exists"
+              },
+              "file:src/cli/parse.ts": {
+                "passed": true,
+                "detail": "exists"
+              },
+              "pattern:discount in pricing": {
+                "passed": true,
+                "detail": "src/services/pricing.ts: found 5"
+              },
+              "pattern:discount flag in cli": {
+                "passed": true,
+                "detail": "src/cli/parse.ts: found 3"
+              },
+              "pattern:handler surfaces discount": {
+                "passed": true,
+                "detail": "src/api/handlers.ts: found 9"
+              },
+              "pattern:no legacy totalAmount anywhere": {
+                "passed": true,
+                "detail": "clean"
+              },
+              "behavior:verifier": {
+                "passed": false,
+                "detail": "node:internal/modules/run_main:123 triggerUncaughtException( ^ AssertionError [ERR_ASSERTION]: unknown code must be reported invalid false !== true at <anonymous> (/Users/addy/Downloads/cuppet/benchmarks/results/verifier-tmp/feature-discount-end-to-end-49cf6643.mjs:16:8) { generatedMessage: false, code: 'ERR_ASSERTION', actual: false, expected: true, operator: 'strictEqual', diff: 'simple' } Node."
+              },
+              "regression:smoke-test": {
+                "passed": true,
+                "detail": "ok"
+              }
+            }
+          },
+          "finalMessage": "",
+          "error": "acceptance checks failed"
+        },
+        {
+          "index": 3,
+          "slug": "fix-idempotent-renewal",
+          "title": "Fix double-billing on rapid subscription renewals",
+          "success": true,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "agentDurationMs": 183542,
+          "endToEndDurationMs": 183542,
+          "usage": {
+            "input": 7979,
+            "output": 4129,
+            "reasoning": 1817,
+            "cacheRead": 374656,
+            "cacheWrite": 0,
+            "totalModel": 13925,
+            "totalWithCache": 388581,
+            "eventCount": 8,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 596,
+                "output": 60,
+                "reasoning": 3,
+                "cacheRead": 44288,
+                "cacheWrite": 0,
+                "totalModel": 659,
+                "totalWithCache": 44947
+              },
+              {
+                "gapSeconds": 2,
+                "input": 415,
+                "output": 28,
+                "reasoning": 0,
+                "cacheRead": 44864,
+                "cacheWrite": 0,
+                "totalModel": 443,
+                "totalWithCache": 45307
+              },
+              {
+                "gapSeconds": 2,
+                "input": 271,
+                "output": 27,
+                "reasoning": 0,
+                "cacheRead": 45248,
+                "cacheWrite": 0,
+                "totalModel": 298,
+                "totalWithCache": 45546
+              },
+              {
+                "gapSeconds": 80,
+                "input": 323,
+                "output": 1573,
+                "reasoning": 1136,
+                "cacheRead": 45504,
+                "cacheWrite": 0,
+                "totalModel": 3032,
+                "totalWithCache": 48536
+              },
+              {
+                "gapSeconds": 16,
+                "input": 3073,
+                "output": 648,
+                "reasoning": 56,
+                "cacheRead": 45824,
+                "cacheWrite": 0,
+                "totalModel": 3777,
+                "totalWithCache": 49601
+              },
+              {
+                "gapSeconds": 16,
+                "input": 713,
+                "output": 680,
+                "reasoning": 0,
+                "cacheRead": 48896,
+                "cacheWrite": 0,
+                "totalModel": 1393,
+                "totalWithCache": 50289
+              },
+              {
+                "gapSeconds": 42,
+                "input": 848,
+                "output": 640,
+                "reasoning": 535,
+                "cacheRead": 49600,
+                "cacheWrite": 0,
+                "totalModel": 2023,
+                "totalWithCache": 51623
+              },
+              {
+                "gapSeconds": 18,
+                "input": 1740,
+                "output": 473,
+                "reasoning": 87,
+                "cacheRead": 50432,
+                "cacheWrite": 0,
+                "totalModel": 2300,
+                "totalWithCache": 52732
+              }
+            ]
+          },
+          "toolCalls": 9,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 5,
+            "totalChecks": 5,
+            "checks": {
+              "file:src/services/renewal.ts": {
+                "passed": true,
+                "detail": "exists"
+              },
+              "pattern:renewal touched": {
+                "passed": true,
+                "detail": "src/services/renewal.ts: found 8"
+              },
+              "pattern:no legacy totalAmount anywhere": {
+                "passed": true,
+                "detail": "clean"
+              },
+              "behavior:verifier": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:smoke-test": {
+                "passed": true,
+                "detail": "ok"
+              }
+            }
+          },
+          "finalMessage": ""
+        },
+        {
+          "index": 4,
+          "slug": "consolidate-money-rounding",
+          "title": "Consolidate duplicated rounding into one util",
+          "success": true,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "agentDurationMs": 126793,
+          "endToEndDurationMs": 126793,
+          "usage": {
+            "input": 5452,
+            "output": 3335,
+            "reasoning": 313,
+            "cacheRead": 597952,
+            "cacheWrite": 0,
+            "totalModel": 9100,
+            "totalWithCache": 607052,
+            "eventCount": 11,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 707,
+                "output": 74,
+                "reasoning": 24,
+                "cacheRead": 52160,
+                "cacheWrite": 0,
+                "totalModel": 805,
+                "totalWithCache": 52965
+              },
+              {
+                "gapSeconds": 13,
+                "input": 516,
+                "output": 312,
+                "reasoning": 92,
+                "cacheRead": 52864,
+                "cacheWrite": 0,
+                "totalModel": 920,
+                "totalWithCache": 53784
+              },
+              {
+                "gapSeconds": 6,
+                "input": 416,
+                "output": 223,
+                "reasoning": 13,
+                "cacheRead": 53376,
+                "cacheWrite": 0,
+                "totalModel": 652,
+                "totalWithCache": 54028
+              },
+              {
+                "gapSeconds": 7,
+                "input": 282,
+                "output": 427,
+                "reasoning": 0,
+                "cacheRead": 53760,
+                "cacheWrite": 0,
+                "totalModel": 709,
+                "totalWithCache": 54469
+              },
+              {
+                "gapSeconds": 5,
+                "input": 461,
+                "output": 176,
+                "reasoning": 0,
+                "cacheRead": 54016,
+                "cacheWrite": 0,
+                "totalModel": 637,
+                "totalWithCache": 54653
+              },
+              {
+                "gapSeconds": 5,
+                "input": 203,
+                "output": 136,
+                "reasoning": 0,
+                "cacheRead": 54464,
+                "cacheWrite": 0,
+                "totalModel": 339,
+                "totalWithCache": 54803
+              },
+              {
+                "gapSeconds": 8,
+                "input": 155,
+                "output": 221,
+                "reasoning": 41,
+                "cacheRead": 54656,
+                "cacheWrite": 0,
+                "totalModel": 417,
+                "totalWithCache": 55073
+              },
+              {
+                "gapSeconds": 14,
+                "input": 240,
+                "output": 589,
+                "reasoning": 0,
+                "cacheRead": 54784,
+                "cacheWrite": 0,
+                "totalModel": 829,
+                "totalWithCache": 55613
+              },
+              {
+                "gapSeconds": 39,
+                "input": 1011,
+                "output": 381,
+                "reasoning": 25,
+                "cacheRead": 54976,
+                "cacheWrite": 0,
+                "totalModel": 1417,
+                "totalWithCache": 56393
+              },
+              {
+                "gapSeconds": 10,
+                "input": 1068,
+                "output": 282,
+                "reasoning": 51,
+                "cacheRead": 55936,
+                "cacheWrite": 0,
+                "totalModel": 1401,
+                "totalWithCache": 57337
+              },
+              {
+                "gapSeconds": 15,
+                "input": 393,
+                "output": 514,
+                "reasoning": 67,
+                "cacheRead": 56960,
+                "cacheWrite": 0,
+                "totalModel": 974,
+                "totalWithCache": 57934
+              }
+            ]
+          },
+          "toolCalls": 14,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 7,
+            "totalChecks": 7,
+            "checks": {
+              "file:src/util/money.ts": {
+                "passed": true,
+                "detail": "exists"
+              },
+              "pattern:util exports roundMoney": {
+                "passed": true,
+                "detail": "src/util/money.ts: found 1"
+              },
+              "pattern:pricing imports util": {
+                "passed": true,
+                "detail": "src/services/pricing.ts: found 1"
+              },
+              "pattern:billing imports util": {
+                "passed": true,
+                "detail": "src/services/billing.ts: found 1"
+              },
+              "pattern:no legacy totalAmount anywhere": {
+                "passed": true,
+                "detail": "clean"
+              },
+              "behavior:verifier": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:smoke-test": {
+                "passed": true,
+                "detail": "ok"
+              }
+            }
+          },
+          "finalMessage": ""
+        },
+        {
+          "index": 5,
+          "slug": "ordering-audit-before-notify",
+          "title": "Guarantee audit-first ordering and resilient notifications",
+          "success": false,
+          "attempts": 3,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "agentDurationMs": 311634,
+          "endToEndDurationMs": 311634,
+          "usage": {
+            "input": 13115,
+            "output": 7452,
+            "reasoning": 2528,
+            "cacheRead": 1323136,
+            "cacheWrite": 0,
+            "totalModel": 23095,
+            "totalWithCache": 1346231,
+            "eventCount": 21,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 724,
+                "output": 52,
+                "reasoning": 0,
+                "cacheRead": 57344,
+                "cacheWrite": 0,
+                "totalModel": 776,
+                "totalWithCache": 58120
+              },
+              {
+                "gapSeconds": 3,
+                "input": 297,
+                "output": 52,
+                "reasoning": 0,
+                "cacheRead": 58048,
+                "cacheWrite": 0,
+                "totalModel": 349,
+                "totalWithCache": 58397
+              },
+              {
+                "gapSeconds": 23,
+                "input": 597,
+                "output": 755,
+                "reasoning": 220,
+                "cacheRead": 58304,
+                "cacheWrite": 0,
+                "totalModel": 1572,
+                "totalWithCache": 59876
+              },
+              {
+                "gapSeconds": 4,
+                "input": 1004,
+                "output": 132,
+                "reasoning": 0,
+                "cacheRead": 58880,
+                "cacheWrite": 0,
+                "totalModel": 1136,
+                "totalWithCache": 60016
+              },
+              {
+                "gapSeconds": 6,
+                "input": 184,
+                "output": 173,
+                "reasoning": 0,
+                "cacheRead": 59840,
+                "cacheWrite": 0,
+                "totalModel": 357,
+                "totalWithCache": 60197
+              },
+              {
+                "gapSeconds": 16,
+                "input": 237,
+                "output": 192,
+                "reasoning": 50,
+                "cacheRead": 59968,
+                "cacheWrite": 0,
+                "totalModel": 479,
+                "totalWithCache": 60447
+              },
+              {
+                "gapSeconds": 15,
+                "input": 261,
+                "output": 518,
+                "reasoning": 53,
+                "cacheRead": 60160,
+                "cacheWrite": 0,
+                "totalModel": 832,
+                "totalWithCache": 60992
+              },
+              {
+                "gapSeconds": 6,
+                "input": 640,
+                "output": 152,
+                "reasoning": 0,
+                "cacheRead": 60416,
+                "cacheWrite": 0,
+                "totalModel": 792,
+                "totalWithCache": 61208
+              },
+              {
+                "gapSeconds": 3,
+                "input": 127,
+                "output": 66,
+                "reasoning": 0,
+                "cacheRead": 61056,
+                "cacheWrite": 0,
+                "totalModel": 193,
+                "totalWithCache": 61249
+              },
+              {
+                "gapSeconds": 12,
+                "input": 1006,
+                "output": 368,
+                "reasoning": 64,
+                "cacheRead": 61120,
+                "cacheWrite": 0,
+                "totalModel": 1438,
+                "totalWithCache": 62558
+              },
+              {
+                "gapSeconds": 71,
+                "input": 536,
+                "output": 1403,
+                "reasoning": 941,
+                "cacheRead": 62080,
+                "cacheWrite": 0,
+                "totalModel": 2880,
+                "totalWithCache": 64960
+              },
+              {
+                "gapSeconds": 5,
+                "input": 2376,
+                "output": 185,
+                "reasoning": 0,
+                "cacheRead": 62592,
+                "cacheWrite": 0,
+                "totalModel": 2561,
+                "totalWithCache": 65153
+              },
+              {
+                "gapSeconds": 6,
+                "input": 207,
+                "output": 147,
+                "reasoning": 20,
+                "cacheRead": 64960,
+                "cacheWrite": 0,
+                "totalModel": 374,
+                "totalWithCache": 65334
+              },
+              {
+                "gapSeconds": 8,
+                "input": 129,
+                "output": 302,
+                "reasoning": 0,
+                "cacheRead": 65152,
+                "cacheWrite": 0,
+                "totalModel": 431,
+                "totalWithCache": 65583
+              },
+              {
+                "gapSeconds": 12,
+                "input": 356,
+                "output": 149,
+                "reasoning": 0,
+                "cacheRead": 65280,
+                "cacheWrite": 0,
+                "totalModel": 505,
+                "totalWithCache": 65785
+              },
+              {
+                "gapSeconds": 82,
+                "input": 257,
+                "output": 1927,
+                "reasoning": 1117,
+                "cacheRead": 65600,
+                "cacheWrite": 0,
+                "totalModel": 3301,
+                "totalWithCache": 68901
+              },
+              {
+                "gapSeconds": 7,
+                "input": 3059,
+                "output": 145,
+                "reasoning": 0,
+                "cacheRead": 65856,
+                "cacheWrite": 0,
+                "totalModel": 3204,
+                "totalWithCache": 69060
+              },
+              {
+                "gapSeconds": 4,
+                "input": 204,
+                "output": 69,
+                "reasoning": 0,
+                "cacheRead": 68864,
+                "cacheWrite": 0,
+                "totalModel": 273,
+                "totalWithCache": 69137
+              },
+              {
+                "gapSeconds": 6,
+                "input": 96,
+                "output": 260,
+                "reasoning": 0,
+                "cacheRead": 69056,
+                "cacheWrite": 0,
+                "totalModel": 356,
+                "totalWithCache": 69412
+              },
+              {
+                "gapSeconds": 6,
+                "input": 361,
+                "output": 108,
+                "reasoning": 0,
+                "cacheRead": 69120,
+                "cacheWrite": 0,
+                "totalModel": 469,
+                "totalWithCache": 69589
+              },
+              {
+                "gapSeconds": 12,
+                "input": 457,
+                "output": 297,
+                "reasoning": 63,
+                "cacheRead": 69440,
+                "cacheWrite": 0,
+                "totalModel": 817,
+                "totalWithCache": 70257
+              }
+            ]
+          },
+          "toolCalls": 22,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 5,
+            "totalChecks": 6,
+            "checks": {
+              "file:src/services/checkout.ts": {
+                "passed": true,
+                "detail": "exists"
+              },
+              "pattern:try around notify": {
+                "passed": true,
+                "detail": "src/services/checkout.ts: found 2"
+              },
+              "pattern:still appends audit": {
+                "passed": false,
+                "detail": "src/services/checkout.ts: found 1"
+              },
+              "pattern:no legacy totalAmount anywhere": {
+                "passed": true,
+                "detail": "clean"
+              },
+              "behavior:verifier": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:smoke-test": {
+                "passed": true,
+                "detail": "ok"
+              }
+            }
+          },
+          "finalMessage": "",
+          "error": "acceptance checks failed"
+        }
+      ],
+      "finalSessionUsage": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalModel": 0,
+        "totalWithCache": 0
+      },
+      "errors": []
+    },
+    "cuppet": {
+      "arm": "cuppet",
+      "workspace": "/private/tmp/cuppet-hard-LnvDov/cuppet/workspace",
+      "sessionID": "ses_fd059d1f4ffeRwhOeSSXvpnO7h",
+      "tasks": [
+        {
+          "index": 1,
+          "slug": "deep-rename-grand-total",
+          "title": "Rename internal total without changing the wire format",
+          "success": true,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "agentDurationMs": 150714,
+          "endToEndDurationMs": 150714,
+          "usage": {
+            "input": 35117,
+            "output": 1634,
+            "reasoning": 269,
+            "cacheRead": 262848,
+            "cacheWrite": 0,
+            "totalModel": 37020,
+            "totalWithCache": 299868,
+            "eventCount": 18,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 15285,
+                "output": 29,
+                "reasoning": 5,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 15319,
+                "totalWithCache": 15319
+              },
+              {
+                "gapSeconds": 7,
+                "input": 15213,
+                "output": 27,
+                "reasoning": 0,
+                "cacheRead": 128,
+                "cacheWrite": 0,
+                "totalModel": 15240,
+                "totalWithCache": 15368
+              },
+              {
+                "gapSeconds": 7,
+                "input": 96,
+                "output": 47,
+                "reasoning": 6,
+                "cacheRead": 15296,
+                "cacheWrite": 0,
+                "totalModel": 149,
+                "totalWithCache": 15445
+              },
+              {
+                "gapSeconds": 3,
+                "input": 470,
+                "output": 31,
+                "reasoning": 0,
+                "cacheRead": 15360,
+                "cacheWrite": 0,
+                "totalModel": 501,
+                "totalWithCache": 15861
+              },
+              {
+                "gapSeconds": 8,
+                "input": 153,
+                "output": 102,
+                "reasoning": 0,
+                "cacheRead": 15808,
+                "cacheWrite": 0,
+                "totalModel": 255,
+                "totalWithCache": 16063
+              },
+              {
+                "gapSeconds": 6,
+                "input": 1140,
+                "output": 28,
+                "reasoning": 0,
+                "cacheRead": 15936,
+                "cacheWrite": 0,
+                "totalModel": 1168,
+                "totalWithCache": 17104
+              },
+              {
+                "gapSeconds": 18,
+                "input": 610,
+                "output": 523,
+                "reasoning": 109,
+                "cacheRead": 17024,
+                "cacheWrite": 0,
+                "totalModel": 1242,
+                "totalWithCache": 18266
+              },
+              {
+                "gapSeconds": 8,
+                "input": 491,
+                "output": 27,
+                "reasoning": 0,
+                "cacheRead": 17600,
+                "cacheWrite": 0,
+                "totalModel": 518,
+                "totalWithCache": 18118
+              },
+              {
+                "gapSeconds": 4,
+                "input": 119,
+                "output": 84,
+                "reasoning": 0,
+                "cacheRead": 18048,
+                "cacheWrite": 0,
+                "totalModel": 203,
+                "totalWithCache": 18251
+              },
+              {
+                "gapSeconds": 6,
+                "input": 147,
+                "output": 56,
+                "reasoning": 0,
+                "cacheRead": 18112,
+                "cacheWrite": 0,
+                "totalModel": 203,
+                "totalWithCache": 18315
+              },
+              {
+                "gapSeconds": 6,
+                "input": 83,
+                "output": 55,
+                "reasoning": 0,
+                "cacheRead": 18240,
+                "cacheWrite": 0,
+                "totalModel": 138,
+                "totalWithCache": 18378
+              },
+              {
+                "gapSeconds": 7,
+                "input": 82,
+                "output": 40,
+                "reasoning": 0,
+                "cacheRead": 18304,
+                "cacheWrite": 0,
+                "totalModel": 122,
+                "totalWithCache": 18426
+              },
+              {
+                "gapSeconds": 8,
+                "input": 91,
+                "output": 65,
+                "reasoning": 27,
+                "cacheRead": 18368,
+                "cacheWrite": 0,
+                "totalModel": 183,
+                "totalWithCache": 18551
+              },
+              {
+                "gapSeconds": 9,
+                "input": 184,
+                "output": 86,
+                "reasoning": 0,
+                "cacheRead": 18432,
+                "cacheWrite": 0,
+                "totalModel": 270,
+                "totalWithCache": 18702
+              },
+              {
+                "gapSeconds": 8,
+                "input": 205,
+                "output": 82,
+                "reasoning": 0,
+                "cacheRead": 18560,
+                "cacheWrite": 0,
+                "totalModel": 287,
+                "totalWithCache": 18847
+              },
+              {
+                "gapSeconds": 16,
+                "input": 153,
+                "output": 236,
+                "reasoning": 88,
+                "cacheRead": 18752,
+                "cacheWrite": 0,
+                "totalModel": 477,
+                "totalWithCache": 19229
+              },
+              {
+                "gapSeconds": 10,
+                "input": 595,
+                "output": 116,
+                "reasoning": 34,
+                "cacheRead": 18880,
+                "cacheWrite": 0,
+                "totalModel": 745,
+                "totalWithCache": 19625
+              },
+              {
+                "gapSeconds": 4,
+                "input": 0,
+                "output": 0,
+                "reasoning": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 0,
+                "totalWithCache": 0
+              }
+            ]
+          },
+          "toolCalls": 21,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 7,
+            "totalChecks": 7,
+            "checks": {
+              "file:src/models/order.ts": {
+                "passed": true,
+                "detail": "exists"
+              },
+              "file:src/api/handlers.ts": {
+                "passed": true,
+                "detail": "exists"
+              },
+              "pattern:grandTotal in model": {
+                "passed": true,
+                "detail": "src/models/order.ts: found 2"
+              },
+              "pattern:payload keeps total key": {
+                "passed": true,
+                "detail": "src/api/handlers.ts: found 6"
+              },
+              "pattern:no legacy totalAmount anywhere": {
+                "passed": true,
+                "detail": "clean"
+              },
+              "behavior:verifier": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:smoke-test": {
+                "passed": true,
+                "detail": "ok"
+              }
+            }
+          },
+          "finalMessage": ""
+        },
+        {
+          "index": 2,
+          "slug": "feature-discount-end-to-end",
+          "title": "Thread discount codes through the entire stack",
+          "success": true,
+          "attempts": 3,
+          "firstAttemptSuccess": false,
+          "repaired": true,
+          "agentDurationMs": 232037,
+          "endToEndDurationMs": 232037,
+          "usage": {
+            "input": 13409,
+            "output": 5011,
+            "reasoning": 1707,
+            "cacheRead": 330240,
+            "cacheWrite": 0,
+            "totalModel": 20127,
+            "totalWithCache": 350367,
+            "eventCount": 14,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 0,
+                "output": 0,
+                "reasoning": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 0,
+                "totalWithCache": 0
+              },
+              {
+                "gapSeconds": 2,
+                "input": 0,
+                "output": 0,
+                "reasoning": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 0,
+                "totalWithCache": 0
+              },
+              {
+                "gapSeconds": 11,
+                "input": 3352,
+                "output": 131,
+                "reasoning": 21,
+                "cacheRead": 19456,
+                "cacheWrite": 0,
+                "totalModel": 3504,
+                "totalWithCache": 22960
+              },
+              {
+                "gapSeconds": 8,
+                "input": 905,
+                "output": 50,
+                "reasoning": 0,
+                "cacheRead": 22784,
+                "cacheWrite": 0,
+                "totalModel": 955,
+                "totalWithCache": 23739
+              },
+              {
+                "gapSeconds": 119,
+                "input": 698,
+                "output": 2351,
+                "reasoning": 1618,
+                "cacheRead": 23680,
+                "cacheWrite": 0,
+                "totalModel": 4667,
+                "totalWithCache": 28347
+              },
+              {
+                "gapSeconds": 16,
+                "input": 4222,
+                "output": 734,
+                "reasoning": 9,
+                "cacheRead": 24320,
+                "cacheWrite": 0,
+                "totalModel": 4965,
+                "totalWithCache": 29285
+              },
+              {
+                "gapSeconds": 8,
+                "input": 813,
+                "output": 210,
+                "reasoning": 0,
+                "cacheRead": 28480,
+                "cacheWrite": 0,
+                "totalModel": 1023,
+                "totalWithCache": 29503
+              },
+              {
+                "gapSeconds": 10,
+                "input": 263,
+                "output": 341,
+                "reasoning": 0,
+                "cacheRead": 29248,
+                "cacheWrite": 0,
+                "totalModel": 604,
+                "totalWithCache": 29852
+              },
+              {
+                "gapSeconds": 5,
+                "input": 356,
+                "output": 134,
+                "reasoning": 0,
+                "cacheRead": 29504,
+                "cacheWrite": 0,
+                "totalModel": 490,
+                "totalWithCache": 29994
+              },
+              {
+                "gapSeconds": 10,
+                "input": 178,
+                "output": 229,
+                "reasoning": 0,
+                "cacheRead": 29824,
+                "cacheWrite": 0,
+                "totalModel": 407,
+                "totalWithCache": 30231
+              },
+              {
+                "gapSeconds": 3,
+                "input": 287,
+                "output": 52,
+                "reasoning": 0,
+                "cacheRead": 29952,
+                "cacheWrite": 0,
+                "totalModel": 339,
+                "totalWithCache": 30291
+              },
+              {
+                "gapSeconds": 13,
+                "input": 1127,
+                "output": 228,
+                "reasoning": 38,
+                "cacheRead": 30208,
+                "cacheWrite": 0,
+                "totalModel": 1393,
+                "totalWithCache": 31601
+              },
+              {
+                "gapSeconds": 13,
+                "input": 231,
+                "output": 473,
+                "reasoning": 0,
+                "cacheRead": 31296,
+                "cacheWrite": 0,
+                "totalModel": 704,
+                "totalWithCache": 32000
+              },
+              {
+                "gapSeconds": 9,
+                "input": 977,
+                "output": 78,
+                "reasoning": 21,
+                "cacheRead": 31488,
+                "cacheWrite": 0,
+                "totalModel": 1076,
+                "totalWithCache": 32564
+              }
+            ]
+          },
+          "toolCalls": 15,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 8,
+            "totalChecks": 8,
+            "checks": {
+              "file:src/services/pricing.ts": {
+                "passed": true,
+                "detail": "exists"
+              },
+              "file:src/cli/parse.ts": {
+                "passed": true,
+                "detail": "exists"
+              },
+              "pattern:discount in pricing": {
+                "passed": true,
+                "detail": "src/services/pricing.ts: found 6"
+              },
+              "pattern:discount flag in cli": {
+                "passed": true,
+                "detail": "src/cli/parse.ts: found 3"
+              },
+              "pattern:handler surfaces discount": {
+                "passed": true,
+                "detail": "src/api/handlers.ts: found 6"
+              },
+              "pattern:no legacy totalAmount anywhere": {
+                "passed": true,
+                "detail": "clean"
+              },
+              "behavior:verifier": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:smoke-test": {
+                "passed": true,
+                "detail": "ok"
+              }
+            }
+          },
+          "finalMessage": ""
+        },
+        {
+          "index": 3,
+          "slug": "fix-idempotent-renewal",
+          "title": "Fix double-billing on rapid subscription renewals",
+          "success": true,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "agentDurationMs": 85788,
+          "endToEndDurationMs": 85788,
+          "usage": {
+            "input": 4612,
+            "output": 2226,
+            "reasoning": 577,
+            "cacheRead": 173376,
+            "cacheWrite": 0,
+            "totalModel": 7415,
+            "totalWithCache": 180791,
+            "eventCount": 5,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 1097,
+                "output": 101,
+                "reasoning": 11,
+                "cacheRead": 32448,
+                "cacheWrite": 0,
+                "totalModel": 1209,
+                "totalWithCache": 33657
+              },
+              {
+                "gapSeconds": 46,
+                "input": 968,
+                "output": 1195,
+                "reasoning": 512,
+                "cacheRead": 33536,
+                "cacheWrite": 0,
+                "totalModel": 2675,
+                "totalWithCache": 36211
+              },
+              {
+                "gapSeconds": 11,
+                "input": 1724,
+                "output": 535,
+                "reasoning": 0,
+                "cacheRead": 34496,
+                "cacheWrite": 0,
+                "totalModel": 2259,
+                "totalWithCache": 36755
+              },
+              {
+                "gapSeconds": 5,
+                "input": 609,
+                "output": 94,
+                "reasoning": 0,
+                "cacheRead": 36160,
+                "cacheWrite": 0,
+                "totalModel": 703,
+                "totalWithCache": 36863
+              },
+              {
+                "gapSeconds": 12,
+                "input": 214,
+                "output": 301,
+                "reasoning": 54,
+                "cacheRead": 36736,
+                "cacheWrite": 0,
+                "totalModel": 569,
+                "totalWithCache": 37305
+              }
+            ]
+          },
+          "toolCalls": 6,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 5,
+            "totalChecks": 5,
+            "checks": {
+              "file:src/services/renewal.ts": {
+                "passed": true,
+                "detail": "exists"
+              },
+              "pattern:renewal touched": {
+                "passed": true,
+                "detail": "src/services/renewal.ts: found 5"
+              },
+              "pattern:no legacy totalAmount anywhere": {
+                "passed": true,
+                "detail": "clean"
+              },
+              "behavior:verifier": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:smoke-test": {
+                "passed": true,
+                "detail": "ok"
+              }
+            }
+          },
+          "finalMessage": ""
+        },
+        {
+          "index": 4,
+          "slug": "consolidate-money-rounding",
+          "title": "Consolidate duplicated rounding into one util",
+          "success": true,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "agentDurationMs": 134780,
+          "endToEndDurationMs": 134780,
+          "usage": {
+            "input": 5381,
+            "output": 2024,
+            "reasoning": 114,
+            "cacheRead": 515072,
+            "cacheWrite": 0,
+            "totalModel": 7519,
+            "totalWithCache": 522591,
+            "eventCount": 13,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 1406,
+                "output": 82,
+                "reasoning": 27,
+                "cacheRead": 36928,
+                "cacheWrite": 0,
+                "totalModel": 1515,
+                "totalWithCache": 38443
+              },
+              {
+                "gapSeconds": 12,
+                "input": 526,
+                "output": 275,
+                "reasoning": 43,
+                "cacheRead": 38272,
+                "cacheWrite": 0,
+                "totalModel": 844,
+                "totalWithCache": 39116
+              },
+              {
+                "gapSeconds": 7,
+                "input": 340,
+                "output": 73,
+                "reasoning": 0,
+                "cacheRead": 38784,
+                "cacheWrite": 0,
+                "totalModel": 413,
+                "totalWithCache": 39197
+              },
+              {
+                "gapSeconds": 8,
+                "input": 101,
+                "output": 135,
+                "reasoning": 0,
+                "cacheRead": 39104,
+                "cacheWrite": 0,
+                "totalModel": 236,
+                "totalWithCache": 39340
+              },
+              {
+                "gapSeconds": 9,
+                "input": 180,
+                "output": 183,
+                "reasoning": 0,
+                "cacheRead": 39168,
+                "cacheWrite": 0,
+                "totalModel": 363,
+                "totalWithCache": 39531
+              },
+              {
+                "gapSeconds": 3,
+                "input": 243,
+                "output": 95,
+                "reasoning": 0,
+                "cacheRead": 39296,
+                "cacheWrite": 0,
+                "totalModel": 338,
+                "totalWithCache": 39634
+              },
+              {
+                "gapSeconds": 8,
+                "input": 154,
+                "output": 122,
+                "reasoning": 0,
+                "cacheRead": 39488,
+                "cacheWrite": 0,
+                "totalModel": 276,
+                "totalWithCache": 39764
+              },
+              {
+                "gapSeconds": 7,
+                "input": 156,
+                "output": 62,
+                "reasoning": 0,
+                "cacheRead": 39616,
+                "cacheWrite": 0,
+                "totalModel": 218,
+                "totalWithCache": 39834
+              },
+              {
+                "gapSeconds": 9,
+                "input": 922,
+                "output": 66,
+                "reasoning": 13,
+                "cacheRead": 39744,
+                "cacheWrite": 0,
+                "totalModel": 1001,
+                "totalWithCache": 40745
+              },
+              {
+                "gapSeconds": 14,
+                "input": 320,
+                "output": 383,
+                "reasoning": 0,
+                "cacheRead": 40640,
+                "cacheWrite": 0,
+                "totalModel": 703,
+                "totalWithCache": 41343
+              },
+              {
+                "gapSeconds": 8,
+                "input": 506,
+                "output": 185,
+                "reasoning": 31,
+                "cacheRead": 40960,
+                "cacheWrite": 0,
+                "totalModel": 722,
+                "totalWithCache": 41682
+              },
+              {
+                "gapSeconds": 19,
+                "input": 287,
+                "output": 108,
+                "reasoning": 0,
+                "cacheRead": 41408,
+                "cacheWrite": 0,
+                "totalModel": 395,
+                "totalWithCache": 41803
+              },
+              {
+                "gapSeconds": 21,
+                "input": 240,
+                "output": 255,
+                "reasoning": 0,
+                "cacheRead": 41664,
+                "cacheWrite": 0,
+                "totalModel": 495,
+                "totalWithCache": 42159
+              }
+            ]
+          },
+          "toolCalls": 14,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 7,
+            "totalChecks": 7,
+            "checks": {
+              "file:src/util/money.ts": {
+                "passed": true,
+                "detail": "exists"
+              },
+              "pattern:util exports roundMoney": {
+                "passed": true,
+                "detail": "src/util/money.ts: found 1"
+              },
+              "pattern:pricing imports util": {
+                "passed": true,
+                "detail": "src/services/pricing.ts: found 1"
+              },
+              "pattern:billing imports util": {
+                "passed": true,
+                "detail": "src/services/billing.ts: found 1"
+              },
+              "pattern:no legacy totalAmount anywhere": {
+                "passed": true,
+                "detail": "clean"
+              },
+              "behavior:verifier": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:smoke-test": {
+                "passed": true,
+                "detail": "ok"
+              }
+            }
+          },
+          "finalMessage": ""
+        },
+        {
+          "index": 5,
+          "slug": "ordering-audit-before-notify",
+          "title": "Guarantee audit-first ordering and resilient notifications",
+          "success": true,
+          "attempts": 3,
+          "firstAttemptSuccess": false,
+          "repaired": true,
+          "agentDurationMs": 397662,
+          "endToEndDurationMs": 397662,
+          "usage": {
+            "input": 18399,
+            "output": 7705,
+            "reasoning": 2571,
+            "cacheRead": 1253632,
+            "cacheWrite": 0,
+            "totalModel": 28675,
+            "totalWithCache": 1282307,
+            "eventCount": 25,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 1341,
+                "output": 149,
+                "reasoning": 39,
+                "cacheRead": 41856,
+                "cacheWrite": 0,
+                "totalModel": 1529,
+                "totalWithCache": 43385
+              },
+              {
+                "gapSeconds": 3,
+                "input": 767,
+                "output": 27,
+                "reasoning": 0,
+                "cacheRead": 43136,
+                "cacheWrite": 0,
+                "totalModel": 794,
+                "totalWithCache": 43930
+              },
+              {
+                "gapSeconds": 26,
+                "input": 301,
+                "output": 822,
+                "reasoning": 271,
+                "cacheRead": 43840,
+                "cacheWrite": 0,
+                "totalModel": 1394,
+                "totalWithCache": 45234
+              },
+              {
+                "gapSeconds": 21,
+                "input": 1146,
+                "output": 159,
+                "reasoning": 0,
+                "cacheRead": 44096,
+                "cacheWrite": 0,
+                "totalModel": 1305,
+                "totalWithCache": 45401
+              },
+              {
+                "gapSeconds": 7,
+                "input": 225,
+                "output": 208,
+                "reasoning": 0,
+                "cacheRead": 45184,
+                "cacheWrite": 0,
+                "totalModel": 433,
+                "totalWithCache": 45617
+              },
+              {
+                "gapSeconds": 15,
+                "input": 249,
+                "output": 405,
+                "reasoning": 26,
+                "cacheRead": 45376,
+                "cacheWrite": 0,
+                "totalModel": 680,
+                "totalWithCache": 46056
+              },
+              {
+                "gapSeconds": 5,
+                "input": 500,
+                "output": 119,
+                "reasoning": 0,
+                "cacheRead": 45568,
+                "cacheWrite": 0,
+                "totalModel": 619,
+                "totalWithCache": 46187
+              },
+              {
+                "gapSeconds": 10,
+                "input": 506,
+                "output": 215,
+                "reasoning": 0,
+                "cacheRead": 46016,
+                "cacheWrite": 0,
+                "totalModel": 721,
+                "totalWithCache": 46737
+              },
+              {
+                "gapSeconds": 55,
+                "input": 848,
+                "output": 1006,
+                "reasoning": 747,
+                "cacheRead": 46464,
+                "cacheWrite": 0,
+                "totalModel": 2601,
+                "totalWithCache": 49065
+              },
+              {
+                "gapSeconds": 7,
+                "input": 1807,
+                "output": 193,
+                "reasoning": 30,
+                "cacheRead": 47296,
+                "cacheWrite": 0,
+                "totalModel": 2030,
+                "totalWithCache": 49326
+              },
+              {
+                "gapSeconds": 11,
+                "input": 246,
+                "output": 360,
+                "reasoning": 0,
+                "cacheRead": 49088,
+                "cacheWrite": 0,
+                "totalModel": 606,
+                "totalWithCache": 49694
+              },
+              {
+                "gapSeconds": 16,
+                "input": 422,
+                "output": 416,
+                "reasoning": 0,
+                "cacheRead": 49280,
+                "cacheWrite": 0,
+                "totalModel": 838,
+                "totalWithCache": 50118
+              },
+              {
+                "gapSeconds": 4,
+                "input": 518,
+                "output": 97,
+                "reasoning": 0,
+                "cacheRead": 49664,
+                "cacheWrite": 0,
+                "totalModel": 615,
+                "totalWithCache": 50279
+              },
+              {
+                "gapSeconds": 14,
+                "input": 134,
+                "output": 220,
+                "reasoning": 0,
+                "cacheRead": 50176,
+                "cacheWrite": 0,
+                "totalModel": 354,
+                "totalWithCache": 50530
+              },
+              {
+                "gapSeconds": 66,
+                "input": 605,
+                "output": 1017,
+                "reasoning": 942,
+                "cacheRead": 50304,
+                "cacheWrite": 0,
+                "totalModel": 2564,
+                "totalWithCache": 52868
+              },
+              {
+                "gapSeconds": 10,
+                "input": 2045,
+                "output": 73,
+                "reasoning": 6,
+                "cacheRead": 50880,
+                "cacheWrite": 0,
+                "totalModel": 2124,
+                "totalWithCache": 53004
+              },
+              {
+                "gapSeconds": 7,
+                "input": 301,
+                "output": 86,
+                "reasoning": 0,
+                "cacheRead": 52864,
+                "cacheWrite": 0,
+                "totalModel": 387,
+                "totalWithCache": 53251
+              },
+              {
+                "gapSeconds": 13,
+                "input": 1180,
+                "output": 122,
+                "reasoning": 51,
+                "cacheRead": 53120,
+                "cacheWrite": 0,
+                "totalModel": 1353,
+                "totalWithCache": 54473
+              },
+              {
+                "gapSeconds": 8,
+                "input": 554,
+                "output": 46,
+                "reasoning": 0,
+                "cacheRead": 54272,
+                "cacheWrite": 0,
+                "totalModel": 600,
+                "totalWithCache": 54872
+              },
+              {
+                "gapSeconds": 8,
+                "input": 1743,
+                "output": 59,
+                "reasoning": 11,
+                "cacheRead": 54784,
+                "cacheWrite": 0,
+                "totalModel": 1813,
+                "totalWithCache": 56597
+              },
+              {
+                "gapSeconds": 46,
+                "input": 648,
+                "output": 1118,
+                "reasoning": 448,
+                "cacheRead": 56512,
+                "cacheWrite": 0,
+                "totalModel": 2214,
+                "totalWithCache": 58726
+              },
+              {
+                "gapSeconds": 7,
+                "input": 1582,
+                "output": 109,
+                "reasoning": 0,
+                "cacheRead": 57152,
+                "cacheWrite": 0,
+                "totalModel": 1691,
+                "totalWithCache": 58843
+              },
+              {
+                "gapSeconds": 12,
+                "input": 163,
+                "output": 358,
+                "reasoning": 0,
+                "cacheRead": 58688,
+                "cacheWrite": 0,
+                "totalModel": 521,
+                "totalWithCache": 59209
+              },
+              {
+                "gapSeconds": 8,
+                "input": 412,
+                "output": 97,
+                "reasoning": 0,
+                "cacheRead": 58816,
+                "cacheWrite": 0,
+                "totalModel": 509,
+                "totalWithCache": 59325
+              },
+              {
+                "gapSeconds": 13,
+                "input": 156,
+                "output": 224,
+                "reasoning": 0,
+                "cacheRead": 59200,
+                "cacheWrite": 0,
+                "totalModel": 380,
+                "totalWithCache": 59580
+              }
+            ]
+          },
+          "toolCalls": 24,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 6,
+            "totalChecks": 6,
+            "checks": {
+              "file:src/services/checkout.ts": {
+                "passed": true,
+                "detail": "exists"
+              },
+              "pattern:try around notify": {
+                "passed": true,
+                "detail": "src/services/checkout.ts: found 2"
+              },
+              "pattern:still appends audit": {
+                "passed": true,
+                "detail": "src/services/checkout.ts: found 2"
+              },
+              "pattern:no legacy totalAmount anywhere": {
+                "passed": true,
+                "detail": "clean"
+              },
+              "behavior:verifier": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:smoke-test": {
+                "passed": true,
+                "detail": "ok"
+              }
+            }
+          },
+          "finalMessage": ""
+        }
+      ],
+      "finalSessionUsage": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalModel": 0,
+        "totalWithCache": 0
+      },
+      "errors": []
+    }
+  },
+  "summary": {
+    "opencode": {
+      "tasks": 5,
+      "successes": 3,
+      "firstAttemptSuccesses": 3,
+      "repairedTasks": 0,
+      "totalAgentDurationMs": 1260694,
+      "medianAgentDurationMs": 183542,
+      "uncachedInput": 84454,
+      "cacheRead": 3599808,
+      "totalModelTokens": 124519,
+      "cacheShare": 0.9770770916943474,
+      "adjustedCacheShare": 0.9770770916943474,
+      "toolCalls": 108,
+      "passedChecks": 31,
+      "totalChecks": 33,
+      "errors": []
+    },
+    "cuppet": {
+      "tasks": 5,
+      "successes": 5,
+      "firstAttemptSuccesses": 3,
+      "repairedTasks": 2,
+      "totalAgentDurationMs": 1000981,
+      "medianAgentDurationMs": 150714,
+      "uncachedInput": 76918,
+      "cacheRead": 2535168,
+      "totalModelTokens": 100756,
+      "cacheShare": 0.970553036921449,
+      "adjustedCacheShare": 0.970553036921449,
+      "toolCalls": 80,
+      "passedChecks": 33,
+      "totalChecks": 33,
+      "errors": []
+    },
+    "comparison": {
+      "successDelta": 2,
+      "timeReduction": 0.206007960694665,
+      "medianTimeReduction": 0.17885824497935077,
+      "uncachedInputReduction": 0.08923200795699435,
+      "totalTokenReduction": 0.19083834595523574,
+      "toolCallReduction": 0.25925925925925924,
+      "cacheShareDelta": -0.006524054772898413,
+      "checkDelta": 2
+    }
+  }
+}

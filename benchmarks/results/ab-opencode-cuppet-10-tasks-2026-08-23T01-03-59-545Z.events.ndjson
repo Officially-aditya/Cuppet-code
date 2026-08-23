@@ -1,0 +1,58 @@
+{"at":"2026-08-23T01:03:59.545Z","event":"fixture-created"}
+{"at":"2026-08-23T01:04:00.769Z","event":"opencode-runtime-created"}
+{"at":"2026-08-23T01:04:00.772Z","event":"opencode-session-created"}
+{"at":"2026-08-23T01:04:06.187Z","event":"cuppet-runtime-created"}
+{"at":"2026-08-23T01:04:06.190Z","event":"cuppet-session-created"}
+{"at":"2026-08-23T01:04:06.202Z","event":"cuppet-landing-page-prompt-started"}
+{"at":"2026-08-23T01:04:06.242Z","event":"opencode-landing-page-prompt-started"}
+{"at":"2026-08-23T01:05:23.281Z","event":"cuppet-landing-page-repair-needed"}
+{"at":"2026-08-23T01:05:23.289Z","event":"cuppet-landing-page-repair-started"}
+{"at":"2026-08-23T01:11:49.306Z","event":"opencode-landing-page-evaluated"}
+{"at":"2026-08-23T01:11:49.313Z","event":"opencode-landing-page-completed"}
+{"at":"2026-08-23T01:12:17.851Z","event":"cuppet-landing-page-evaluated"}
+{"at":"2026-08-23T01:12:17.853Z","event":"cuppet-landing-page-completed"}
+{"at":"2026-08-23T01:12:17.860Z","event":"cuppet-todo-list-app-prompt-started"}
+{"at":"2026-08-23T01:12:17.870Z","event":"opencode-todo-list-app-prompt-started"}
+{"at":"2026-08-23T01:17:14.588Z","event":"cuppet-todo-list-app-evaluated"}
+{"at":"2026-08-23T01:17:14.593Z","event":"cuppet-todo-list-app-completed"}
+{"at":"2026-08-23T01:19:32.713Z","event":"opencode-todo-list-app-evaluated"}
+{"at":"2026-08-23T01:19:32.716Z","event":"opencode-todo-list-app-completed"}
+{"at":"2026-08-23T01:19:32.721Z","event":"opencode-calculator-web-app-prompt-started"}
+{"at":"2026-08-23T01:19:32.737Z","event":"cuppet-calculator-web-app-prompt-started"}
+{"at":"2026-08-23T01:27:16.228Z","event":"opencode-calculator-web-app-evaluated"}
+{"at":"2026-08-23T01:27:16.233Z","event":"opencode-calculator-web-app-completed"}
+{"at":"2026-08-23T01:27:17.983Z","event":"cuppet-calculator-web-app-evaluated"}
+{"at":"2026-08-23T01:27:17.985Z","event":"cuppet-calculator-web-app-completed"}
+{"at":"2026-08-23T01:27:17.991Z","event":"cuppet-survey-form-prompt-started"}
+{"at":"2026-08-23T01:27:17.994Z","event":"opencode-survey-form-prompt-started"}
+{"at":"2026-08-23T01:28:29.282Z","event":"opencode-survey-form-repair-needed"}
+{"at":"2026-08-23T01:28:29.297Z","event":"opencode-survey-form-repair-started"}
+{"at":"2026-08-23T01:44:38.591Z","event":"opencode-survey-form-evaluated","error":"opencode/survey-form timed out"}
+{"at":"2026-08-23T01:44:38.597Z","event":"opencode-survey-form-completed"}
+{"at":"2026-08-23T01:44:38.637Z","event":"cuppet-survey-form-evaluated","error":"cuppet/survey-form timed out"}
+{"at":"2026-08-23T01:44:38.644Z","event":"cuppet-survey-form-completed"}
+{"at":"2026-08-23T01:44:38.704Z","event":"opencode-personal-blog-prompt-started"}
+{"at":"2026-08-23T01:44:38.704Z","event":"cuppet-personal-blog-prompt-started"}
+{"at":"2026-08-23T02:04:22.674Z","event":"opencode-personal-blog-evaluated","error":"opencode/personal-blog timed out"}
+{"at":"2026-08-23T02:04:22.674Z","event":"cuppet-personal-blog-evaluated","error":"cuppet/personal-blog timed out"}
+{"at":"2026-08-23T02:04:22.677Z","event":"opencode-personal-blog-completed"}
+{"at":"2026-08-23T02:04:22.677Z","event":"cuppet-personal-blog-completed"}
+{"at":"2026-08-23T02:04:22.685Z","event":"opencode-business-portfolio-prompt-started"}
+{"at":"2026-08-23T02:04:22.685Z","event":"cuppet-business-portfolio-prompt-started"}
+{"at":"2026-08-23T02:29:28.339Z","event":"cuppet-business-portfolio-evaluated","error":"cuppet/business-portfolio timed out"}
+{"at":"2026-08-23T02:29:28.339Z","event":"opencode-business-portfolio-evaluated","error":"opencode/business-portfolio timed out"}
+{"at":"2026-08-23T02:29:28.352Z","event":"opencode-business-portfolio-completed"}
+{"at":"2026-08-23T02:29:28.352Z","event":"cuppet-business-portfolio-completed"}
+{"at":"2026-08-23T02:29:28.361Z","event":"opencode-quiz-game-prompt-started"}
+{"at":"2026-08-23T02:29:28.361Z","event":"cuppet-quiz-game-prompt-started"}
+{"at":"2026-08-23T02:47:09.849Z","event":"opencode-quiz-game-evaluated","error":"opencode/quiz-game timed out"}
+{"at":"2026-08-23T02:47:09.858Z","event":"cuppet-quiz-game-evaluated","error":"cuppet/quiz-game timed out"}
+{"at":"2026-08-23T02:47:09.866Z","event":"opencode-quiz-game-completed"}
+{"at":"2026-08-23T02:47:09.866Z","event":"cuppet-quiz-game-completed"}
+{"at":"2026-08-23T02:47:09.877Z","event":"opencode-meme-generator-prompt-started"}
+{"at":"2026-08-23T02:47:09.877Z","event":"cuppet-meme-generator-prompt-started"}
+{"at":"2026-08-23T03:04:59.654Z","event":"cuppet-meme-generator-evaluated","error":"cuppet/meme-generator timed out"}
+{"at":"2026-08-23T03:04:59.663Z","event":"opencode-meme-generator-evaluated","error":"opencode/meme-generator timed out"}
+{"at":"2026-08-23T03:04:59.668Z","event":"cuppet-meme-generator-completed"}
+{"at":"2026-08-23T03:04:59.668Z","event":"opencode-meme-generator-completed"}
+{"at":"2026-08-23T03:04:59.671Z","event":"benchmark-completed"}

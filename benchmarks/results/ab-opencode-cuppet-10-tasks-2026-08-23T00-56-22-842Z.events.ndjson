@@ -1,0 +1,14 @@
+{"at":"2026-08-23T00:56:22.842Z","event":"fixture-created"}
+{"at":"2026-08-23T00:56:24.117Z","event":"opencode-runtime-created"}
+{"at":"2026-08-23T00:56:24.119Z","event":"opencode-session-created"}
+{"at":"2026-08-23T00:56:34.964Z","event":"cuppet-runtime-created"}
+{"at":"2026-08-23T00:56:34.966Z","event":"cuppet-session-created"}
+{"at":"2026-08-23T00:56:34.976Z","event":"cuppet-landing-page-prompt-started"}
+{"at":"2026-08-23T00:56:35.007Z","event":"opencode-landing-page-prompt-started"}
+{"at":"2026-08-23T00:58:41.161Z","event":"cuppet-landing-page-repair-needed"}
+{"at":"2026-08-23T00:58:41.167Z","event":"cuppet-landing-page-repair-started"}
+{"at":"2026-08-23T01:02:32.029Z","event":"opencode-landing-page-evaluated"}
+{"at":"2026-08-23T01:02:32.035Z","event":"opencode-landing-page-completed"}
+{"at":"2026-08-23T01:02:49.803Z","event":"cuppet-landing-page-evaluated"}
+{"at":"2026-08-23T01:02:49.805Z","event":"cuppet-landing-page-completed"}
+{"at":"2026-08-23T01:02:49.808Z","event":"benchmark-completed"}

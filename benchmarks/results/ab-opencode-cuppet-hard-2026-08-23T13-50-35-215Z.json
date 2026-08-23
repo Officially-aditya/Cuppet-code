@@ -1,0 +1,404 @@
+{
+  "schema": 1,
+  "createdAt": "2026-08-23T15:05:42.788Z",
+  "model": {
+    "providerID": "openai",
+    "modelID": "gpt-5.6-luna",
+    "variant": "low"
+  },
+  "fixtureFiles": 22,
+  "fixtureHash": "435a99496a598928083a53c0246a01fba3b389c7b66f9a27f4d19d5def6bf25c",
+  "artifacts": "/private/tmp/cuppet-hard-9PHmx3",
+  "arms": {
+    "opencode": {
+      "arm": "opencode",
+      "workspace": "/private/tmp/cuppet-hard-9PHmx3/opencode/workspace",
+      "sessionID": "ses_fd11ccf4affeA5I5fz5BVt6fZa",
+      "tasks": [
+        {
+          "index": 1,
+          "slug": "deep-rename-grand-total",
+          "title": "Rename internal total without changing the wire format",
+          "success": false,
+          "attempts": 1,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "agentDurationMs": 900158,
+          "endToEndDurationMs": 900158,
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0,
+            "eventCount": 0,
+            "cost": 0
+          },
+          "toolCalls": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 0,
+            "totalChecks": 0,
+            "checks": {}
+          },
+          "finalMessage": "",
+          "error": "opencode/deep-rename-grand-total timed out"
+        },
+        {
+          "index": 2,
+          "slug": "feature-discount-end-to-end",
+          "title": "Thread discount codes through the entire stack",
+          "success": false,
+          "attempts": 1,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "agentDurationMs": 900124,
+          "endToEndDurationMs": 900124,
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0,
+            "eventCount": 0,
+            "cost": 0
+          },
+          "toolCalls": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 0,
+            "totalChecks": 0,
+            "checks": {}
+          },
+          "finalMessage": "",
+          "error": "opencode/feature-discount-end-to-end timed out"
+        },
+        {
+          "index": 3,
+          "slug": "fix-idempotent-renewal",
+          "title": "Fix double-billing on rapid subscription renewals",
+          "success": false,
+          "attempts": 1,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "agentDurationMs": 900124,
+          "endToEndDurationMs": 900124,
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0,
+            "eventCount": 0,
+            "cost": 0
+          },
+          "toolCalls": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 0,
+            "totalChecks": 0,
+            "checks": {}
+          },
+          "finalMessage": "",
+          "error": "opencode/fix-idempotent-renewal timed out"
+        },
+        {
+          "index": 4,
+          "slug": "consolidate-money-rounding",
+          "title": "Consolidate duplicated rounding into one util",
+          "success": false,
+          "attempts": 1,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "agentDurationMs": 900099,
+          "endToEndDurationMs": 900099,
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0,
+            "eventCount": 0,
+            "cost": 0
+          },
+          "toolCalls": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 0,
+            "totalChecks": 0,
+            "checks": {}
+          },
+          "finalMessage": "",
+          "error": "opencode/consolidate-money-rounding timed out"
+        },
+        {
+          "index": 5,
+          "slug": "ordering-audit-before-notify",
+          "title": "Guarantee audit-first ordering and resilient notifications",
+          "success": false,
+          "attempts": 1,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "agentDurationMs": 900108,
+          "endToEndDurationMs": 900108,
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0,
+            "eventCount": 0,
+            "cost": 0
+          },
+          "toolCalls": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 0,
+            "totalChecks": 0,
+            "checks": {}
+          },
+          "finalMessage": "",
+          "error": "opencode/ordering-audit-before-notify timed out"
+        }
+      ],
+      "finalSessionUsage": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalModel": 0,
+        "totalWithCache": 0
+      },
+      "errors": []
+    },
+    "cuppet": {
+      "arm": "cuppet",
+      "workspace": "/private/tmp/cuppet-hard-9PHmx3/cuppet/workspace",
+      "sessionID": "ses_fd11cb8ceffeHqBSGHJ0jRtMYP",
+      "tasks": [
+        {
+          "index": 1,
+          "slug": "deep-rename-grand-total",
+          "title": "Rename internal total without changing the wire format",
+          "success": false,
+          "attempts": 1,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "agentDurationMs": 900160,
+          "endToEndDurationMs": 900160,
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0,
+            "eventCount": 0,
+            "cost": 0
+          },
+          "toolCalls": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 0,
+            "totalChecks": 0,
+            "checks": {}
+          },
+          "finalMessage": "",
+          "error": "cuppet/deep-rename-grand-total timed out"
+        },
+        {
+          "index": 2,
+          "slug": "feature-discount-end-to-end",
+          "title": "Thread discount codes through the entire stack",
+          "success": false,
+          "attempts": 1,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "agentDurationMs": 900127,
+          "endToEndDurationMs": 900127,
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0,
+            "eventCount": 0,
+            "cost": 0
+          },
+          "toolCalls": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 0,
+            "totalChecks": 0,
+            "checks": {}
+          },
+          "finalMessage": "",
+          "error": "cuppet/feature-discount-end-to-end timed out"
+        },
+        {
+          "index": 3,
+          "slug": "fix-idempotent-renewal",
+          "title": "Fix double-billing on rapid subscription renewals",
+          "success": false,
+          "attempts": 1,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "agentDurationMs": 900122,
+          "endToEndDurationMs": 900122,
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0,
+            "eventCount": 0,
+            "cost": 0
+          },
+          "toolCalls": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 0,
+            "totalChecks": 0,
+            "checks": {}
+          },
+          "finalMessage": "",
+          "error": "cuppet/fix-idempotent-renewal timed out"
+        },
+        {
+          "index": 4,
+          "slug": "consolidate-money-rounding",
+          "title": "Consolidate duplicated rounding into one util",
+          "success": false,
+          "attempts": 1,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "agentDurationMs": 900098,
+          "endToEndDurationMs": 900098,
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0,
+            "eventCount": 0,
+            "cost": 0
+          },
+          "toolCalls": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 0,
+            "totalChecks": 0,
+            "checks": {}
+          },
+          "finalMessage": "",
+          "error": "cuppet/consolidate-money-rounding timed out"
+        },
+        {
+          "index": 5,
+          "slug": "ordering-audit-before-notify",
+          "title": "Guarantee audit-first ordering and resilient notifications",
+          "success": false,
+          "attempts": 1,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "agentDurationMs": 900110,
+          "endToEndDurationMs": 900110,
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0,
+            "eventCount": 0,
+            "cost": 0
+          },
+          "toolCalls": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 0,
+            "totalChecks": 0,
+            "checks": {}
+          },
+          "finalMessage": "",
+          "error": "cuppet/ordering-audit-before-notify timed out"
+        }
+      ],
+      "finalSessionUsage": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalModel": 0,
+        "totalWithCache": 0
+      },
+      "errors": []
+    }
+  },
+  "summary": {
+    "opencode": {
+      "tasks": 5,
+      "successes": 0,
+      "firstAttemptSuccesses": 0,
+      "repairedTasks": 0,
+      "totalAgentDurationMs": 4500613,
+      "medianAgentDurationMs": 900124,
+      "uncachedInput": 0,
+      "cacheRead": 0,
+      "totalModelTokens": 0,
+      "cacheShare": 0,
+      "adjustedCacheShare": 0,
+      "toolCalls": 0,
+      "passedChecks": 0,
+      "totalChecks": 0,
+      "errors": []
+    },
+    "cuppet": {
+      "tasks": 5,
+      "successes": 0,
+      "firstAttemptSuccesses": 0,
+      "repairedTasks": 0,
+      "totalAgentDurationMs": 4500617,
+      "medianAgentDurationMs": 900122,
+      "uncachedInput": 0,
+      "cacheRead": 0,
+      "totalModelTokens": 0,
+      "cacheShare": 0,
+      "adjustedCacheShare": 0,
+      "toolCalls": 0,
+      "passedChecks": 0,
+      "totalChecks": 0,
+      "errors": []
+    },
+    "comparison": {
+      "successDelta": 0,
+      "timeReduction": -8.887678189615503e-7,
+      "medianTimeReduction": 0.0000022219160915607183,
+      "uncachedInputReduction": 0,
+      "totalTokenReduction": 0,
+      "toolCallReduction": 0,
+      "cacheShareDelta": 0,
+      "checkDelta": 0
+    }
+  }
+}

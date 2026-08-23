@@ -1,0 +1,309 @@
+{
+  "schema": 1,
+  "createdAt": "2026-08-23T22:08:20.073Z",
+  "model": {
+    "providerID": "opencode",
+    "modelID": "x-preview-f-free"
+  },
+  "stages": [
+    "core-store",
+    "query-api",
+    "indexes",
+    "transactions",
+    "cli-repl",
+    "aggregation",
+    "schema-validation",
+    "durability-reload",
+    "pluggable-backends",
+    "atomic-batches"
+  ],
+  "artifacts": "/private/tmp/cuppet-marathon-Qsa937",
+  "arms": {
+    "opencode": {
+      "results": [
+        {
+          "index": 1,
+          "slug": "core-store",
+          "success": false,
+          "attempts": 1,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "regressions": [],
+          "agentDurationMs": 176788,
+          "usage": {
+            "input": 24632,
+            "output": 4931,
+            "reasoning": 1983,
+            "cacheRead": 51648,
+            "cacheWrite": 0,
+            "totalModel": 31546,
+            "totalWithCache": 83194,
+            "eventCount": 5,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 12283,
+                "output": 262,
+                "reasoning": 56,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 12601,
+                "totalWithCache": 12601
+              },
+              {
+                "gapSeconds": 3,
+                "input": 4921,
+                "output": 49,
+                "reasoning": 0,
+                "cacheRead": 7744,
+                "cacheWrite": 0,
+                "totalModel": 4970,
+                "totalWithCache": 12714
+              },
+              {
+                "gapSeconds": 113,
+                "input": 388,
+                "output": 3776,
+                "reasoning": 1574,
+                "cacheRead": 12608,
+                "cacheWrite": 0,
+                "totalModel": 5738,
+                "totalWithCache": 18346
+              },
+              {
+                "gapSeconds": 10,
+                "input": 5363,
+                "output": 129,
+                "reasoning": 29,
+                "cacheRead": 12992,
+                "cacheWrite": 0,
+                "totalModel": 5521,
+                "totalWithCache": 18513
+              },
+              {
+                "gapSeconds": 28,
+                "input": 1677,
+                "output": 715,
+                "reasoning": 324,
+                "cacheRead": 18304,
+                "cacheWrite": 0,
+                "totalModel": 2716,
+                "totalWithCache": 21020
+              }
+            ]
+          },
+          "toolCalls": 8,
+          "compactions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 0,
+            "totalChecks": 1,
+            "checks": {
+              "behavior:core-store": {
+                "passed": false,
+                "detail": "node:internal/modules/run_main:123 triggerUncaughtException( ^ AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal: + actual - expected [ { + _id: 'b92894bc-ba86-46f6-8db5-5e91aade28d7', - _id: 'u1', age: 30, name: 'a' } ] at <anonymous> (/Users/addy/Downloads/cuppet/benchmarks/results/verifier-tmp/core-store-010820a8.mjs:31:8) { generatedMessage: true, code: 'ERR_ASSERTION',"
+              }
+            },
+            "regressions": []
+          },
+          "error": "acceptance checks failed"
+        }
+      ],
+      "summary": {
+        "stagesCompleted": 1,
+        "successes": 0,
+        "firstAttemptSuccesses": 0,
+        "repairedStages": 0,
+        "regressionStages": 0,
+        "totalAgentDurationMs": 176788,
+        "uncachedInput": 24632,
+        "cacheRead": 51648,
+        "totalModelTokens": 31546,
+        "cacheShare": 0.6770844257996854,
+        "adjustedCacheShare": 0.6770844257996854,
+        "toolCalls": 8,
+        "compactions": 0,
+        "passedChecks": 0,
+        "totalChecks": 1,
+        "errors": []
+      }
+    },
+    "cuppet": {
+      "results": [
+        {
+          "index": 1,
+          "slug": "core-store",
+          "success": false,
+          "attempts": 1,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "regressions": [],
+          "agentDurationMs": 146635,
+          "usage": {
+            "input": 19516,
+            "output": 3161,
+            "reasoning": 1167,
+            "cacheRead": 96640,
+            "cacheWrite": 0,
+            "totalModel": 23844,
+            "totalWithCache": 120484,
+            "eventCount": 7,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 14558,
+                "output": 29,
+                "reasoning": 4,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 14591,
+                "totalWithCache": 14591
+              },
+              {
+                "gapSeconds": 7,
+                "input": 114,
+                "output": 29,
+                "reasoning": 5,
+                "cacheRead": 14528,
+                "cacheWrite": 0,
+                "totalModel": 148,
+                "totalWithCache": 14676
+              },
+              {
+                "gapSeconds": 8,
+                "input": 212,
+                "output": 49,
+                "reasoning": 0,
+                "cacheRead": 14592,
+                "cacheWrite": 0,
+                "totalModel": 261,
+                "totalWithCache": 14853
+              },
+              {
+                "gapSeconds": 84,
+                "input": 351,
+                "output": 2561,
+                "reasoning": 1043,
+                "cacheRead": 14784,
+                "cacheWrite": 0,
+                "totalModel": 3955,
+                "totalWithCache": 18739
+              },
+              {
+                "gapSeconds": 9,
+                "input": 3644,
+                "output": 90,
+                "reasoning": 7,
+                "cacheRead": 15104,
+                "cacheWrite": 0,
+                "totalModel": 3741,
+                "totalWithCache": 18845
+              },
+              {
+                "gapSeconds": 14,
+                "input": 283,
+                "output": 195,
+                "reasoning": 90,
+                "cacheRead": 18688,
+                "cacheWrite": 0,
+                "totalModel": 568,
+                "totalWithCache": 19256
+              },
+              {
+                "gapSeconds": 11,
+                "input": 354,
+                "output": 208,
+                "reasoning": 18,
+                "cacheRead": 18944,
+                "cacheWrite": 0,
+                "totalModel": 580,
+                "totalWithCache": 19524
+              }
+            ]
+          },
+          "toolCalls": 9,
+          "compactions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 0,
+            "totalChecks": 1,
+            "checks": {
+              "behavior:core-store": {
+                "passed": false,
+                "detail": "node:internal/modules/run_main:123 triggerUncaughtException( ^ AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal: + actual - expected [ { + _id: 'mt6cypp3-3-q2q8ue73', - _id: 'u1', age: 30, name: 'a' } ] at <anonymous> (/Users/addy/Downloads/cuppet/benchmarks/results/verifier-tmp/core-store-5ec41643.mjs:31:8) { generatedMessage: true, code: 'ERR_ASSERTION', actual: [ { name"
+              }
+            },
+            "regressions": []
+          },
+          "error": "acceptance checks failed"
+        }
+      ],
+      "summary": {
+        "stagesCompleted": 1,
+        "successes": 0,
+        "firstAttemptSuccesses": 0,
+        "repairedStages": 0,
+        "regressionStages": 0,
+        "totalAgentDurationMs": 146635,
+        "uncachedInput": 19516,
+        "cacheRead": 96640,
+        "totalModelTokens": 23844,
+        "cacheShare": 0.8319845724715038,
+        "adjustedCacheShare": 0.8319845724715038,
+        "toolCalls": 9,
+        "compactions": 0,
+        "passedChecks": 0,
+        "totalChecks": 1,
+        "errors": []
+      }
+    }
+  },
+  "summary": {
+    "opencode": {
+      "stagesCompleted": 1,
+      "successes": 0,
+      "firstAttemptSuccesses": 0,
+      "repairedStages": 0,
+      "regressionStages": 0,
+      "totalAgentDurationMs": 176788,
+      "uncachedInput": 24632,
+      "cacheRead": 51648,
+      "totalModelTokens": 31546,
+      "cacheShare": 0.6770844257996854,
+      "adjustedCacheShare": 0.6770844257996854,
+      "toolCalls": 8,
+      "compactions": 0,
+      "passedChecks": 0,
+      "totalChecks": 1,
+      "errors": []
+    },
+    "cuppet": {
+      "stagesCompleted": 1,
+      "successes": 0,
+      "firstAttemptSuccesses": 0,
+      "repairedStages": 0,
+      "regressionStages": 0,
+      "totalAgentDurationMs": 146635,
+      "uncachedInput": 19516,
+      "cacheRead": 96640,
+      "totalModelTokens": 23844,
+      "cacheShare": 0.8319845724715038,
+      "adjustedCacheShare": 0.8319845724715038,
+      "toolCalls": 9,
+      "compactions": 0,
+      "passedChecks": 0,
+      "totalChecks": 1,
+      "errors": []
+    },
+    "comparison": {
+      "successDelta": 0,
+      "timeReduction": 0.17056021901939045,
+      "uncachedInputReduction": 0.20769730431958427,
+      "totalTokenReduction": 0.24415139795853674,
+      "toolCallReduction": -0.125,
+      "checkDelta": 0
+    }
+  }
+}

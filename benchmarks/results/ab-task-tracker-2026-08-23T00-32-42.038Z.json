@@ -1,0 +1,3493 @@
+{
+  "schema": 1,
+  "createdAt": "2026-08-23T00:32:42.038Z",
+  "project": "/Users/addy/Downloads/cuppet",
+  "task": "Rename Task.dueDate to deadline, add priority-aware indexed filtering, reject past deadlines, and fix deadline-loss plus stale-index bugs.",
+  "model": {
+    "providerID": "openai",
+    "modelID": "gpt-5.6-luna",
+    "variant": "low"
+  },
+  "kernel": {
+    "name": "official OpenCode",
+    "version": "1.18.4"
+  },
+  "followupEnabled": false,
+  "design": "paired fresh repository copies; identical task/model/tools/permissions; Cuppet adds bounded TST context; arm order alternates; hidden suite is generated outside trial workspaces; mutations are isolated per trial",
+  "repeats": 5,
+  "permissions": {
+    "allowExternalDirectory": true,
+    "graphFirstGate": false,
+    "graphOnlySearch": false,
+    "rejectedPermissions": 0,
+    "graphGateRejections": 0,
+    "unexpectedRejectedPermissions": 0,
+    "blockedFileSearchRequests": 0,
+    "graphRedirectMessages": 0,
+    "blockedFileSearchCalls": 0,
+    "blockedBashRequests": 0
+  },
+  "summary": {
+    "opencode": {
+      "trials": 5,
+      "successes": 5,
+      "completionRate": 1,
+      "meanAcceptanceScore": 1,
+      "medianLatencyMs": 115542,
+      "medianUncachedInputTokens": 50409,
+      "medianTotalModelTokens": 54653,
+      "medianCost": 0,
+      "medianSuccessfulLatencyMs": 115542,
+      "medianSuccessfulUncachedInputTokens": 50409,
+      "medianSuccessfulTotalModelTokens": 54653,
+      "medianSuccessfulCost": 0,
+      "totalCost": 0,
+      "meanToolCalls": 40.8,
+      "meanPermissionRequests": 10,
+      "rejectedPermissions": 0,
+      "medianContextTokens": 0,
+      "medianTaskContextChars": 0,
+      "medianTaskContextHighConfidence": 0,
+      "medianTaskContextMediumConfidence": 0,
+      "costPerAcceptancePoint": 0,
+      "hop1OrLess": 1,
+      "hop2": 1,
+      "regression": 1
+    },
+    "cuppet": {
+      "trials": 5,
+      "successes": 5,
+      "completionRate": 1,
+      "meanAcceptanceScore": 1,
+      "medianLatencyMs": 120005,
+      "medianUncachedInputTokens": 36285,
+      "medianTotalModelTokens": 41248,
+      "medianCost": 0,
+      "medianSuccessfulLatencyMs": 120005,
+      "medianSuccessfulUncachedInputTokens": 36285,
+      "medianSuccessfulTotalModelTokens": 41248,
+      "medianSuccessfulCost": 0,
+      "totalCost": 0,
+      "meanToolCalls": 38.6,
+      "meanPermissionRequests": 9.8,
+      "rejectedPermissions": 0,
+      "medianContextTokens": 340,
+      "medianTaskContextChars": 0,
+      "medianTaskContextHighConfidence": 0,
+      "medianTaskContextMediumConfidence": 0,
+      "costPerAcceptancePoint": 0,
+      "hop1OrLess": 1,
+      "hop2": 1,
+      "regression": 1
+    },
+    "comparison": {
+      "completionRateDelta": 0,
+      "acceptanceScoreDelta": 0,
+      "latencyReduction": -0.03862664658738814,
+      "costReduction": 0,
+      "totalCostDelta": 0,
+      "uncachedInputReduction": 0.28018806165565674,
+      "totalModelTokenReduction": 0.2452747333174757,
+      "costPerAcceptancePointReduction": 0,
+      "successfulLatencyReduction": -0.03862664658738814,
+      "successfulInputReduction": 0.28018806165565674,
+      "successfulTotalModelTokenReduction": 0.2452747333174757,
+      "successfulCostReduction": 0,
+      "hop1OrLessDelta": 0,
+      "hop2Delta": 0,
+      "regressionDelta": 0
+    }
+  },
+  "trials": [
+    {
+      "repeat": 1,
+      "arm": "opencode",
+      "workspace": "<removed after evaluation>",
+      "sessionID": "ses_fd40a8db8ffe95hwWve4Rp3rAD",
+      "success": true,
+      "attempts": 1,
+      "acceptanceScore": 1,
+      "contextTokens": 0,
+      "taskContextChars": 0,
+      "taskContextHighConfidence": 0,
+      "taskContextMediumConfidence": 0,
+      "contextEnabled": false,
+      "instructionMode": "opencode",
+      "instructionApplied": null,
+      "durationMs": 114268,
+      "usage": {
+        "input": 59604,
+        "output": 4037,
+        "reasoning": 547,
+        "cacheRead": 213504,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 59604,
+      "totalModelTokens": 64188,
+      "cost": 0,
+      "toolCalls": 43,
+      "toolCounts": {
+        "todowrite": 2,
+        "cuppet_workspace_info": 1,
+        "cuppet_graph_tree": 1,
+        "cuppet_graph_search": 4,
+        "cuppet_graph_trace": 5,
+        "read": 16,
+        "apply_patch": 3,
+        "grep": 2,
+        "bash": 9
+      },
+      "firstToolName": "todowrite",
+      "graphSearchCalls": 11,
+      "graphOutputBytes": 12424,
+      "graphToolTrace": [
+        {
+          "name": "cuppet_workspace_info",
+          "input": {
+            "limit": 200
+          },
+          "outputBytes": 801,
+          "resultCount": 105,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_tree",
+          "input": {
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 736,
+          "resultCount": 16,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "dueDate",
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 1144,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "deadline",
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 63,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "priority",
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 1293,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "index",
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 1231,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "execute",
+            "direction": "callees",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 78,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "listFilteredTasks",
+            "direction": "callers",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 2402,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "addTask",
+            "direction": "callers",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 2402,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "queryTaskIds",
+            "direction": "callers",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 2191,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "completeTask",
+            "direction": "callees",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 83,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        }
+      ],
+      "graphBeforeWorkspace": false,
+      "firstToolMs": 5680,
+      "firstGraphMs": 11298,
+      "firstWorkspaceToolMs": 5680,
+      "firstWorkspaceToolName": "todowrite",
+      "firstSearchMs": 11384,
+      "firstEditMs": 5680,
+      "firstBashMs": 71052,
+      "permissionRequests": 12,
+      "rejectedPermissions": 0,
+      "graphGateRejections": 0,
+      "unexpectedRejectedPermissions": 0,
+      "blockedFileSearchRequests": 0,
+      "graphRedirectMessages": 0,
+      "blockedFileSearchCalls": 0,
+      "blockedBashRequests": 0,
+      "graphGateEnabled": false,
+      "graphPreflightPassed": true,
+      "permissionActions": [
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-AJ4J0o/opencode-1/games/task-tracker/src/core/task.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-1/games/task-tracker/src/core/taskFactory.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-1/games/task-tracker/src/store/taskStore.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-1/games/task-tracker/src/cli/parser.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-1/games/task-tracker/src/cli/commands.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-1/games/task-tracker/src/format/display.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-1/games/task-tracker/src/format/compact.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-1/games/task-tracker/src/cli/main.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-1/games/task-tracker/test/fixtures.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-1/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-AJ4J0o/opencode-1/games/task-tracker/src/store/taskIndex.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-AJ4J0o/opencode-1/games/task-tracker/src/core/task.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "git status --short",
+            "git diff --stat"
+          ]
+        }
+      ],
+      "answer": "I’ll inventory the fixture and trace the requested data paths before editing, then apply the cross-file refactor and run all three required scripts.\nThe fixture already has partial priority/index scaffolding, but it is optional in the core model, uses `dueDate`, and the two seeded defects are exactly at the store boundaries: `addTask` strips the field and `updateTask` refreshes the index before mutation. I’m now making the minimal coherent rename/defaulting/filter propagation and moving index refresh after mutation.\nThe required scripts show one type error in the index representation: `IndexedTask` still declares priority as optional even though `Task.priority` is now required. The runtime tests and help output pass; I’m correcting that boundary type and rerunning verification.\nImplemented the Task Tracker refactor.\n\nChanged files:\n- `src/core/task.ts`\n- `src/core/taskFactory.ts`\n- `src/store/taskStore.ts`\n- `src/store/taskIndex.ts`\n- `src/cli/parser.ts`\n- `src/cli/commands.ts`\n- `src/cli/main.ts`\n- `src/format/display.ts`\n- `src/format/compact.ts`\n- `test/fixtures.ts`\n- `test/task-tracker.test.ts`\n\nKey fixes include `deadline` rename, required/defaulted priority, indexed filtering, date validation, deadline persistence, and post-update index refresh.\n\nValidation:\n- `npm run task-tracker:test`: all 6 tests passed\n- `npm run task-tracker:typecheck`: passed\n- `npm run task-tracker:run -- --help`: passed with updated `--deadline` help text",
+      "evaluation": {
+        "acceptanceScore": 1,
+        "passedChecks": 8,
+        "totalChecks": 8,
+        "success": true,
+        "checks": {
+          "fixtureShape": {
+            "passed": true,
+            "detail": "all seeded cross-file fixture files remain present"
+          },
+          "npmScripts": {
+            "passed": true,
+            "detail": "all task-tracker scripts exist"
+          },
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and priority with no dueDate token remaining"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines and invalid priorities rejected; future deadline and default priority accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → query/store/index paths preserve fields and refresh filters"
+          },
+          "targetedTests": {
+            "passed": true,
+            "detail": "passed in 558 ms"
+          },
+          "typecheck": {
+            "passed": true,
+            "detail": "passed in 791 ms"
+          },
+          "cliSmoke": {
+            "passed": true,
+            "detail": "passed in 434 ms"
+          }
+        },
+        "hopScores": {
+          "hop1OrLess": {
+            "passed": 2,
+            "total": 2,
+            "score": 1
+          },
+          "hop2": {
+            "passed": 1,
+            "total": 1,
+            "score": 1
+          },
+          "regression": {
+            "passed": 3,
+            "total": 3,
+            "score": 1
+          }
+        },
+        "hidden": {
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and priority with no dueDate token remaining"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines and invalid priorities rejected; future deadline and default priority accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → query/store/index paths preserve fields and refresh filters"
+          }
+        },
+        "targetedTest": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 558,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:test\n> node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n[PASS] validate accepts a well-formed future deadline and priority\n[PASS] validate rejects malformed dates and invalid priorities\n[PASS] store supports create, read, update, and delete\n[PASS] API handlers create and list tasks\n[PASS] CLI parser and command formatter work together\n[PASS] indexed filters select status and tags\n",
+          "stderr": ""
+        },
+        "typecheck": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 791,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\n",
+          "stderr": ""
+        },
+        "cliSmoke": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 434,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\nTask Tracker CLI\n\nUsage:\n  task-tracker add <title> [--deadline ISO] [--priority low|normal|high]\n  task-tracker list [--status STATUS] [--priority PRIORITY] [--tag TAG]\n  task-tracker show <id>\n  task-tracker done <id>\n\n",
+          "stderr": ""
+        }
+      }
+    },
+    {
+      "repeat": 1,
+      "arm": "cuppet",
+      "workspace": "<removed after evaluation>",
+      "sessionID": "ses_fd408b19affeHlK4GPU5LCaxuz",
+      "success": true,
+      "attempts": 1,
+      "acceptanceScore": 1,
+      "contextTokens": 340,
+      "taskContextChars": 0,
+      "taskContextHighConfidence": 0,
+      "taskContextMediumConfidence": 0,
+      "contextEnabled": true,
+      "instructionMode": "cuppet",
+      "instructionApplied": null,
+      "durationMs": 120005,
+      "usage": {
+        "input": 36285,
+        "output": 4604,
+        "reasoning": 359,
+        "cacheRead": 223232,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 36285,
+      "totalModelTokens": 41248,
+      "cost": 0,
+      "toolCalls": 41,
+      "toolCounts": {
+        "todowrite": 2,
+        "cuppet_workspace_info": 1,
+        "cuppet_graph_tree": 1,
+        "cuppet_graph_search": 4,
+        "cuppet_graph_trace": 2,
+        "read": 16,
+        "apply_patch": 3,
+        "grep": 4,
+        "bash": 8
+      },
+      "firstToolName": "todowrite",
+      "graphSearchCalls": 8,
+      "graphOutputBytes": 7724,
+      "graphToolTrace": [
+        {
+          "name": "cuppet_workspace_info",
+          "input": {
+            "limit": 200
+          },
+          "outputBytes": 802,
+          "resultCount": 105,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "listAllTasks",
+            "direction": "callees",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 83,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "deadline",
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 63,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_tree",
+          "input": {
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 736,
+          "resultCount": 16,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "dueDate",
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 1144,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "priority",
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 1293,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "index",
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 1231,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "execute",
+            "direction": "callers",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 2372,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        }
+      ],
+      "graphBeforeWorkspace": false,
+      "firstToolMs": 6436,
+      "firstGraphMs": 14315,
+      "firstWorkspaceToolMs": 6436,
+      "firstWorkspaceToolName": "todowrite",
+      "firstSearchMs": 14315,
+      "firstEditMs": 6436,
+      "firstBashMs": 70247,
+      "permissionRequests": 11,
+      "rejectedPermissions": 0,
+      "graphGateRejections": 0,
+      "unexpectedRejectedPermissions": 0,
+      "blockedFileSearchRequests": 0,
+      "graphRedirectMessages": 0,
+      "blockedFileSearchCalls": 0,
+      "blockedBashRequests": 0,
+      "graphGateEnabled": false,
+      "graphPreflightPassed": true,
+      "permissionActions": [
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-AJ4J0o/cuppet-1/games/task-tracker/src/core/task.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-1/games/task-tracker/src/core/taskFactory.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-1/games/task-tracker/src/store/taskStore.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-1/games/task-tracker/src/format/display.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-1/games/task-tracker/src/format/compact.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-1/games/task-tracker/src/cli/parser.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-1/games/task-tracker/src/cli/commands.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-1/games/task-tracker/src/cli/main.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-1/games/task-tracker/test/fixtures.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-1/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-AJ4J0o/cuppet-1/games/task-tracker/src/store/taskIndex.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-1/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-AJ4J0o/cuppet-1/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "git status --short"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "git diff --stat"
+          ]
+        }
+      ],
+      "answer": "I’m inventorying the fixture and tracing the required CLI-to-index paths before editing, then I’ll make the cross-file refactor and run all three mandated scripts.\nThe fixture already contains partial priority and index scaffolding, but priority is optional, the CLI still uses `--due-date`, `addTask` explicitly strips the date, and `updateTask` refreshes the index before mutation. I’m correcting those boundaries and propagating `deadline` consistently while retaining the existing exports.\nThe functional tests and help command pass. TypeScript found one remaining optionality mismatch in the index implementation: `Task.priority` is required, but the index still conditionally spreads it. I’m fixing that and adding explicit regression coverage for deadline persistence, past deadlines, and index refresh after updates.\nImplemented the Task Tracker changes.\n\nChanged files:\n- `src/core/task.ts`\n- `src/core/taskFactory.ts`\n- `src/store/taskStore.ts`\n- `src/store/taskIndex.ts`\n- `src/format/display.ts`\n- `src/format/compact.ts`\n- `src/cli/parser.ts`\n- `src/cli/commands.ts`\n- `src/cli/main.ts`\n- `test/fixtures.ts`\n- `test/task-tracker.test.ts`\n\nKey fixes:\n- Renamed `dueDate` to `deadline`, including CLI `--deadline`.\n- Added required `priority`, defaulting to `normal`.\n- Added indexed status, priority, and tag filtering.\n- Fixed deadline persistence in the store.\n- Fixed stale index metadata after task updates.\n- Added past-deadline validation and regression tests.\n\nValidation:\n- `npm run task-tracker:test`: passed, 6 tests.\n- `npm run task-tracker:typecheck`: passed.\n- `npm run task-tracker:run -- --help`: passed with updated help text.\n- No remaining `dueDate` or `--due-date` references in the fixture.",
+      "evaluation": {
+        "acceptanceScore": 1,
+        "passedChecks": 8,
+        "totalChecks": 8,
+        "success": true,
+        "checks": {
+          "fixtureShape": {
+            "passed": true,
+            "detail": "all seeded cross-file fixture files remain present"
+          },
+          "npmScripts": {
+            "passed": true,
+            "detail": "all task-tracker scripts exist"
+          },
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and priority with no dueDate token remaining"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines and invalid priorities rejected; future deadline and default priority accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → query/store/index paths preserve fields and refresh filters"
+          },
+          "targetedTests": {
+            "passed": true,
+            "detail": "passed in 471 ms"
+          },
+          "typecheck": {
+            "passed": true,
+            "detail": "passed in 749 ms"
+          },
+          "cliSmoke": {
+            "passed": true,
+            "detail": "passed in 442 ms"
+          }
+        },
+        "hopScores": {
+          "hop1OrLess": {
+            "passed": 2,
+            "total": 2,
+            "score": 1
+          },
+          "hop2": {
+            "passed": 1,
+            "total": 1,
+            "score": 1
+          },
+          "regression": {
+            "passed": 3,
+            "total": 3,
+            "score": 1
+          }
+        },
+        "hidden": {
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and priority with no dueDate token remaining"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines and invalid priorities rejected; future deadline and default priority accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → query/store/index paths preserve fields and refresh filters"
+          }
+        },
+        "targetedTest": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 471,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:test\n> node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n[PASS] validate accepts a well-formed future deadline and priority\n[PASS] validate rejects malformed dates and invalid priorities\n[PASS] store supports create, read, update, and delete\n[PASS] API handlers create and list tasks\n[PASS] CLI parser and command formatter work together\n[PASS] indexed filters select status and tags\n",
+          "stderr": ""
+        },
+        "typecheck": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 749,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\n",
+          "stderr": ""
+        },
+        "cliSmoke": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 442,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\nTask Tracker CLI\n\nUsage:\n  task-tracker add <title> [--deadline ISO] [--priority low|normal|high]\n  task-tracker list [--status STATUS] [--priority PRIORITY] [--tag TAG]\n  task-tracker show <id>\n  task-tracker done <id>\n\n",
+          "stderr": ""
+        }
+      }
+    },
+    {
+      "repeat": 2,
+      "arm": "cuppet",
+      "workspace": "<removed after evaluation>",
+      "sessionID": "ses_fd406bfd9ffex2jsvwtic21Vju",
+      "success": true,
+      "attempts": 1,
+      "acceptanceScore": 1,
+      "contextTokens": 340,
+      "taskContextChars": 0,
+      "taskContextHighConfidence": 0,
+      "taskContextMediumConfidence": 0,
+      "contextEnabled": true,
+      "instructionMode": "cuppet",
+      "instructionApplied": null,
+      "durationMs": 105241,
+      "usage": {
+        "input": 30978,
+        "output": 4132,
+        "reasoning": 316,
+        "cacheRead": 216576,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 30978,
+      "totalModelTokens": 35426,
+      "cost": 0,
+      "toolCalls": 36,
+      "toolCounts": {
+        "todowrite": 2,
+        "cuppet_workspace_info": 1,
+        "cuppet_graph_tree": 1,
+        "cuppet_graph_search": 2,
+        "cuppet_graph_trace": 4,
+        "read": 17,
+        "apply_patch": 2,
+        "grep": 1,
+        "bash": 6
+      },
+      "firstToolName": "todowrite",
+      "graphSearchCalls": 8,
+      "graphOutputBytes": 6697,
+      "graphToolTrace": [
+        {
+          "name": "cuppet_workspace_info",
+          "input": {
+            "limit": 200
+          },
+          "outputBytes": 802,
+          "resultCount": 105,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "setStatus",
+            "direction": "outgoing",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 0,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "dueDate|deadline|priority|taskIndex|listFilteredTasks",
+            "prefix": "games/task-tracker",
+            "limit": 300
+          },
+          "outputBytes": 1338,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_tree",
+          "input": {
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 736,
+          "resultCount": 16,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "listAllTasks",
+            "direction": "incoming",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 0,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "listAllTasks",
+            "direction": "callers",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 2402,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "dueDate|due-date|deadline|priority|queryTaskIds|updateTaskIndex",
+            "prefix": "games/task-tracker",
+            "limit": 300
+          },
+          "outputBytes": 1339,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "setStatus",
+            "direction": "callees",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 80,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        }
+      ],
+      "graphBeforeWorkspace": false,
+      "firstToolMs": 6745,
+      "firstGraphMs": 12186,
+      "firstWorkspaceToolMs": 6745,
+      "firstWorkspaceToolName": "todowrite",
+      "firstSearchMs": 12186,
+      "firstEditMs": 6745,
+      "firstBashMs": 70208,
+      "permissionRequests": 8,
+      "rejectedPermissions": 0,
+      "graphGateRejections": 0,
+      "unexpectedRejectedPermissions": 0,
+      "blockedFileSearchRequests": 0,
+      "graphRedirectMessages": 0,
+      "blockedFileSearchCalls": 0,
+      "blockedBashRequests": 0,
+      "graphGateEnabled": false,
+      "graphPreflightPassed": true,
+      "permissionActions": [
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-AJ4J0o/cuppet-2/games/task-tracker/src/core/task.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-2/games/task-tracker/src/core/taskFactory.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-2/games/task-tracker/src/store/taskStore.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-2/games/task-tracker/src/cli/parser.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-2/games/task-tracker/src/cli/commands.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-2/games/task-tracker/src/format/compact.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-2/games/task-tracker/src/format/display.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-2/games/task-tracker/src/cli/main.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-2/games/task-tracker/test/fixtures.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-2/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-AJ4J0o/cuppet-2/games/task-tracker/src/store/taskIndex.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "git diff -- games/task-tracker"
+          ]
+        }
+      ],
+      "answer": "I’m inventorying the fixture and tracing the required CLI-to-index paths before editing, then I’ll apply the cross-file refactor and run all three mandated scripts.\nThe fixture already has partial priority/index scaffolding, but `Task.priority` and the date field are optional/old-named, the store explicitly drops the date, and index refresh occurs before mutation. I’m correcting those boundaries and propagating the names/options through formatting, help, fixtures, and tests.\nImplemented the Task Tracker refactor.\n\nChanged files:\n- `src/core/task.ts`\n- `src/core/taskFactory.ts`\n- `src/store/taskStore.ts`\n- `src/store/taskIndex.ts`\n- `src/cli/parser.ts`\n- `src/cli/commands.ts`\n- `src/cli/main.ts`\n- `src/format/compact.ts`\n- `src/format/display.ts`\n- `test/fixtures.ts`\n- `test/task-tracker.test.ts`\n\nKey fixes:\n- Renamed `dueDate` to `deadline` and CLI option to `--deadline`.\n- Added required `priority`, defaulting to `normal`.\n- Added indexed status, priority, and tag filtering.\n- Fixed deadline persistence in `addTask`.\n- Fixed stale index metadata after updates.\n- Validation now rejects malformed and past deadlines.\n- Updated formatting, fixtures, tests, and help text.\n\nValidation:\n- `npm run task-tracker:test` passed.\n- `npm run task-tracker:typecheck` passed.\n- `npm run task-tracker:run -- --help` passed and shows `--deadline`.",
+      "evaluation": {
+        "acceptanceScore": 1,
+        "passedChecks": 8,
+        "totalChecks": 8,
+        "success": true,
+        "checks": {
+          "fixtureShape": {
+            "passed": true,
+            "detail": "all seeded cross-file fixture files remain present"
+          },
+          "npmScripts": {
+            "passed": true,
+            "detail": "all task-tracker scripts exist"
+          },
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and priority with no dueDate token remaining"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines and invalid priorities rejected; future deadline and default priority accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → query/store/index paths preserve fields and refresh filters"
+          },
+          "targetedTests": {
+            "passed": true,
+            "detail": "passed in 491 ms"
+          },
+          "typecheck": {
+            "passed": true,
+            "detail": "passed in 743 ms"
+          },
+          "cliSmoke": {
+            "passed": true,
+            "detail": "passed in 426 ms"
+          }
+        },
+        "hopScores": {
+          "hop1OrLess": {
+            "passed": 2,
+            "total": 2,
+            "score": 1
+          },
+          "hop2": {
+            "passed": 1,
+            "total": 1,
+            "score": 1
+          },
+          "regression": {
+            "passed": 3,
+            "total": 3,
+            "score": 1
+          }
+        },
+        "hidden": {
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and priority with no dueDate token remaining"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines and invalid priorities rejected; future deadline and default priority accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → query/store/index paths preserve fields and refresh filters"
+          }
+        },
+        "targetedTest": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 491,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:test\n> node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n[PASS] validate accepts a well-formed future deadline and priority\n[PASS] validate rejects malformed dates and invalid priorities\n[PASS] store supports create, read, update, and delete\n[PASS] API handlers create and list tasks\n[PASS] CLI parser and command formatter work together\n[PASS] indexed filters select status and tags\n",
+          "stderr": ""
+        },
+        "typecheck": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 743,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\n",
+          "stderr": ""
+        },
+        "cliSmoke": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 426,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\nTask Tracker CLI\n\nUsage:\n  task-tracker add <title> [--deadline ISO] [--priority low|normal|high]\n  task-tracker list [--status STATUS] [--priority PRIORITY] [--tag TAG]\n  task-tracker show <id>\n  task-tracker done <id>\n\n",
+          "stderr": ""
+        }
+      }
+    },
+    {
+      "repeat": 2,
+      "arm": "opencode",
+      "workspace": "<removed after evaluation>",
+      "sessionID": "ses_fd404f730ffeRjLk6XfUKuUuZD",
+      "success": true,
+      "attempts": 1,
+      "acceptanceScore": 1,
+      "contextTokens": 0,
+      "taskContextChars": 0,
+      "taskContextHighConfidence": 0,
+      "taskContextMediumConfidence": 0,
+      "contextEnabled": false,
+      "instructionMode": "opencode",
+      "instructionApplied": null,
+      "durationMs": 115542,
+      "usage": {
+        "input": 50409,
+        "output": 3946,
+        "reasoning": 298,
+        "cacheRead": 309760,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 50409,
+      "totalModelTokens": 54653,
+      "cost": 0,
+      "toolCalls": 42,
+      "toolCounts": {
+        "todowrite": 3,
+        "cuppet_workspace_info": 1,
+        "cuppet_graph_tree": 1,
+        "cuppet_graph_search": 4,
+        "cuppet_graph_trace": 4,
+        "read": 17,
+        "apply_patch": 3,
+        "grep": 3,
+        "bash": 6
+      },
+      "firstToolName": "todowrite",
+      "graphSearchCalls": 10,
+      "graphOutputBytes": 12511,
+      "graphToolTrace": [
+        {
+          "name": "cuppet_workspace_info",
+          "input": {
+            "limit": 200
+          },
+          "outputBytes": 801,
+          "resultCount": 105,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_tree",
+          "input": {
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 736,
+          "resultCount": 16,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "dueDate",
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 1144,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "priority",
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 1293,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "index",
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 1231,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "deadline",
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 63,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "execute",
+            "direction": "callees",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 78,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "listFilteredTasks",
+            "direction": "callers",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 2402,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "setStatus",
+            "direction": "callers",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 2361,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "addTask",
+            "direction": "callers",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 2402,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        }
+      ],
+      "graphBeforeWorkspace": false,
+      "firstToolMs": 5382,
+      "firstGraphMs": 10467,
+      "firstWorkspaceToolMs": 5382,
+      "firstWorkspaceToolName": "todowrite",
+      "firstSearchMs": 10548,
+      "firstEditMs": 5382,
+      "firstBashMs": 86962,
+      "permissionRequests": 9,
+      "rejectedPermissions": 0,
+      "graphGateRejections": 0,
+      "unexpectedRejectedPermissions": 0,
+      "blockedFileSearchRequests": 0,
+      "graphRedirectMessages": 0,
+      "blockedFileSearchCalls": 0,
+      "blockedBashRequests": 0,
+      "graphGateEnabled": false,
+      "graphPreflightPassed": true,
+      "permissionActions": [
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-AJ4J0o/opencode-2/games/task-tracker/src/core/task.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-2/games/task-tracker/src/core/taskFactory.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-2/games/task-tracker/src/store/taskStore.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-2/games/task-tracker/src/cli/parser.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-2/games/task-tracker/src/cli/commands.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-2/games/task-tracker/src/format/display.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-2/games/task-tracker/src/format/compact.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-2/games/task-tracker/test/fixtures.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-2/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-AJ4J0o/opencode-2/games/task-tracker/src/cli/main.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-AJ4J0o/opencode-2/games/task-tracker/src/store/taskIndex.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "git status --short"
+          ]
+        }
+      ],
+      "answer": "I’ll inventory the fixture and trace the requested data paths before editing, then apply the smallest cross-file change and run all three required root scripts.\nThe trace confirms both seeded defects are at store boundaries: `addTask` explicitly strips the date, and `updateTask` refreshes the index before mutation. I’m now replacing those defects, making `priority` required on stored tasks with factory defaulting, and wiring the deadline/filter names through the existing API and formatter contracts.\nImplemented the Task Tracker updates.\n\nChanged files:\n- `src/core/task.ts`\n- `src/core/taskFactory.ts`\n- `src/store/taskStore.ts`\n- `src/store/taskIndex.ts`\n- `src/cli/parser.ts`\n- `src/cli/commands.ts`\n- `src/cli/main.ts`\n- `src/format/display.ts`\n- `src/format/compact.ts`\n- `test/fixtures.ts`\n- `test/task-tracker.test.ts`\n\nKey fixes:\n- Renamed `dueDate` to `deadline`, including `--deadline`.\n- Added required `Task.priority` with default `normal`.\n- Added indexed status, priority, and tag filtering.\n- Fixed deadline persistence in `addTask`.\n- Fixed stale index metadata after updates.\n- Added malformed and past-deadline validation.\n\nValidation:\n- `npm run task-tracker:test`: passed, 6 tests.\n- `npm run task-tracker:typecheck`: passed.\n- `npm run task-tracker:run -- --help`: passed with updated help text.",
+      "evaluation": {
+        "acceptanceScore": 1,
+        "passedChecks": 8,
+        "totalChecks": 8,
+        "success": true,
+        "checks": {
+          "fixtureShape": {
+            "passed": true,
+            "detail": "all seeded cross-file fixture files remain present"
+          },
+          "npmScripts": {
+            "passed": true,
+            "detail": "all task-tracker scripts exist"
+          },
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and priority with no dueDate token remaining"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines and invalid priorities rejected; future deadline and default priority accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → query/store/index paths preserve fields and refresh filters"
+          },
+          "targetedTests": {
+            "passed": true,
+            "detail": "passed in 473 ms"
+          },
+          "typecheck": {
+            "passed": true,
+            "detail": "passed in 750 ms"
+          },
+          "cliSmoke": {
+            "passed": true,
+            "detail": "passed in 427 ms"
+          }
+        },
+        "hopScores": {
+          "hop1OrLess": {
+            "passed": 2,
+            "total": 2,
+            "score": 1
+          },
+          "hop2": {
+            "passed": 1,
+            "total": 1,
+            "score": 1
+          },
+          "regression": {
+            "passed": 3,
+            "total": 3,
+            "score": 1
+          }
+        },
+        "hidden": {
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and priority with no dueDate token remaining"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines and invalid priorities rejected; future deadline and default priority accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → query/store/index paths preserve fields and refresh filters"
+          }
+        },
+        "targetedTest": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 473,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:test\n> node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n[PASS] validate accepts a well-formed future deadline and priority\n[PASS] validate rejects malformed dates and invalid priorities\n[PASS] store supports create, read, update, and delete\n[PASS] API handlers create and list tasks\n[PASS] CLI parser and command formatter work together\n[PASS] indexed filters select status and tags\n",
+          "stderr": ""
+        },
+        "typecheck": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 750,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\n",
+          "stderr": ""
+        },
+        "cliSmoke": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 427,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\nTask Tracker CLI\n\nUsage:\n  task-tracker add <title> [--deadline ISO] [--priority low|normal|high]\n  task-tracker list [--status STATUS] [--priority PRIORITY] [--tag TAG]\n  task-tracker show <id>\n  task-tracker done <id>\n\n",
+          "stderr": ""
+        }
+      }
+    },
+    {
+      "repeat": 3,
+      "arm": "opencode",
+      "workspace": "<removed after evaluation>",
+      "sessionID": "ses_fd403114dffeDM1jUgNGysm3rk",
+      "success": true,
+      "attempts": 1,
+      "acceptanceScore": 1,
+      "contextTokens": 0,
+      "taskContextChars": 0,
+      "taskContextHighConfidence": 0,
+      "taskContextMediumConfidence": 0,
+      "contextEnabled": false,
+      "instructionMode": "opencode",
+      "instructionApplied": null,
+      "durationMs": 116911,
+      "usage": {
+        "input": 60221,
+        "output": 4019,
+        "reasoning": 275,
+        "cacheRead": 257024,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 60221,
+      "totalModelTokens": 64515,
+      "cost": 0,
+      "toolCalls": 40,
+      "toolCounts": {
+        "todowrite": 3,
+        "cuppet_workspace_info": 1,
+        "cuppet_graph_tree": 1,
+        "cuppet_graph_search": 4,
+        "read": 16,
+        "cuppet_graph_trace": 4,
+        "apply_patch": 2,
+        "bash": 7,
+        "grep": 2
+      },
+      "firstToolName": "todowrite",
+      "graphSearchCalls": 10,
+      "graphOutputBytes": 5590,
+      "graphToolTrace": [
+        {
+          "name": "cuppet_workspace_info",
+          "input": {
+            "limit": 200
+          },
+          "outputBytes": 801,
+          "resultCount": 105,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_tree",
+          "input": {
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 736,
+          "resultCount": 16,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "dueDate",
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 1144,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "deadline",
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 63,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "priority",
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 1293,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "index",
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 1231,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "execute",
+            "direction": "callees",
+            "depth": 5,
+            "limit": 50
+          },
+          "outputBytes": 78,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "completeTask",
+            "direction": "callees",
+            "depth": 5,
+            "limit": 50
+          },
+          "outputBytes": 83,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "listAllTasks",
+            "direction": "callees",
+            "depth": 5,
+            "limit": 50
+          },
+          "outputBytes": 83,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "addTask",
+            "direction": "callees",
+            "depth": 5,
+            "limit": 50
+          },
+          "outputBytes": 78,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        }
+      ],
+      "graphBeforeWorkspace": false,
+      "firstToolMs": 5381,
+      "firstGraphMs": 11239,
+      "firstWorkspaceToolMs": 5381,
+      "firstWorkspaceToolName": "todowrite",
+      "firstSearchMs": 11239,
+      "firstEditMs": 5381,
+      "firstBashMs": 78850,
+      "permissionRequests": 9,
+      "rejectedPermissions": 0,
+      "graphGateRejections": 0,
+      "unexpectedRejectedPermissions": 0,
+      "blockedFileSearchRequests": 0,
+      "graphRedirectMessages": 0,
+      "blockedFileSearchCalls": 0,
+      "blockedBashRequests": 0,
+      "graphGateEnabled": false,
+      "graphPreflightPassed": true,
+      "permissionActions": [
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-AJ4J0o/opencode-3/games/task-tracker/src/core/task.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-3/games/task-tracker/src/core/taskFactory.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-3/games/task-tracker/src/store/taskStore.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-3/games/task-tracker/src/cli/parser.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-3/games/task-tracker/src/cli/commands.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-3/games/task-tracker/src/format/compact.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-3/games/task-tracker/src/format/display.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-3/games/task-tracker/src/cli/main.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-3/games/task-tracker/test/fixtures.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-3/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-AJ4J0o/opencode-3/games/task-tracker/src/store/taskIndex.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "git status --short"
+          ]
+        }
+      ],
+      "answer": "I’m inventorying the fixture and tracing the requested data paths before editing, then I’ll apply the cross-file refactor and run all three required scripts.\nThe traced path is `execute -> routes -> handlers -> listFilteredTasks -> queryTaskIds`, and creation/update terminate at `taskStore.addTask/updateTask` plus `taskIndex`. The two defects are at those store boundaries: `addTask` explicitly strips the date, while `updateTask` refreshes the index before mutation. I’m correcting those boundaries and propagating the renamed, required-on-built-task priority shape.\nTests and help pass. Typecheck found one stale optionality assumption in the index: `Task.priority` is now required, so I’m making the indexed representation required as well and checking for any remaining `dueDate`/old CLI option references.\nImplemented the Task Tracker refactor.\n\nChanged files:\n- `src/core/task.ts`\n- `src/core/taskFactory.ts`\n- `src/store/taskStore.ts`\n- `src/store/taskIndex.ts`\n- `src/cli/parser.ts`\n- `src/cli/commands.ts`\n- `src/cli/main.ts`\n- `src/format/compact.ts`\n- `src/format/display.ts`\n- `test/fixtures.ts`\n- `test/task-tracker.test.ts`\n\nKey fixes:\n- Renamed `dueDate` to `deadline` and CLI option to `--deadline`.\n- Added validated `priority` with default `normal`.\n- Preserved deadlines through store creation.\n- Updated indexes after task mutations.\n- Added deadline past-date validation.\n- Preserved indexed status, priority, and tag filtering.\n\nValidation:\n- `npm run task-tracker:test`: passed, 6 tests.\n- `npm run task-tracker:typecheck`: passed.\n- `npm run task-tracker:run -- --help`: passed with updated help text.",
+      "evaluation": {
+        "acceptanceScore": 1,
+        "passedChecks": 8,
+        "totalChecks": 8,
+        "success": true,
+        "checks": {
+          "fixtureShape": {
+            "passed": true,
+            "detail": "all seeded cross-file fixture files remain present"
+          },
+          "npmScripts": {
+            "passed": true,
+            "detail": "all task-tracker scripts exist"
+          },
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and priority with no dueDate token remaining"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines and invalid priorities rejected; future deadline and default priority accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → query/store/index paths preserve fields and refresh filters"
+          },
+          "targetedTests": {
+            "passed": true,
+            "detail": "passed in 457 ms"
+          },
+          "typecheck": {
+            "passed": true,
+            "detail": "passed in 744 ms"
+          },
+          "cliSmoke": {
+            "passed": true,
+            "detail": "passed in 422 ms"
+          }
+        },
+        "hopScores": {
+          "hop1OrLess": {
+            "passed": 2,
+            "total": 2,
+            "score": 1
+          },
+          "hop2": {
+            "passed": 1,
+            "total": 1,
+            "score": 1
+          },
+          "regression": {
+            "passed": 3,
+            "total": 3,
+            "score": 1
+          }
+        },
+        "hidden": {
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and priority with no dueDate token remaining"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines and invalid priorities rejected; future deadline and default priority accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → query/store/index paths preserve fields and refresh filters"
+          }
+        },
+        "targetedTest": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 457,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:test\n> node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n[PASS] validate accepts a well-formed future deadline and priority\n[PASS] validate rejects malformed dates and invalid priorities\n[PASS] store supports create, read, update, and delete\n[PASS] API handlers create and list tasks\n[PASS] CLI parser and command formatter work together\n[PASS] indexed filters select status and tags\n",
+          "stderr": ""
+        },
+        "typecheck": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 744,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\n",
+          "stderr": ""
+        },
+        "cliSmoke": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 422,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\nTask Tracker CLI\n\nUsage:\n  task-tracker add <title> [--deadline ISO] [--priority low|normal|high]\n  task-tracker list [--status STATUS] [--priority PRIORITY] [--tag TAG]\n  task-tracker show <id>\n  task-tracker done <id>\n\n",
+          "stderr": ""
+        }
+      }
+    },
+    {
+      "repeat": 3,
+      "arm": "cuppet",
+      "workspace": "<removed after evaluation>",
+      "sessionID": "ses_fd40129bbffeXlYDi22wmZ3DlT",
+      "success": true,
+      "attempts": 1,
+      "acceptanceScore": 1,
+      "contextTokens": 340,
+      "taskContextChars": 0,
+      "taskContextHighConfidence": 0,
+      "taskContextMediumConfidence": 0,
+      "contextEnabled": true,
+      "instructionMode": "cuppet",
+      "instructionApplied": null,
+      "durationMs": 113444,
+      "usage": {
+        "input": 47032,
+        "output": 4158,
+        "reasoning": 290,
+        "cacheRead": 146944,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 47032,
+      "totalModelTokens": 51480,
+      "cost": 0,
+      "toolCalls": 34,
+      "toolCounts": {
+        "todowrite": 2,
+        "cuppet_workspace_info": 1,
+        "cuppet_graph_tree": 1,
+        "cuppet_graph_search": 1,
+        "cuppet_graph_trace": 2,
+        "read": 16,
+        "apply_patch": 2,
+        "grep": 2,
+        "bash": 7
+      },
+      "firstToolName": "todowrite",
+      "graphSearchCalls": 5,
+      "graphOutputBytes": 5356,
+      "graphToolTrace": [
+        {
+          "name": "cuppet_workspace_info",
+          "input": {
+            "limit": 200
+          },
+          "outputBytes": 802,
+          "resultCount": 105,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "listFilteredTasks",
+            "direction": "callers",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 2402,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "dueDate|deadline|priority|taskIndex|listFilteredTasks",
+            "prefix": "games/task-tracker",
+            "limit": 300
+          },
+          "outputBytes": 1338,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_tree",
+          "input": {
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 736,
+          "resultCount": 16,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "execute",
+            "direction": "callees",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 78,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        }
+      ],
+      "graphBeforeWorkspace": false,
+      "firstToolMs": 6180,
+      "firstGraphMs": 11406,
+      "firstWorkspaceToolMs": 6180,
+      "firstWorkspaceToolName": "todowrite",
+      "firstSearchMs": 11406,
+      "firstEditMs": 6180,
+      "firstBashMs": 63286,
+      "permissionRequests": 9,
+      "rejectedPermissions": 0,
+      "graphGateRejections": 0,
+      "unexpectedRejectedPermissions": 0,
+      "blockedFileSearchRequests": 0,
+      "graphRedirectMessages": 0,
+      "blockedFileSearchCalls": 0,
+      "blockedBashRequests": 0,
+      "graphGateEnabled": false,
+      "graphPreflightPassed": true,
+      "permissionActions": [
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-AJ4J0o/cuppet-3/games/task-tracker/src/core/task.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-3/games/task-tracker/src/core/taskFactory.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-3/games/task-tracker/src/store/taskStore.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-3/games/task-tracker/src/cli/parser.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-3/games/task-tracker/src/cli/commands.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-3/games/task-tracker/src/format/display.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-3/games/task-tracker/src/format/compact.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-3/games/task-tracker/src/cli/main.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-3/games/task-tracker/test/fixtures.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-3/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-AJ4J0o/cuppet-3/games/task-tracker/src/store/taskIndex.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "git diff --stat",
+            "git status --short"
+          ]
+        }
+      ],
+      "answer": "I’m inventorying the fixture and tracing the CLI-to-index paths before making edits, then I’ll run the required test, typecheck, and help commands.\nThe fixture already contains partial priority and index scaffolding, but `Task.priority` is optional, all date names are still `dueDate`, and the two seeded store defects are explicit. I’ll now make the cross-file rename, make priority required with a factory default, and refresh the index after mutation.\nThe first validation pass found one type-level consequence of making priority required: the index still modeled it as optional. That boundary is now aligned; I’m rerunning all required commands and checking the final diff for leftover legacy names or unrelated edits.\nImplemented the Task Tracker updates.\n\nChanged files:\n- `src/core/task.ts`\n- `src/core/taskFactory.ts`\n- `src/store/taskStore.ts`\n- `src/store/taskIndex.ts`\n- `src/cli/parser.ts`\n- `src/cli/commands.ts`\n- `src/cli/main.ts`\n- `src/format/display.ts`\n- `src/format/compact.ts`\n- `test/fixtures.ts`\n- `test/task-tracker.test.ts`\n\nKey fixes:\n- Renamed `dueDate` to `deadline` and CLI option to `--deadline`.\n- Added required `priority`, defaulting to `normal`.\n- Added status, priority, and tag indexed filtering.\n- Repaired deadline persistence in the store.\n- Refreshed the task index after updates.\n- Added malformed and past-deadline validation.\n\nValidation:\n- `npm run task-tracker:test`: passed, 6 tests.\n- `npm run task-tracker:typecheck`: passed.\n- `npm run task-tracker:run -- --help`: passed with updated help text.\n- No remaining `dueDate` or `--due-date` references.",
+      "evaluation": {
+        "acceptanceScore": 1,
+        "passedChecks": 8,
+        "totalChecks": 8,
+        "success": true,
+        "checks": {
+          "fixtureShape": {
+            "passed": true,
+            "detail": "all seeded cross-file fixture files remain present"
+          },
+          "npmScripts": {
+            "passed": true,
+            "detail": "all task-tracker scripts exist"
+          },
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and priority with no dueDate token remaining"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines and invalid priorities rejected; future deadline and default priority accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → query/store/index paths preserve fields and refresh filters"
+          },
+          "targetedTests": {
+            "passed": true,
+            "detail": "passed in 471 ms"
+          },
+          "typecheck": {
+            "passed": true,
+            "detail": "passed in 736 ms"
+          },
+          "cliSmoke": {
+            "passed": true,
+            "detail": "passed in 435 ms"
+          }
+        },
+        "hopScores": {
+          "hop1OrLess": {
+            "passed": 2,
+            "total": 2,
+            "score": 1
+          },
+          "hop2": {
+            "passed": 1,
+            "total": 1,
+            "score": 1
+          },
+          "regression": {
+            "passed": 3,
+            "total": 3,
+            "score": 1
+          }
+        },
+        "hidden": {
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and priority with no dueDate token remaining"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines and invalid priorities rejected; future deadline and default priority accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → query/store/index paths preserve fields and refresh filters"
+          }
+        },
+        "targetedTest": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 471,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:test\n> node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n[PASS] validate accepts a well-formed future deadline and priority\n[PASS] validate rejects malformed dates and invalid priorities\n[PASS] store supports create, read, update, and delete\n[PASS] API handlers create and list tasks\n[PASS] CLI parser and command formatter work together\n[PASS] indexed filters select status and tags\n",
+          "stderr": ""
+        },
+        "typecheck": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 736,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\n",
+          "stderr": ""
+        },
+        "cliSmoke": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 435,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\nTask Tracker CLI\n\nUsage:\n  task-tracker add <title> [--deadline ISO] [--priority low|normal|high]\n  task-tracker list [--status STATUS] [--priority PRIORITY] [--tag TAG]\n  task-tracker show <id>\n  task-tracker done <id>\n\n",
+          "stderr": ""
+        }
+      }
+    },
+    {
+      "repeat": 4,
+      "arm": "cuppet",
+      "workspace": "<removed after evaluation>",
+      "sessionID": "ses_fd3ff3fd9ffeB4LOnCPsJ65aL6",
+      "success": true,
+      "attempts": 1,
+      "acceptanceScore": 1,
+      "contextTokens": 340,
+      "taskContextChars": 0,
+      "taskContextHighConfidence": 0,
+      "taskContextMediumConfidence": 0,
+      "contextEnabled": true,
+      "instructionMode": "cuppet",
+      "instructionApplied": null,
+      "durationMs": 121966,
+      "usage": {
+        "input": 32560,
+        "output": 4256,
+        "reasoning": 360,
+        "cacheRead": 247808,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 32560,
+      "totalModelTokens": 37176,
+      "cost": 0,
+      "toolCalls": 38,
+      "toolCounts": {
+        "todowrite": 3,
+        "cuppet_workspace_info": 1,
+        "cuppet_graph_tree": 1,
+        "cuppet_graph_search": 4,
+        "read": 15,
+        "cuppet_graph_trace": 3,
+        "apply_patch": 2,
+        "bash": 7,
+        "grep": 2
+      },
+      "firstToolName": "todowrite",
+      "graphSearchCalls": 9,
+      "graphOutputBytes": 10435,
+      "graphToolTrace": [
+        {
+          "name": "cuppet_workspace_info",
+          "input": {
+            "limit": 200
+          },
+          "outputBytes": 802,
+          "resultCount": 105,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "deadline|priority|indexTask|updateTaskIndex|queryTaskIds|listFilteredTasks",
+            "prefix": "games/task-tracker",
+            "limit": 300
+          },
+          "outputBytes": 1369,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_tree",
+          "input": {
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 736,
+          "resultCount": 16,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "dueDate",
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 1144,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "execute",
+            "direction": "callees",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 78,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "index|priority",
+            "prefix": "games/task-tracker/src",
+            "limit": 200
+          },
+          "outputBytes": 1273,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "updateTaskIndex",
+            "direction": "callers",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 2402,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "listAllTasks",
+            "direction": "callers",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 2402,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "dueDate",
+            "prefix": "games/task-tracker/test",
+            "limit": 100
+          },
+          "outputBytes": 229,
+          "resultCount": 3,
+          "truncated": false,
+          "cacheHit": false
+        }
+      ],
+      "graphBeforeWorkspace": false,
+      "firstToolMs": 9201,
+      "firstGraphMs": 18766,
+      "firstWorkspaceToolMs": 9201,
+      "firstWorkspaceToolName": "todowrite",
+      "firstSearchMs": 18766,
+      "firstEditMs": 9201,
+      "firstBashMs": 76206,
+      "permissionRequests": 9,
+      "rejectedPermissions": 0,
+      "graphGateRejections": 0,
+      "unexpectedRejectedPermissions": 0,
+      "blockedFileSearchRequests": 0,
+      "graphRedirectMessages": 0,
+      "blockedFileSearchCalls": 0,
+      "blockedBashRequests": 0,
+      "graphGateEnabled": false,
+      "graphPreflightPassed": true,
+      "permissionActions": [
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-AJ4J0o/cuppet-4/games/task-tracker/src/core/task.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-4/games/task-tracker/src/core/taskFactory.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-4/games/task-tracker/src/store/taskStore.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-4/games/task-tracker/src/cli/parser.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-4/games/task-tracker/src/cli/commands.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-4/games/task-tracker/src/format/display.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-4/games/task-tracker/src/format/compact.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-4/games/task-tracker/test/fixtures.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-4/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-AJ4J0o/cuppet-4/games/task-tracker/src/store/taskIndex.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-4/games/task-tracker/src/cli/main.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "git status --short",
+            "git diff -- games/task-tracker"
+          ]
+        }
+      ],
+      "answer": "I’m inventorying the fixture and tracing the CLI-to-index paths before editing, then I’ll apply the cross-file refactor and run all three required checks.\nThe trace confirms both defects are at the store boundary: `addTask` strips the date after factory creation, and `updateTask` refreshes the index before mutation. I’m now renaming the field, making priority materialize as `normal`, and moving index refresh after updates while preserving the existing exports.\nThe runtime tests pass, but typecheck exposed one remaining optional-priority assumption in the index, and the CLI help is hardcoded with the old option. I’m correcting those two surfaces, then rerunning the required commands.\nImplemented the Task Tracker changes.\n\nChanged files:\n- Core task types, validation, and factory\n- Store and task index\n- Query, API, CLI parser/commands/help\n- Display and compact formatters\n- Fixtures and tests\n\nKey fixes:\n- Renamed `dueDate` to `deadline` and CLI option to `--deadline`\n- Added required `priority` with `normal` default\n- Added indexed status, priority, and tag filtering\n- Rejected malformed and past deadlines\n- Preserved deadlines in the store\n- Refreshed indexes after task updates\n\nValidation:\n- `npm run task-tracker:test` passed\n- `npm run task-tracker:typecheck` passed\n- `npm run task-tracker:run -- --help` passed with updated help text",
+      "evaluation": {
+        "acceptanceScore": 1,
+        "passedChecks": 8,
+        "totalChecks": 8,
+        "success": true,
+        "checks": {
+          "fixtureShape": {
+            "passed": true,
+            "detail": "all seeded cross-file fixture files remain present"
+          },
+          "npmScripts": {
+            "passed": true,
+            "detail": "all task-tracker scripts exist"
+          },
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and priority with no dueDate token remaining"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines and invalid priorities rejected; future deadline and default priority accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → query/store/index paths preserve fields and refresh filters"
+          },
+          "targetedTests": {
+            "passed": true,
+            "detail": "passed in 455 ms"
+          },
+          "typecheck": {
+            "passed": true,
+            "detail": "passed in 744 ms"
+          },
+          "cliSmoke": {
+            "passed": true,
+            "detail": "passed in 429 ms"
+          }
+        },
+        "hopScores": {
+          "hop1OrLess": {
+            "passed": 2,
+            "total": 2,
+            "score": 1
+          },
+          "hop2": {
+            "passed": 1,
+            "total": 1,
+            "score": 1
+          },
+          "regression": {
+            "passed": 3,
+            "total": 3,
+            "score": 1
+          }
+        },
+        "hidden": {
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and priority with no dueDate token remaining"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines and invalid priorities rejected; future deadline and default priority accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → query/store/index paths preserve fields and refresh filters"
+          }
+        },
+        "targetedTest": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 455,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:test\n> node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n[PASS] validate accepts a well-formed future deadline and priority\n[PASS] validate rejects malformed dates and invalid priorities\n[PASS] store supports create, read, update, and delete\n[PASS] API handlers create and list tasks\n[PASS] CLI parser and command formatter work together\n[PASS] indexed filters select status and tags\n",
+          "stderr": ""
+        },
+        "typecheck": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 744,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\n",
+          "stderr": ""
+        },
+        "cliSmoke": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 429,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\nTask Tracker CLI\n\nUsage:\n  task-tracker add <title> [--deadline ISO] [--priority low|normal|high]\n  task-tracker list [--status STATUS] [--priority PRIORITY] [--tag TAG]\n  task-tracker show <id>\n  task-tracker done <id>\n\n",
+          "stderr": ""
+        }
+      }
+    },
+    {
+      "repeat": 4,
+      "arm": "opencode",
+      "workspace": "<removed after evaluation>",
+      "sessionID": "ses_fd3fd4331ffeXbGkp3IvK3Qpnn",
+      "success": true,
+      "attempts": 1,
+      "acceptanceScore": 1,
+      "contextTokens": 0,
+      "taskContextChars": 0,
+      "taskContextHighConfidence": 0,
+      "taskContextMediumConfidence": 0,
+      "contextEnabled": false,
+      "instructionMode": "opencode",
+      "instructionApplied": null,
+      "durationMs": 134798,
+      "usage": {
+        "input": 36362,
+        "output": 4069,
+        "reasoning": 392,
+        "cacheRead": 259584,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 36362,
+      "totalModelTokens": 40823,
+      "cost": 0,
+      "toolCalls": 43,
+      "toolCounts": {
+        "todowrite": 3,
+        "cuppet_workspace_info": 1,
+        "cuppet_graph_tree": 1,
+        "cuppet_graph_search": 6,
+        "cuppet_graph_trace": 3,
+        "read": 18,
+        "apply_patch": 2,
+        "grep": 4,
+        "bash": 5
+      },
+      "firstToolName": "todowrite",
+      "graphSearchCalls": 11,
+      "graphOutputBytes": 8963,
+      "graphToolTrace": [
+        {
+          "name": "cuppet_workspace_info",
+          "input": {
+            "limit": 200
+          },
+          "outputBytes": 801,
+          "resultCount": 105,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "deadline",
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 63,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "dueDate",
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 1144,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "index",
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 1231,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_tree",
+          "input": {
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 736,
+          "resultCount": 16,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "priority",
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 1293,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "execute",
+            "direction": "callees",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 78,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "listFilteredTasks",
+            "direction": "callers",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 2402,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "completeTask",
+            "direction": "callees",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 83,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "dueDate",
+            "prefix": "games/task-tracker",
+            "limit": 100
+          },
+          "outputBytes": 62,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "deadline",
+            "prefix": "games/task-tracker",
+            "limit": 100
+          },
+          "outputBytes": 1070,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        }
+      ],
+      "graphBeforeWorkspace": false,
+      "firstToolMs": 5187,
+      "firstGraphMs": 11135,
+      "firstWorkspaceToolMs": 5187,
+      "firstWorkspaceToolName": "todowrite",
+      "firstSearchMs": 11135,
+      "firstEditMs": 5187,
+      "firstBashMs": 115205,
+      "permissionRequests": 11,
+      "rejectedPermissions": 0,
+      "graphGateRejections": 0,
+      "unexpectedRejectedPermissions": 0,
+      "blockedFileSearchRequests": 0,
+      "graphRedirectMessages": 0,
+      "blockedFileSearchCalls": 0,
+      "blockedBashRequests": 0,
+      "graphGateEnabled": false,
+      "graphPreflightPassed": true,
+      "permissionActions": [
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-AJ4J0o/opencode-4/games/task-tracker/src/core/task.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-4/games/task-tracker/src/core/taskFactory.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-4/games/task-tracker/src/store/taskStore.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-4/games/task-tracker/src/format/display.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-4/games/task-tracker/src/format/compact.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-4/games/task-tracker/src/cli/parser.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-4/games/task-tracker/src/cli/commands.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-4/games/task-tracker/test/fixtures.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-4/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "external_directory",
+          "resources": [
+            "/private/tmp/cttr-AJ4J0o/games/*"
+          ]
+        },
+        {
+          "action": "external_directory",
+          "resources": [
+            "/private/tmp/cttr-AJ4J0o/games/*"
+          ]
+        },
+        {
+          "action": "external_directory",
+          "resources": [
+            "/private/tmp/cttr-AJ4J0o/games/task-tracker/src/core/*"
+          ]
+        },
+        {
+          "action": "external_directory",
+          "resources": [
+            "/private/tmp/cttr-AJ4J0o/games/task-tracker/src/cli/*"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-AJ4J0o/opencode-4/games/task-tracker/src/core/taskFactory.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-4/games/task-tracker/src/store/taskIndex.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-4/games/task-tracker/src/cli/main.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "git diff --check",
+            "git status --short"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "git diff -- games/task-tracker"
+          ]
+        }
+      ],
+      "answer": "I’m inventorying the fixture and tracing the required data paths before editing, including all deadline, priority, and index references.\nThe trace confirms both seeded defects are at store/index boundaries: `addTask` strips the date after factory creation, and `updateTask` refreshes the index before mutation. I’m now making the cross-file rename and propagation, with filtered reads continuing through `queryTaskIds`.\nThe refactor is in place, including required stored priorities and post-mutation index refresh. I also updated the executable help text; next I’m running the fixture’s mandated test, typecheck, and help commands.\nImplemented the Task Tracker refactor.\n\nChanged files:\n- `src/core/task.ts`\n- `src/core/taskFactory.ts`\n- `src/store/taskStore.ts`\n- `src/store/taskIndex.ts`\n- `src/format/display.ts`\n- `src/format/compact.ts`\n- `src/cli/parser.ts`\n- `src/cli/commands.ts`\n- `src/cli/main.ts`\n- `test/fixtures.ts`\n- `test/task-tracker.test.ts`\n\nHighlights:\n- Renamed `dueDate` to `deadline` and CLI option to `--deadline`.\n- Added required `priority` with default `normal`.\n- Added indexed status, priority, and tag filtering.\n- Fixed deadline persistence and stale index updates.\n- Added past-deadline validation.\n\nValidation:\n- `npm run task-tracker:test`: passed\n- `npm run task-tracker:typecheck`: passed\n- `npm run task-tracker:run -- --help`: passed with updated help text\n- Graph search confirms zero remaining `dueDate` references.",
+      "evaluation": {
+        "acceptanceScore": 1,
+        "passedChecks": 8,
+        "totalChecks": 8,
+        "success": true,
+        "checks": {
+          "fixtureShape": {
+            "passed": true,
+            "detail": "all seeded cross-file fixture files remain present"
+          },
+          "npmScripts": {
+            "passed": true,
+            "detail": "all task-tracker scripts exist"
+          },
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and priority with no dueDate token remaining"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines and invalid priorities rejected; future deadline and default priority accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → query/store/index paths preserve fields and refresh filters"
+          },
+          "targetedTests": {
+            "passed": true,
+            "detail": "passed in 461 ms"
+          },
+          "typecheck": {
+            "passed": true,
+            "detail": "passed in 751 ms"
+          },
+          "cliSmoke": {
+            "passed": true,
+            "detail": "passed in 426 ms"
+          }
+        },
+        "hopScores": {
+          "hop1OrLess": {
+            "passed": 2,
+            "total": 2,
+            "score": 1
+          },
+          "hop2": {
+            "passed": 1,
+            "total": 1,
+            "score": 1
+          },
+          "regression": {
+            "passed": 3,
+            "total": 3,
+            "score": 1
+          }
+        },
+        "hidden": {
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and priority with no dueDate token remaining"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines and invalid priorities rejected; future deadline and default priority accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → query/store/index paths preserve fields and refresh filters"
+          }
+        },
+        "targetedTest": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 461,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:test\n> node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n[PASS] validate accepts a well-formed future deadline and priority\n[PASS] validate rejects malformed dates and invalid priorities\n[PASS] store supports create, read, update, and delete\n[PASS] API handlers create and list tasks\n[PASS] CLI parser and command formatter work together\n[PASS] indexed filters select status and tags\n",
+          "stderr": ""
+        },
+        "typecheck": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 751,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\n",
+          "stderr": ""
+        },
+        "cliSmoke": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 426,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\nTask Tracker CLI\n\nUsage:\n  task-tracker add <title> [--deadline ISO] [--priority low|normal|high]\n  task-tracker list [--status STATUS] [--priority PRIORITY] [--tag TAG]\n  task-tracker show <id>\n  task-tracker done <id>\n\n",
+          "stderr": ""
+        }
+      }
+    },
+    {
+      "repeat": 5,
+      "arm": "opencode",
+      "workspace": "<removed after evaluation>",
+      "sessionID": "ses_fd3fb1588ffeVZ5zvcRztiItSR",
+      "success": true,
+      "attempts": 1,
+      "acceptanceScore": 1,
+      "contextTokens": 0,
+      "taskContextChars": 0,
+      "taskContextHighConfidence": 0,
+      "taskContextMediumConfidence": 0,
+      "contextEnabled": false,
+      "instructionMode": "opencode",
+      "instructionApplied": null,
+      "durationMs": 101121,
+      "usage": {
+        "input": 34003,
+        "output": 3611,
+        "reasoning": 310,
+        "cacheRead": 167936,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 34003,
+      "totalModelTokens": 37924,
+      "cost": 0,
+      "toolCalls": 36,
+      "toolCounts": {
+        "cuppet_workspace_info": 1,
+        "cuppet_graph_tree": 1,
+        "cuppet_graph_search": 6,
+        "cuppet_graph_trace": 2,
+        "read": 17,
+        "apply_patch": 2,
+        "bash": 7
+      },
+      "firstToolName": "cuppet_workspace_info",
+      "graphSearchCalls": 10,
+      "graphOutputBytes": 10661,
+      "graphToolTrace": [
+        {
+          "name": "cuppet_workspace_info",
+          "input": {
+            "limit": 200
+          },
+          "outputBytes": 801,
+          "resultCount": 105,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "completeTask",
+            "direction": "both",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 2401,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "dueDate|deadline|priority|indexTask|updateTaskIndex|queryTaskIds",
+            "prefix": "games/task-tracker",
+            "limit": 300
+          },
+          "outputBytes": 1346,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_tree",
+          "input": {
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 736,
+          "resultCount": 16,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "listFilteredTasks",
+            "direction": "both",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 2402,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "dueDate",
+            "prefix": "games/task-tracker",
+            "limit": 100
+          },
+          "outputBytes": 62,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "priority\\?",
+            "prefix": "games/task-tracker",
+            "limit": 100
+          },
+          "outputBytes": 1297,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "--due-date",
+            "prefix": "games/task-tracker",
+            "limit": 100
+          },
+          "outputBytes": 293,
+          "resultCount": 3,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "deadline",
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 1073,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "dueDate|--due-date",
+            "prefix": "games/task-tracker",
+            "limit": 100
+          },
+          "outputBytes": 250,
+          "resultCount": 2,
+          "truncated": false,
+          "cacheHit": false
+        }
+      ],
+      "graphBeforeWorkspace": true,
+      "firstToolMs": 6509,
+      "firstGraphMs": 6509,
+      "firstWorkspaceToolMs": 20090,
+      "firstWorkspaceToolName": "read",
+      "firstSearchMs": 6509,
+      "firstEditMs": 54504,
+      "firstBashMs": 65605,
+      "permissionRequests": 9,
+      "rejectedPermissions": 0,
+      "graphGateRejections": 0,
+      "unexpectedRejectedPermissions": 0,
+      "blockedFileSearchRequests": 0,
+      "graphRedirectMessages": 0,
+      "blockedFileSearchCalls": 0,
+      "blockedBashRequests": 0,
+      "graphGateEnabled": false,
+      "graphPreflightPassed": true,
+      "permissionActions": [
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-AJ4J0o/opencode-5/games/task-tracker/src/core/task.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-5/games/task-tracker/src/core/taskFactory.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-5/games/task-tracker/src/store/taskStore.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-5/games/task-tracker/src/cli/parser.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-5/games/task-tracker/src/cli/commands.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-5/games/task-tracker/src/format/display.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-5/games/task-tracker/src/format/compact.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-5/games/task-tracker/test/fixtures.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-5/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-AJ4J0o/opencode-5/games/task-tracker/src/store/taskIndex.ts",
+            "private/tmp/cttr-AJ4J0o/opencode-5/games/task-tracker/src/cli/main.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "git status --short"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "git diff -- games/task-tracker"
+          ]
+        }
+      ],
+      "answer": "I’m inventorying the fixture and tracing the required CLI-to-index paths before editing, then I’ll apply the smallest cross-file refactor and run all three requested validations.\nThe fixture already contains partial priority/index scaffolding, but its public model still makes priority optional and uses `dueDate`; the two seeded defects are exactly at the store boundaries identified. I’m now renaming the field, making stored `Task.priority` required with factory defaulting, wiring CLI/API filters, and refreshing the index after mutation.\nThe first verification pass found one type-level mismatch in the index: `Task.priority` is now required, so the index entry must be required too. That is corrected, and the help text now uses `--deadline`; I’m rerunning the complete requested checks.\nImplemented the Task Tracker refactor.\n\nChanged files:\n- `src/core/task.ts`\n- `src/core/taskFactory.ts`\n- `src/store/taskStore.ts`\n- `src/store/taskIndex.ts`\n- `src/cli/parser.ts`\n- `src/cli/commands.ts`\n- `src/cli/main.ts`\n- `src/format/display.ts`\n- `src/format/compact.ts`\n- `test/fixtures.ts`\n- `test/task-tracker.test.ts`\n\nKey fixes:\n- Renamed `dueDate` to `deadline` and CLI option to `--deadline`.\n- Added required `Task.priority`, defaulting to `normal`.\n- Added indexed status, priority, and tag filtering.\n- Fixed deadline persistence in `addTask`.\n- Fixed stale index metadata after task updates.\n- Added past-deadline validation.\n- Updated formatting, fixtures, tests, and help text.\n\nValidation:\n- `npm run task-tracker:test` passed.\n- `npm run task-tracker:typecheck` passed.\n- `npm run task-tracker:run -- --help` passed with updated help output.",
+      "evaluation": {
+        "acceptanceScore": 1,
+        "passedChecks": 8,
+        "totalChecks": 8,
+        "success": true,
+        "checks": {
+          "fixtureShape": {
+            "passed": true,
+            "detail": "all seeded cross-file fixture files remain present"
+          },
+          "npmScripts": {
+            "passed": true,
+            "detail": "all task-tracker scripts exist"
+          },
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and priority with no dueDate token remaining"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines and invalid priorities rejected; future deadline and default priority accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → query/store/index paths preserve fields and refresh filters"
+          },
+          "targetedTests": {
+            "passed": true,
+            "detail": "passed in 567 ms"
+          },
+          "typecheck": {
+            "passed": true,
+            "detail": "passed in 760 ms"
+          },
+          "cliSmoke": {
+            "passed": true,
+            "detail": "passed in 459 ms"
+          }
+        },
+        "hopScores": {
+          "hop1OrLess": {
+            "passed": 2,
+            "total": 2,
+            "score": 1
+          },
+          "hop2": {
+            "passed": 1,
+            "total": 1,
+            "score": 1
+          },
+          "regression": {
+            "passed": 3,
+            "total": 3,
+            "score": 1
+          }
+        },
+        "hidden": {
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and priority with no dueDate token remaining"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines and invalid priorities rejected; future deadline and default priority accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → query/store/index paths preserve fields and refresh filters"
+          }
+        },
+        "targetedTest": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 567,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:test\n> node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n[PASS] validate accepts a well-formed future deadline and priority\n[PASS] validate rejects malformed dates and invalid priorities\n[PASS] store supports create, read, update, and delete\n[PASS] API handlers create and list tasks\n[PASS] CLI parser and command formatter work together\n[PASS] indexed filters select status and tags\n",
+          "stderr": ""
+        },
+        "typecheck": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 760,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\n",
+          "stderr": ""
+        },
+        "cliSmoke": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 459,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\nTask Tracker CLI\n\nUsage:\n  task-tracker add <title> [--deadline ISO] [--priority low|normal|high]\n  task-tracker list [--status STATUS] [--priority PRIORITY] [--tag TAG]\n  task-tracker show <id>\n  task-tracker done <id>\n\n",
+          "stderr": ""
+        }
+      }
+    },
+    {
+      "repeat": 5,
+      "arm": "cuppet",
+      "workspace": "<removed after evaluation>",
+      "sessionID": "ses_fd3f959b3ffepHatIPW8h6eo8J",
+      "success": true,
+      "attempts": 1,
+      "acceptanceScore": 1,
+      "contextTokens": 340,
+      "taskContextChars": 0,
+      "taskContextHighConfidence": 0,
+      "taskContextMediumConfidence": 0,
+      "contextEnabled": true,
+      "instructionMode": "cuppet",
+      "instructionApplied": null,
+      "durationMs": 133094,
+      "usage": {
+        "input": 50763,
+        "output": 4580,
+        "reasoning": 282,
+        "cacheRead": 309760,
+        "cacheWrite": 0
+      },
+      "uncachedInputTokens": 50763,
+      "totalModelTokens": 55625,
+      "cost": 0,
+      "toolCalls": 44,
+      "toolCounts": {
+        "todowrite": 3,
+        "cuppet_workspace_info": 1,
+        "cuppet_graph_tree": 1,
+        "cuppet_graph_search": 4,
+        "read": 16,
+        "cuppet_graph_trace": 6,
+        "apply_patch": 3,
+        "bash": 9,
+        "grep": 1
+      },
+      "firstToolName": "todowrite",
+      "graphSearchCalls": 12,
+      "graphOutputBytes": 11317,
+      "graphToolTrace": [
+        {
+          "name": "cuppet_workspace_info",
+          "input": {
+            "limit": 100
+          },
+          "outputBytes": 802,
+          "resultCount": 100,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "dueDate|deadline|priority|taskIndex|listFilteredTasks",
+            "prefix": "games/task-tracker",
+            "limit": 300
+          },
+          "outputBytes": 1338,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_tree",
+          "input": {
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 736,
+          "resultCount": 16,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "execute",
+            "direction": "outgoing",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 0,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "listTasksHandler",
+            "direction": "incoming",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 0,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "listFilteredTasks",
+            "direction": "incoming",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 0,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "execute",
+            "direction": "callees",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 78,
+          "resultCount": 0,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "indexTask|updateTaskIndex|queryTaskIds",
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 1149,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "listTasksHandler",
+            "direction": "callers",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 2375,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "dueDate",
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 1144,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_trace",
+          "input": {
+            "query": "listFilteredTasks",
+            "direction": "callers",
+            "depth": 5,
+            "limit": 100
+          },
+          "outputBytes": 2402,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        },
+        {
+          "name": "cuppet_graph_search",
+          "input": {
+            "pattern": "priority",
+            "prefix": "games/task-tracker",
+            "limit": 200
+          },
+          "outputBytes": 1293,
+          "resultCount": 12,
+          "truncated": false,
+          "cacheHit": false
+        }
+      ],
+      "graphBeforeWorkspace": false,
+      "firstToolMs": 6360,
+      "firstGraphMs": 11025,
+      "firstWorkspaceToolMs": 6360,
+      "firstWorkspaceToolName": "todowrite",
+      "firstSearchMs": 11025,
+      "firstEditMs": 6360,
+      "firstBashMs": 77351,
+      "permissionRequests": 12,
+      "rejectedPermissions": 0,
+      "graphGateRejections": 0,
+      "unexpectedRejectedPermissions": 0,
+      "blockedFileSearchRequests": 0,
+      "graphRedirectMessages": 0,
+      "blockedFileSearchCalls": 0,
+      "blockedBashRequests": 0,
+      "graphGateEnabled": false,
+      "graphPreflightPassed": true,
+      "permissionActions": [
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-AJ4J0o/cuppet-5/games/task-tracker/src/core/task.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-5/games/task-tracker/src/core/taskFactory.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-5/games/task-tracker/src/store/taskStore.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-5/games/task-tracker/src/format/display.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-5/games/task-tracker/src/format/compact.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-5/games/task-tracker/src/cli/parser.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-5/games/task-tracker/src/cli/commands.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-5/games/task-tracker/test/fixtures.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-5/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-AJ4J0o/cuppet-5/games/task-tracker/src/store/taskIndex.ts",
+            "private/tmp/cttr-AJ4J0o/cuppet-5/games/task-tracker/src/cli/main.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:typecheck"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:run -- --help"
+          ]
+        },
+        {
+          "action": "edit",
+          "resources": [
+            "private/tmp/cttr-AJ4J0o/cuppet-5/games/task-tracker/test/task-tracker.test.ts"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "npm run task-tracker:test"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "git status --short -- games/task-tracker"
+          ]
+        },
+        {
+          "action": "bash",
+          "resources": [
+            "git diff --stat -- games/task-tracker"
+          ]
+        }
+      ],
+      "answer": "I’ll inventory the fixture and trace the indexed request path first, then make the cross-file refactor and run all three required root scripts.\nThe graph and exact reads confirm both seeded defects are at the store boundary: `addTask` strips the date, and `updateTask` refreshes the index before mutation. The existing query already resolves IDs through the index, so the minimal fix is to make `priority` required on stored tasks, rename the field end-to-end, and reindex after mutation.\nTests pass, but typecheck exposed one remaining optional-priority assumption in the index, and the CLI help is hard-coded with the old `--due-date` spelling. I’ll fix those two contract-level issues, then rerun the required commands.\nImplemented the Task Tracker changes.\n\nChanged files:\n- `src/core/task.ts`\n- `src/core/taskFactory.ts`\n- `src/store/taskStore.ts`\n- `src/store/taskIndex.ts`\n- `src/format/display.ts`\n- `src/format/compact.ts`\n- `src/cli/parser.ts`\n- `src/cli/commands.ts`\n- `src/cli/main.ts`\n- `test/fixtures.ts`\n- `test/task-tracker.test.ts`\n\nHighlights:\n- Renamed `dueDate` to `deadline` and CLI option to `--deadline`.\n- Added required `priority`, defaulting to `normal`.\n- Added indexed status, priority, and tag filtering.\n- Fixed deadline persistence and stale index metadata.\n- Added past-deadline validation and regression coverage.\n\nValidation:\n- `npm run task-tracker:test`: passed, 6 tests.\n- `npm run task-tracker:typecheck`: passed.\n- `npm run task-tracker:run -- --help`: passed, displays `--deadline`.\n- No remaining `dueDate` or `--due-date` references in the fixture.",
+      "evaluation": {
+        "acceptanceScore": 1,
+        "passedChecks": 8,
+        "totalChecks": 8,
+        "success": true,
+        "checks": {
+          "fixtureShape": {
+            "passed": true,
+            "detail": "all seeded cross-file fixture files remain present"
+          },
+          "npmScripts": {
+            "passed": true,
+            "detail": "all task-tracker scripts exist"
+          },
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and priority with no dueDate token remaining"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines and invalid priorities rejected; future deadline and default priority accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → query/store/index paths preserve fields and refresh filters"
+          },
+          "targetedTests": {
+            "passed": true,
+            "detail": "passed in 515 ms"
+          },
+          "typecheck": {
+            "passed": true,
+            "detail": "passed in 821 ms"
+          },
+          "cliSmoke": {
+            "passed": true,
+            "detail": "passed in 439 ms"
+          }
+        },
+        "hopScores": {
+          "hop1OrLess": {
+            "passed": 2,
+            "total": 2,
+            "score": 1
+          },
+          "hop2": {
+            "passed": 1,
+            "total": 1,
+            "score": 1
+          },
+          "regression": {
+            "passed": 3,
+            "total": 3,
+            "score": 1
+          }
+        },
+        "hidden": {
+          "renameCoverage": {
+            "passed": true,
+            "detail": "all fixture source/test usages use deadline and priority with no dueDate token remaining"
+          },
+          "pastDeadline": {
+            "passed": true,
+            "detail": "past deadlines and invalid priorities rejected; future deadline and default priority accepted"
+          },
+          "twoHopBug": {
+            "passed": true,
+            "detail": "direct store and CLI → API → query/store/index paths preserve fields and refresh filters"
+          }
+        },
+        "targetedTest": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 515,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:test\n> node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n[PASS] validate accepts a well-formed future deadline and priority\n[PASS] validate rejects malformed dates and invalid priorities\n[PASS] store supports create, read, update, and delete\n[PASS] API handlers create and list tasks\n[PASS] CLI parser and command formatter work together\n[PASS] indexed filters select status and tags\n",
+          "stderr": ""
+        },
+        "typecheck": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 821,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\n",
+          "stderr": ""
+        },
+        "cliSmoke": {
+          "passed": true,
+          "code": 0,
+          "durationMs": 439,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.1 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\nTask Tracker CLI\n\nUsage:\n  task-tracker add <title> [--deadline ISO] [--priority low|normal|high]\n  task-tracker list [--status STATUS] [--priority PRIORITY] [--tag TAG]\n  task-tracker show <id>\n  task-tracker done <id>\n\n",
+          "stderr": ""
+        }
+      }
+    }
+  ]
+}

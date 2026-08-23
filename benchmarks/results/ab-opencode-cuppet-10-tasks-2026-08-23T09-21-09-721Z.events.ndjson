@@ -1,0 +1,29 @@
+{"at":"2026-08-23T09:21:09.722Z","event":"fixture-created"}
+{"at":"2026-08-23T09:21:10.901Z","event":"opencode-runtime-created"}
+{"at":"2026-08-23T09:21:10.902Z","event":"opencode-session-created"}
+{"at":"2026-08-23T09:21:16.413Z","event":"cuppet-runtime-created"}
+{"at":"2026-08-23T09:21:16.420Z","event":"cuppet-session-created"}
+{"at":"2026-08-23T09:21:16.441Z","event":"cuppet-landing-page-prompt-started"}
+{"at":"2026-08-23T09:21:16.451Z","event":"opencode-landing-page-prompt-started"}
+{"at":"2026-08-23T09:28:17.749Z","event":"opencode-landing-page-evaluated"}
+{"at":"2026-08-23T09:28:17.756Z","event":"opencode-landing-page-completed"}
+{"at":"2026-08-23T09:29:51.641Z","event":"cuppet-landing-page-evaluated"}
+{"at":"2026-08-23T09:29:51.648Z","event":"cuppet-landing-page-completed"}
+{"at":"2026-08-23T09:29:51.659Z","event":"cuppet-todo-list-app-prompt-started"}
+{"at":"2026-08-23T09:29:51.673Z","event":"opencode-todo-list-app-prompt-started"}
+{"at":"2026-08-23T09:44:52.005Z","event":"opencode-todo-list-app-evaluated","error":"opencode/todo-list-app timed out"}
+{"at":"2026-08-23T09:44:52.005Z","event":"cuppet-todo-list-app-evaluated","error":"cuppet/todo-list-app timed out"}
+{"at":"2026-08-23T09:44:52.010Z","event":"opencode-todo-list-app-completed"}
+{"at":"2026-08-23T09:44:52.010Z","event":"cuppet-todo-list-app-completed"}
+{"at":"2026-08-23T09:44:52.021Z","event":"opencode-calculator-web-app-prompt-started"}
+{"at":"2026-08-23T09:44:52.021Z","event":"cuppet-calculator-web-app-prompt-started"}
+{"at":"2026-08-23T09:59:52.489Z","event":"opencode-calculator-web-app-evaluated","error":"opencode/calculator-web-app timed out"}
+{"at":"2026-08-23T09:59:52.500Z","event":"opencode-calculator-web-app-completed"}
+{"at":"2026-08-23T09:59:52.711Z","event":"cuppet-calculator-web-app-evaluated","error":"cuppet/calculator-web-app timed out"}
+{"at":"2026-08-23T09:59:52.713Z","event":"cuppet-calculator-web-app-completed"}
+{"at":"2026-08-23T09:59:52.721Z","event":"cuppet-survey-form-prompt-started"}
+{"at":"2026-08-23T09:59:52.721Z","event":"opencode-survey-form-prompt-started"}
+{"at":"2026-08-23T10:00:50.829Z","event":"opencode-survey-form-repair-needed"}
+{"at":"2026-08-23T10:00:50.834Z","event":"opencode-survey-form-repair-started"}
+{"at":"2026-08-23T10:06:23.206Z","event":"opencode-survey-form-evaluated"}
+{"at":"2026-08-23T10:06:23.214Z","event":"opencode-survey-form-completed"}

@@ -1,0 +1,4699 @@
+{
+  "schema": 1,
+  "status": "partial",
+  "createdAt": "2026-08-23T10:11:50.784Z",
+  "updatedAt": "2026-08-23T11:14:37.119Z",
+  "model": {
+    "providerID": "opencode",
+    "modelID": "x-preview-f-free"
+  },
+  "cuppetContextMode": "task-conditioned-relevance",
+  "opencodeVersion": "1.18.4",
+  "officialBinary": "/private/tmp/cuppet-opencode-official-1.18.4/node_modules/opencode-darwin-arm64/bin/opencode",
+  "fixture": {
+    "hash": "825e116e633562fcfe2e6ce29204a5e6ac768e29e3be8f8accb363d668154b1f",
+    "files": [
+      "README.md",
+      "projects/README.md"
+    ]
+  },
+  "tasks": [
+    "landing-page",
+    "todo-list-app",
+    "calculator-web-app",
+    "survey-form",
+    "personal-blog",
+    "business-portfolio",
+    "quiz-game",
+    "meme-generator"
+  ],
+  "design": "Two fresh workspaces and two foreground sessions. Both arms receive the same 8 prompt(s) concurrently in one persistent session each, keeping both provider prompt caches warm so idle eviction cannot bias either arm. Official OpenCode uses the unpatched upstream server; Cuppet uses the live plugin and TST path. Every task is evaluated immediately with hidden file, behavior-contract, syntax, network, and scope checks. Per-step token samples include idle gaps; cache share excluding steps after gaps over 180s is reported as idle-adjusted.",
+  "checkpoint": {
+    "lastEvent": "benchmark-completed"
+  },
+  "arms": {
+    "opencode": {
+      "arm": "opencode",
+      "workspace": "/private/tmp/cuppet-10-task-sskjor/opencode/workspace",
+      "runtimeRoot": "/private/tmp/cuppet-10-task-sskjor/opencode/runtime",
+      "sessionID": "ses_fd1e51051ffebxhUdWOkB70k3a",
+      "promptCount": 8,
+      "tasks": [
+        {
+          "index": 1,
+          "slug": "landing-page",
+          "title": "Responsive product landing page",
+          "success": true,
+          "promptStartedAt": "2026-08-23T10:12:02.114Z",
+          "promptCompletedAt": "2026-08-23T10:17:23.487Z",
+          "agentDurationMs": 321360,
+          "evaluationDurationMs": 17,
+          "endToEndDurationMs": 321377,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "usage": {
+            "input": 29117,
+            "output": 14466,
+            "reasoning": 876,
+            "cacheRead": 242176,
+            "cacheWrite": 0,
+            "totalModel": 44459,
+            "totalWithCache": 286635,
+            "eventCount": 13,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 29117,
+              "output": 14466,
+              "reasoning": 876,
+              "cacheRead": 242176,
+              "cacheWrite": 0,
+              "totalModel": 44459,
+              "totalWithCache": 286635
+            },
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 12052,
+                "output": 123,
+                "reasoning": 37,
+                "cacheRead": 128,
+                "cacheWrite": 0,
+                "totalModel": 12212,
+                "totalWithCache": 12340
+              },
+              {
+                "gapSeconds": 4,
+                "input": 227,
+                "output": 50,
+                "reasoning": 0,
+                "cacheRead": 12160,
+                "cacheWrite": 0,
+                "totalModel": 277,
+                "totalWithCache": 12437
+              },
+              {
+                "gapSeconds": 52,
+                "input": 201,
+                "output": 1122,
+                "reasoning": 655,
+                "cacheRead": 12352,
+                "cacheWrite": 0,
+                "totalModel": 1978,
+                "totalWithCache": 14330
+              },
+              {
+                "gapSeconds": 4,
+                "input": 1920,
+                "output": 17,
+                "reasoning": 0,
+                "cacheRead": 12544,
+                "cacheWrite": 0,
+                "totalModel": 1937,
+                "totalWithCache": 14481
+              },
+              {
+                "gapSeconds": 79,
+                "input": 24,
+                "output": 4795,
+                "reasoning": 0,
+                "cacheRead": 14464,
+                "cacheWrite": 0,
+                "totalModel": 4819,
+                "totalWithCache": 19283
+              },
+              {
+                "gapSeconds": 8,
+                "input": 4828,
+                "output": 114,
+                "reasoning": 0,
+                "cacheRead": 14464,
+                "cacheWrite": 0,
+                "totalModel": 4942,
+                "totalWithCache": 19406
+              },
+              {
+                "gapSeconds": 95,
+                "input": 276,
+                "output": 6437,
+                "reasoning": 0,
+                "cacheRead": 19264,
+                "cacheWrite": 0,
+                "totalModel": 6713,
+                "totalWithCache": 25977
+              },
+              {
+                "gapSeconds": 17,
+                "input": 6466,
+                "output": 517,
+                "reasoning": 0,
+                "cacheRead": 19520,
+                "cacheWrite": 0,
+                "totalModel": 6983,
+                "totalWithCache": 26503
+              },
+              {
+                "gapSeconds": 10,
+                "input": 528,
+                "output": 380,
+                "reasoning": 23,
+                "cacheRead": 25984,
+                "cacheWrite": 0,
+                "totalModel": 931,
+                "totalWithCache": 26915
+              },
+              {
+                "gapSeconds": 15,
+                "input": 1060,
+                "output": 513,
+                "reasoning": 109,
+                "cacheRead": 26496,
+                "cacheWrite": 0,
+                "totalModel": 1682,
+                "totalWithCache": 28178
+              },
+              {
+                "gapSeconds": 8,
+                "input": 1043,
+                "output": 138,
+                "reasoning": 52,
+                "cacheRead": 27520,
+                "cacheWrite": 0,
+                "totalModel": 1233,
+                "totalWithCache": 28753
+              },
+              {
+                "gapSeconds": 4,
+                "input": 219,
+                "output": 113,
+                "reasoning": 0,
+                "cacheRead": 28544,
+                "cacheWrite": 0,
+                "totalModel": 332,
+                "totalWithCache": 28876
+              },
+              {
+                "gapSeconds": 6,
+                "input": 273,
+                "output": 147,
+                "reasoning": 0,
+                "cacheRead": 28736,
+                "cacheWrite": 0,
+                "totalModel": 420,
+                "totalWithCache": 29156
+              }
+            ]
+          },
+          "cumulativeSessionUsage": {
+            "input": 29117,
+            "output": 14466,
+            "reasoning": 876,
+            "cacheRead": 242176,
+            "cacheWrite": 0,
+            "totalModel": 44459,
+            "totalWithCache": 286635
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 13,
+          "permissionRequests": 7,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 15,
+            "totalChecks": 15,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:semantic header": {
+                "passed": true,
+                "detail": "index.html: found 4, expected at least 1"
+              },
+              "pattern:navigation": {
+                "passed": true,
+                "detail": "index.html: found 4, expected at least 1"
+              },
+              "pattern:main content": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:hero content": {
+                "passed": true,
+                "detail": "index.html: found 9, expected at least 1"
+              },
+              "pattern:primary CTA": {
+                "passed": true,
+                "detail": "index.html: found 8, expected at least 1"
+              },
+              "pattern:feature section": {
+                "passed": true,
+                "detail": "index.html: found 23, expected at least 1"
+              },
+              "pattern:contact or footer": {
+                "passed": true,
+                "detail": "index.html: found 17, expected at least 1"
+              },
+              "pattern:CSS variables": {
+                "passed": true,
+                "detail": "styles.css: found 31, expected at least 2"
+              },
+              "pattern:responsive breakpoint": {
+                "passed": true,
+                "detail": "styles.css: found 3, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 23, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              }
+            },
+            "files": [
+              "README.md",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {}
+          },
+          "finalMessage": "Done. `projects/landing-page/` contains exactly `index.html`, `styles.css`, and `README.md` — a fictional product (\"Nimbus\") landing page with sticky header/nav, dark hero + CSS-only app mockup, six feature cards, testimonials + stats strip, three-tier pricing, contact form section, and footer. Verified: HTML tags balanced (parser check), CSS braces matched (154 pairs), no network/remote assets (icons are inline SVG/data URIs), skip link + `:focus-visible` styles throughout, and breakpoints at 900px/720px. Only new files under `projects/landing-page/`; nothing else touched. Open `index.html` in a browser to view."
+        },
+        {
+          "index": 2,
+          "slug": "todo-list-app",
+          "title": "Persistent todo list app",
+          "success": true,
+          "promptStartedAt": "2026-08-23T10:20:42.633Z",
+          "promptCompletedAt": "2026-08-23T10:26:38.909Z",
+          "agentDurationMs": 356265,
+          "evaluationDurationMs": 60,
+          "endToEndDurationMs": 356325,
+          "attempts": 2,
+          "firstAttemptSuccess": false,
+          "repaired": true,
+          "usage": {
+            "input": 14686,
+            "output": 9496,
+            "reasoning": 785,
+            "cacheRead": 672576,
+            "cacheWrite": 0,
+            "totalModel": 24967,
+            "totalWithCache": 697543,
+            "eventCount": 19,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 14686,
+              "output": 9496,
+              "reasoning": 785,
+              "cacheRead": 672576,
+              "cacheWrite": 0,
+              "totalModel": 24967,
+              "totalWithCache": 697543
+            },
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 0,
+                "output": 0,
+                "reasoning": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 0,
+                "totalWithCache": 0
+              },
+              {
+                "gapSeconds": 9,
+                "input": 2712,
+                "output": 152,
+                "reasoning": 64,
+                "cacheRead": 29248,
+                "cacheWrite": 0,
+                "totalModel": 2928,
+                "totalWithCache": 32176
+              },
+              {
+                "gapSeconds": 6,
+                "input": 255,
+                "output": 70,
+                "reasoning": 9,
+                "cacheRead": 31936,
+                "cacheWrite": 0,
+                "totalModel": 334,
+                "totalWithCache": 32270
+              },
+              {
+                "gapSeconds": 16,
+                "input": 149,
+                "output": 773,
+                "reasoning": 0,
+                "cacheRead": 32128,
+                "cacheWrite": 0,
+                "totalModel": 922,
+                "totalWithCache": 33050
+              },
+              {
+                "gapSeconds": 37,
+                "input": 803,
+                "output": 2205,
+                "reasoning": 0,
+                "cacheRead": 32256,
+                "cacheWrite": 0,
+                "totalModel": 3008,
+                "totalWithCache": 35264
+              },
+              {
+                "gapSeconds": 27,
+                "input": 2249,
+                "output": 1177,
+                "reasoning": 0,
+                "cacheRead": 33024,
+                "cacheWrite": 0,
+                "totalModel": 3426,
+                "totalWithCache": 36450
+              },
+              {
+                "gapSeconds": 20,
+                "input": 1195,
+                "output": 482,
+                "reasoning": 0,
+                "cacheRead": 35264,
+                "cacheWrite": 0,
+                "totalModel": 1677,
+                "totalWithCache": 36941
+              },
+              {
+                "gapSeconds": 19,
+                "input": 534,
+                "output": 698,
+                "reasoning": 0,
+                "cacheRead": 36416,
+                "cacheWrite": 0,
+                "totalModel": 1232,
+                "totalWithCache": 37648
+              },
+              {
+                "gapSeconds": 9,
+                "input": 1185,
+                "output": 365,
+                "reasoning": 23,
+                "cacheRead": 36928,
+                "cacheWrite": 0,
+                "totalModel": 1573,
+                "totalWithCache": 38501
+              },
+              {
+                "gapSeconds": 12,
+                "input": 789,
+                "output": 239,
+                "reasoning": 71,
+                "cacheRead": 38080,
+                "cacheWrite": 0,
+                "totalModel": 1099,
+                "totalWithCache": 39179
+              },
+              {
+                "gapSeconds": 14,
+                "input": 345,
+                "output": 285,
+                "reasoning": 0,
+                "cacheRead": 38848,
+                "cacheWrite": 0,
+                "totalModel": 630,
+                "totalWithCache": 39478
+              },
+              {
+                "gapSeconds": 18,
+                "input": 504,
+                "output": 250,
+                "reasoning": 195,
+                "cacheRead": 39168,
+                "cacheWrite": 0,
+                "totalModel": 949,
+                "totalWithCache": 40117
+              },
+              {
+                "gapSeconds": 8,
+                "input": 745,
+                "output": 248,
+                "reasoning": 0,
+                "cacheRead": 39616,
+                "cacheWrite": 0,
+                "totalModel": 993,
+                "totalWithCache": 40609
+              },
+              {
+                "gapSeconds": 10,
+                "input": 297,
+                "output": 386,
+                "reasoning": 0,
+                "cacheRead": 40320,
+                "cacheWrite": 0,
+                "totalModel": 683,
+                "totalWithCache": 41003
+              },
+              {
+                "gapSeconds": 31,
+                "input": 448,
+                "output": 822,
+                "reasoning": 330,
+                "cacheRead": 40576,
+                "cacheWrite": 0,
+                "totalModel": 1600,
+                "totalWithCache": 42176
+              },
+              {
+                "gapSeconds": 6,
+                "input": 1166,
+                "output": 251,
+                "reasoning": 0,
+                "cacheRead": 41024,
+                "cacheWrite": 0,
+                "totalModel": 1417,
+                "totalWithCache": 42441
+              },
+              {
+                "gapSeconds": 15,
+                "input": 273,
+                "output": 633,
+                "reasoning": 0,
+                "cacheRead": 42176,
+                "cacheWrite": 0,
+                "totalModel": 906,
+                "totalWithCache": 43082
+              },
+              {
+                "gapSeconds": 10,
+                "input": 767,
+                "output": 127,
+                "reasoning": 20,
+                "cacheRead": 42432,
+                "cacheWrite": 0,
+                "totalModel": 914,
+                "totalWithCache": 43346
+              },
+              {
+                "gapSeconds": 14,
+                "input": 270,
+                "output": 333,
+                "reasoning": 73,
+                "cacheRead": 43136,
+                "cacheWrite": 0,
+                "totalModel": 676,
+                "totalWithCache": 43812
+              }
+            ]
+          },
+          "cumulativeSessionUsage": {
+            "input": 43803,
+            "output": 23962,
+            "reasoning": 1661,
+            "cacheRead": 914752,
+            "cacheWrite": 0,
+            "totalModel": 69426,
+            "totalWithCache": 984178
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 18,
+          "permissionRequests": 17,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 16,
+            "totalChecks": 16,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:todo input": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:todo list container": {
+                "passed": true,
+                "detail": "index.html: found 3, expected at least 1"
+              },
+              "pattern:filter controls": {
+                "passed": true,
+                "detail": "index.html: found 8, expected at least 1"
+              },
+              "pattern:local persistence": {
+                "passed": true,
+                "detail": "app.js: found 2, expected at least 2"
+              },
+              "pattern:event listeners": {
+                "passed": true,
+                "detail": "app.js: found 5, expected at least 2"
+              },
+              "pattern:completion behavior": {
+                "passed": true,
+                "detail": "app.js: found 27, expected at least 1"
+              },
+              "pattern:delete behavior": {
+                "passed": true,
+                "detail": "app.js: found 10, expected at least 1"
+              },
+              "pattern:filter behavior": {
+                "passed": true,
+                "detail": "app.js: found 42, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 8, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 44
+              }
+            }
+          },
+          "finalMessage": "Fixed and verified. The earlier FAIL was my test assertion's string slicing — the actual code is correct (`hidden` on the element at index.html:63, managed in app.js:158). All verifier points now pass inside `projects/todo-list-app`: - **Files**: index.html, styles.css, app.js, README.md all present - **index.html**: labeled todo input, `<ul id=\"todo-list\">`, three filter radios (All/Active/Completed) - **app.js**: `localStorage` getItem/setItem persistence with validation + try/catch, 5 event listeners (submit/change/click/clear/filter), toggle/delete/filter functions, accurate singular/plural count with `aria-live`, filter-aware empty states, clear-completed that self-hides - **styles.css**: design tokens, `@media (max-width: 520px)` responsive breakpoint Inspection also caught and fixed two real bugs: unassociated checkbox labels and a never-hidden empty-state block. Rendering is XSS-safe (textContent only), JS passes `node --check`, HTML is balanced, and no other project or root file was touched."
+        },
+        {
+          "index": 3,
+          "slug": "calculator-web-app",
+          "title": "Keyboard-friendly calculator",
+          "success": true,
+          "promptStartedAt": "2026-08-23T10:26:38.933Z",
+          "promptCompletedAt": "2026-08-23T10:31:42.589Z",
+          "agentDurationMs": 303646,
+          "evaluationDurationMs": 43,
+          "endToEndDurationMs": 303689,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "usage": {
+            "input": 9985,
+            "output": 8401,
+            "reasoning": 2698,
+            "cacheRead": 396416,
+            "cacheWrite": 0,
+            "totalModel": 21084,
+            "totalWithCache": 417500,
+            "eventCount": 8,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 9985,
+              "output": 8401,
+              "reasoning": 2698,
+              "cacheRead": 396416,
+              "cacheWrite": 0,
+              "totalModel": 21084,
+              "totalWithCache": 417500
+            },
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 539,
+                "output": 3479,
+                "reasoning": 2283,
+                "cacheRead": 43392,
+                "cacheWrite": 0,
+                "totalModel": 6301,
+                "totalWithCache": 49693
+              },
+              {
+                "gapSeconds": 3,
+                "input": 5906,
+                "output": 38,
+                "reasoning": 0,
+                "cacheRead": 43904,
+                "cacheWrite": 0,
+                "totalModel": 5944,
+                "totalWithCache": 49848
+              },
+              {
+                "gapSeconds": 15,
+                "input": 63,
+                "output": 787,
+                "reasoning": 0,
+                "cacheRead": 49792,
+                "cacheWrite": 0,
+                "totalModel": 850,
+                "totalWithCache": 50642
+              },
+              {
+                "gapSeconds": 21,
+                "input": 859,
+                "output": 1235,
+                "reasoning": 0,
+                "cacheRead": 49792,
+                "cacheWrite": 0,
+                "totalModel": 2094,
+                "totalWithCache": 51886
+              },
+              {
+                "gapSeconds": 15,
+                "input": 55,
+                "output": 233,
+                "reasoning": 93,
+                "cacheRead": 51840,
+                "cacheWrite": 0,
+                "totalModel": 381,
+                "totalWithCache": 52221
+              },
+              {
+                "gapSeconds": 25,
+                "input": 393,
+                "output": 1437,
+                "reasoning": 0,
+                "cacheRead": 51840,
+                "cacheWrite": 0,
+                "totalModel": 1830,
+                "totalWithCache": 53670
+              },
+              {
+                "gapSeconds": 23,
+                "input": 1455,
+                "output": 659,
+                "reasoning": 0,
+                "cacheRead": 52224,
+                "cacheWrite": 0,
+                "totalModel": 2114,
+                "totalWithCache": 54338
+              },
+              {
+                "gapSeconds": 32,
+                "input": 715,
+                "output": 533,
+                "reasoning": 322,
+                "cacheRead": 53632,
+                "cacheWrite": 0,
+                "totalModel": 1570,
+                "totalWithCache": 55202
+              }
+            ]
+          },
+          "cumulativeSessionUsage": {
+            "input": 53788,
+            "output": 32363,
+            "reasoning": 4359,
+            "cacheRead": 1311168,
+            "cacheWrite": 0,
+            "totalModel": 90510,
+            "totalWithCache": 1401678
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 8,
+          "permissionRequests": 7,
+          "rejectedPermissions": 1,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 16,
+            "totalChecks": 16,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:calculator display": {
+                "passed": true,
+                "detail": "index.html: found 2, expected at least 1"
+              },
+              "pattern:digit buttons": {
+                "passed": true,
+                "detail": "index.html: found 10, expected at least 4"
+              },
+              "pattern:operator controls": {
+                "passed": true,
+                "detail": "index.html: found 6, expected at least 1"
+              },
+              "pattern:equals and clear": {
+                "passed": true,
+                "detail": "index.html: found 6, expected at least 2"
+              },
+              "pattern:event listeners": {
+                "passed": true,
+                "detail": "app.js: found 2, expected at least 2"
+              },
+              "pattern:keyboard support": {
+                "passed": true,
+                "detail": "app.js: found 1, expected at least 1"
+              },
+              "pattern:arithmetic logic": {
+                "passed": true,
+                "detail": "app.js: found 36, expected at least 1"
+              },
+              "pattern:zero guard": {
+                "passed": true,
+                "detail": "app.js: found 20, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 4, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 35
+              }
+            }
+          },
+          "finalMessage": "Files created. Now running an automated edge-case suite against the real `app.js` logic using a DOM-stub harness (kept outside the workspace):"
+        },
+        {
+          "index": 4,
+          "slug": "survey-form",
+          "title": "Accessible survey form",
+          "success": true,
+          "promptStartedAt": "2026-08-23T10:32:25.076Z",
+          "promptCompletedAt": "2026-08-23T10:40:20.560Z",
+          "agentDurationMs": 475464,
+          "evaluationDurationMs": 161,
+          "endToEndDurationMs": 475625,
+          "attempts": 2,
+          "firstAttemptSuccess": false,
+          "repaired": true,
+          "usage": {
+            "input": 20825,
+            "output": 16128,
+            "reasoning": 1709,
+            "cacheRead": 969088,
+            "cacheWrite": 0,
+            "totalModel": 38662,
+            "totalWithCache": 1007750,
+            "eventCount": 16,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 20825,
+              "output": 16128,
+              "reasoning": 1709,
+              "cacheRead": 969088,
+              "cacheWrite": 0,
+              "totalModel": 38662,
+              "totalWithCache": 1007750
+            },
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 0,
+                "output": 0,
+                "reasoning": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 0,
+                "totalWithCache": 0
+              },
+              {
+                "gapSeconds": 9,
+                "input": 1921,
+                "output": 157,
+                "reasoning": 66,
+                "cacheRead": 55296,
+                "cacheWrite": 0,
+                "totalModel": 2144,
+                "totalWithCache": 57440
+              },
+              {
+                "gapSeconds": 11,
+                "input": 246,
+                "output": 220,
+                "reasoning": 86,
+                "cacheRead": 57216,
+                "cacheWrite": 0,
+                "totalModel": 552,
+                "totalWithCache": 57768
+              },
+              {
+                "gapSeconds": 28,
+                "input": 367,
+                "output": 1530,
+                "reasoning": 0,
+                "cacheRead": 57408,
+                "cacheWrite": 0,
+                "totalModel": 1897,
+                "totalWithCache": 59305
+              },
+              {
+                "gapSeconds": 40,
+                "input": 1586,
+                "output": 2385,
+                "reasoning": 0,
+                "cacheRead": 57728,
+                "cacheWrite": 0,
+                "totalModel": 3971,
+                "totalWithCache": 61699
+              },
+              {
+                "gapSeconds": 25,
+                "input": 2444,
+                "output": 1313,
+                "reasoning": 0,
+                "cacheRead": 59264,
+                "cacheWrite": 0,
+                "totalModel": 3757,
+                "totalWithCache": 63021
+              },
+              {
+                "gapSeconds": 22,
+                "input": 1334,
+                "output": 595,
+                "reasoning": 0,
+                "cacheRead": 61696,
+                "cacheWrite": 0,
+                "totalModel": 1929,
+                "totalWithCache": 63625
+              },
+              {
+                "gapSeconds": 92,
+                "input": 658,
+                "output": 1774,
+                "reasoning": 1127,
+                "cacheRead": 62976,
+                "cacheWrite": 0,
+                "totalModel": 3559,
+                "totalWithCache": 66535
+              },
+              {
+                "gapSeconds": 8,
+                "input": 2933,
+                "output": 302,
+                "reasoning": 0,
+                "cacheRead": 63616,
+                "cacheWrite": 0,
+                "totalModel": 3235,
+                "totalWithCache": 66851
+              },
+              {
+                "gapSeconds": 14,
+                "input": 375,
+                "output": 586,
+                "reasoning": 0,
+                "cacheRead": 66496,
+                "cacheWrite": 0,
+                "totalModel": 961,
+                "totalWithCache": 67457
+              },
+              {
+                "gapSeconds": 46,
+                "input": 716,
+                "output": 2153,
+                "reasoning": 0,
+                "cacheRead": 66816,
+                "cacheWrite": 0,
+                "totalModel": 2869,
+                "totalWithCache": 69685
+              },
+              {
+                "gapSeconds": 60,
+                "input": 2302,
+                "output": 2552,
+                "reasoning": 353,
+                "cacheRead": 67520,
+                "cacheWrite": 0,
+                "totalModel": 5207,
+                "totalWithCache": 72727
+              },
+              {
+                "gapSeconds": 38,
+                "input": 3102,
+                "output": 2148,
+                "reasoning": 77,
+                "cacheRead": 69760,
+                "cacheWrite": 0,
+                "totalModel": 5327,
+                "totalWithCache": 75087
+              },
+              {
+                "gapSeconds": 8,
+                "input": 2393,
+                "output": 45,
+                "reasoning": 0,
+                "cacheRead": 72832,
+                "cacheWrite": 0,
+                "totalModel": 2438,
+                "totalWithCache": 75270
+              },
+              {
+                "gapSeconds": 13,
+                "input": 111,
+                "output": 135,
+                "reasoning": 0,
+                "cacheRead": 75200,
+                "cacheWrite": 0,
+                "totalModel": 246,
+                "totalWithCache": 75446
+              },
+              {
+                "gapSeconds": 9,
+                "input": 337,
+                "output": 233,
+                "reasoning": 0,
+                "cacheRead": 75264,
+                "cacheWrite": 0,
+                "totalModel": 570,
+                "totalWithCache": 75834
+              }
+            ]
+          },
+          "cumulativeSessionUsage": {
+            "input": 74613,
+            "output": 48491,
+            "reasoning": 6068,
+            "cacheRead": 2280256,
+            "cacheWrite": 0,
+            "totalModel": 129172,
+            "totalWithCache": 2409428
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 17,
+          "permissionRequests": 16,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 18,
+            "totalChecks": 18,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:form element": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:labels": {
+                "passed": true,
+                "detail": "index.html: found 14, expected at least 3"
+              },
+              "pattern:required controls": {
+                "passed": true,
+                "detail": "index.html: found 8, expected at least 3"
+              },
+              "pattern:email field": {
+                "passed": true,
+                "detail": "index.html: found 8, expected at least 1"
+              },
+              "pattern:rating choice": {
+                "passed": true,
+                "detail": "index.html: found 14, expected at least 1"
+              },
+              "pattern:select field": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:checkbox group": {
+                "passed": true,
+                "detail": "index.html: found 5, expected at least 1"
+              },
+              "pattern:success state": {
+                "passed": true,
+                "detail": "index.html: found 5, expected at least 1"
+              },
+              "pattern:prevent default": {
+                "passed": true,
+                "detail": "app.js: found 1, expected at least 1"
+              },
+              "pattern:validation handling": {
+                "passed": true,
+                "detail": "app.js: found 32, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 5, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 140
+              }
+            }
+          },
+          "finalMessage": "Done. `projects/survey-form/` now contains exactly `index.html`, `styles.css`, `app.js`, and `README.md`, satisfying every verifier point: - **index.html**: `<form>` with 14 labels, 8 required controls (name, email, rating radios, consent), rating radio fieldset, `<select>`, 4-checkbox feature group, textarea, and an in-DOM success panel (`role=\"status\"`) - **app.js**: `event.preventDefault()` on submit, Constraint Validation API handling with inline errors wired via `aria-describedby`/`aria-invalid` - **styles.css**: `@media (max-width: 480px)` responsive breakpoint plus focus-visible styles throughout Inspection fixed three real bugs before testing (reset flashing stale errors, a mismatched error-selector class, leftover CSS rule). A DOM-stubbed end-to-end suite then exercised all validation paths — empty submit, bad email format, short name, live error clearing, valid submission with local-only summary + focus management, char counter, and full reset — all 22 assertions pass. No other project or root file was touched."
+        },
+        {
+          "index": 5,
+          "slug": "personal-blog",
+          "title": "Personal blog with local search",
+          "success": true,
+          "promptStartedAt": "2026-08-23T10:40:20.600Z",
+          "promptCompletedAt": "2026-08-23T10:46:54.124Z",
+          "agentDurationMs": 393513,
+          "evaluationDurationMs": 48,
+          "endToEndDurationMs": 393561,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "usage": {
+            "input": 19711,
+            "output": 11372,
+            "reasoning": 1859,
+            "cacheRead": 596416,
+            "cacheWrite": 0,
+            "totalModel": 32942,
+            "totalWithCache": 629358,
+            "eventCount": 9,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 19711,
+              "output": 11372,
+              "reasoning": 1859,
+              "cacheRead": 596416,
+              "cacheWrite": 0,
+              "totalModel": 32942,
+              "totalWithCache": 629358
+            },
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 376,
+                "output": 2298,
+                "reasoning": 1803,
+                "cacheRead": 75584,
+                "cacheWrite": 0,
+                "totalModel": 4477,
+                "totalWithCache": 80061
+              },
+              {
+                "gapSeconds": 78,
+                "input": 4181,
+                "output": 3532,
+                "reasoning": 0,
+                "cacheRead": 75904,
+                "cacheWrite": 0,
+                "totalModel": 7713,
+                "totalWithCache": 83617
+              },
+              {
+                "gapSeconds": 19,
+                "input": 3562,
+                "output": 823,
+                "reasoning": 0,
+                "cacheRead": 80064,
+                "cacheWrite": 0,
+                "totalModel": 4385,
+                "totalWithCache": 84449
+              },
+              {
+                "gapSeconds": 46,
+                "input": 0,
+                "output": 0,
+                "reasoning": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 0,
+                "totalWithCache": 0
+              },
+              {
+                "gapSeconds": 24,
+                "input": 7477,
+                "output": 1386,
+                "reasoning": 56,
+                "cacheRead": 84416,
+                "cacheWrite": 0,
+                "totalModel": 8919,
+                "totalWithCache": 93335
+              },
+              {
+                "gapSeconds": 31,
+                "input": 1504,
+                "output": 1948,
+                "reasoning": 0,
+                "cacheRead": 91840,
+                "cacheWrite": 0,
+                "totalModel": 3452,
+                "totalWithCache": 95292
+              },
+              {
+                "gapSeconds": 23,
+                "input": 1988,
+                "output": 610,
+                "reasoning": 0,
+                "cacheRead": 93312,
+                "cacheWrite": 0,
+                "totalModel": 2598,
+                "totalWithCache": 95910
+              },
+              {
+                "gapSeconds": 17,
+                "input": 623,
+                "output": 775,
+                "reasoning": 0,
+                "cacheRead": 95296,
+                "cacheWrite": 0,
+                "totalModel": 1398,
+                "totalWithCache": 96694
+              },
+              {
+                "gapSeconds": 20,
+                "input": 0,
+                "output": 0,
+                "reasoning": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 0,
+                "totalWithCache": 0
+              }
+            ]
+          },
+          "cumulativeSessionUsage": {
+            "input": 94324,
+            "output": 59863,
+            "reasoning": 7927,
+            "cacheRead": 2876672,
+            "cacheWrite": 0,
+            "totalModel": 162114,
+            "totalWithCache": 3038786
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 8,
+          "permissionRequests": 7,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 15,
+            "totalChecks": 15,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:blog navigation": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:author introduction": {
+                "passed": true,
+                "detail": "index.html: found 15, expected at least 1"
+              },
+              "pattern:article cards": {
+                "passed": true,
+                "detail": "index.html: found 8, expected at least 3"
+              },
+              "pattern:article dates": {
+                "passed": true,
+                "detail": "index.html: found 41, expected at least 3"
+              },
+              "pattern:article tags": {
+                "passed": true,
+                "detail": "index.html: found 30, expected at least 1"
+              },
+              "pattern:search control": {
+                "passed": true,
+                "detail": "index.html: found 20, expected at least 1"
+              },
+              "pattern:local filtering": {
+                "passed": true,
+                "detail": "app.js: found 4, expected at least 2"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 2, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 38
+              }
+            }
+          },
+          "finalMessage": "Now the inspection battery — syntax, HTML balance, requirement patterns, and a behavioral test of the filtering logic:"
+        },
+        {
+          "index": 6,
+          "slug": "business-portfolio",
+          "title": "Business portfolio website",
+          "success": true,
+          "promptStartedAt": "2026-08-23T10:48:30.361Z",
+          "promptCompletedAt": "2026-08-23T10:56:24.886Z",
+          "agentDurationMs": 474545,
+          "evaluationDurationMs": 65,
+          "endToEndDurationMs": 474610,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "usage": {
+            "input": 23133,
+            "output": 20232,
+            "reasoning": 1210,
+            "cacheRead": 1419456,
+            "cacheWrite": 0,
+            "totalModel": 44575,
+            "totalWithCache": 1464031,
+            "eventCount": 13,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 23133,
+              "output": 20232,
+              "reasoning": 1210,
+              "cacheRead": 1419456,
+              "cacheWrite": 0,
+              "totalModel": 44575,
+              "totalWithCache": 1464031
+            },
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 784,
+                "output": 1074,
+                "reasoning": 849,
+                "cacheRead": 96768,
+                "cacheWrite": 0,
+                "totalModel": 2707,
+                "totalWithCache": 99475
+              },
+              {
+                "gapSeconds": 80,
+                "input": 1946,
+                "output": 4221,
+                "reasoning": 0,
+                "cacheRead": 97536,
+                "cacheWrite": 0,
+                "totalModel": 6167,
+                "totalWithCache": 103703
+              },
+              {
+                "gapSeconds": 82,
+                "input": 4256,
+                "output": 5305,
+                "reasoning": 0,
+                "cacheRead": 99456,
+                "cacheWrite": 0,
+                "totalModel": 9561,
+                "totalWithCache": 109017
+              },
+              {
+                "gapSeconds": 24,
+                "input": 5346,
+                "output": 1101,
+                "reasoning": 0,
+                "cacheRead": 103680,
+                "cacheWrite": 0,
+                "totalModel": 6447,
+                "totalWithCache": 110127
+              },
+              {
+                "gapSeconds": 20,
+                "input": 1144,
+                "output": 669,
+                "reasoning": 0,
+                "cacheRead": 108992,
+                "cacheWrite": 0,
+                "totalModel": 1813,
+                "totalWithCache": 110805
+              },
+              {
+                "gapSeconds": 18,
+                "input": 734,
+                "output": 833,
+                "reasoning": 0,
+                "cacheRead": 110080,
+                "cacheWrite": 0,
+                "totalModel": 1567,
+                "totalWithCache": 111647
+              },
+              {
+                "gapSeconds": 24,
+                "input": 989,
+                "output": 404,
+                "reasoning": 260,
+                "cacheRead": 110784,
+                "cacheWrite": 0,
+                "totalModel": 1653,
+                "totalWithCache": 112437
+              },
+              {
+                "gapSeconds": 36,
+                "input": 724,
+                "output": 1698,
+                "reasoning": 0,
+                "cacheRead": 111744,
+                "cacheWrite": 0,
+                "totalModel": 2422,
+                "totalWithCache": 114166
+              },
+              {
+                "gapSeconds": 24,
+                "input": 1904,
+                "output": 1670,
+                "reasoning": 10,
+                "cacheRead": 112448,
+                "cacheWrite": 0,
+                "totalModel": 3584,
+                "totalWithCache": 116032
+              },
+              {
+                "gapSeconds": 39,
+                "input": 1947,
+                "output": 1657,
+                "reasoning": 27,
+                "cacheRead": 114304,
+                "cacheWrite": 0,
+                "totalModel": 3631,
+                "totalWithCache": 117935
+              },
+              {
+                "gapSeconds": 27,
+                "input": 1835,
+                "output": 1253,
+                "reasoning": 64,
+                "cacheRead": 116224,
+                "cacheWrite": 0,
+                "totalModel": 3152,
+                "totalWithCache": 119376
+              },
+              {
+                "gapSeconds": 9,
+                "input": 1417,
+                "output": 45,
+                "reasoning": 0,
+                "cacheRead": 118016,
+                "cacheWrite": 0,
+                "totalModel": 1462,
+                "totalWithCache": 119478
+              },
+              {
+                "gapSeconds": 28,
+                "input": 107,
+                "output": 302,
+                "reasoning": 0,
+                "cacheRead": 119424,
+                "cacheWrite": 0,
+                "totalModel": 409,
+                "totalWithCache": 119833
+              }
+            ]
+          },
+          "cumulativeSessionUsage": {
+            "input": 117457,
+            "output": 80095,
+            "reasoning": 9137,
+            "cacheRead": 4296128,
+            "cacheWrite": 0,
+            "totalModel": 206689,
+            "totalWithCache": 4502817
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 12,
+          "permissionRequests": 12,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 15,
+            "totalChecks": 15,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:business hero": {
+                "passed": true,
+                "detail": "index.html: found 8, expected at least 1"
+              },
+              "pattern:services": {
+                "passed": true,
+                "detail": "index.html: found 10, expected at least 1"
+              },
+              "pattern:case studies": {
+                "passed": true,
+                "detail": "index.html: found 12, expected at least 1"
+              },
+              "pattern:three portfolio items": {
+                "passed": true,
+                "detail": "index.html: found 6, expected at least 3"
+              },
+              "pattern:contact path": {
+                "passed": true,
+                "detail": "index.html: found 13, expected at least 1"
+              },
+              "pattern:theme or form behavior": {
+                "passed": true,
+                "detail": "app.js: found 52, expected at least 2"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 21, expected at least 1"
+              },
+              "pattern:focus styles": {
+                "passed": true,
+                "detail": "styles.css: found 10, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 52
+              }
+            }
+          },
+          "finalMessage": "Done. `projects/business-portfolio/` contains exactly `index.html`, `styles.css`, `app.js`, and `README.md` for \"Meridian,\" a fictional product studio: - **Required sections**: hero with positioning + dual CTAs + stats, 3 service cards, 4-step process timeline, 4-project work grid with outcome metrics and expandable native `<details>` case studies, testimonial quotes + metric strip, about panel with principles, contact form + direct email CTA - **app.js**: working theme toggle (`data-theme` attribute, CSS-variable token swap, localStorage persistence, OS preference fallback) plus full form validation (preventDefault always, Constraint Validation API, inline errors via `aria-describedby`/`aria-invalid`, focus management, success panel) - **Accessibility**: skip link, labels/hints on every field, visible `:focus-visible` styles, `role=\"status\"` live regions - **Responsive**: fluid auto-fit grids; `760px` breakpoint reflows nav under the brand and stacks contact/form columns Inspection ran syntax checks, HTML balance verification, 18 static requirement patterns, and a DOM-stubbed behavioral suite — theme persistence/reload/OS-preference (7 tests) and all validation paths including reset (14 tests) pass. The two failures encountered along the way were stub limitations (missing `documentElement`, no-op `reset()`), not app bugs. Only new files under this project were created."
+        },
+        {
+          "index": 7,
+          "slug": "quiz-game",
+          "title": "Interactive quiz game",
+          "success": true,
+          "promptStartedAt": "2026-08-23T11:00:33.740Z",
+          "promptCompletedAt": "2026-08-23T11:03:54.611Z",
+          "agentDurationMs": 200862,
+          "evaluationDurationMs": 176,
+          "endToEndDurationMs": 201038,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "usage": {
+            "input": 7648,
+            "output": 6638,
+            "reasoning": 976,
+            "cacheRead": 609344,
+            "cacheWrite": 0,
+            "totalModel": 15262,
+            "totalWithCache": 624606,
+            "eventCount": 6,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 7648,
+              "output": 6638,
+              "reasoning": 976,
+              "cacheRead": 609344,
+              "cacheWrite": 0,
+              "totalModel": 15262,
+              "totalWithCache": 624606
+            },
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 468,
+                "output": 1152,
+                "reasoning": 976,
+                "cacheRead": 119488,
+                "cacheWrite": 0,
+                "totalModel": 2596,
+                "totalWithCache": 122084
+              },
+              {
+                "gapSeconds": 25,
+                "input": 2155,
+                "output": 1103,
+                "reasoning": 0,
+                "cacheRead": 119936,
+                "cacheWrite": 0,
+                "totalModel": 3258,
+                "totalWithCache": 123194
+              },
+              {
+                "gapSeconds": 35,
+                "input": 1155,
+                "output": 1510,
+                "reasoning": 0,
+                "cacheRead": 122048,
+                "cacheWrite": 0,
+                "totalModel": 2665,
+                "totalWithCache": 124713
+              },
+              {
+                "gapSeconds": 37,
+                "input": 1522,
+                "output": 2289,
+                "reasoning": 0,
+                "cacheRead": 123200,
+                "cacheWrite": 0,
+                "totalModel": 3811,
+                "totalWithCache": 127011
+              },
+              {
+                "gapSeconds": 19,
+                "input": 2348,
+                "output": 584,
+                "reasoning": 0,
+                "cacheRead": 124672,
+                "cacheWrite": 0,
+                "totalModel": 2932,
+                "totalWithCache": 127604
+              },
+              {
+                "gapSeconds": 8,
+                "input": 0,
+                "output": 0,
+                "reasoning": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 0,
+                "totalWithCache": 0
+              }
+            ]
+          },
+          "cumulativeSessionUsage": {
+            "input": 125105,
+            "output": 86733,
+            "reasoning": 10113,
+            "cacheRead": 4905472,
+            "cacheWrite": 0,
+            "totalModel": 221951,
+            "totalWithCache": 5127423
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 5,
+          "permissionRequests": 5,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 17,
+            "totalChecks": 17,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:quiz shell": {
+                "passed": true,
+                "detail": "index.html: found 27, expected at least 1"
+              },
+              "pattern:answer controls": {
+                "passed": true,
+                "detail": "index.html: found 3, expected at least 1"
+              },
+              "pattern:score display": {
+                "passed": true,
+                "detail": "index.html: found 15, expected at least 1"
+              },
+              "pattern:next and restart controls": {
+                "passed": true,
+                "detail": "index.html: found 5, expected at least 2"
+              },
+              "pattern:question data": {
+                "passed": true,
+                "detail": "app.js: found 4, expected at least 1"
+              },
+              "pattern:at least five questions": {
+                "passed": true,
+                "detail": "app.js: found 24, expected at least 5"
+              },
+              "pattern:score state": {
+                "passed": true,
+                "detail": "app.js: found 24, expected at least 1"
+              },
+              "pattern:event listeners": {
+                "passed": true,
+                "detail": "app.js: found 5, expected at least 2"
+              },
+              "pattern:next flow": {
+                "passed": true,
+                "detail": "app.js: found 20, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 8, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 154
+              }
+            }
+          },
+          "finalMessage": "Done. `projects/business-portfolio/` contains exactly `index.html`, `styles.css`, `app.js`, and `README.md` for \"Meridian,\" a fictional product studio: - **Required sections**: hero with positioning + dual CTAs + stats, 3 service cards, 4-step process timeline, 4-project work grid with outcome metrics and expandable native `<details>` case studies, testimonial quotes + metric strip, about panel with principles, contact form + direct email CTA - **app.js**: working theme toggle (`data-theme` attribute, CSS-variable token swap, localStorage persistence, OS preference fallback) plus full form validation (preventDefault always, Constraint Validation API, inline errors via `aria-describedby`/`aria-invalid`, focus management, success panel) - **Accessibility**: skip link, labels/hints on every field, visible `:focus-visible` styles, `role=\"status\"` live regions - **Responsive**: fluid auto-fit grids; `760px` breakpoint reflows nav under the brand and stacks contact/form columns Inspection ran syntax checks, HTML balance verification, 18 static requirement patterns, and a DOM-stubbed behavioral suite — theme persistence/reload/OS-preference (7 tests) and all validation paths including reset (14 tests) pass. The two failures encountered along the way were stub limitations (missing `documentElement`, no-op `reset()`), not app bugs. Only new files under this project were created."
+        },
+        {
+          "index": 8,
+          "slug": "meme-generator",
+          "title": "Local meme generator",
+          "success": true,
+          "promptStartedAt": "2026-08-23T11:06:33.273Z",
+          "promptCompletedAt": "2026-08-23T11:14:37.075Z",
+          "agentDurationMs": 483804,
+          "evaluationDurationMs": 53,
+          "endToEndDurationMs": 483857,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "usage": {
+            "input": 19596,
+            "output": 15607,
+            "reasoning": 2334,
+            "cacheRead": 1620160,
+            "cacheWrite": 0,
+            "totalModel": 37537,
+            "totalWithCache": 1657697,
+            "eventCount": 12,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 19596,
+              "output": 15607,
+              "reasoning": 2334,
+              "cacheRead": 1620160,
+              "cacheWrite": 0,
+              "totalModel": 37537,
+              "totalWithCache": 1657697
+            },
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 770,
+                "output": 1403,
+                "reasoning": 1199,
+                "cacheRead": 126976,
+                "cacheWrite": 0,
+                "totalModel": 3372,
+                "totalWithCache": 130348
+              },
+              {
+                "gapSeconds": 18,
+                "input": 2611,
+                "output": 892,
+                "reasoning": 0,
+                "cacheRead": 127744,
+                "cacheWrite": 0,
+                "totalModel": 3503,
+                "totalWithCache": 131247
+              },
+              {
+                "gapSeconds": 42,
+                "input": 952,
+                "output": 1872,
+                "reasoning": 0,
+                "cacheRead": 130304,
+                "cacheWrite": 0,
+                "totalModel": 2824,
+                "totalWithCache": 133128
+              },
+              {
+                "gapSeconds": 19,
+                "input": 1937,
+                "output": 564,
+                "reasoning": 0,
+                "cacheRead": 131200,
+                "cacheWrite": 0,
+                "totalModel": 2501,
+                "totalWithCache": 133701
+              },
+              {
+                "gapSeconds": 54,
+                "input": 590,
+                "output": 1247,
+                "reasoning": 522,
+                "cacheRead": 133120,
+                "cacheWrite": 0,
+                "totalModel": 2359,
+                "totalWithCache": 135479
+              },
+              {
+                "gapSeconds": 30,
+                "input": 1836,
+                "output": 1721,
+                "reasoning": 13,
+                "cacheRead": 133696,
+                "cacheWrite": 0,
+                "totalModel": 3570,
+                "totalWithCache": 137266
+              },
+              {
+                "gapSeconds": 13,
+                "input": 1787,
+                "output": 445,
+                "reasoning": 0,
+                "cacheRead": 135488,
+                "cacheWrite": 0,
+                "totalModel": 2232,
+                "totalWithCache": 137720
+              },
+              {
+                "gapSeconds": 45,
+                "input": 595,
+                "output": 1785,
+                "reasoning": 0,
+                "cacheRead": 137216,
+                "cacheWrite": 0,
+                "totalModel": 2380,
+                "totalWithCache": 139596
+              },
+              {
+                "gapSeconds": 76,
+                "input": 2046,
+                "output": 2067,
+                "reasoning": 430,
+                "cacheRead": 137792,
+                "cacheWrite": 0,
+                "totalModel": 4543,
+                "totalWithCache": 142335
+              },
+              {
+                "gapSeconds": 34,
+                "input": 2716,
+                "output": 1663,
+                "reasoning": 84,
+                "cacheRead": 139776,
+                "cacheWrite": 0,
+                "totalModel": 4463,
+                "totalWithCache": 144239
+              },
+              {
+                "gapSeconds": 32,
+                "input": 1928,
+                "output": 1641,
+                "reasoning": 86,
+                "cacheRead": 142464,
+                "cacheWrite": 0,
+                "totalModel": 3655,
+                "totalWithCache": 146119
+              },
+              {
+                "gapSeconds": 19,
+                "input": 1828,
+                "output": 307,
+                "reasoning": 0,
+                "cacheRead": 144384,
+                "cacheWrite": 0,
+                "totalModel": 2135,
+                "totalWithCache": 146519
+              }
+            ]
+          },
+          "cumulativeSessionUsage": {
+            "input": 144701,
+            "output": 102340,
+            "reasoning": 12447,
+            "cacheRead": 6525632,
+            "cacheWrite": 0,
+            "totalModel": 259488,
+            "totalWithCache": 6785120
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 11,
+          "permissionRequests": 11,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 16,
+            "totalChecks": 16,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:image input": {
+                "passed": true,
+                "detail": "index.html: found 8, expected at least 1"
+              },
+              "pattern:top and bottom text": {
+                "passed": true,
+                "detail": "index.html: found 9, expected at least 2"
+              },
+              "pattern:preview surface": {
+                "passed": true,
+                "detail": "index.html: found 7, expected at least 1"
+              },
+              "pattern:download control": {
+                "passed": true,
+                "detail": "index.html: found 3, expected at least 1"
+              },
+              "pattern:file handling": {
+                "passed": true,
+                "detail": "app.js: found 28, expected at least 1"
+              },
+              "pattern:live updates": {
+                "passed": true,
+                "detail": "app.js: found 25, expected at least 2"
+              },
+              "pattern:canvas or download implementation": {
+                "passed": true,
+                "detail": "app.js: found 20, expected at least 2"
+              },
+              "pattern:reset behavior": {
+                "passed": true,
+                "detail": "app.js: found 6, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 4, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 40
+              }
+            }
+          },
+          "finalMessage": "Done. `projects/meme-generator/` (\"Meme Forge\") contains exactly `index.html`, `styles.css`, `app.js`, and `README.md`: - **Image sources**: native `<input type=\"file\" accept=\"image/*\">` read via `FileReader` (never uploaded), plus a built-in backdrop drawn procedurally on a canvas at startup — no image assets shipped or fetched - **Live preview**: 960×720 canvas with cover-cropping, uppercase auto-shrinking word-wrapped overlay text in classic white-with-black-outline style - **Reset**: clears both texts, the file input, and restores the backdrop - **Download**: real local export via `canvas.toBlob` → object URL → `download` attribute, URL revoked after; `toDataURL` fallback for older browsers - **Accessibility**: labeled controls, canvas `role=\"img\"` with dynamic aria-label describing current text, polite status region announcing loads/rejections/resets/downloads, visible focus styles - **Responsive**: two-column layout stacking below `820px` Verification: syntax/structure checks and 14 static patterns pass; a DOM/canvas-stubbed behavioral suite exercised all four critical paths plus edge cases (non-image rejection, unreadable file, wrap behavior, blob revocation, fallback download) — all 12 tests pass. The three failures seen mid-run were harness artifacts (missing stubs, wrong assertions), confirmed against debug output. No other project or root file touched."
+        }
+      ],
+      "finalSessionUsage": {
+        "input": 144701,
+        "output": 102340,
+        "reasoning": 12447,
+        "cacheRead": 6525632,
+        "cacheWrite": 0,
+        "totalModel": 259488,
+        "totalWithCache": 6785120
+      },
+      "totalDurationMs": 3010082,
+      "errors": [],
+      "summary": {
+        "tasks": 8,
+        "completedPrompts": 8,
+        "successes": 8,
+        "successRate": 1,
+        "totalAgentDurationMs": 3009459,
+        "totalEndToEndDurationMs": 3010082,
+        "medianTaskDurationMs": 374943,
+        "totalUsage": {
+          "input": 144701,
+          "output": 102340,
+          "reasoning": 12447,
+          "cacheRead": 6525632,
+          "cacheWrite": 0,
+          "totalModel": 259488,
+          "totalWithCache": 6785120
+        },
+        "totalReportedCost": 0,
+        "costReported": false,
+        "compactions": 0,
+        "compactionTasks": 0,
+        "totalToolCalls": 92,
+        "totalPermissionRequests": 82,
+        "rejectedPermissions": 1,
+        "totalEvaluationChecks": 128,
+        "passedEvaluationChecks": 128,
+        "firstAttemptSuccesses": 6,
+        "repairedTasks": 2,
+        "cacheShare": 0.9783067801862366,
+        "cacheFullMisses": 0,
+        "cacheMissInputTokens": 0,
+        "adjustedCacheShare": 0.980077207597963
+      }
+    },
+    "cuppet": {
+      "arm": "cuppet",
+      "workspace": "/private/tmp/cuppet-10-task-sskjor/cuppet/workspace",
+      "runtimeRoot": "/private/tmp/cuppet-10-task-sskjor/cuppet/runtime",
+      "sessionID": "ses_fd1e4ea73ffepWr7BB5kAX4QhE",
+      "promptCount": 8,
+      "tasks": [
+        {
+          "index": 1,
+          "slug": "landing-page",
+          "title": "Responsive product landing page",
+          "success": true,
+          "promptStartedAt": "2026-08-23T10:12:02.086Z",
+          "promptCompletedAt": "2026-08-23T10:20:42.518Z",
+          "agentDurationMs": 520401,
+          "evaluationDurationMs": 19,
+          "endToEndDurationMs": 520420,
+          "attempts": 2,
+          "firstAttemptSuccess": false,
+          "repaired": true,
+          "usage": {
+            "input": 41139,
+            "output": 12632,
+            "reasoning": 378,
+            "cacheRead": 478848,
+            "cacheWrite": 0,
+            "totalModel": 54149,
+            "totalWithCache": 532997,
+            "eventCount": 16,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 41139,
+              "output": 12632,
+              "reasoning": 378,
+              "cacheRead": 478848,
+              "cacheWrite": 0,
+              "totalModel": 54149,
+              "totalWithCache": 532997
+            },
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 14529,
+                "output": 59,
+                "reasoning": 17,
+                "cacheRead": 128,
+                "cacheWrite": 0,
+                "totalModel": 14605,
+                "totalWithCache": 14733
+              },
+              {
+                "gapSeconds": 7,
+                "input": 99,
+                "output": 35,
+                "reasoning": 7,
+                "cacheRead": 14656,
+                "cacheWrite": 0,
+                "totalModel": 141,
+                "totalWithCache": 14797
+              },
+              {
+                "gapSeconds": 161,
+                "input": 0,
+                "output": 0,
+                "reasoning": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 0,
+                "totalWithCache": 0
+              },
+              {
+                "gapSeconds": 11,
+                "input": 7203,
+                "output": 93,
+                "reasoning": 44,
+                "cacheRead": 14976,
+                "cacheWrite": 0,
+                "totalModel": 7340,
+                "totalWithCache": 22316
+              },
+              {
+                "gapSeconds": 76,
+                "input": 179,
+                "output": 5328,
+                "reasoning": 0,
+                "cacheRead": 22144,
+                "cacheWrite": 0,
+                "totalModel": 5507,
+                "totalWithCache": 27651
+              },
+              {
+                "gapSeconds": 70,
+                "input": 0,
+                "output": 0,
+                "reasoning": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 0,
+                "totalWithCache": 0
+              },
+              {
+                "gapSeconds": 47,
+                "input": 11411,
+                "output": 2263,
+                "reasoning": 126,
+                "cacheRead": 27648,
+                "cacheWrite": 0,
+                "totalModel": 13800,
+                "totalWithCache": 41448
+              },
+              {
+                "gapSeconds": 41,
+                "input": 2417,
+                "output": 2780,
+                "reasoning": 28,
+                "cacheRead": 39040,
+                "cacheWrite": 0,
+                "totalModel": 5225,
+                "totalWithCache": 44265
+              },
+              {
+                "gapSeconds": 19,
+                "input": 2864,
+                "output": 497,
+                "reasoning": 2,
+                "cacheRead": 41408,
+                "cacheWrite": 0,
+                "totalModel": 3363,
+                "totalWithCache": 44771
+              },
+              {
+                "gapSeconds": 19,
+                "input": 556,
+                "output": 642,
+                "reasoning": 33,
+                "cacheRead": 44224,
+                "cacheWrite": 0,
+                "totalModel": 1231,
+                "totalWithCache": 45455
+              },
+              {
+                "gapSeconds": 14,
+                "input": 947,
+                "output": 188,
+                "reasoning": 77,
+                "cacheRead": 44736,
+                "cacheWrite": 0,
+                "totalModel": 1212,
+                "totalWithCache": 45948
+              },
+              {
+                "gapSeconds": 8,
+                "input": 324,
+                "output": 58,
+                "reasoning": 0,
+                "cacheRead": 45632,
+                "cacheWrite": 0,
+                "totalModel": 382,
+                "totalWithCache": 46014
+              },
+              {
+                "gapSeconds": 8,
+                "input": 79,
+                "output": 84,
+                "reasoning": 0,
+                "cacheRead": 45952,
+                "cacheWrite": 0,
+                "totalModel": 163,
+                "totalWithCache": 46115
+              },
+              {
+                "gapSeconds": 9,
+                "input": 107,
+                "output": 108,
+                "reasoning": 0,
+                "cacheRead": 46016,
+                "cacheWrite": 0,
+                "totalModel": 215,
+                "totalWithCache": 46231
+              },
+              {
+                "gapSeconds": 9,
+                "input": 159,
+                "output": 166,
+                "reasoning": 0,
+                "cacheRead": 46080,
+                "cacheWrite": 0,
+                "totalModel": 325,
+                "totalWithCache": 46405
+              },
+              {
+                "gapSeconds": 12,
+                "input": 265,
+                "output": 331,
+                "reasoning": 44,
+                "cacheRead": 46208,
+                "cacheWrite": 0,
+                "totalModel": 640,
+                "totalWithCache": 46848
+              }
+            ]
+          },
+          "cumulativeSessionUsage": {
+            "input": 41139,
+            "output": 12632,
+            "reasoning": 378,
+            "cacheRead": 478848,
+            "cacheWrite": 0,
+            "totalModel": 54149,
+            "totalWithCache": 532997
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 14,
+          "permissionRequests": 11,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 15,
+            "totalChecks": 15,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:semantic header": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:navigation": {
+                "passed": true,
+                "detail": "index.html: found 4, expected at least 1"
+              },
+              "pattern:main content": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:hero content": {
+                "passed": true,
+                "detail": "index.html: found 8, expected at least 1"
+              },
+              "pattern:primary CTA": {
+                "passed": true,
+                "detail": "index.html: found 11, expected at least 1"
+              },
+              "pattern:feature section": {
+                "passed": true,
+                "detail": "index.html: found 17, expected at least 1"
+              },
+              "pattern:contact or footer": {
+                "passed": true,
+                "detail": "index.html: found 17, expected at least 1"
+              },
+              "pattern:CSS variables": {
+                "passed": true,
+                "detail": "styles.css: found 18, expected at least 2"
+              },
+              "pattern:responsive breakpoint": {
+                "passed": true,
+                "detail": "styles.css: found 3, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 22, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              }
+            },
+            "files": [
+              "README.md",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {}
+          },
+          "finalMessage": "All verified problems are fixed. `projects/landing-page/` now contains exactly `index.html`, `styles.css`, and `README.md`: - **Semantic markup**: `<header>` + `<nav aria-label=\"Primary\">` (plus labeled footer navs), `<main>`, hero section with `h1` headline and primary CTA (\"Start free trial\"), features grid, testimonials, pricing tiers, contact form, and dark `<footer>`. - **Accessibility**: skip link, `aria-labelledby` sections, labeled/hinted form fields, star ratings as `role=\"img\"` labels, visible `:focus-visible` outlines, `prefers-reduced-motion` support. - **CSS**: 15 custom properties in `:root`, fluid `clamp()` type, `auto-fit` grids, breakpoints at `920px` and a mobile breakpoint at `700px`. - **Local-only**: all icons/artwork are inline or data-URI SVG; zero remote references. Inspection passed: balanced tags, no duplicate ids, no unstyled classes, balanced CSS braces, and `git status` confirms no other files were modified.",
+          "taskContext": {
+            "type": "create",
+            "scope": [
+              "projects/landing-page"
+            ],
+            "scopeState": "new",
+            "entities": [
+              "product",
+              "install",
+              "reference",
+              "index",
+              "styles",
+              "README",
+              "semantic",
+              "header",
+              "hero",
+              "section",
+              "with"
+            ],
+            "actions": [],
+            "constraints": [
+              "local-only",
+              "accessible",
+              "scope-limited",
+              "exact-file-set",
+              "responsive"
+            ],
+            "selectedPaths": [],
+            "highConfidence": 0,
+            "mediumConfidence": 0,
+            "contextChars": 1019
+          }
+        },
+        {
+          "index": 2,
+          "slug": "todo-list-app",
+          "title": "Persistent todo list app",
+          "success": true,
+          "promptStartedAt": "2026-08-23T10:20:42.547Z",
+          "promptCompletedAt": "2026-08-23T10:25:17.513Z",
+          "agentDurationMs": 274957,
+          "evaluationDurationMs": 58,
+          "endToEndDurationMs": 275015,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "usage": {
+            "input": 10359,
+            "output": 9581,
+            "reasoning": 1384,
+            "cacheRead": 470656,
+            "cacheWrite": 0,
+            "totalModel": 21324,
+            "totalWithCache": 491980,
+            "eventCount": 9,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 10359,
+              "output": 9581,
+              "reasoning": 1384,
+              "cacheRead": 470656,
+              "cacheWrite": 0,
+              "totalModel": 21324,
+              "totalWithCache": 491980
+            },
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 745,
+                "output": 2106,
+                "reasoning": 1194,
+                "cacheRead": 46464,
+                "cacheWrite": 0,
+                "totalModel": 4045,
+                "totalWithCache": 50509
+              },
+              {
+                "gapSeconds": 16,
+                "input": 3348,
+                "output": 714,
+                "reasoning": 0,
+                "cacheRead": 47168,
+                "cacheWrite": 0,
+                "totalModel": 4062,
+                "totalWithCache": 51230
+              },
+              {
+                "gapSeconds": 37,
+                "input": 743,
+                "output": 2265,
+                "reasoning": 0,
+                "cacheRead": 50496,
+                "cacheWrite": 0,
+                "totalModel": 3008,
+                "totalWithCache": 53504
+              },
+              {
+                "gapSeconds": 27,
+                "input": 2313,
+                "output": 1366,
+                "reasoning": 35,
+                "cacheRead": 51200,
+                "cacheWrite": 0,
+                "totalModel": 3714,
+                "totalWithCache": 54914
+              },
+              {
+                "gapSeconds": 9,
+                "input": 1419,
+                "output": 70,
+                "reasoning": 0,
+                "cacheRead": 53504,
+                "cacheWrite": 0,
+                "totalModel": 1489,
+                "totalWithCache": 54993
+              },
+              {
+                "gapSeconds": 19,
+                "input": 89,
+                "output": 532,
+                "reasoning": 0,
+                "cacheRead": 54912,
+                "cacheWrite": 0,
+                "totalModel": 621,
+                "totalWithCache": 55533
+              },
+              {
+                "gapSeconds": 27,
+                "input": 566,
+                "output": 693,
+                "reasoning": 134,
+                "cacheRead": 54976,
+                "cacheWrite": 0,
+                "totalModel": 1393,
+                "totalWithCache": 56369
+              },
+              {
+                "gapSeconds": 11,
+                "input": 1004,
+                "output": 58,
+                "reasoning": 21,
+                "cacheRead": 55488,
+                "cacheWrite": 0,
+                "totalModel": 1083,
+                "totalWithCache": 56571
+              },
+              {
+                "gapSeconds": 40,
+                "input": 132,
+                "output": 1777,
+                "reasoning": 0,
+                "cacheRead": 56448,
+                "cacheWrite": 0,
+                "totalModel": 1909,
+                "totalWithCache": 58357
+              }
+            ]
+          },
+          "cumulativeSessionUsage": {
+            "input": 51498,
+            "output": 22213,
+            "reasoning": 1762,
+            "cacheRead": 949504,
+            "cacheWrite": 0,
+            "totalModel": 75473,
+            "totalWithCache": 1024977
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 9,
+          "permissionRequests": 9,
+          "rejectedPermissions": 1,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 16,
+            "totalChecks": 16,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:todo input": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:todo list container": {
+                "passed": true,
+                "detail": "index.html: found 3, expected at least 1"
+              },
+              "pattern:filter controls": {
+                "passed": true,
+                "detail": "index.html: found 7, expected at least 1"
+              },
+              "pattern:local persistence": {
+                "passed": true,
+                "detail": "app.js: found 2, expected at least 2"
+              },
+              "pattern:event listeners": {
+                "passed": true,
+                "detail": "app.js: found 6, expected at least 2"
+              },
+              "pattern:completion behavior": {
+                "passed": true,
+                "detail": "app.js: found 12, expected at least 1"
+              },
+              "pattern:delete behavior": {
+                "passed": true,
+                "detail": "app.js: found 11, expected at least 1"
+              },
+              "pattern:filter behavior": {
+                "passed": true,
+                "detail": "app.js: found 34, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 7, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 47
+              }
+            }
+          },
+          "finalMessage": "All verified problems are fixed. `projects/landing-page/` now contains exactly `index.html`, `styles.css`, and `README.md`: - **Semantic markup**: `<header>` + `<nav aria-label=\"Primary\">` (plus labeled footer navs), `<main>`, hero section with `h1` headline and primary CTA (\"Start free trial\"), features grid, testimonials, pricing tiers, contact form, and dark `<footer>`. - **Accessibility**: skip link, `aria-labelledby` sections, labeled/hinted form fields, star ratings as `role=\"img\"` labels, visible `:focus-visible` outlines, `prefers-reduced-motion` support. - **CSS**: 15 custom properties in `:root`, fluid `clamp()` type, `auto-fit` grids, breakpoints at `920px` and a mobile breakpoint at `700px`. - **Local-only**: all icons/artwork are inline or data-URI SVG; zero remote references. Inspection passed: balanced tags, no duplicate ids, no unstyled classes, balanced CSS braces, and `git status` confirms no other files were modified.",
+          "taskContext": {
+            "type": "create",
+            "scope": [
+              "projects/todo-list-app"
+            ],
+            "scopeState": "new",
+            "entities": [
+              "dependency-free",
+              "free",
+              "index",
+              "styles",
+              "README",
+              "user",
+              "mark",
+              "active",
+              "completed",
+              "items"
+            ],
+            "actions": [
+              "list",
+              "delete",
+              "filter"
+            ],
+            "constraints": [
+              "dependency-free",
+              "local-only",
+              "accessible",
+              "scope-limited",
+              "responsive"
+            ],
+            "selectedPaths": [],
+            "highConfidence": 0,
+            "mediumConfidence": 0,
+            "contextChars": 1018
+          }
+        },
+        {
+          "index": 3,
+          "slug": "calculator-web-app",
+          "title": "Keyboard-friendly calculator",
+          "success": true,
+          "promptStartedAt": "2026-08-23T10:26:38.974Z",
+          "promptCompletedAt": "2026-08-23T10:32:25.024Z",
+          "agentDurationMs": 346041,
+          "evaluationDurationMs": 49,
+          "endToEndDurationMs": 346090,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "usage": {
+            "input": 13361,
+            "output": 8770,
+            "reasoning": 2595,
+            "cacheRead": 581440,
+            "cacheWrite": 0,
+            "totalModel": 24726,
+            "totalWithCache": 606166,
+            "eventCount": 9,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 13361,
+              "output": 8770,
+              "reasoning": 2595,
+              "cacheRead": 581440,
+              "cacheWrite": 0,
+              "totalModel": 24726,
+              "totalWithCache": 606166
+            },
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 2139,
+                "output": 2291,
+                "reasoning": 1973,
+                "cacheRead": 56576,
+                "cacheWrite": 0,
+                "totalModel": 6403,
+                "totalWithCache": 62979
+              },
+              {
+                "gapSeconds": 22,
+                "input": 4298,
+                "output": 1012,
+                "reasoning": 0,
+                "cacheRead": 58688,
+                "cacheWrite": 0,
+                "totalModel": 5310,
+                "totalWithCache": 63998
+              },
+              {
+                "gapSeconds": 36,
+                "input": 1031,
+                "output": 1281,
+                "reasoning": 0,
+                "cacheRead": 62976,
+                "cacheWrite": 0,
+                "totalModel": 2312,
+                "totalWithCache": 65288
+              },
+              {
+                "gapSeconds": 43,
+                "input": 1297,
+                "output": 1939,
+                "reasoning": 213,
+                "cacheRead": 64000,
+                "cacheWrite": 0,
+                "totalModel": 3449,
+                "totalWithCache": 67449
+              },
+              {
+                "gapSeconds": 21,
+                "input": 2178,
+                "output": 564,
+                "reasoning": 0,
+                "cacheRead": 65280,
+                "cacheWrite": 0,
+                "totalModel": 2742,
+                "totalWithCache": 68022
+              },
+              {
+                "gapSeconds": 22,
+                "input": 575,
+                "output": 680,
+                "reasoning": 78,
+                "cacheRead": 67456,
+                "cacheWrite": 0,
+                "totalModel": 1333,
+                "totalWithCache": 68789
+              },
+              {
+                "gapSeconds": 27,
+                "input": 968,
+                "output": 379,
+                "reasoning": 257,
+                "cacheRead": 67968,
+                "cacheWrite": 0,
+                "totalModel": 1604,
+                "totalWithCache": 69572
+              },
+              {
+                "gapSeconds": 10,
+                "input": 652,
+                "output": 164,
+                "reasoning": 0,
+                "cacheRead": 68928,
+                "cacheWrite": 0,
+                "totalModel": 816,
+                "totalWithCache": 69744
+              },
+              {
+                "gapSeconds": 19,
+                "input": 223,
+                "output": 460,
+                "reasoning": 74,
+                "cacheRead": 69568,
+                "cacheWrite": 0,
+                "totalModel": 757,
+                "totalWithCache": 70325
+              }
+            ]
+          },
+          "cumulativeSessionUsage": {
+            "input": 64859,
+            "output": 30983,
+            "reasoning": 4357,
+            "cacheRead": 1530944,
+            "cacheWrite": 0,
+            "totalModel": 100199,
+            "totalWithCache": 1631143
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 8,
+          "permissionRequests": 8,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 16,
+            "totalChecks": 16,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:calculator display": {
+                "passed": true,
+                "detail": "index.html: found 5, expected at least 1"
+              },
+              "pattern:digit buttons": {
+                "passed": true,
+                "detail": "index.html: found 10, expected at least 4"
+              },
+              "pattern:operator controls": {
+                "passed": true,
+                "detail": "index.html: found 7, expected at least 1"
+              },
+              "pattern:equals and clear": {
+                "passed": true,
+                "detail": "index.html: found 5, expected at least 2"
+              },
+              "pattern:event listeners": {
+                "passed": true,
+                "detail": "app.js: found 2, expected at least 2"
+              },
+              "pattern:keyboard support": {
+                "passed": true,
+                "detail": "app.js: found 1, expected at least 1"
+              },
+              "pattern:arithmetic logic": {
+                "passed": true,
+                "detail": "app.js: found 52, expected at least 1"
+              },
+              "pattern:zero guard": {
+                "passed": true,
+                "detail": "app.js: found 18, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 5, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 43
+              }
+            }
+          },
+          "finalMessage": "Built `projects/calculator-web-app/` with exactly `index.html`, `styles.css`, `app.js`, and `README.md` — dependency-free and fully local. **Features**: digits, decimal (with duplicate/leading-zero guards), chained `+ − × ÷`, equals with live running totals, `AC` clear, backspace, and full keyboard shortcuts (`0–9`, `.`/`,`, operators, `Enter`/`=`, `Backspace`, `Esc`) advertised to AT via `aria-keyshortcuts`. **Edge cases verified during inspection**: - Division by zero → friendly \"Cannot divide by zero\" message; input locks until `AC` recovers (no crash) - Non-finite results (overflow) → caught and surfaced as an error state - Float artifacts suppressed (`0.1 + 0.2` → `0.3` via `toPrecision(12)`); huge results use exponential notation - Repeated operator presses replace the pending op instead of mis-computing; equals with no pending op is a no-op; backspace floors at `\"0\"` - `preventDefault()` on keyboard handling prevents double-firing when the focused button's shortcut is pressed **Accessibility/responsiveness**: result shown in `<output aria-live=\"polite\">`, labeled glyph buttons, skip link, visible `:focus-visible` rings, reduced-motion support, fluid sizing with a `420px` mobile breakpoint. Static checks pass: JS syntax OK, HTML balanced, all element IDs resolve, CSS braces balanced, zero unstyled classes, zero remote references. No other project or root file was touched.",
+          "taskContext": {
+            "type": "create",
+            "scope": [
+              "projects/calculator-web-app"
+            ],
+            "scopeState": "new",
+            "entities": [
+              "index",
+              "styles",
+              "README",
+              "with",
+              "digits",
+              "decimal",
+              "input",
+              "addition",
+              "subtraction",
+              "multiplication",
+              "division",
+              "equals"
+            ],
+            "actions": [
+              "delete"
+            ],
+            "constraints": [
+              "dependency-free",
+              "local-only",
+              "accessible",
+              "scope-limited",
+              "responsive"
+            ],
+            "selectedPaths": [],
+            "highConfidence": 0,
+            "mediumConfidence": 0,
+            "contextChars": 1035
+          }
+        },
+        {
+          "index": 4,
+          "slug": "survey-form",
+          "title": "Accessible survey form",
+          "success": true,
+          "promptStartedAt": "2026-08-23T10:32:25.050Z",
+          "promptCompletedAt": "2026-08-23T10:37:33.731Z",
+          "agentDurationMs": 308665,
+          "evaluationDurationMs": 59,
+          "endToEndDurationMs": 308724,
+          "attempts": 2,
+          "firstAttemptSuccess": false,
+          "repaired": true,
+          "usage": {
+            "input": 11967,
+            "output": 9278,
+            "reasoning": 568,
+            "cacheRead": 766912,
+            "cacheWrite": 0,
+            "totalModel": 21813,
+            "totalWithCache": 788725,
+            "eventCount": 11,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 11967,
+              "output": 9278,
+              "reasoning": 568,
+              "cacheRead": 766912,
+              "cacheWrite": 0,
+              "totalModel": 21813,
+              "totalWithCache": 788725
+            },
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 0,
+                "output": 0,
+                "reasoning": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 0,
+                "totalWithCache": 0
+              },
+              {
+                "gapSeconds": 13,
+                "input": 2052,
+                "output": 126,
+                "reasoning": 69,
+                "cacheRead": 70656,
+                "cacheWrite": 0,
+                "totalModel": 2247,
+                "totalWithCache": 72903
+              },
+              {
+                "gapSeconds": 34,
+                "input": 206,
+                "output": 1926,
+                "reasoning": 0,
+                "cacheRead": 72704,
+                "cacheWrite": 0,
+                "totalModel": 2132,
+                "totalWithCache": 74836
+              },
+              {
+                "gapSeconds": 34,
+                "input": 1949,
+                "output": 1566,
+                "reasoning": 0,
+                "cacheRead": 72896,
+                "cacheWrite": 0,
+                "totalModel": 3515,
+                "totalWithCache": 76411
+              },
+              {
+                "gapSeconds": 16,
+                "input": 1604,
+                "output": 190,
+                "reasoning": 52,
+                "cacheRead": 74816,
+                "cacheWrite": 0,
+                "totalModel": 1846,
+                "totalWithCache": 76662
+              },
+              {
+                "gapSeconds": 45,
+                "input": 254,
+                "output": 2673,
+                "reasoning": 0,
+                "cacheRead": 76416,
+                "cacheWrite": 0,
+                "totalModel": 2927,
+                "totalWithCache": 79343
+              },
+              {
+                "gapSeconds": 27,
+                "input": 2744,
+                "output": 666,
+                "reasoning": 0,
+                "cacheRead": 76608,
+                "cacheWrite": 0,
+                "totalModel": 3410,
+                "totalWithCache": 80018
+              },
+              {
+                "gapSeconds": 44,
+                "input": 731,
+                "output": 1190,
+                "reasoning": 342,
+                "cacheRead": 79296,
+                "cacheWrite": 0,
+                "totalModel": 2263,
+                "totalWithCache": 81559
+              },
+              {
+                "gapSeconds": 10,
+                "input": 1688,
+                "output": 169,
+                "reasoning": 42,
+                "cacheRead": 80000,
+                "cacheWrite": 0,
+                "totalModel": 1899,
+                "totalWithCache": 81899
+              },
+              {
+                "gapSeconds": 15,
+                "input": 243,
+                "output": 348,
+                "reasoning": 0,
+                "cacheRead": 81664,
+                "cacheWrite": 0,
+                "totalModel": 591,
+                "totalWithCache": 82255
+              },
+              {
+                "gapSeconds": 16,
+                "input": 496,
+                "output": 424,
+                "reasoning": 63,
+                "cacheRead": 81856,
+                "cacheWrite": 0,
+                "totalModel": 983,
+                "totalWithCache": 82839
+              }
+            ]
+          },
+          "cumulativeSessionUsage": {
+            "input": 76826,
+            "output": 40261,
+            "reasoning": 4925,
+            "cacheRead": 2297856,
+            "cacheWrite": 0,
+            "totalModel": 122012,
+            "totalWithCache": 2419868
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 9,
+          "permissionRequests": 9,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 18,
+            "totalChecks": 18,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:form element": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:labels": {
+                "passed": true,
+                "detail": "index.html: found 14, expected at least 3"
+              },
+              "pattern:required controls": {
+                "passed": true,
+                "detail": "index.html: found 10, expected at least 3"
+              },
+              "pattern:email field": {
+                "passed": true,
+                "detail": "index.html: found 12, expected at least 1"
+              },
+              "pattern:rating choice": {
+                "passed": true,
+                "detail": "index.html: found 35, expected at least 1"
+              },
+              "pattern:select field": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:checkbox group": {
+                "passed": true,
+                "detail": "index.html: found 5, expected at least 1"
+              },
+              "pattern:success state": {
+                "passed": true,
+                "detail": "index.html: found 6, expected at least 1"
+              },
+              "pattern:prevent default": {
+                "passed": true,
+                "detail": "app.js: found 1, expected at least 1"
+              },
+              "pattern:validation handling": {
+                "passed": true,
+                "detail": "app.js: found 35, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 12, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 46
+              }
+            }
+          },
+          "finalMessage": "All verifier findings are resolved — `projects/survey-form/` now contains exactly `index.html`, `styles.css`, `app.js`, and `README.md`, with every reported pattern present: - **Form & controls**: `<form>` with 14 labeled controls — name (`required`, `minlength=2`), email (`type=\"email\"`, `required`), a required 1–5 rating radio group, a required select, an optional features checkbox group, textarea with live counter, and required consent — 10 native `required` attributes in total. - **Validation**: native constraints plus `novalidate`; JS intercepts with `preventDefault()`, renders per-field inline errors via `ValidityState` flags, sets `aria-invalid`, focuses the first invalid control, and announces the problem count through a `role=\"alert\"` status line. - **Success state**: valid submissions swap the form for a summary card (\"Thank you — response recorded!\") that lists every answer, with focus moved to its heading and a \"Submit another response\" reset flow. - **Inspected validation paths**: empty/short name, missing vs malformed email, unrated, placeholder select, unchecked consent, all-valid submission, live error clearing after touch, and the reset cycle. - **Styling**: CSS variables, visible focus states, responsive single-column layout with a `640px` breakpoint; static checks pass (JS syntax OK, balanced HTML/CSS, all label/describedby/id targets resolve, zero remote references). No other project or root file was modified.",
+          "taskContext": {
+            "type": "create",
+            "scope": [
+              "projects/survey-form"
+            ],
+            "scopeState": "new",
+            "entities": [
+              "index",
+              "styles",
+              "README",
+              "labeled",
+              "name",
+              "email",
+              "fields",
+              "required",
+              "rating",
+              "choice",
+              "select",
+              "field"
+            ],
+            "actions": [],
+            "constraints": [
+              "accessible",
+              "scope-limited",
+              "responsive"
+            ],
+            "selectedPaths": [],
+            "highConfidence": 0,
+            "mediumConfidence": 0,
+            "contextChars": 993
+          }
+        },
+        {
+          "index": 5,
+          "slug": "personal-blog",
+          "title": "Personal blog with local search",
+          "success": true,
+          "promptStartedAt": "2026-08-23T10:40:20.661Z",
+          "promptCompletedAt": "2026-08-23T10:48:30.172Z",
+          "agentDurationMs": 489497,
+          "evaluationDurationMs": 172,
+          "endToEndDurationMs": 489669,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "usage": {
+            "input": 20258,
+            "output": 13544,
+            "reasoning": 1599,
+            "cacheRead": 1373568,
+            "cacheWrite": 0,
+            "totalModel": 35401,
+            "totalWithCache": 1408969,
+            "eventCount": 15,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 20258,
+              "output": 13544,
+              "reasoning": 1599,
+              "cacheRead": 1373568,
+              "cacheWrite": 0,
+              "totalModel": 35401,
+              "totalWithCache": 1408969
+            },
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 886,
+                "output": 1337,
+                "reasoning": 1037,
+                "cacheRead": 82304,
+                "cacheWrite": 0,
+                "totalModel": 3260,
+                "totalWithCache": 85564
+              },
+              {
+                "gapSeconds": 57,
+                "input": 0,
+                "output": 0,
+                "reasoning": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 0,
+                "totalWithCache": 0
+              },
+              {
+                "gapSeconds": 35,
+                "input": 6290,
+                "output": 2132,
+                "reasoning": 26,
+                "cacheRead": 85568,
+                "cacheWrite": 0,
+                "totalModel": 8448,
+                "totalWithCache": 94016
+              },
+              {
+                "gapSeconds": 49,
+                "input": 2185,
+                "output": 2079,
+                "reasoning": 0,
+                "cacheRead": 91840,
+                "cacheWrite": 0,
+                "totalModel": 4264,
+                "totalWithCache": 96104
+              },
+              {
+                "gapSeconds": 68,
+                "input": 2095,
+                "output": 4144,
+                "reasoning": 58,
+                "cacheRead": 94016,
+                "cacheWrite": 0,
+                "totalModel": 6297,
+                "totalWithCache": 100313
+              },
+              {
+                "gapSeconds": 23,
+                "input": 4258,
+                "output": 729,
+                "reasoning": 0,
+                "cacheRead": 96064,
+                "cacheWrite": 0,
+                "totalModel": 4987,
+                "totalWithCache": 101051
+              },
+              {
+                "gapSeconds": 21,
+                "input": 772,
+                "output": 606,
+                "reasoning": 0,
+                "cacheRead": 100288,
+                "cacheWrite": 0,
+                "totalModel": 1378,
+                "totalWithCache": 101666
+              },
+              {
+                "gapSeconds": 35,
+                "input": 619,
+                "output": 888,
+                "reasoning": 157,
+                "cacheRead": 101056,
+                "cacheWrite": 0,
+                "totalModel": 1664,
+                "totalWithCache": 102720
+              },
+              {
+                "gapSeconds": 18,
+                "input": 1232,
+                "output": 286,
+                "reasoning": 161,
+                "cacheRead": 101632,
+                "cacheWrite": 0,
+                "totalModel": 1679,
+                "totalWithCache": 103311
+              },
+              {
+                "gapSeconds": 21,
+                "input": 471,
+                "output": 72,
+                "reasoning": 0,
+                "cacheRead": 102848,
+                "cacheWrite": 0,
+                "totalModel": 543,
+                "totalWithCache": 103391
+              },
+              {
+                "gapSeconds": 14,
+                "input": 103,
+                "output": 78,
+                "reasoning": 0,
+                "cacheRead": 103296,
+                "cacheWrite": 0,
+                "totalModel": 181,
+                "totalWithCache": 103477
+              },
+              {
+                "gapSeconds": 11,
+                "input": 125,
+                "output": 237,
+                "reasoning": 0,
+                "cacheRead": 103360,
+                "cacheWrite": 0,
+                "totalModel": 362,
+                "totalWithCache": 103722
+              },
+              {
+                "gapSeconds": 18,
+                "input": 415,
+                "output": 199,
+                "reasoning": 65,
+                "cacheRead": 103424,
+                "cacheWrite": 0,
+                "totalModel": 679,
+                "totalWithCache": 104103
+              },
+              {
+                "gapSeconds": 14,
+                "input": 303,
+                "output": 376,
+                "reasoning": 0,
+                "cacheRead": 103808,
+                "cacheWrite": 0,
+                "totalModel": 679,
+                "totalWithCache": 104487
+              },
+              {
+                "gapSeconds": 25,
+                "input": 504,
+                "output": 381,
+                "reasoning": 95,
+                "cacheRead": 104064,
+                "cacheWrite": 0,
+                "totalModel": 980,
+                "totalWithCache": 105044
+              }
+            ]
+          },
+          "cumulativeSessionUsage": {
+            "input": 97084,
+            "output": 53805,
+            "reasoning": 6524,
+            "cacheRead": 3671424,
+            "cacheWrite": 0,
+            "totalModel": 157413,
+            "totalWithCache": 3828837
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 14,
+          "permissionRequests": 13,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 15,
+            "totalChecks": 15,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:blog navigation": {
+                "passed": true,
+                "detail": "index.html: found 1, expected at least 1"
+              },
+              "pattern:author introduction": {
+                "passed": true,
+                "detail": "index.html: found 27, expected at least 1"
+              },
+              "pattern:article cards": {
+                "passed": true,
+                "detail": "index.html: found 4, expected at least 3"
+              },
+              "pattern:article dates": {
+                "passed": true,
+                "detail": "index.html: found 42, expected at least 3"
+              },
+              "pattern:article tags": {
+                "passed": true,
+                "detail": "index.html: found 32, expected at least 1"
+              },
+              "pattern:search control": {
+                "passed": true,
+                "detail": "index.html: found 14, expected at least 1"
+              },
+              "pattern:local filtering": {
+                "passed": true,
+                "detail": "app.js: found 6, expected at least 2"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 5, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 150
+              }
+            }
+          },
+          "finalMessage": "Built `projects/personal-blog/` with exactly `index.html`, `styles.css`, `app.js`, and `README.md` — dependency-free and fully local. **Page**: semantic header with labeled primary nav, author intro (\"Maya Chen\") with avatar and bio, four distinct article cards (title, `<time>` date, read time, excerpt, clickable tags, reading links), full self-contained text for each post with back-links, an About section with a \"Currently\" facts card, a contact area with email button, and a footer. **Search & filtering (app.js)**: labeled search input filters by title/excerpt/tag substrings; `aria-pressed` tag chips (all/css/javascript/accessibility/career/design) filter by tag — the two combine, in-card tag buttons drive the same state, results are announced via a `role=\"status\"` live region, matching full-text sections hide in sync, and a zero-match empty state offers a working **Clear filters** button that returns focus to the search field. **Inspection passed**: JS syntax valid, HTML balanced with no duplicate ids, every `label for`/`aria-labelledby`/anchor target resolves, all slugs ↔ full posts pair up, no unstyled classes, no orphan tags, zero remote references, CSS braces balanced, global `:focus-visible` rings, `prefers-reduced-motion` support, auto-fit responsive grid plus a `720px` mobile breakpoint. No other project or root file was touched.",
+          "taskContext": {
+            "type": "create",
+            "scope": [
+              "projects/personal-blog"
+            ],
+            "scopeState": "new",
+            "entities": [
+              "site",
+              "index",
+              "styles",
+              "README",
+              "with",
+              "semantic",
+              "header",
+              "navigation",
+              "author",
+              "introduction",
+              "least",
+              "three"
+            ],
+            "actions": [],
+            "constraints": [
+              "dependency-free",
+              "local-only",
+              "accessible",
+              "scope-limited",
+              "responsive"
+            ],
+            "selectedPaths": [],
+            "highConfidence": 0,
+            "mediumConfidence": 0,
+            "contextChars": 1031
+          }
+        },
+        {
+          "index": 6,
+          "slug": "business-portfolio",
+          "title": "Business portfolio website",
+          "success": true,
+          "promptStartedAt": "2026-08-23T10:48:30.249Z",
+          "promptCompletedAt": "2026-08-23T11:00:33.631Z",
+          "agentDurationMs": 723406,
+          "evaluationDurationMs": 152,
+          "endToEndDurationMs": 723558,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "usage": {
+            "input": 24202,
+            "output": 20760,
+            "reasoning": 1692,
+            "cacheRead": 2773248,
+            "cacheWrite": 0,
+            "totalModel": 46654,
+            "totalWithCache": 2819902,
+            "eventCount": 23,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 24202,
+              "output": 20760,
+              "reasoning": 1692,
+              "cacheRead": 2773248,
+              "cacheWrite": 0,
+              "totalModel": 46654,
+              "totalWithCache": 2819902
+            },
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 888,
+                "output": 1153,
+                "reasoning": 933,
+                "cacheRead": 104512,
+                "cacheWrite": 0,
+                "totalModel": 2974,
+                "totalWithCache": 107486
+              },
+              {
+                "gapSeconds": 48,
+                "input": 2148,
+                "output": 2685,
+                "reasoning": 0,
+                "cacheRead": 105344,
+                "cacheWrite": 0,
+                "totalModel": 4833,
+                "totalWithCache": 110177
+              },
+              {
+                "gapSeconds": 65,
+                "input": 2730,
+                "output": 3099,
+                "reasoning": 0,
+                "cacheRead": 107456,
+                "cacheWrite": 0,
+                "totalModel": 5829,
+                "totalWithCache": 113285
+              },
+              {
+                "gapSeconds": 52,
+                "input": 3148,
+                "output": 2604,
+                "reasoning": 31,
+                "cacheRead": 110144,
+                "cacheWrite": 0,
+                "totalModel": 5783,
+                "totalWithCache": 115927
+              },
+              {
+                "gapSeconds": 44,
+                "input": 2656,
+                "output": 2512,
+                "reasoning": 39,
+                "cacheRead": 113280,
+                "cacheWrite": 0,
+                "totalModel": 5207,
+                "totalWithCache": 118487
+              },
+              {
+                "gapSeconds": 49,
+                "input": 2592,
+                "output": 2365,
+                "reasoning": 0,
+                "cacheRead": 115904,
+                "cacheWrite": 0,
+                "totalModel": 4957,
+                "totalWithCache": 120861
+              },
+              {
+                "gapSeconds": 12,
+                "input": 2406,
+                "output": 100,
+                "reasoning": 11,
+                "cacheRead": 118464,
+                "cacheWrite": 0,
+                "totalModel": 2517,
+                "totalWithCache": 120981
+              },
+              {
+                "gapSeconds": 35,
+                "input": 157,
+                "output": 1481,
+                "reasoning": 0,
+                "cacheRead": 120832,
+                "cacheWrite": 0,
+                "totalModel": 1638,
+                "totalWithCache": 122470
+              },
+              {
+                "gapSeconds": 28,
+                "input": 1519,
+                "output": 703,
+                "reasoning": 0,
+                "cacheRead": 120960,
+                "cacheWrite": 0,
+                "totalModel": 2222,
+                "totalWithCache": 123182
+              },
+              {
+                "gapSeconds": 22,
+                "input": 759,
+                "output": 764,
+                "reasoning": 0,
+                "cacheRead": 122432,
+                "cacheWrite": 0,
+                "totalModel": 1523,
+                "totalWithCache": 123955
+              },
+              {
+                "gapSeconds": 52,
+                "input": 969,
+                "output": 545,
+                "reasoning": 403,
+                "cacheRead": 123136,
+                "cacheWrite": 0,
+                "totalModel": 1917,
+                "totalWithCache": 125053
+              },
+              {
+                "gapSeconds": 20,
+                "input": 1083,
+                "output": 103,
+                "reasoning": 0,
+                "cacheRead": 124096,
+                "cacheWrite": 0,
+                "totalModel": 1186,
+                "totalWithCache": 125282
+              },
+              {
+                "gapSeconds": 11,
+                "input": 171,
+                "output": 123,
+                "reasoning": 50,
+                "cacheRead": 125120,
+                "cacheWrite": 0,
+                "totalModel": 344,
+                "totalWithCache": 125464
+              },
+              {
+                "gapSeconds": 29,
+                "input": 244,
+                "output": 196,
+                "reasoning": 94,
+                "cacheRead": 125248,
+                "cacheWrite": 0,
+                "totalModel": 534,
+                "totalWithCache": 125782
+              },
+              {
+                "gapSeconds": 17,
+                "input": 350,
+                "output": 76,
+                "reasoning": 0,
+                "cacheRead": 125440,
+                "cacheWrite": 0,
+                "totalModel": 426,
+                "totalWithCache": 125866
+              },
+              {
+                "gapSeconds": 23,
+                "input": 123,
+                "output": 202,
+                "reasoning": 0,
+                "cacheRead": 125760,
+                "cacheWrite": 0,
+                "totalModel": 325,
+                "totalWithCache": 126085
+              },
+              {
+                "gapSeconds": 12,
+                "input": 269,
+                "output": 77,
+                "reasoning": 0,
+                "cacheRead": 125824,
+                "cacheWrite": 0,
+                "totalModel": 346,
+                "totalWithCache": 126170
+              },
+              {
+                "gapSeconds": 10,
+                "input": 98,
+                "output": 77,
+                "reasoning": 0,
+                "cacheRead": 126080,
+                "cacheWrite": 0,
+                "totalModel": 175,
+                "totalWithCache": 126255
+              },
+              {
+                "gapSeconds": 12,
+                "input": 119,
+                "output": 154,
+                "reasoning": 0,
+                "cacheRead": 126144,
+                "cacheWrite": 0,
+                "totalModel": 273,
+                "totalWithCache": 126417
+              },
+              {
+                "gapSeconds": 22,
+                "input": 217,
+                "output": 669,
+                "reasoning": 0,
+                "cacheRead": 126208,
+                "cacheWrite": 0,
+                "totalModel": 886,
+                "totalWithCache": 127094
+              },
+              {
+                "gapSeconds": 22,
+                "input": 745,
+                "output": 259,
+                "reasoning": 0,
+                "cacheRead": 126400,
+                "cacheWrite": 0,
+                "totalModel": 1004,
+                "totalWithCache": 127404
+              },
+              {
+                "gapSeconds": 24,
+                "input": 306,
+                "output": 291,
+                "reasoning": 63,
+                "cacheRead": 127104,
+                "cacheWrite": 0,
+                "totalModel": 660,
+                "totalWithCache": 127764
+              },
+              {
+                "gapSeconds": 34,
+                "input": 505,
+                "output": 522,
+                "reasoning": 68,
+                "cacheRead": 127360,
+                "cacheWrite": 0,
+                "totalModel": 1095,
+                "totalWithCache": 128455
+              }
+            ]
+          },
+          "cumulativeSessionUsage": {
+            "input": 121286,
+            "output": 74565,
+            "reasoning": 8216,
+            "cacheRead": 6444672,
+            "cacheWrite": 0,
+            "totalModel": 204067,
+            "totalWithCache": 6648739
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 22,
+          "permissionRequests": 21,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 15,
+            "totalChecks": 15,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:business hero": {
+                "passed": true,
+                "detail": "index.html: found 7, expected at least 1"
+              },
+              "pattern:services": {
+                "passed": true,
+                "detail": "index.html: found 13, expected at least 1"
+              },
+              "pattern:case studies": {
+                "passed": true,
+                "detail": "index.html: found 15, expected at least 1"
+              },
+              "pattern:three portfolio items": {
+                "passed": true,
+                "detail": "index.html: found 12, expected at least 3"
+              },
+              "pattern:contact path": {
+                "passed": true,
+                "detail": "index.html: found 23, expected at least 1"
+              },
+              "pattern:theme or form behavior": {
+                "passed": true,
+                "detail": "app.js: found 60, expected at least 2"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 36, expected at least 1"
+              },
+              "pattern:focus styles": {
+                "passed": true,
+                "detail": "styles.css: found 10, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 132
+              }
+            }
+          },
+          "finalMessage": "Built `projects/business-portfolio/` with exactly `index.html`, `styles.css`, `app.js`, and `README.md` — all local, no dependencies or network. **Page**: sticky header (nav + theme toggle + CTA), hero with positioning statement and dual CTAs, metrics band (120+ projects, 98% retention…), six service cards, four-step process, three case-study cards with hard outcome metrics (Fleetpath, Havenbook, Greenview), star-rated testimonials, studio/about section with facts card, contact area with validated form + success panel, and a full footer. **app.js**: working **theme toggle** (`data-theme` on `<html>`, persisted in localStorage, defaults to OS preference, `aria-pressed` + dynamic label) and **contact-form validation** — native constraints drive custom inline errors via `ValidityState`, failed submits call `preventDefault()`, announce via `role=\"alert\"`, focus the first invalid field with `aria-invalid`, re-validate live, then swap to a focused success panel with a clean reset path. Also an accessible mobile nav (`aria-expanded`/`aria-controls`, closes on link click, Escape, or outside click). **Inspection fixes made**: added the missing `#top` anchor target, relocated the status line inside the form to prevent a broken grid auto-placement row, pruned unused class hooks, and styled the remainder. Final checks: JS syntax valid, balanced HTML/CSS, zero duplicate ids, every label/`aria-describedby`/anchor/JS id reference resolves, dark-theme variable block present, visible `:focus-visible` rings throughout, responsive breakpoints at 900px/620px, and no remote references. No other project or root file was touched.",
+          "taskContext": {
+            "type": "create",
+            "scope": [
+              "projects/business-portfolio"
+            ],
+            "scopeState": "new",
+            "entities": [
+              "professional",
+              "website",
+              "index",
+              "styles",
+              "README",
+              "content",
+              "strong",
+              "hero",
+              "with",
+              "positioning",
+              "services",
+              "section"
+            ],
+            "actions": [],
+            "constraints": [
+              "accessible",
+              "scope-limited",
+              "exact-file-set",
+              "responsive"
+            ],
+            "selectedPaths": [],
+            "highConfidence": 0,
+            "mediumConfidence": 0,
+            "contextChars": 1029
+          }
+        },
+        {
+          "index": 7,
+          "slug": "quiz-game",
+          "title": "Interactive quiz game",
+          "success": true,
+          "promptStartedAt": "2026-08-23T11:00:33.673Z",
+          "promptCompletedAt": "2026-08-23T11:06:33.148Z",
+          "agentDurationMs": 359473,
+          "evaluationDurationMs": 83,
+          "endToEndDurationMs": 359556,
+          "attempts": 2,
+          "firstAttemptSuccess": false,
+          "repaired": true,
+          "usage": {
+            "input": 11380,
+            "output": 8408,
+            "reasoning": 448,
+            "cacheRead": 1211328,
+            "cacheWrite": 0,
+            "totalModel": 20236,
+            "totalWithCache": 1231564,
+            "eventCount": 10,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 11380,
+              "output": 8408,
+              "reasoning": 448,
+              "cacheRead": 1211328,
+              "cacheWrite": 0,
+              "totalModel": 20236,
+              "totalWithCache": 1231564
+            },
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 0,
+                "output": 0,
+                "reasoning": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 0,
+                "totalWithCache": 0
+              },
+              {
+                "gapSeconds": 19,
+                "input": 2582,
+                "output": 120,
+                "reasoning": 78,
+                "cacheRead": 128768,
+                "cacheWrite": 0,
+                "totalModel": 2780,
+                "totalWithCache": 131548
+              },
+              {
+                "gapSeconds": 32,
+                "input": 227,
+                "output": 1192,
+                "reasoning": 0,
+                "cacheRead": 131328,
+                "cacheWrite": 0,
+                "totalModel": 1419,
+                "totalWithCache": 132747
+              },
+              {
+                "gapSeconds": 42,
+                "input": 1236,
+                "output": 1664,
+                "reasoning": 0,
+                "cacheRead": 131520,
+                "cacheWrite": 0,
+                "totalModel": 2900,
+                "totalWithCache": 134420
+              },
+              {
+                "gapSeconds": 53,
+                "input": 1693,
+                "output": 2657,
+                "reasoning": 0,
+                "cacheRead": 132736,
+                "cacheWrite": 0,
+                "totalModel": 4350,
+                "totalWithCache": 137086
+              },
+              {
+                "gapSeconds": 23,
+                "input": 2695,
+                "output": 616,
+                "reasoning": 0,
+                "cacheRead": 134400,
+                "cacheWrite": 0,
+                "totalModel": 3311,
+                "totalWithCache": 137711
+              },
+              {
+                "gapSeconds": 29,
+                "input": 632,
+                "output": 528,
+                "reasoning": 251,
+                "cacheRead": 137088,
+                "cacheWrite": 0,
+                "totalModel": 1411,
+                "totalWithCache": 138499
+              },
+              {
+                "gapSeconds": 24,
+                "input": 843,
+                "output": 707,
+                "reasoning": 0,
+                "cacheRead": 137664,
+                "cacheWrite": 0,
+                "totalModel": 1550,
+                "totalWithCache": 139214
+              },
+              {
+                "gapSeconds": 23,
+                "input": 842,
+                "output": 456,
+                "reasoning": 43,
+                "cacheRead": 138496,
+                "cacheWrite": 0,
+                "totalModel": 1341,
+                "totalWithCache": 139837
+              },
+              {
+                "gapSeconds": 27,
+                "input": 630,
+                "output": 468,
+                "reasoning": 76,
+                "cacheRead": 139328,
+                "cacheWrite": 0,
+                "totalModel": 1174,
+                "totalWithCache": 140502
+              }
+            ]
+          },
+          "cumulativeSessionUsage": {
+            "input": 132666,
+            "output": 82973,
+            "reasoning": 8664,
+            "cacheRead": 7656000,
+            "cacheWrite": 0,
+            "totalModel": 224303,
+            "totalWithCache": 7880303
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 8,
+          "permissionRequests": 8,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 17,
+            "totalChecks": 17,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:quiz shell": {
+                "passed": true,
+                "detail": "index.html: found 30, expected at least 1"
+              },
+              "pattern:answer controls": {
+                "passed": true,
+                "detail": "index.html: found 9, expected at least 1"
+              },
+              "pattern:score display": {
+                "passed": true,
+                "detail": "index.html: found 12, expected at least 1"
+              },
+              "pattern:next and restart controls": {
+                "passed": true,
+                "detail": "index.html: found 4, expected at least 2"
+              },
+              "pattern:question data": {
+                "passed": true,
+                "detail": "app.js: found 5, expected at least 1"
+              },
+              "pattern:at least five questions": {
+                "passed": true,
+                "detail": "app.js: found 26, expected at least 5"
+              },
+              "pattern:score state": {
+                "passed": true,
+                "detail": "app.js: found 34, expected at least 1"
+              },
+              "pattern:event listeners": {
+                "passed": true,
+                "detail": "app.js: found 4, expected at least 2"
+              },
+              "pattern:next flow": {
+                "passed": true,
+                "detail": "app.js: found 19, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 10, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 45
+              }
+            }
+          },
+          "finalMessage": "All verifier findings are fixed — `projects/quiz-game/` now contains exactly `index.html`, `styles.css`, `app.js`, and `README.md`, covering every reported pattern: - **Shell & controls**: `.quiz-shell` wrapper; static answer buttons (`class=\"option\"`) for the first question as a pre-JS baseline that the renderer rebuilds from data; persistent score display (\"Score:\" chip with `#score-value`); both **Next** and **Restart** controls present statically. - **Data & state**: a local `QUESTIONS` array with **six** multiple-choice questions (each with explanation), `let score` state, four event listeners, and an explicit `handleNext` flow. - **Game flow**: start screen → one question at a time → locked answers (double-answer prevented via `answered` flag + disabled buttons) → correct/incorrect styling with the right answer always highlighted → explanation announced through a polite live region → progress bar with synced `aria-valuenow`/`aria-valuetext` → \"Next question\" (becomes \"See results\" on the last item) → results screen with fraction score, tiered message, accuracy stats → \"Play again\" resets everything. - **Polish**: visible `:focus-visible` rings, focus management to each new question/Next/results heading, reduced-motion support, `<noscript>` fallback, and a `520px` responsive breakpoint. Inspection confirmed valid JS syntax, balanced HTML/CSS, all id references resolving, no unstyled classes, and no remote references. No other project or root file was modified.",
+          "taskContext": {
+            "type": "create",
+            "scope": [
+              "projects/quiz-game"
+            ],
+            "scopeState": "new",
+            "entities": [
+              "index",
+              "styles",
+              "README",
+              "without",
+              "start",
+              "state",
+              "data",
+              "least",
+              "five",
+              "multiple-choice",
+              "multiple",
+              "choice"
+            ],
+            "actions": [],
+            "constraints": [
+              "dependency-free",
+              "local-only",
+              "accessible",
+              "scope-limited",
+              "responsive"
+            ],
+            "selectedPaths": [],
+            "highConfidence": 0,
+            "mediumConfidence": 0,
+            "contextChars": 1026
+          }
+        },
+        {
+          "index": 8,
+          "slug": "meme-generator",
+          "title": "Local meme generator",
+          "success": true,
+          "promptStartedAt": "2026-08-23T11:06:33.193Z",
+          "promptCompletedAt": "2026-08-23T11:13:23.307Z",
+          "agentDurationMs": 410115,
+          "evaluationDurationMs": 50,
+          "endToEndDurationMs": 410165,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "usage": {
+            "input": 10129,
+            "output": 8036,
+            "reasoning": 1168,
+            "cacheRead": 1156544,
+            "cacheWrite": 0,
+            "totalModel": 19333,
+            "totalWithCache": 1175877,
+            "eventCount": 8,
+            "cost": 0,
+            "sessionDelta": {
+              "input": 10129,
+              "output": 8036,
+              "reasoning": 1168,
+              "cacheRead": 1156544,
+              "cacheWrite": 0,
+              "totalModel": 19333,
+              "totalWithCache": 1175877
+            },
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 959,
+                "output": 892,
+                "reasoning": 798,
+                "cacheRead": 139904,
+                "cacheWrite": 0,
+                "totalModel": 2649,
+                "totalWithCache": 142553
+              },
+              {
+                "gapSeconds": 31,
+                "input": 1760,
+                "output": 936,
+                "reasoning": 0,
+                "cacheRead": 140800,
+                "cacheWrite": 0,
+                "totalModel": 2696,
+                "totalWithCache": 143496
+              },
+              {
+                "gapSeconds": 48,
+                "input": 977,
+                "output": 1876,
+                "reasoning": 0,
+                "cacheRead": 142528,
+                "cacheWrite": 0,
+                "totalModel": 2853,
+                "totalWithCache": 145381
+              },
+              {
+                "gapSeconds": 80,
+                "input": 1902,
+                "output": 1875,
+                "reasoning": 0,
+                "cacheRead": 143488,
+                "cacheWrite": 0,
+                "totalModel": 3777,
+                "totalWithCache": 147265
+              },
+              {
+                "gapSeconds": 47,
+                "input": 1930,
+                "output": 662,
+                "reasoning": 0,
+                "cacheRead": 145344,
+                "cacheWrite": 0,
+                "totalModel": 2592,
+                "totalWithCache": 147936
+              },
+              {
+                "gapSeconds": 62,
+                "input": 681,
+                "output": 1035,
+                "reasoning": 204,
+                "cacheRead": 147264,
+                "cacheWrite": 0,
+                "totalModel": 1920,
+                "totalWithCache": 149184
+              },
+              {
+                "gapSeconds": 42,
+                "input": 1449,
+                "output": 248,
+                "reasoning": 74,
+                "cacheRead": 147904,
+                "cacheWrite": 0,
+                "totalModel": 1771,
+                "totalWithCache": 149675
+              },
+              {
+                "gapSeconds": 29,
+                "input": 471,
+                "output": 512,
+                "reasoning": 92,
+                "cacheRead": 149312,
+                "cacheWrite": 0,
+                "totalModel": 1075,
+                "totalWithCache": 150387
+              }
+            ]
+          },
+          "cumulativeSessionUsage": {
+            "input": 142795,
+            "output": 91009,
+            "reasoning": 9832,
+            "cacheRead": 8812544,
+            "cacheWrite": 0,
+            "totalModel": 243636,
+            "totalWithCache": 9056180
+          },
+          "compaction": {
+            "done": false,
+            "count": 0,
+            "phases": []
+          },
+          "toolCalls": 7,
+          "permissionRequests": 7,
+          "rejectedPermissions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 16,
+            "totalChecks": 16,
+            "checks": {
+              "file:index.html": {
+                "passed": true,
+                "detail": "index.html exists"
+              },
+              "file:styles.css": {
+                "passed": true,
+                "detail": "styles.css exists"
+              },
+              "file:app.js": {
+                "passed": true,
+                "detail": "app.js exists"
+              },
+              "file:README.md": {
+                "passed": true,
+                "detail": "README.md exists"
+              },
+              "pattern:image input": {
+                "passed": true,
+                "detail": "index.html: found 13, expected at least 1"
+              },
+              "pattern:top and bottom text": {
+                "passed": true,
+                "detail": "index.html: found 9, expected at least 2"
+              },
+              "pattern:preview surface": {
+                "passed": true,
+                "detail": "index.html: found 8, expected at least 1"
+              },
+              "pattern:download control": {
+                "passed": true,
+                "detail": "index.html: found 4, expected at least 1"
+              },
+              "pattern:file handling": {
+                "passed": true,
+                "detail": "app.js: found 40, expected at least 1"
+              },
+              "pattern:live updates": {
+                "passed": true,
+                "detail": "app.js: found 29, expected at least 2"
+              },
+              "pattern:canvas or download implementation": {
+                "passed": true,
+                "detail": "app.js: found 16, expected at least 2"
+              },
+              "pattern:reset behavior": {
+                "passed": true,
+                "detail": "app.js: found 7, expected at least 1"
+              },
+              "pattern:responsive layout": {
+                "passed": true,
+                "detail": "styles.css: found 9, expected at least 1"
+              },
+              "no:external-network-assets": {
+                "passed": true,
+                "detail": "no external network asset or fetch found"
+              },
+              "scope:only-current-project": {
+                "passed": true,
+                "detail": "files outside the current project were unchanged"
+              },
+              "syntax:app.js": {
+                "passed": true,
+                "detail": "app.js parses"
+              }
+            },
+            "files": [
+              "README.md",
+              "app.js",
+              "index.html",
+              "styles.css"
+            ],
+            "outsideWorkspaceUnchanged": true,
+            "syntax": {
+              "app.js": {
+                "passed": true,
+                "code": 0,
+                "stdout": "",
+                "stderr": "",
+                "durationMs": 35
+              }
+            }
+          },
+          "finalMessage": "Built `projects/meme-generator/` with exactly `index.html`, `styles.css`, `app.js`, and `README.md` — fully local, zero dependencies or remote assets. **Features**: - **Image source**: native labeled `<input type=\"file\" accept=\"image/*\">` (decoded via `FileReader` → `Image`, drawn cover-fit) *or* the **built-in placeholder** — a programmatically painted gradient landscape, so nothing is bundled or fetched. - **Top/bottom text**: live canvas preview on every keystroke with classic meme typography — Impact stack, white fill, black stroke, auto-wrap plus auto-shrink so long captions stay readable and centered. - **Download**: real local export via `canvas.toBlob()` → object URL → `<a download=\"my-meme.png\">` → URL revoked; failure branch included. - **Reset**: clears both fields, the file input, and the custom image, repaints the placeholder, announces it, and returns focus to the top-text field. **Inspected paths & edge cases**: cancelled dialog, non-image files, undecodable images, read errors, whitespace-only captions (nothing drawn), oversized images (cover-crop), repeated downloads (fresh URLs each time), and export-blocked fallback — all handled with `role=\"status\"` announcements. **Accessibility/responsive**: visible labels, keyboard-operable styled file input, dynamic canvas `aria-label` describing the current caption, skip link, `:focus-visible` rings, reduced-motion support; two-column layout collapses below `860px` (preview moves above controls) with full-width buttons under `480px`. Static checks pass: valid JS syntax, balanced markup/CSS, every id reference resolving, no unstyled classes, no network references. No other project or root file was touched.",
+          "taskContext": {
+            "type": "create",
+            "scope": [
+              "projects/meme-generator"
+            ],
+            "scopeState": "new",
+            "entities": [
+              "dependency-free",
+              "free",
+              "index",
+              "styles",
+              "README",
+              "user",
+              "choose",
+              "image",
+              "from",
+              "built-in",
+              "built",
+              "placeholder"
+            ],
+            "actions": [],
+            "constraints": [
+              "dependency-free",
+              "accessible",
+              "scope-limited",
+              "responsive"
+            ],
+            "selectedPaths": [],
+            "highConfidence": 0,
+            "mediumConfidence": 0,
+            "contextChars": 1022
+          }
+        }
+      ],
+      "finalSessionUsage": {
+        "input": 142795,
+        "output": 91009,
+        "reasoning": 9832,
+        "cacheRead": 8812544,
+        "cacheWrite": 0,
+        "totalModel": 243636,
+        "totalWithCache": 9056180
+      },
+      "totalDurationMs": 3433197,
+      "errors": [],
+      "summary": {
+        "tasks": 8,
+        "completedPrompts": 8,
+        "successes": 8,
+        "successRate": 1,
+        "totalAgentDurationMs": 3432555,
+        "totalEndToEndDurationMs": 3433197,
+        "medianTaskDurationMs": 384860.5,
+        "totalUsage": {
+          "input": 142795,
+          "output": 91009,
+          "reasoning": 9832,
+          "cacheRead": 8812544,
+          "cacheWrite": 0,
+          "totalModel": 243636,
+          "totalWithCache": 9056180
+        },
+        "totalReportedCost": 0,
+        "costReported": false,
+        "compactions": 0,
+        "compactionTasks": 0,
+        "totalToolCalls": 91,
+        "totalPermissionRequests": 86,
+        "rejectedPermissions": 1,
+        "totalEvaluationChecks": 128,
+        "passedEvaluationChecks": 128,
+        "firstAttemptSuccesses": 5,
+        "repairedTasks": 3,
+        "cacheShare": 0.984054763309351,
+        "cacheFullMisses": 0,
+        "cacheMissInputTokens": 0,
+        "adjustedCacheShare": 0.9856536671363549
+      }
+    }
+  },
+  "summary": {
+    "opencode": {
+      "tasks": 8,
+      "completedPrompts": 8,
+      "successes": 8,
+      "successRate": 1,
+      "totalAgentDurationMs": 3009459,
+      "totalEndToEndDurationMs": 3010082,
+      "medianTaskDurationMs": 374943,
+      "totalUsage": {
+        "input": 144701,
+        "output": 102340,
+        "reasoning": 12447,
+        "cacheRead": 6525632,
+        "cacheWrite": 0,
+        "totalModel": 259488,
+        "totalWithCache": 6785120
+      },
+      "totalReportedCost": 0,
+      "costReported": false,
+      "compactions": 0,
+      "compactionTasks": 0,
+      "totalToolCalls": 92,
+      "totalPermissionRequests": 82,
+      "rejectedPermissions": 1,
+      "totalEvaluationChecks": 128,
+      "passedEvaluationChecks": 128,
+      "firstAttemptSuccesses": 6,
+      "repairedTasks": 2,
+      "cacheShare": 0.9783067801862366,
+      "cacheFullMisses": 0,
+      "cacheMissInputTokens": 0,
+      "adjustedCacheShare": 0.980077207597963
+    },
+    "cuppet": {
+      "tasks": 8,
+      "completedPrompts": 8,
+      "successes": 8,
+      "successRate": 1,
+      "totalAgentDurationMs": 3432555,
+      "totalEndToEndDurationMs": 3433197,
+      "medianTaskDurationMs": 384860.5,
+      "totalUsage": {
+        "input": 142795,
+        "output": 91009,
+        "reasoning": 9832,
+        "cacheRead": 8812544,
+        "cacheWrite": 0,
+        "totalModel": 243636,
+        "totalWithCache": 9056180
+      },
+      "totalReportedCost": 0,
+      "costReported": false,
+      "compactions": 0,
+      "compactionTasks": 0,
+      "totalToolCalls": 91,
+      "totalPermissionRequests": 86,
+      "rejectedPermissions": 1,
+      "totalEvaluationChecks": 128,
+      "passedEvaluationChecks": 128,
+      "firstAttemptSuccesses": 5,
+      "repairedTasks": 3,
+      "cacheShare": 0.984054763309351,
+      "cacheFullMisses": 0,
+      "cacheMissInputTokens": 0,
+      "adjustedCacheShare": 0.9856536671363549
+    },
+    "comparison": {
+      "baseline": "opencode",
+      "candidate": "cuppet",
+      "successDelta": 0,
+      "agentTimeReduction": -0.14058872375400364,
+      "endToEndTimeReduction": -0.1405659380707901,
+      "uncachedInputReduction": 0.013171989136218823,
+      "totalModelTokenReduction": 0.061089530151683315,
+      "cacheReadDelta": 2286912,
+      "cacheShareDelta": 0.00574798312311442,
+      "compactionDelta": 0,
+      "evaluationDelta": 0,
+      "firstAttemptDelta": -1,
+      "repairDelta": 1,
+      "cacheFullMissDelta": 0,
+      "adjustedCacheShareDelta": 0.00557645953839192,
+      "reportedCostAvailable": false
+    }
+  }
+}

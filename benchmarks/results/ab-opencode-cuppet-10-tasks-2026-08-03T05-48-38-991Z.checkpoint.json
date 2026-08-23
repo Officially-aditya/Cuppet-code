@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "createdAt": "2026-08-03T05:48:38.992Z",
+  "updatedAt": "2026-08-03T05:48:39.537Z",
+  "status": "failed",
+  "model": {
+    "providerID": "openai",
+    "modelID": "gpt-5.6-luna",
+    "variant": "low"
+  },
+  "fixtureHash": "4463b948dba0b6cb08bb15ff0ad354282aa148c16477c286a8ce2a4342fa97f5",
+  "tasks": [
+    "landing-page",
+    "address-book",
+    "survey-form"
+  ],
+  "selectionSeed": "20260803-relevance-v1",
+  "arms": {},
+  "lastEvent": "process-error",
+  "error": "OpenCode server exited with code 1: "
+}

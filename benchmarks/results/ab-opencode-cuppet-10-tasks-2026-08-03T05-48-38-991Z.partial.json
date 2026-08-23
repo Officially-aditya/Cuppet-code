@@ -1,0 +1,104 @@
+{
+  "schema": 1,
+  "status": "partial",
+  "createdAt": "2026-08-03T05:48:38.992Z",
+  "updatedAt": "2026-08-03T05:48:39.537Z",
+  "model": {
+    "providerID": "openai",
+    "modelID": "gpt-5.6-luna",
+    "variant": "low"
+  },
+  "cuppetContextMode": "task-conditioned-relevance",
+  "opencodeVersion": "1.18.4",
+  "officialBinary": "/private/tmp/cuppet-opencode-official-1.18.4/node_modules/opencode-darwin-arm64/bin/opencode",
+  "fixture": {
+    "hash": "4463b948dba0b6cb08bb15ff0ad354282aa148c16477c286a8ce2a4342fa97f5",
+    "files": [
+      "README.md",
+      "projects/README.md"
+    ]
+  },
+  "tasks": [
+    "landing-page",
+    "address-book",
+    "survey-form"
+  ],
+  "design": "Two fresh workspaces and two foreground sessions. The arms alternate task order, but each arm receives the same 3 prompt(s) in one persistent session. Official OpenCode uses the unpatched upstream server; Cuppet uses the live plugin and TST path. Every task is evaluated immediately with hidden file, behavior-contract, syntax, network, and scope checks.",
+  "checkpoint": {
+    "lastEvent": "process-error",
+    "error": "OpenCode server exited with code 1: "
+  },
+  "arms": {},
+  "summary": {
+    "opencode": {
+      "tasks": 3,
+      "completedPrompts": 0,
+      "successes": 0,
+      "successRate": 0,
+      "totalAgentDurationMs": 0,
+      "totalEndToEndDurationMs": 0,
+      "medianTaskDurationMs": 0,
+      "totalUsage": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalModel": 0,
+        "totalWithCache": 0
+      },
+      "totalReportedCost": 0,
+      "costReported": false,
+      "compactions": 0,
+      "compactionTasks": 0,
+      "totalToolCalls": 0,
+      "totalPermissionRequests": 0,
+      "rejectedPermissions": 0,
+      "totalEvaluationChecks": 0,
+      "passedEvaluationChecks": 0,
+      "cacheShare": 0
+    },
+    "cuppet": {
+      "tasks": 3,
+      "completedPrompts": 0,
+      "successes": 0,
+      "successRate": 0,
+      "totalAgentDurationMs": 0,
+      "totalEndToEndDurationMs": 0,
+      "medianTaskDurationMs": 0,
+      "totalUsage": {
+        "input": 0,
+        "output": 0,
+        "reasoning": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalModel": 0,
+        "totalWithCache": 0
+      },
+      "totalReportedCost": 0,
+      "costReported": false,
+      "compactions": 0,
+      "compactionTasks": 0,
+      "totalToolCalls": 0,
+      "totalPermissionRequests": 0,
+      "rejectedPermissions": 0,
+      "totalEvaluationChecks": 0,
+      "passedEvaluationChecks": 0,
+      "cacheShare": 0
+    },
+    "comparison": {
+      "baseline": "opencode",
+      "candidate": "cuppet",
+      "successDelta": 0,
+      "agentTimeReduction": 0,
+      "endToEndTimeReduction": 0,
+      "uncachedInputReduction": 0,
+      "totalModelTokenReduction": 0,
+      "cacheReadDelta": 0,
+      "cacheShareDelta": 0,
+      "compactionDelta": 0,
+      "evaluationDelta": 0,
+      "reportedCostAvailable": false
+    }
+  }
+}

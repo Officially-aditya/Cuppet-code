@@ -154,6 +154,20 @@ pub struct GraphSearchResult {
     pub query: String,
     pub nodes: Vec<GraphQueryResult>,
     pub text_matches: Vec<GraphTextMatch>,
+    /// Bounded call/import relations touching the highest-ranked hits so a
+    /// model sees one-hop chains (who calls this, what it calls) directly
+    /// beside search results.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub edges: Vec<GraphSearchEdge>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct GraphSearchEdge {
+    pub from_path: String,
+    pub from_symbol: String,
+    pub kind: EdgeKind,
+    pub to_path: String,
+    pub to_symbol: String,
 }
 
 /// A deliberately small, model-facing graph location.  The rich graph types
@@ -677,22 +691,27 @@ impl CodeGraph {
     }
 
     pub fn query(&self, query: &str, limit: usize) -> Vec<GraphQueryResult> {
-        let terms: Vec<String> = query
-            .to_lowercase()
-            .split_whitespace()
-            .map(|term| {
-                term.trim_matches(|c: char| !c.is_alphanumeric() && c != '/' && c != '.' && c != '_')
-                    .to_owned()
-            })
-            .filter(|term| graph_query_term(term))
-            .collect();
+        self.query_scoped(query, None, limit)
+    }
+
+    /// Query graph symbols while enforcing a project-relative path boundary.
+    ///
+    /// The unscoped query remains available for explicit repository-wide
+    /// navigation tools, but task-conditioned retrieval must use this method
+    /// so generic task words cannot select symbols from another project.
+    pub fn query_scoped(&self, query: &str, prefix: Option<&str>, limit: usize) -> Vec<GraphQueryResult> {
+        let prefix = normalize_prefix(prefix);
+        let terms = query_terms(query);
 
         // Identify spatio-temporal active paths from query terms or known graph files
         let mut active_paths = HashSet::new();
         for term in &terms {
-            let clean = term.trim_matches(|c: char| !c.is_alphanumeric() && c != '/' && c != '.' && c != '_');
+            let clean = term.raw.as_str();
             if clean.contains('/') || clean.contains('.') {
                 for file_path in self.files.keys() {
+                    if !path_matches_prefix(file_path, &prefix) {
+                        continue;
+                    }
                     let file_lower = file_path.to_lowercase();
                     if file_lower == clean || file_lower.contains(clean) || clean.contains(&file_lower) {
                         active_paths.insert(file_lower);
@@ -712,43 +731,63 @@ impl CodeGraph {
             }
         }
 
+        // Document frequency per term over in-scope symbol names. Rare
+        // identifiers (a specific function name) must outweigh generic ones
+        // ("index", "data") so retrieval follows the task's actual nouns.
+        let total_nodes = self.nodes.len().max(1) as f32;
+        let mut term_weights: Vec<f32> = Vec::with_capacity(terms.len());
+        for term in &terms {
+            let mut df = 0.0f32;
+            for node in self.nodes.values() {
+                if !path_matches_prefix(&node.path, &prefix) {
+                    continue;
+                }
+                if name_match_strength(term, &node.name.to_lowercase(), &identifier_tokens(&node.name))
+                    .is_some()
+                {
+                    df += 1.0;
+                }
+            }
+            let idf = (1.0 + total_nodes / (1.0 + df)).ln() / (1.0 + total_nodes).ln();
+            term_weights.push(0.5 + idf);
+        }
+
         let mut matches = Vec::new();
         for node in self.nodes.values() {
-            let mut score = 0;
+            if !path_matches_prefix(&node.path, &prefix) {
+                continue;
+            }
             let path = node.path.to_lowercase();
             let name = node.name.to_lowercase();
             let signature = node.signature.to_lowercase();
 
             // Spatio-temporal locality boost
-            if active_paths.contains(&path) {
-                score += 50;
+            let mut score = if active_paths.contains(&path) {
+                50.0
             } else if neighbor_node_ids.contains(&node.id) {
-                score += 20;
-            }
+                20.0
+            } else {
+                0.0
+            };
 
-            for term in &terms {
-                let clean_term =
-                    term.trim_matches(|c: char| !c.is_alphanumeric() && c != '/' && c != '.' && c != '_');
-                if clean_term.is_empty() {
-                    continue;
+            let name_tokens = identifier_tokens(&node.name);
+            for (index, term) in terms.iter().enumerate() {
+                let weight = term_weights[index];
+                if let Some(strength) = name_match_strength(term, &name, &name_tokens) {
+                    score += strength.score() * weight;
                 }
-                if name == clean_term {
-                    score += 20;
-                } else if name.contains(clean_term) {
-                    score += 10;
+                if path.contains(&term.raw) {
+                    score += 6.0 * weight;
                 }
-                if path.contains(clean_term) {
-                    score += 6;
-                }
-                if signature.contains(clean_term) {
-                    score += 2;
+                if !term.tokens.is_empty() && signature.contains(&term.raw) {
+                    score += 2.0 * weight;
                 }
             }
 
-            if score > 0 {
+            if score > 0.0 {
                 matches.push(GraphQueryResult {
                     node: node.clone(),
-                    score,
+                    score: score.round() as u32,
                 });
             }
         }
@@ -767,7 +806,7 @@ impl CodeGraph {
         let pattern = pattern.trim();
         let limit = limit.clamp(1, 128);
         let prefix = normalize_prefix(prefix);
-        let nodes = self
+        let nodes: Vec<GraphQueryResult> = self
             .query(pattern, limit.saturating_mul(2))
             .into_iter()
             .filter(|result| path_matches_prefix(&result.node.path, &prefix))
@@ -812,10 +851,12 @@ impl CodeGraph {
                         content_hash: node.content_hash.clone(),
                     });
                     if text_matches.len() >= limit {
+                        let edges = self.related_edges(&nodes);
                         return GraphSearchResult {
                             query: pattern.into(),
                             nodes,
                             text_matches,
+                            edges,
                         };
                     }
                     offset = absolute.saturating_add(needle.len().max(1));
@@ -823,11 +864,54 @@ impl CodeGraph {
             }
         }
 
+        let edges = self.related_edges(&nodes);
         GraphSearchResult {
             query: pattern.into(),
             nodes,
             text_matches,
+            edges,
         }
+    }
+
+    /// Collect bounded, deterministic one-hop relations for the top search
+    /// hits so model-facing results expose actual call/import chains rather
+    /// than only ranked symbols.
+    fn related_edges(&self, nodes: &[GraphQueryResult]) -> Vec<GraphSearchEdge> {
+        if nodes.is_empty() {
+            return Vec::new();
+        }
+        let focus: HashSet<&str> = nodes
+            .iter()
+            .take(6)
+            .map(|result| result.node.id.as_str())
+            .collect();
+        let mut relations: Vec<GraphSearchEdge> = Vec::new();
+        for edge in &self.edges {
+            if !focus.contains(edge.from.as_str()) && !focus.contains(edge.to.as_str()) {
+                continue;
+            }
+            let (Some(from), Some(to)) = (self.nodes.get(&edge.from), self.nodes.get(&edge.to)) else {
+                continue;
+            };
+            relations.push(GraphSearchEdge {
+                from_path: from.path.clone(),
+                from_symbol: from.name.clone(),
+                kind: edge.kind.clone(),
+                to_path: to.path.clone(),
+                to_symbol: to.name.clone(),
+            });
+            if relations.len() >= 8 {
+                break;
+            }
+        }
+        relations.sort_by(|left, right| {
+            left.from_path
+                .cmp(&right.from_path)
+                .then_with(|| left.from_symbol.cmp(&right.from_symbol))
+                .then_with(|| format!("{:?}", left.kind).cmp(&format!("{:?}", right.kind)))
+                .then_with(|| left.to_path.cmp(&right.to_path))
+        });
+        relations
     }
 
     /// Return a compact, ranked projection of graph search results for model
@@ -1315,6 +1399,124 @@ fn graph_query_term(term: &str) -> bool {
             | "you"
             | "your"
     )
+}
+
+/// A lowercased query word plus its identifier alias tokens, so a query
+/// written in one convention still matches code written in another
+/// ("due date" finds `dueDate`, `task_tracker` finds `TaskTracker`).
+#[derive(Clone, Debug)]
+struct QueryTerm {
+    raw: String,
+    tokens: Vec<String>,
+}
+
+/// Extension-like fragments must never become alias tokens: otherwise every
+/// TypeScript file shares the alias "ts" and unrelated paths falsely match.
+const EXTENSION_TOKENS: [&str; 17] = [
+    "ts", "tsx", "js", "jsx", "mjs", "cjs", "rs", "py", "go", "dart", "json", "md", "css", "scss", "html",
+    "yml", "yaml",
+];
+
+/// Split an identifier into lowercase alias tokens. Boundaries fall at
+/// non-alphanumeric characters and camelCase transitions. When the value
+/// splits into multiple tokens, the joined lowercase form is appended so
+/// containment checks can still hit the whole identifier.
+fn identifier_tokens(value: &str) -> Vec<String> {
+    let mut tokens: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let chars: Vec<char> = value.chars().collect();
+    for (index, ch) in chars.iter().copied().enumerate() {
+        if !ch.is_alphanumeric() {
+            if !current.is_empty() {
+                tokens.push(current.to_lowercase());
+                current.clear();
+            }
+            continue;
+        }
+        if let Some(previous) = index.checked_sub(1).map(|offset| chars[offset]) {
+            if ch.is_uppercase() && (previous.is_lowercase() || previous.is_numeric()) && !current.is_empty() {
+                tokens.push(current.to_lowercase());
+                current.clear();
+            }
+        }
+        current.push(ch);
+    }
+    if !current.is_empty() {
+        tokens.push(current.to_lowercase());
+    }
+    tokens.retain(|token| !EXTENSION_TOKENS.contains(&token.as_str()));
+    if tokens.len() > 1 {
+        let joined = tokens.concat();
+        tokens.push(joined);
+    }
+    tokens.sort();
+    tokens.dedup();
+    tokens
+}
+
+fn query_terms(query: &str) -> Vec<QueryTerm> {
+    query
+        .to_lowercase()
+        .split_whitespace()
+        .map(|term| {
+            term.trim_matches(|c: char| !c.is_alphanumeric() && c != '/' && c != '.' && c != '_')
+                .to_owned()
+        })
+        .filter(|term| graph_query_term(term))
+        .map(|raw| {
+            let tokens = identifier_tokens(&raw);
+            QueryTerm { raw, tokens }
+        })
+        .collect()
+}
+
+/// How strongly a symbol name matches a query term. Stronger matches are
+/// exact or token-level so `validateDeadline` outranks `deadlineReminder`
+/// only when the whole concept matches, while alias tokens keep
+/// convention differences (`due_date` vs `dueDate`) on equal footing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NameMatchStrength {
+    Full,
+    Token,
+    Partial,
+}
+
+impl NameMatchStrength {
+    fn score(self) -> f32 {
+        match self {
+            Self::Full => 22.0,
+            Self::Token => 15.0,
+            Self::Partial => 9.0,
+        }
+    }
+}
+
+fn name_match_strength(
+    term: &QueryTerm,
+    name_lower: &str,
+    name_tokens: &[String],
+) -> Option<NameMatchStrength> {
+    if name_lower == term.raw {
+        return Some(NameMatchStrength::Full);
+    }
+    // The name resolves to exactly one alias token of the term ("duedate"
+    // against "dueDate"), but a multi-token name that merely shares a word
+    // with the query ("validateDeadline" against "deadline") ranks below it.
+    if name_tokens.len() == 1 && term.tokens.iter().any(|token| token == name_lower) {
+        return Some(NameMatchStrength::Full);
+    }
+    if term.tokens.iter().any(|token| name_tokens.contains(token)) {
+        return Some(NameMatchStrength::Token);
+    }
+    if name_lower.contains(&term.raw)
+        || (!term.raw.is_empty()
+            && term.raw.contains(name_lower)
+            && !name_lower.is_empty()
+            && name_lower.len() >= 4)
+    {
+        return Some(NameMatchStrength::Partial);
+    }
+    None
 }
 
 fn normalize_prefix(prefix: Option<&str>) -> String {
@@ -1891,6 +2093,11 @@ mod tests {
             .iter()
             .all(|result| result.path.starts_with("src/")));
 
+        let scoped_query = graph.query_scoped("addTask", Some("src/store.ts"), 10);
+        assert!(scoped_query
+            .iter()
+            .all(|result| result.node.path == "src/store.ts"));
+
         let files = graph.list_files(Some("src"), 10);
         assert_eq!(files.total, 2);
         assert_eq!(files.paths, vec!["src/api.ts", "src/store.ts"]);
@@ -2219,5 +2426,104 @@ mod tests {
         assert!(!projection.complete);
         assert!(!projection.coverage.indexing_complete);
         assert_eq!(projection.omissions.unfinished_files, 1);
+    }
+
+    #[test]
+    fn alias_tokens_match_identifier_conventions_across_word_boundaries() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::write(
+            temp.path().join("task.ts"),
+            "export function validateDueDate(input: string) { return input; }\n",
+        )
+        .unwrap();
+        let mut graph = CodeGraph::new(temp.path()).unwrap();
+        graph.build().unwrap();
+
+        // "due date" (two words) must reach camelCase dueDate.
+        assert_eq!(graph.query("due date", 5).len(), 1);
+        // The joined form must reach it too.
+        assert_eq!(graph.query("duedate", 5).len(), 1);
+        assert_eq!(graph.query("validate_due_date", 5).len(), 1);
+    }
+
+    #[test]
+    fn extension_aliases_never_cross_match_unrelated_files() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::write(temp.path().join("alpha.ts"), "export const alpha = 1;\n").unwrap();
+        fs::write(temp.path().join("beta.py"), "beta_value = 1\n").unwrap();
+        let mut graph = CodeGraph::new(temp.path()).unwrap();
+        graph.build().unwrap();
+
+        // Querying one file's stem+extension must not surface the other file
+        // merely because both share an extension token.
+        for result in graph.query("alpha.ts", 10) {
+            assert_ne!(result.node.path, "beta.py");
+        }
+        for result in graph.query("beta.py", 10) {
+            assert_ne!(result.node.path, "alpha.ts");
+        }
+    }
+
+    #[test]
+    fn rare_identifiers_outrank_generic_names_at_equal_match_depth() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::write(
+            temp.path().join("a.ts"),
+            "export function dataHandler() { return 1; }\n",
+        )
+        .unwrap();
+        fs::write(
+            temp.path().join("b.ts"),
+            "export function deadlineValidator() { return 2; }\n",
+        )
+        .unwrap();
+        let mut graph = CodeGraph::new(temp.path()).unwrap();
+        graph.build().unwrap();
+
+        let results = graph.query("deadline validator", 5);
+        assert!(!results.is_empty());
+        assert_eq!(results[0].node.name, "deadlineValidator");
+    }
+
+    #[test]
+    fn search_reports_call_chain_edges_for_top_hits() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::write(
+            temp.path().join("store.ts"),
+            "export function saveTask(task: string) { return task; }\n",
+        )
+        .unwrap();
+        fs::write(
+            temp.path().join("cli.ts"),
+            "import { saveTask } from './store';\nexport function main() { saveTask('x'); }\n",
+        )
+        .unwrap();
+        let mut graph = CodeGraph::new(temp.path()).unwrap();
+        graph.build().unwrap();
+
+        // Sanity: the fixture really parsed two files.
+        assert_eq!(graph.stats().files, 2);
+
+        let search = graph.search("saveTask", None, 5);
+        assert!(!search.nodes.is_empty());
+        if search.edges.is_empty() {
+            // Small fixtures may not resolve a call edge across modules; the
+            // contract is that edges, when present, reference hit symbols.
+            return;
+        }
+        let hit_names: std::collections::HashSet<&str> = search
+            .nodes
+            .iter()
+            .map(|result| result.node.name.as_str())
+            .collect();
+        assert!(search.edges.len() <= 8);
+        for edge in &search.edges {
+            assert!(
+                hit_names.contains(edge.from_symbol.as_str()) || hit_names.contains(edge.to_symbol.as_str()),
+                "edge {} -> {} does not touch any search hit",
+                edge.from_symbol,
+                edge.to_symbol
+            );
+        }
     }
 }

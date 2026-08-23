@@ -2,12 +2,31 @@ use crate::memory::{normalize_key, MemoryRecord};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum StmError {
     #[error("short-term memory is full and every entry is pinned")]
     AllSlotsPinned,
+}
+
+/// Fresh records matter more than stale ones even when the textual match is
+/// identical. The boost halves every 30 minutes and caps well below a single
+/// term match so relevance still dominates.
+const RECENCY_HALF_LIFE_MS: f32 = 30.0 * 60.0 * 1000.0;
+const RECENCY_BOOST_MAX: f32 = 4.0;
+
+fn recency_boost(now_ms: i64, updated_ms: u64) -> f32 {
+    let age_ms = (now_ms - updated_ms as i64).max(0) as f32;
+    RECENCY_BOOST_MAX * 0.5f32.powf(age_ms / RECENCY_HALF_LIFE_MS)
+}
+
+fn now_millis() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as i64)
+        .unwrap_or(0)
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -146,20 +165,33 @@ impl ShortTermMemory {
     }
 
     pub fn query(&mut self, query: &str, limit: usize) -> Vec<MemoryRecord> {
+        self.query_matched(query, limit).0
+    }
+
+    /// Query and report whether any record genuinely matched the query terms.
+    /// Pinned-only results do not count: they are context, not evidence that
+    /// retrieval understood the query.
+    fn query_matched(&mut self, query: &str, limit: usize) -> (Vec<MemoryRecord>, bool) {
         let terms: Vec<String> = normalize_key(query)
             .split_whitespace()
             .map(ToOwned::to_owned)
             .collect();
+        let now_ms = now_millis();
         let mut scored = Vec::new();
+        let mut had_term_match = false;
         for slot in &mut self.slots {
             let Some(entry) = slot.entry.as_mut() else {
                 continue;
             };
             let text = format!("{} {}", entry.normalized_key, entry.value.to_lowercase());
             let matches = terms.iter().filter(|term| text.contains(term.as_str())).count();
+            if matches > 0 {
+                had_term_match = true;
+            }
             if matches > 0 || entry.pinned {
                 entry.access_count += 1;
-                scored.push((matches as f32 * 10.0 + entry.score, entry.clone()));
+                let relevance = matches as f32 * 10.0 + entry.score + recency_boost(now_ms, entry.updated_ms);
+                scored.push((relevance, entry.clone()));
             }
         }
         scored.sort_by(|left, right| {
@@ -169,7 +201,8 @@ impl ShortTermMemory {
                 .unwrap_or(Ordering::Equal)
                 .then_with(|| right.1.updated_ms.cmp(&left.1.updated_ms))
         });
-        scored.into_iter().take(limit).map(|(_, entry)| entry).collect()
+        let records = scored.into_iter().take(limit).map(|(_, entry)| entry).collect();
+        (records, had_term_match)
     }
 
     pub fn query_with_recent(
@@ -178,8 +211,11 @@ impl ShortTermMemory {
         limit: usize,
         recent_fallback: usize,
     ) -> Vec<MemoryRecord> {
-        let mut result = self.query(query, limit);
-        if result.len() >= limit || recent_fallback == 0 {
+        // Recent padding is a fallback for queries retrieval could not match.
+        // When term matches exist, padding with merely-new records would only
+        // dilute the candidate list with noise.
+        let (mut result, had_term_match) = self.query_matched(query, limit);
+        if had_term_match || recent_fallback == 0 || result.len() >= limit {
             return result;
         }
         let existing: std::collections::HashSet<String> =
@@ -360,5 +396,37 @@ mod tests {
         );
         let after: Vec<String> = stm.entries().map(|entry| entry.id.clone()).collect();
         assert_eq!(before, after);
+    }
+
+    #[test]
+    fn fresher_records_outrank_stale_records_with_equal_text_matches() {
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        let mut stm = ShortTermMemory::new("s", 2);
+        // Same term match count and score; only recency differs.
+        stm.upsert(record("deadline old", 0.5, false, now_ms - 6 * 60 * 60 * 1000))
+            .unwrap();
+        stm.upsert(record("deadline new", 0.5, false, now_ms)).unwrap();
+        let results = stm.query("deadline", 10);
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].key, "deadline new");
+    }
+
+    #[test]
+    fn recent_fallback_only_applies_when_no_term_matched() {
+        let mut stm = ShortTermMemory::new("s", 3);
+        stm.upsert(record("alpha requirement", 1.0, false, 10)).unwrap();
+        stm.upsert(record("unrelated note", 1.0, false, 20)).unwrap();
+
+        // A matched query must not be padded with merely-recent noise.
+        let matched = stm.query_with_recent("alpha", 2, 2);
+        assert_eq!(matched.len(), 1);
+        assert_eq!(matched[0].key, "alpha requirement");
+
+        // An unmatched query still receives the recent fallback.
+        let fallback = stm.query_with_recent("zzz-nothing", 3, 2);
+        assert_eq!(fallback.len(), 2);
     }
 }

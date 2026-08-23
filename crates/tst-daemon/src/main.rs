@@ -359,9 +359,10 @@ async fn dispatch(method: &str, params: Value, service: &Arc<Mutex<TstService>>)
         }
         "graph.query" => {
             let query = required_string(&params, "query")?;
+            let prefix = params.get("prefix").and_then(Value::as_str);
             let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(20) as usize;
             Ok(serde_json::to_value(
-                service.lock().await.graph_query(query, limit),
+                service.lock().await.graph_query(query, prefix, limit),
             )?)
         }
         "graph.search" => {

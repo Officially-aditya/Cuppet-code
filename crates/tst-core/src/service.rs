@@ -383,9 +383,7 @@ impl TstService {
 
     pub fn query(&mut self, input: QueryInput) -> QueryOutput {
         let limit = input.limit.clamp(1, 128);
-        let stm_limit = (limit / 5).max(1);
-        let ltm_limit = ((limit * 3) / 10).max(1);
-        let graph_limit = limit.saturating_sub(stm_limit + ltm_limit).max(1);
+        let (stm_limit, ltm_limit, graph_limit) = allocate_retrieval_budget(limit, &input.query);
         let stm = self.session(&input.session_id).query(&input.query, stm_limit);
         let mut ltm = self.project.query(&input.query, ltm_limit);
         if ltm.len() < ltm_limit {
@@ -435,8 +433,16 @@ impl TstService {
             records.sort_by(|left, right| right.updated_ms.cmp(&left.updated_ms));
             records
         } else {
+            // Navigation-heavy tasks benefit from exact graph candidates over
+            // merely-recent session records, so skip the recent fallback for
+            // them. Authoring tasks keep the original behaviour.
+            let recent_fallback = if is_navigation_query(&retrieval_query) {
+                0
+            } else {
+                3
+            };
             self.session(&input.session_id)
-                .query_with_recent(&retrieval_query, 8, 3)
+                .query_with_recent(&retrieval_query, 8, recent_fallback)
         };
         if stm_only {
             let paths = paths_for_records(&stm);
@@ -454,11 +460,16 @@ impl TstService {
         if ltm.len() < 5 {
             ltm.extend(self.global.query(&retrieval_query, 5 - ltm.len()));
         }
-        let graph = self.graph.query(&retrieval_query, 8);
+        // Navigation queries fetch a wider graph candidate set so the
+        // renderer can choose the strongest symbols within its token cap.
+        let navigation = is_navigation_query(&retrieval_query);
+        let graph = self
+            .graph
+            .query(&retrieval_query, if navigation { 10 } else { 8 });
         let mut edges = Vec::new();
         let mut edge_keys = std::collections::HashSet::new();
-        for root in graph.iter().take(2) {
-            let trace = self.graph.trace_summary(&root.node.name, "both", 1, 8).ok();
+        for root in graph.iter().take(if navigation { 3 } else { 2 }) {
+            let trace = self.graph.trace_summary(&root.node.name, "both", 2, 8).ok();
             for edge in trace.into_iter().flat_map(|item| item.edges) {
                 let key = format!(
                     "{}:{}:{:?}:{}:{}",
@@ -803,8 +814,8 @@ impl TstService {
             .save_snapshot(&self.project_store.join("graph.msgpack"));
     }
 
-    pub fn graph_query(&self, query: &str, limit: usize) -> Vec<GraphQueryResult> {
-        self.graph.query(query, limit.clamp(1, 128))
+    pub fn graph_query(&self, query: &str, prefix: Option<&str>, limit: usize) -> Vec<GraphQueryResult> {
+        self.graph.query_scoped(query, prefix, limit.clamp(1, 128))
     }
 
     pub fn graph_search(&self, pattern: &str, prefix: Option<&str>, limit: usize) -> GraphSearchResult {
@@ -1240,6 +1251,53 @@ fn token_overlap(query: &str, candidate: &str) -> usize {
         .filter(|term| term.len() >= 3 && candidate.contains(term))
         .collect::<HashSet<_>>()
         .len()
+}
+
+/// True when the query reads like code navigation (refactors, call graphs,
+/// symbol lookup) rather than authoring a fresh artifact. Navigation tasks
+/// are where graph evidence is strongest and recent-session padding is
+/// weakest, so budgets shift accordingly.
+fn is_navigation_query(query: &str) -> bool {
+    const NAVIGATION_TERMS: [&str; 16] = [
+        "rename",
+        "refactor",
+        "call ",
+        "calls ",
+        "callgraph",
+        "graph",
+        "import",
+        "export",
+        "symbol",
+        "trace",
+        "propagat",
+        "dependency",
+        "dependencies",
+        "who uses",
+        "usages",
+        "bug",
+    ];
+    let lower = query.to_lowercase();
+    NAVIGATION_TERMS
+        .iter()
+        .filter(|term| lower.contains(*term))
+        .count()
+        >= 2
+}
+
+/// Split a retrieval budget across STM/LTM/graph. Neutral queries keep the
+/// historical ratio (~20/30/50); navigation-heavy queries shift toward the
+/// graph because that is where their answers live.
+fn allocate_retrieval_budget(limit: usize, query: &str) -> (usize, usize, usize) {
+    if is_navigation_query(query) {
+        let stm_limit = (limit / 6).max(1);
+        let ltm_limit = (limit / 5).max(1);
+        let graph_limit = limit.saturating_sub(stm_limit + ltm_limit).max(1);
+        return (stm_limit, ltm_limit, graph_limit);
+    }
+    let stm_limit = (limit / 5).max(1);
+    let ltm_limit = ((limit * 3) / 10).max(1);
+    let graph_limit = limit.saturating_sub(stm_limit + ltm_limit).max(1);
+    (stm_limit, ltm_limit, graph_limit)
 }
 
 fn tombstone_scope(store: &mut DurableStore, scope: MemoryScope) -> Result<usize> {

@@ -2936,6 +2936,7 @@ async function startOpenCodeServer(options) {
         CUPPET_PROJECT_ROOT: options.paths.projectRealpath,
         CUPPET_CONTEXT_COMPILER_AB: options.compiledContext ? "1" : "0",
         CUPPET_TASK_CONTEXT_AB: options.taskContext ? "1" : "0",
+        ...options.taskContextTracePath ? { CUPPET_TASK_CONTEXT_TRACE_FILE: options.taskContextTracePath } : {},
         ...options.plugin ? {
           CUPPET_OPENCODE_VARIANTS_PATH: variantBridgePath,
           CUPPET_OPENCODE_PLUGIN_STATUS_PATH: pluginStatusPath

@@ -17,6 +17,7 @@ const preferencesSchema = z.object({
   secondary: modelRef.optional(),
   vertexProject: z.string().min(1).optional(),
   backgroundPaused: z.boolean().default(false),
+  orchestratorEnabled: z.boolean().optional(),
   lastSessionByProject: z.record(z.string(), z.string()).default({}),
 })
 
@@ -27,6 +28,7 @@ export type Preferences = {
   secondary?: ModelRef | undefined
   vertexProject?: string | undefined
   backgroundPaused: boolean
+  orchestratorEnabled?: boolean | undefined
   lastSessionByProject: Record<string, string>
 }
 

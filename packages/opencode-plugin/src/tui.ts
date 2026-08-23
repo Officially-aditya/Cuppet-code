@@ -355,6 +355,34 @@ const CuppetTuiPlugin: TuiPluginModule = {
           run: () => action('Cuppet background', 'background.set', { paused: false }, 'Background enrichment resumed.'),
         },
         {
+          name: 'cuppet.orchestrator.toggle',
+          title: 'Toggle Cuppet orchestrator mode',
+          desc: 'Master/worker delegation: primary curates context and reviews, worker codes',
+          category: 'Cuppet',
+          namespace: 'palette',
+          slashName: 'orchestrator',
+          run: async () => {
+            try {
+              const status = await client.call<{ enabled?: boolean }>('orchestrator.status')
+              const next = !status.enabled
+              await client.call('orchestrator.set', { enabled: next })
+              api.ui.toast({
+                title: 'Cuppet orchestrator',
+                variant: 'success',
+                message: next
+                  ? 'Orchestrator mode ON for new turns: you are the master; delegate coding to the worker (task tool), and curate context yourself with cuppet_* tools.'
+                  : 'Orchestrator mode OFF: automatic TST context injection restored.',
+              })
+            } catch (error) {
+              api.ui.toast({
+                title: 'Cuppet orchestrator',
+                variant: 'error',
+                message: error instanceof Error ? error.message : String(error),
+              })
+            }
+          },
+        },
+        {
           name: 'cuppet.platform',
           title: 'Choose Cuppet platform',
           desc: 'Choose Anthropic, OpenAI, Google, OpenCode, or Vertex AI',
@@ -523,6 +551,7 @@ export function formatStatus(value: unknown): string {
     ...(sessionTitle ? [row('Session', sessionTitle)] : []),
     row('Primary', modelSummary(status.primary)),
     row('Secondary', modelSummary(status.secondary)),
+    row('Orchestrator', booleanValue((record(status.orchestrator)).enabled) ? 'master/worker' : 'off'),
     row('State', `${running}${steps === undefined ? '' : ` · ${steps} step${steps === 1 ? '' : 's'}`}`),
     row('Usage', usageSummary(foregroundUsage, foregroundCost)),
     row('Background', backgroundSummary(background, backgroundCost)),

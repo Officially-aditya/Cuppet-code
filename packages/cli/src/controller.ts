@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 import { constants } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
 import { BackgroundWorker, type BackgroundStats } from './background/worker.js'
+import { readOrchestratorState, writeOrchestratorState } from './control/orchestrator-state.js'
 import { DEFAULT_STEP_LIMIT } from './constants.js'
 import type { PreferenceStore } from './config/preferences.js'
 import type { OpenCodeGateway } from './opencode/gateway.js'
@@ -44,6 +45,7 @@ export type ControllerSnapshot = {
   foregroundUsage: TokenUsage
   foregroundCost: number
   background?: BackgroundStats
+  orchestrator?: { enabled: boolean }
   running: boolean
   planMode: boolean
   activeTools: number
@@ -74,6 +76,7 @@ export class CuppetController extends EventEmitter {
   #usageSessionID: string | undefined
   #running = false
   #planMode = false
+  #orchestrator = false
   #tools = new Map<string, string>()
   #background: BackgroundWorker | undefined
   #stepCount = 0
@@ -107,6 +110,9 @@ export class CuppetController extends EventEmitter {
     this.#vertex = options.vertex ?? missingVertexStatus()
     this.#interactive = options.interactive
     this.#tstAvailable = Boolean(options.tst?.connected)
+    // Runtime state file wins (it is the plugin's source of truth); env and
+    // stored preference only seed it when the file does not exist yet.
+    this.#orchestrator = readOrchestratorState(options.paths) ?? process.env.CUPPET_ORCHESTRATOR === '1'
   }
 
   async initialize(): Promise<void> {
@@ -186,6 +192,7 @@ export class CuppetController extends EventEmitter {
       ...(this.#background ? { background: this.#background.stats } : {}),
       running: this.#running,
       planMode: this.#planMode,
+      orchestrator: { enabled: this.#orchestrator },
       activeTools: this.#tools.size,
       degraded: !this.#tstAvailable,
       stepCount: this.#stepCount,
@@ -512,6 +519,17 @@ export class CuppetController extends EventEmitter {
     return result.removed
   }
 
+  get orchestratorEnabled(): boolean {
+    return this.#orchestrator
+  }
+
+  async setOrchestratorEnabled(value: boolean): Promise<void> {
+    this.#orchestrator = value
+    await writeOrchestratorState(this.#paths, value)
+    await this.#preferences.update({ orchestratorEnabled: value })
+    this.#changed()
+  }
+
   async setBackgroundPaused(paused: boolean): Promise<void> {
     if (!this.#background && !paused && this.#secondary) this.#createBackground(false)
     if (paused) this.#background?.pause()
@@ -539,6 +557,7 @@ export class CuppetController extends EventEmitter {
       secondary: this.#secondary ? this.#findModel(this.#secondary) ?? this.#secondary : undefined,
       foreground: { usage: this.#usage, cost: this.#cost, running: this.#running, steps: this.#stepCount },
       planMode: this.#planMode,
+      orchestrator: { enabled: this.#orchestrator },
       agent: this.#session?.agent,
       background: this.#background?.stats,
       vertex: this.#vertexDiagnostics(),

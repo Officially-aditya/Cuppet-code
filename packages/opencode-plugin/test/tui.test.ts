@@ -55,6 +55,7 @@ test('native TUI preserves Cuppet slash commands', async () => {
     'doctor',
     'memory',
     'background',
+    'orchestrator',
     'platform',
     'login',
     'model',

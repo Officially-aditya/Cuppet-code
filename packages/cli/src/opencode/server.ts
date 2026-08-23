@@ -51,7 +51,48 @@ type StartOptions = {
   graphNativeProfile?: boolean
   compiledContext?: boolean
   taskContext?: boolean
+  taskContextTracePath?: string
+  /**
+   * Orchestrator mode: the primary model becomes the master agent — it
+   * performs all retrieval/memory curation itself via explicit cuppet_* tools
+   * (automatic synthetic-context injection is disabled) and delegates
+   * implementation work to the `worker` subagent running the secondary model.
+   */
+  orchestrator?: boolean
 }
+
+/** Master-agent instruction for orchestrator mode. */
+export const ORCHESTRATOR_INSTRUCTION =
+  [
+    'You are the Cuppet master orchestrator. A worker subagent (task tool, agent id "general") executes implementation work for you.',
+    'Division of labor:',
+    '- YOU own all context work: before delegating, gather what you need yourself with cuppet_memory_search, cuppet_workspace_info, cuppet_graph_search, cuppet_graph_tree, and cuppet_graph_trace, and read the specific files you select.',
+    '- YOU plan, decompose the goal into self-contained tasks with exact file paths and acceptance criteria, delegate each to the worker with the task tool, review its diffs, and integrate or correct the result.',
+    '- THE WORKER only writes code. Never ask it to explore open-endedly; give it complete instructions and verify its output yourself afterwards.',
+    '- No automatic context will be injected into your turns. Anything you need must be retrieved explicitly and kept in your own working notes.',
+    'Finish a delegated task only after you have personally verified the result (read the changed files, run checks).',
+  ].join('\n')
+
+/** Subagent definition for the orchestrator's worker. */
+export function orchestratorWorkerAgentConfig(model: ModelRef | undefined): {
+  model?: string
+  variant?: string
+  description: string
+  mode: 'subagent'
+  steps: number
+  maxSteps: number
+} {
+  return {
+    ...taskSubagentModelConfig(model),
+    description: 'Cuppet worker subagent: executes precisely-scoped implementation tasks delegated by the master',
+    mode: 'subagent',
+    steps: 96,
+    maxSteps: 96,
+  }
+}
+
+/** Environment flag consumed by the plugin to disable automatic injection. */
+export const ORCHESTRATOR_ENV_FLAG = 'CUPPET_ORCHESTRATOR'
 
 /** OpenCode resolves a subagent's configured model independently of its parent session. */
 export function taskSubagentModelConfig(model: ModelRef | undefined): {
@@ -157,6 +198,7 @@ export async function startOpenCodeServer(options: StartOptions): Promise<OpenCo
           options.graphFirstGate ?? false,
           options.graphOnlySearch ?? false,
           options.graphNativeProfile ?? false,
+          options.orchestrator ?? false,
         ),
       },
       'cuppet-background': {
@@ -169,8 +211,13 @@ export async function startOpenCodeServer(options: StartOptions): Promise<OpenCo
         tools: { '*': false },
         permission: 'deny',
       },
+      ...(options.orchestrator
+        ? { worker: orchestratorWorkerAgentConfig(options.secondaryModel) }
+        : {}),
     },
-    instructions: options.instructions ?? [DEFAULT_CUPPET_INSTRUCTION],
+    instructions: options.orchestrator
+      ? [ORCHESTRATOR_INSTRUCTION, ...(options.instructions ?? [])]
+      : (options.instructions ?? [DEFAULT_CUPPET_INSTRUCTION]),
     experimental: { openTelemetry: false },
   }
 
@@ -195,6 +242,10 @@ export async function startOpenCodeServer(options: StartOptions): Promise<OpenCo
         CUPPET_PROJECT_ROOT: options.paths.projectRealpath,
         CUPPET_CONTEXT_COMPILER_AB: options.compiledContext ? '1' : '0',
         CUPPET_TASK_CONTEXT_AB: options.taskContext ? '1' : '0',
+        CUPPET_ORCHESTRATOR: options.orchestrator ? '1' : '0',
+        ...(options.taskContextTracePath
+          ? { CUPPET_TASK_CONTEXT_TRACE_FILE: options.taskContextTracePath }
+          : {}),
         ...(options.plugin
           ? {
               CUPPET_OPENCODE_VARIANTS_PATH: variantBridgePath,
@@ -211,8 +262,13 @@ export async function startOpenCodeServer(options: StartOptions): Promise<OpenCo
           ? { CUPPET_TST_SOCKET: options.tst.socket, CUPPET_TST_TOKEN: options.tst.token }
           : {}),
         CUPPET_LOSSLESS_PLAN_DIR: losslessPlanDirectory,
-        ...(options.instructions !== undefined
-          ? { CUPPET_FOREGROUND_INSTRUCTION: options.instructions.join('\n\n') }
+        ...((options.instructions !== undefined || options.orchestrator)
+          ? {
+              CUPPET_FOREGROUND_INSTRUCTION: (options.orchestrator
+                ? [ORCHESTRATOR_INSTRUCTION, ...(options.instructions ?? [])]
+                : options.instructions!
+              ).join('\n\n'),
+            }
           : {}),
         ...(options.graphFirstGate ? { CUPPET_GRAPH_FIRST_GATE: '1' } : {}),
         ...(options.graphOnlySearch ? { CUPPET_GRAPH_ONLY_SEARCH: '1' } : {}),
@@ -358,7 +414,7 @@ async function writeVariantBridge(path: string, bridge: VariantBridge): Promise<
   await rename(temporary, path)
 }
 
-export function foregroundPermissions(graphFirstGate = false, graphOnlySearch = false, graphNativeProfile = false) {
+export function foregroundPermissions(graphFirstGate = false, graphOnlySearch = false, graphNativeProfile = false, orchestrator = false) {
   const navigationEffect = graphFirstGate ? 'ask' : 'allow'
   const searchEffect = graphOnlySearch || graphNativeProfile ? 'deny' : navigationEffect
   return {
@@ -395,7 +451,7 @@ export function foregroundPermissions(graphFirstGate = false, graphOnlySearch = 
     external_directory: 'ask',
     webfetch: graphOnlySearch || graphNativeProfile ? 'deny' : 'ask',
     websearch: graphOnlySearch || graphNativeProfile ? 'deny' : 'ask',
-    task: graphOnlySearch || graphNativeProfile ? 'deny' : 'ask',
+    task: graphOnlySearch || graphNativeProfile ? 'deny' : orchestrator ? 'allow' : 'ask',
     skill: graphNativeProfile ? 'deny' : 'ask',
   }
 }

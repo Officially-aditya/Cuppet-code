@@ -116,6 +116,12 @@ export class CuppetControlServer {
         await this.#controller.setBackgroundPaused(params.paused)
         return this.#controller.snapshot.background ?? { paused: params.paused }
       }
+      case 'orchestrator.status': return { enabled: this.#controller.orchestratorEnabled }
+      case 'orchestrator.set': {
+        if (typeof params.enabled !== 'boolean') throw new Error('orchestrator.set requires enabled')
+        await this.#controller.setOrchestratorEnabled(params.enabled)
+        return { enabled: this.#controller.orchestratorEnabled }
+      }
       case 'memory.remember':
         return this.#controller.remember(stringParam(params, 'key'), stringParam(params, 'value'), memoryScopeParam(params.scope))
       case 'memory.forget': return this.#controller.forget(stringParam(params, 'key'))

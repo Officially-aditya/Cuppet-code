@@ -589,6 +589,19 @@ const CuppetPlugin = {
           }
           agent.permissions = foregroundPermissionRules()
         })
+        // Orchestrator mode repurposes the built-in `general` subagent as the
+        // master's worker: its secondary-model pin comes from server config,
+        // and plugin-touched agents are guaranteed to materialize.
+        if (process.env.CUPPET_ORCHESTRATOR === '1') {
+          agents.update('general', (agent) => {
+            agent.description = 'Cuppet worker subagent: executes precisely-scoped implementation tasks delegated by the master'
+            agent.mode = 'subagent'
+            agent.hidden = false
+            agent.steps = 96
+            agent.system =
+              'You are the Cuppet worker subagent. You receive precisely-scoped implementation tasks with exact file paths and acceptance criteria. Implement them directly: read the named files, make the edits, run any specified checks, and report exactly what changed. Do not explore beyond the task scope and do not redesign anything.'
+          })
+        }
         agents.update('cuppet-background', (agent) => {
           agent.description =
             'Hidden one-step memory canonicalization worker; output is never verification evidence'

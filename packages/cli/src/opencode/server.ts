@@ -447,7 +447,7 @@ export function foregroundPermissions(graphFirstGate = false, graphOnlySearch = 
     cuppet_graph_trace: 'allow',
     edit: mutationPermissions(),
     write: mutationPermissions(),
-    bash: 'ask',
+    bash: 'allow',
     external_directory: 'ask',
     webfetch: graphOnlySearch || graphNativeProfile ? 'deny' : 'ask',
     websearch: graphOnlySearch || graphNativeProfile ? 'deny' : 'ask',

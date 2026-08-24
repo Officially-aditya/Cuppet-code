@@ -39,7 +39,7 @@ test('OpenCode permissions use real actions and ordered sensitive resource rules
   assert.equal(edit['**/.claude.json'], 'deny')
   assert.equal('read_file' in permissions, false)
   assert.equal('write_file' in permissions, false)
-  assert.equal(permissions.bash, 'ask')
+  assert.equal(permissions.bash, 'allow')
 })
 
 test('graph-native profile removes legacy discovery tools from the agent action space', () => {

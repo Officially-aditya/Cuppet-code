@@ -721,7 +721,7 @@ export function foregroundPermissionRules(): PermissionRule[] {
     { action: 'edit', resource: '**/.claude.json', effect: 'deny' },
     { action: 'edit', resource: '**/.cuppet/credentials.json', effect: 'deny' },
     { action: 'edit', resource: '**/.cuppet/ltm-trie.json', effect: 'deny' },
-    { action: 'bash', resource: '*', effect: 'ask' },
+    { action: 'bash', resource: '*', effect: 'allow' },
     { action: 'external_directory', resource: '*', effect: 'ask' },
     { action: 'webfetch', resource: '*', effect: process.env.CUPPET_GRAPH_ONLY_SEARCH === '1' || graphNativeProfile ? 'deny' : 'ask' },
     { action: 'websearch', resource: '*', effect: process.env.CUPPET_GRAPH_ONLY_SEARCH === '1' || graphNativeProfile ? 'deny' : 'ask' },

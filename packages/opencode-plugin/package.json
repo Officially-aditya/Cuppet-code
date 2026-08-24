@@ -1,5 +1,5 @@
 {
-  "name": "@cuppet/opencode-plugin",
+  "name": "@cuppet-code/opencode-plugin",
   "version": "0.2.0-alpha.1",
   "private": true,
   "description": "Cuppet server and native-TUI plugins for the bundled OpenCode derivative",

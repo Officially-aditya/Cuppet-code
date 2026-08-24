@@ -30,7 +30,7 @@ The publish job then:
 
 - verifies all four runtime manifests and checksums;
 - creates and smoke-installs the `cuppet-<version>.tgz` npm bundle;
-- publishes the four `@cuppet/runtime-*` packages and `cuppet`;
+- publishes the four `@cuppet-code/runtime-*` packages and `cuppet`;
 - creates a GitHub Release containing the four runtime archives, the npm
   tarball, and `SHA256SUMS`.
 
@@ -38,14 +38,14 @@ The publish job then:
 
 ### npm
 
-Create or verify the npm organization `cuppet`. The publishing identity must
+Create or verify the npm organization `cuppet-code`. The publishing identity must
 be allowed to publish:
 
 - `cuppet`;
-- `@cuppet/runtime-darwin-arm64`;
-- `@cuppet/runtime-darwin-x64`;
-- `@cuppet/runtime-linux-arm64-gnu`;
-- `@cuppet/runtime-linux-x64-gnu`.
+- `@cuppet-code/runtime-darwin-arm64`;
+- `@cuppet-code/runtime-darwin-x64`;
+- `@cuppet-code/runtime-linux-arm64-gnu`;
+- `@cuppet-code/runtime-linux-x64-gnu`.
 
 Create an npm automation token and add it as `NPM_TOKEN` in a GitHub
 Environment named exactly `npm`. The workflow passes that secret to

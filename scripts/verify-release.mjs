@@ -31,7 +31,7 @@ for (const manifestPath of manifests) {
   if (platformKeys.has(platformKey)) throw new Error(`duplicate platform package ${platformKey}`)
   platformKeys.add(platformKey)
   const packageMetadata = JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'))
-  if (packageMetadata.version !== releaseVersion || !packageMetadata.name?.startsWith('@cuppet/runtime-')) {
+  if (packageMetadata.version !== releaseVersion || !packageMetadata.name?.startsWith('@cuppet-code/runtime-')) {
     throw new Error(`invalid package metadata in ${directory}`)
   }
   for (const [relative, expected] of Object.entries(manifest.files)) {

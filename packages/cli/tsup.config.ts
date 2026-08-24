@@ -11,9 +11,9 @@ export default defineConfig({
   sourcemap: true,
   banner: { js: '#!/usr/bin/env node' },
   external: [
-    '@cuppet/runtime-darwin-arm64',
-    '@cuppet/runtime-darwin-x64',
-    '@cuppet/runtime-linux-arm64-gnu',
-    '@cuppet/runtime-linux-x64-gnu',
+    '@cuppet-code/runtime-darwin-arm64',
+    '@cuppet-code/runtime-darwin-x64',
+    '@cuppet-code/runtime-linux-arm64-gnu',
+    '@cuppet-code/runtime-linux-x64-gnu',
   ],
 })

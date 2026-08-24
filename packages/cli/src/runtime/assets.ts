@@ -31,10 +31,10 @@ export type RuntimeAssets = {
 }
 
 const packageNames: Record<string, string> = {
-  'darwin-arm64': '@cuppet/runtime-darwin-arm64',
-  'darwin-x64': '@cuppet/runtime-darwin-x64',
-  'linux-arm64': '@cuppet/runtime-linux-arm64-gnu',
-  'linux-x64': '@cuppet/runtime-linux-x64-gnu',
+  'darwin-arm64': '@cuppet-code/runtime-darwin-arm64',
+  'darwin-x64': '@cuppet-code/runtime-darwin-x64',
+  'linux-arm64': '@cuppet-code/runtime-linux-arm64-gnu',
+  'linux-x64': '@cuppet-code/runtime-linux-x64-gnu',
 }
 
 export async function resolveRuntimeAssets(): Promise<RuntimeAssets> {

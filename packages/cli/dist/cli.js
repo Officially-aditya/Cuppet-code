@@ -5042,10 +5042,10 @@ import { createRequire } from "node:module";
 import { delimiter, dirname as dirname7, join as join12, resolve as resolve2 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var packageNames = {
-  "darwin-arm64": "@cuppet/runtime-darwin-arm64",
-  "darwin-x64": "@cuppet/runtime-darwin-x64",
-  "linux-arm64": "@cuppet/runtime-linux-arm64-gnu",
-  "linux-x64": "@cuppet/runtime-linux-x64-gnu"
+  "darwin-arm64": "@cuppet-code/runtime-darwin-arm64",
+  "darwin-x64": "@cuppet-code/runtime-darwin-x64",
+  "linux-arm64": "@cuppet-code/runtime-linux-arm64-gnu",
+  "linux-x64": "@cuppet-code/runtime-linux-x64-gnu"
 };
 async function resolveRuntimeAssets() {
   const diagnostics = [];

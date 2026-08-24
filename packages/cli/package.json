@@ -34,10 +34,10 @@
     "zod": "3.25.76"
   },
   "optionalDependencies": {
-    "@cuppet/runtime-darwin-arm64": "0.2.0-alpha.1",
-    "@cuppet/runtime-darwin-x64": "0.2.0-alpha.1",
-    "@cuppet/runtime-linux-arm64-gnu": "0.2.0-alpha.1",
-    "@cuppet/runtime-linux-x64-gnu": "0.2.0-alpha.1"
+    "@cuppet-code/runtime-darwin-arm64": "0.2.0-alpha.1",
+    "@cuppet-code/runtime-darwin-x64": "0.2.0-alpha.1",
+    "@cuppet-code/runtime-linux-arm64-gnu": "0.2.0-alpha.1",
+    "@cuppet-code/runtime-linux-x64-gnu": "0.2.0-alpha.1"
   },
   "devDependencies": {
     "@types/qrcode": "1.5.6",

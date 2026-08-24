@@ -6,6 +6,7 @@ target/
 *.log
 coverage/
 artifacts/
+release-assets/
 .opencode/
 .opencode-src/
 .claude/

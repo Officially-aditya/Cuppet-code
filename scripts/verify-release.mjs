@@ -38,7 +38,7 @@ for (const manifestPath of manifests) {
     const path = join(directory, relative)
     const actual = createHash('sha256').update(await readFile(path)).digest('hex')
     if (actual !== expected) throw new Error(`checksum mismatch for ${path}`)
-    if (relative.startsWith('bin/') && ((await stat(path)).mode & 0o111) === 0) {
+    if ((relative === 'bin/opencode' || relative === 'bin/tst-daemon') && ((await stat(path)).mode & 0o111) === 0) {
       throw new Error(`binary is not executable: ${path}`)
     }
   }

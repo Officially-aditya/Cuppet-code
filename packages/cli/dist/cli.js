@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 // src/cli.tsx
-import { rm as rm2 } from "node:fs/promises";
+import { rm as rm3 } from "node:fs/promises";
+import { join as join14 } from "node:path";
 
 // src/config/preferences.ts
 import { randomBytes } from "node:crypto";
@@ -20,6 +21,7 @@ var preferencesSchema = z.object({
   secondary: modelRef.optional(),
   vertexProject: z.string().min(1).optional(),
   backgroundPaused: z.boolean().default(false),
+  orchestratorEnabled: z.boolean().optional(),
   lastSessionByProject: z.record(z.string(), z.string()).default({})
 });
 var PreferenceStore = class {
@@ -68,6 +70,8 @@ var PreferenceStore = class {
 import { EventEmitter as EventEmitter2 } from "node:events";
 import { constants } from "node:fs";
 import { access, stat as stat2 } from "node:fs/promises";
+import { homedir } from "node:os";
+import { basename } from "node:path";
 
 // src/background/worker.ts
 import { EventEmitter } from "node:events";
@@ -684,6 +688,30 @@ function cloneBatchStats(stats) {
   return { ...stats, usage: { ...stats.usage } };
 }
 
+// src/control/orchestrator-state.ts
+import { mkdir as mkdir4, rename as rename4, writeFile as writeFile4 } from "node:fs/promises";
+import { readFileSync } from "node:fs";
+import { join as join3 } from "node:path";
+function orchestratorStatePath(paths) {
+  return join3(paths.runtime, "orchestrator.json");
+}
+function readOrchestratorState(paths) {
+  try {
+    const parsed = JSON.parse(readFileSync(orchestratorStatePath(paths), "utf8"));
+    return typeof parsed.enabled === "boolean" ? parsed.enabled : void 0;
+  } catch {
+    return void 0;
+  }
+}
+async function writeOrchestratorState(paths, enabled) {
+  const path = orchestratorStatePath(paths);
+  await mkdir4(join3(path, ".."), { recursive: true, mode: 448 });
+  const temporary = `${path}.${process.pid}.tmp`;
+  await writeFile4(temporary, `${JSON.stringify({ schema: 1, enabled })}
+`, { encoding: "utf8", mode: 384 });
+  await rename4(temporary, path);
+}
+
 // src/constants.ts
 var CUPPET_VERSION = "0.2.0-alpha.1";
 var OPENCODE_VERSION = "1.18.4";
@@ -747,6 +775,7 @@ var CuppetController = class extends EventEmitter2 {
   #usageSessionID;
   #running = false;
   #planMode = false;
+  #orchestrator = false;
   #tools = /* @__PURE__ */ new Map();
   #background;
   #stepCount = 0;
@@ -771,6 +800,7 @@ var CuppetController = class extends EventEmitter2 {
     this.#vertex = options.vertex ?? missingVertexStatus();
     this.#interactive = options.interactive;
     this.#tstAvailable = Boolean(options.tst?.connected);
+    this.#orchestrator = readOrchestratorState(options.paths) ?? process.env.CUPPET_ORCHESTRATOR === "1";
   }
   async initialize() {
     this.#unsubscribeTst = this.#tst?.onNotification((notification) => {
@@ -830,6 +860,7 @@ var CuppetController = class extends EventEmitter2 {
       ...this.#background ? { background: this.#background.stats } : {},
       running: this.#running,
       planMode: this.#planMode,
+      orchestrator: { enabled: this.#orchestrator },
       activeTools: this.#tools.size,
       degraded: !this.#tstAvailable,
       stepCount: this.#stepCount,
@@ -966,11 +997,11 @@ var CuppetController = class extends EventEmitter2 {
     }
   }
   async submitAndWait(prompt) {
-    const completion = new Promise((resolve2, reject) => {
+    const completion = new Promise((resolve3, reject) => {
       const listener = (event) => {
         if (event.type === "idle") {
           cleanup();
-          resolve2();
+          resolve3();
         } else if (event.type === "error" && (!event.sessionID || event.sessionID === this.#session?.id)) {
           cleanup();
           reject(new Error(event.message));
@@ -1111,12 +1142,72 @@ var CuppetController = class extends EventEmitter2 {
     });
     return result.removed;
   }
+  get orchestratorEnabled() {
+    return this.#orchestrator;
+  }
+  async setOrchestratorEnabled(value) {
+    this.#orchestrator = value;
+    await writeOrchestratorState(this.#paths, value);
+    await this.#preferences.update({ orchestratorEnabled: value });
+    this.#changed();
+  }
   async setBackgroundPaused(paused) {
     if (!this.#background && !paused && this.#secondary) this.#createBackground(false);
     if (paused) this.#background?.pause();
     else this.#background?.resume();
     await this.#preferences.update({ backgroundPaused: paused });
     this.#changed();
+  }
+  async listPendingPermissions() {
+    return this.#gateway.listPendingPermissions();
+  }
+  async listPendingQuestions() {
+    return this.#gateway.listPendingQuestions();
+  }
+  async replyQuestion(requestID, answers) {
+    await this.#gateway.replyQuestion(requestID, answers);
+  }
+  async rejectQuestion(requestID) {
+    await this.#gateway.rejectQuestion(requestID);
+  }
+  async sessionMessages(sessionID) {
+    return this.#gateway.messages(sessionID);
+  }
+  /**
+   * The workspace the host process runs in — v1 exposes exactly one, with a
+   * friendly display name rather than a raw filesystem path.
+   */
+  workspaceInfo() {
+    const home = homedir();
+    const full = this.#paths.projectRealpath;
+    const pathDisplay = home !== "/" && (full === home || full.startsWith(`${home}/`)) ? `~${full.slice(home.length)}` : full;
+    return {
+      workspaceId: this.#paths.projectID,
+      name: basename(full),
+      pathDisplay,
+      activeSessionId: this.#session?.id
+    };
+  }
+  /** Whether a coding provider is configured and usable (BYOK check). */
+  providerStatus() {
+    const snapshot = this.snapshot;
+    const platform = snapshot.platform;
+    const providers = platform ? this.#integrations.filter((integration) => integrationMatchesPlatform(integration, platform)).map((integration) => ({
+      id: integration.id,
+      name: integration.name,
+      connected: integration.connections.length > 0
+    })) : [];
+    const configured = providers.some((provider) => provider.connected);
+    const selectedModel = snapshot.primary?.providerID && snapshot.primary?.modelID ? `${snapshot.primary.providerID}/${snapshot.primary.modelID}` : null;
+    return {
+      configured,
+      // Coding uses the foreground/primary model. The optional secondary
+      // model is a Cuppet background-agent concern and must not block BYOK.
+      ready: Boolean(configured && snapshot.primary),
+      providers,
+      selectedProvider: platform ?? null,
+      selectedModel
+    };
   }
   async replyPermission(request, reply, message2) {
     await this.#gateway.replyPermission(request.sessionID, request.id, reply, message2);
@@ -1133,6 +1224,7 @@ var CuppetController = class extends EventEmitter2 {
       secondary: this.#secondary ? this.#findModel(this.#secondary) ?? this.#secondary : void 0,
       foreground: { usage: this.#usage, cost: this.#cost, running: this.#running, steps: this.#stepCount },
       planMode: this.#planMode,
+      orchestrator: { enabled: this.#orchestrator },
       agent: this.#session?.agent,
       background: this.#background?.stats,
       vertex: this.#vertexDiagnostics(),
@@ -1242,7 +1334,7 @@ var CuppetController = class extends EventEmitter2 {
         this.#gateway.listIntegrations()
       ]);
       if (this.#models.length > 0 || this.#integrations.length > 0) return;
-      await new Promise((resolve2) => setTimeout(resolve2, 150));
+      await new Promise((resolve3) => setTimeout(resolve3, 150));
     } while (Date.now() < deadline);
   }
   async #requireSession() {
@@ -1536,43 +1628,317 @@ function missingVertexStatus() {
 }
 
 // src/control/server.ts
-import { randomBytes as randomBytes2 } from "node:crypto";
-import { chmod as chmod3, mkdir as mkdir4, unlink } from "node:fs/promises";
+import { randomBytes as randomBytes3 } from "node:crypto";
+import { chmod as chmod4, mkdir as mkdir6, unlink } from "node:fs/promises";
 import { createServer } from "node:net";
+
+// src/control/router.ts
+import { homedir as homedir2 } from "node:os";
+import { join as join5 } from "node:path";
+
+// src/remote/identity.ts
+import { generateKeyPairSync, randomBytes as randomBytes2 } from "node:crypto";
+import { hostname } from "node:os";
+import { join as join4 } from "node:path";
+import { chmod as chmod3, mkdir as mkdir5, readFile as readFile4, writeFile as writeFile5 } from "node:fs/promises";
+var IDENTITY_VERSION = 1;
+function hostIdentityPath(remoteDir) {
+  return join4(remoteDir, "host.json");
+}
+async function ensureHostIdentity(remoteDir) {
+  const path = hostIdentityPath(remoteDir);
+  try {
+    const parsed = JSON.parse(await readFile4(path, "utf8"));
+    if (typeof parsed.hostId === "string" && typeof parsed.publicKeyPem === "string" && typeof parsed.privateKeyPem === "string") {
+      return {
+        hostId: parsed.hostId,
+        deviceName: typeof parsed.deviceName === "string" ? parsed.deviceName : hostname(),
+        publicKeyPem: parsed.publicKeyPem,
+        privateKeyPem: parsed.privateKeyPem,
+        createdAt: typeof parsed.createdAt === "string" ? parsed.createdAt : (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+  } catch {
+  }
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+  const identity = {
+    hostId: `host_${randomBytes2(8).toString("hex")}`,
+    deviceName: hostname(),
+    publicKeyPem: publicKey.export({ type: "spki", format: "pem" }).toString(),
+    privateKeyPem: privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
+    createdAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  await mkdir5(remoteDir, { recursive: true, mode: 448 });
+  await writeFile5(
+    path,
+    `${JSON.stringify({ version: IDENTITY_VERSION, ...identity }, null, 2)}
+`,
+    { encoding: "utf8", mode: 384 }
+  );
+  await chmod3(path, 384);
+  return identity;
+}
+async function loadHostIdentityOrNull(remoteDir) {
+  try {
+    return await ensureHostIdentity(remoteDir);
+  } catch {
+    return void 0;
+  }
+}
+
+// src/control/router.ts
+var PROTOCOL_VERSION = 1;
+var PROCESS_STARTED_AT = Date.now();
+var ControlRouter = class {
+  #controller;
+  constructor(controller) {
+    this.#controller = controller;
+  }
+  /** True when a method is part of the shared (remote-exposable) surface. */
+  static handles(method) {
+    const entry = ROUTE_TABLE[method];
+    return Boolean(entry && !entry.localOnly);
+  }
+  async execute(actor, method, params = {}) {
+    const entry = ROUTE_TABLE[method];
+    if (!entry) throw new Error(`unknown control method: ${method}`);
+    if (actor.kind !== "local") {
+      if (entry.localOnly) throw new Error(`method not permitted for remote actors: ${method}`);
+      if (!entry.scope) throw new Error(`method has no remote scope: ${method}`);
+      if (!actor.scopes.includes(entry.scope)) {
+        throw new Error(`missing scope '${entry.scope}' for method: ${method}`);
+      }
+    }
+    return entry.run(this.#controller, params);
+  }
+};
+function requireString(params, key) {
+  const value = params[key];
+  if (typeof value !== "string" || value.length === 0) throw new Error(`${key} is required`);
+  return value;
+}
+var ROUTE_TABLE = {
+  "session.list": { scope: "session.read", run: (c) => c.listSessions() },
+  // The remote contract needs the live controller snapshot shape (including
+  // activeSession/running/models), not the richer local diagnostic payload.
+  "session.snapshot": { scope: "session.read", run: (c) => Promise.resolve(c.snapshot) },
+  "session.messages": {
+    scope: "session.read",
+    run: async (c, params) => c.sessionMessages(requireString(params, "sessionID"))
+  },
+  "session.new": { scope: "session.write", run: (c) => c.newSession() },
+  "session.resume": { scope: "session.write", run: async (c, params) => c.resume(requireString(params, "sessionID")) },
+  "session.submit": {
+    scope: "session.write",
+    run: async (c, params) => {
+      await c.submit(requireString(params, "prompt"), params.delivery === "steer" ? "steer" : "queue");
+      return { submitted: true };
+    }
+  },
+  "session.steer": {
+    scope: "session.write",
+    run: async (c, params) => c.steer(requireString(params, "instruction"), params.interrupt === true)
+  },
+  "session.abort": {
+    scope: "session.write",
+    run: async (c) => {
+      await c.abort();
+      return { aborted: true };
+    }
+  },
+  "session.undo": {
+    scope: "session.write",
+    run: async (c) => {
+      await c.undo();
+      return { undone: true };
+    }
+  },
+  "session.compact": {
+    scope: "session.write",
+    run: async (c) => {
+      await c.compact();
+      return { compacted: true };
+    }
+  },
+  "plan.set": {
+    scope: "session.write",
+    run: async (c, params) => {
+      const agent = stringParam(params, "agent");
+      if (agent !== "plan" && agent !== "build") throw new Error("plan.set agent must be plan or build");
+      const enabled = c.syncNativeAgent(agent, optionalSession(params));
+      return { enabled, agent };
+    }
+  },
+  "permission.list": { scope: "session.read", run: (c) => c.listPendingPermissions() },
+  "permission.reply": {
+    scope: "permission.write",
+    run: async (c, params) => {
+      const request = permissionParam(params);
+      await c.replyPermission(
+        { id: request.id, sessionID: request.sessionID, action: request.action ?? "", resources: [] },
+        replyValue(params),
+        typeof params.message === "string" ? params.message : void 0
+      );
+      return { replied: true };
+    }
+  },
+  "question.list": { scope: "session.read", run: (c) => c.listPendingQuestions() },
+  "question.reply": {
+    scope: "question.write",
+    run: async (c, params) => {
+      await c.replyQuestion(requireString(params, "requestID"), questionAnswersParam(params));
+      return { replied: true };
+    }
+  },
+  "question.reject": {
+    scope: "question.write",
+    run: async (c, params) => {
+      await c.rejectQuestion(requireString(params, "requestID"));
+      return { rejected: true };
+    }
+  },
+  "model.list": { scope: "session.read", run: (c) => Promise.resolve(c.snapshot.models) },
+  "model.select": {
+    scope: "model.write",
+    run: async (c, params) => {
+      await c.selectModel(params.role === "secondary" ? "secondary" : "primary", {
+        providerID: requireString(params, "providerID"),
+        modelID: requireString(params, "modelID"),
+        ...typeof params.variant === "string" ? { variant: params.variant } : {}
+      });
+      return { selected: true };
+    }
+  },
+  /**
+   * Mobile contract (docs/remote-protocol.md): host identity + BYOK provider
+   * readiness in one call so Android can render onboarding without guessing.
+   */
+  "host.get": {
+    scope: "session.read",
+    run: async (c) => {
+      const identity = await loadHostIdentityOrNull(join5(homedir2(), ".cuppet", "v2", "remote")) ?? void 0;
+      const provider = c.providerStatus();
+      return {
+        hostId: identity?.hostId ?? null,
+        name: identity?.deviceName ?? null,
+        platform: process.platform,
+        version: CUPPET_VERSION,
+        protocolVersion: PROTOCOL_VERSION,
+        online: true,
+        connectedAt: PROCESS_STARTED_AT,
+        workspace: c.workspaceInfo(),
+        provider
+      };
+    }
+  },
+  /** v1 exposes exactly one workspace: the directory the host runs in. */
+  "workspace.list": {
+    scope: "session.read",
+    run: (c) => Promise.resolve([c.workspaceInfo()])
+  },
+  "workspace.attach": {
+    scope: "session.write",
+    run: async (c, params) => {
+      const info = c.workspaceInfo();
+      const requested = typeof params.workspaceId === "string" ? params.workspaceId : "";
+      if (requested && requested !== info.workspaceId) {
+        throw new Error(`unknown workspace: ${requested}`);
+      }
+      return { ...info, attached: true };
+    }
+  },
+  "agent.mode.get": {
+    scope: "session.read",
+    run: (c) => Promise.resolve({ mode: c.snapshot.planMode ? "plan" : "build" })
+  },
+  "agent.mode.set": {
+    scope: "session.write",
+    run: async (c, params) => {
+      const agent = stringParam(params, "agent");
+      if (agent !== "plan" && agent !== "build") throw new Error("agent must be plan or build");
+      const enabled = c.syncNativeAgent(agent, optionalSession(params));
+      return { agent, enabled };
+    }
+  },
+  // Host-internal controls: deliberately unreachable from remote transports.
+  "status": { localOnly: true, run: (c) => c.status() },
+  "doctor": { localOnly: true, run: (c) => c.doctor() },
+  "platform.list": {
+    localOnly: true,
+    run: async () => ({ note: "use the desktop TUI for platform and provider management" })
+  }
+};
+function stringParam(params, key) {
+  return String(params[key]);
+}
+function optionalSession(params) {
+  return typeof params.sessionID === "string" ? params.sessionID : void 0;
+}
+function permissionParam(params) {
+  const raw = params.request;
+  if (!raw || typeof raw !== "object") throw new Error("request is required");
+  const record2 = raw;
+  if (typeof record2.id !== "string" || typeof record2.sessionID !== "string") {
+    throw new Error("request.id and request.sessionID are required");
+  }
+  return {
+    id: record2.id,
+    sessionID: record2.sessionID,
+    ...typeof record2.action === "string" ? { action: record2.action } : {}
+  };
+}
+function replyValue(params) {
+  if (params.reply === "once" || params.reply === "always" || params.reply === "reject") return params.reply;
+  throw new Error("reply must be 'once', 'always', or 'reject'");
+}
+function questionAnswersParam(params) {
+  const raw = params.answers;
+  if (!Array.isArray(raw)) throw new Error("answers must be an array of per-question answer arrays");
+  return raw.map((entry) => {
+    if (!Array.isArray(entry) || entry.some((label) => typeof label !== "string")) {
+      throw new Error("each answer must be an array of strings");
+    }
+    return entry;
+  });
+}
+
+// src/control/server.ts
 var MAX_LINE_BYTES = 256 * 1024;
 var CuppetControlServer = class _CuppetControlServer {
   #controller;
+  #router;
   #server;
   #address;
   constructor(controller, server, address) {
     this.#controller = controller;
+    this.#router = new ControlRouter(controller);
     this.#server = server;
     this.#address = address;
   }
   static async start(controller, paths, address = createControlAddress(paths)) {
     const { socket } = address;
-    await mkdir4(paths.runtime, { recursive: true, mode: 448 });
+    await mkdir6(paths.runtime, { recursive: true, mode: 448 });
     await unlink(socket).catch((error) => {
       if (error.code !== "ENOENT") throw error;
     });
     const server = createServer();
     const instance = new _CuppetControlServer(controller, server, address);
     server.on("connection", (connection) => instance.#handle(connection));
-    await new Promise((resolve2, reject) => {
+    await new Promise((resolve3, reject) => {
       server.once("error", reject);
       server.listen(socket, () => {
         server.off("error", reject);
-        resolve2();
+        resolve3();
       });
     });
-    await chmod3(socket, 384);
+    await chmod4(socket, 384);
     return instance;
   }
   get address() {
     return { ...this.#address };
   }
   async close() {
-    await new Promise((resolve2) => this.#server.close(() => resolve2()));
+    await new Promise((resolve3) => this.#server.close(() => resolve3()));
     await unlink(this.#address.socket).catch(() => void 0);
   }
   #handle(socket) {
@@ -1618,6 +1984,9 @@ var CuppetControlServer = class _CuppetControlServer {
     }
   }
   async #call(method, params) {
+    if (ControlRouter.handles(method)) {
+      return this.#router.execute({ kind: "local" }, method, params);
+    }
     switch (method) {
       case "status":
         return this.#controller.status();
@@ -1637,20 +2006,19 @@ var CuppetControlServer = class _CuppetControlServer {
         await this.#controller.setBackgroundPaused(params.paused);
         return this.#controller.snapshot.background ?? { paused: params.paused };
       }
+      case "orchestrator.status":
+        return { enabled: this.#controller.orchestratorEnabled };
+      case "orchestrator.set": {
+        if (typeof params.enabled !== "boolean") throw new Error("orchestrator.set requires enabled");
+        await this.#controller.setOrchestratorEnabled(params.enabled);
+        return { enabled: this.#controller.orchestratorEnabled };
+      }
       case "memory.remember":
-        return this.#controller.remember(stringParam(params, "key"), stringParam(params, "value"), memoryScopeParam(params.scope));
+        return this.#controller.remember(stringParam2(params, "key"), stringParam2(params, "value"), memoryScopeParam(params.scope));
       case "memory.forget":
-        return this.#controller.forget(stringParam(params, "key"));
+        return this.#controller.forget(stringParam2(params, "key"));
       case "memory.clear":
         return this.#controller.clearMemory(scopeParam(params.scope));
-      case "session.steer":
-        return this.#controller.steer(stringParam(params, "instruction"), params.interrupt === true);
-      case "session.compact":
-        await this.#controller.compact();
-        return { compacted: true };
-      case "session.undo":
-        await this.#controller.undo();
-        return { undone: true };
       case "plan.toggle":
         return {
           enabled: this.#controller.syncNativeAgent(
@@ -1659,14 +2027,8 @@ var CuppetControlServer = class _CuppetControlServer {
           ),
           agent: this.#controller.snapshot.planMode ? "plan" : "build"
         };
-      case "plan.set": {
-        const agent = stringParam(params, "agent");
-        if (agent !== "plan" && agent !== "build") throw new Error("plan.set agent must be plan or build");
-        const enabled = this.#controller.syncNativeAgent(agent, optionalStringParam(params, "sessionID"));
-        return { enabled, agent };
-      }
       case "session.adopt":
-        return this.#controller.adoptSession(stringParam(params, "sessionID"));
+        return this.#controller.adoptSession(stringParam2(params, "sessionID"));
       case "session.list":
         return this.#controller.listSessions();
       default:
@@ -1689,9 +2051,9 @@ function platformState(controller) {
   };
 }
 function createControlAddress(paths) {
-  return { socket: `${paths.runtime}/control.sock`, token: randomBytes2(32).toString("base64url") };
+  return { socket: `${paths.runtime}/control.sock`, token: randomBytes3(32).toString("base64url") };
 }
-function stringParam(params, name) {
+function stringParam2(params, name) {
   const value = params[name];
   if (typeof value !== "string" || !value.trim()) throw new Error(`${name} is required`);
   return value.trim();
@@ -2054,6 +2416,35 @@ var OpenCodeGateway = class extends EventEmitter3 {
       })
     );
   }
+  async listPendingPermissions() {
+    return unwrap(
+      await this.#client.permission.list({ directory: this.#directory })
+    );
+  }
+  async listPendingQuestions() {
+    const pending = unwrap(
+      await this.#client.question.list({ directory: this.#directory })
+    );
+    return pending.map((item) => record(item));
+  }
+  async replyQuestion(requestID, answers) {
+    ensureSuccess(
+      await this.#client.question.reply({
+        requestID,
+        directory: this.#directory,
+        // One QuestionAnswer (string[]) per question in the request.
+        answers
+      })
+    );
+  }
+  async rejectQuestion(requestID) {
+    ensureSuccess(
+      await this.#client.question.reject({
+        requestID,
+        directory: this.#directory
+      })
+    );
+  }
   async denyPendingPermissions(sessionID) {
     const pending = unwrap(
       await this.#client.permission.list({ directory: this.#directory })
@@ -2221,6 +2612,48 @@ var OpenCodeEventNormalizer = class {
         }];
       case "session.diff":
         return sessionID && Array.isArray(data.diff) ? [{ type: "diff", sessionID, diff: data.diff }] : [];
+      case "question.asked":
+      case "question.v2.asked":
+        if (!sessionID || typeof data.id !== "string") return [];
+        return [
+          {
+            type: "question",
+            request: {
+              id: data.id,
+              sessionID,
+              questions: Array.isArray(data.questions) ? data.questions.map((item) => {
+                const entry = record(item);
+                return {
+                  ...typeof entry.question === "string" ? { question: entry.question } : {},
+                  ...typeof entry.header === "string" ? { header: entry.header } : {},
+                  ...Array.isArray(entry.options) ? {
+                    options: entry.options.map((option) => {
+                      const optionRecord = record(option);
+                      return {
+                        ...typeof optionRecord.label === "string" ? { label: optionRecord.label } : {},
+                        ...typeof optionRecord.description === "string" ? { description: optionRecord.description } : {},
+                        ...typeof optionRecord.placeholder === "string" ? { placeholder: optionRecord.placeholder } : {}
+                      };
+                    })
+                  } : {},
+                  ...typeof entry.multiple === "boolean" ? { multiple: entry.multiple } : {}
+                };
+              }) : [],
+              ...recordOrUndefined(data.metadata) ? { metadata: record(data.metadata) } : {}
+            }
+          }
+        ];
+      case "question.v2.replied":
+      case "question.v2.rejected":
+        return typeof data.id === "string" && sessionID ? [{ type: "question-resolved", sessionID, requestID: data.id, accepted: data.type === "question.v2.replied" }] : [];
+      case "permission.v2.replied":
+      case "permission.replied":
+        return typeof data.id === "string" && sessionID ? [{
+          type: "permission-resolved",
+          sessionID,
+          requestID: data.id,
+          ...data.reply === "once" || data.reply === "always" || data.reply === "reject" ? { reply: data.reply } : {}
+        }] : [];
       case "permission.v2.asked":
         return typeof data.id === "string" && sessionID ? [{
           type: "permission",
@@ -2629,15 +3062,15 @@ function message(error) {
   return String(data.message ?? value.message ?? value.name ?? "Unknown OpenCode error");
 }
 function delay(milliseconds) {
-  return new Promise((resolve2) => setTimeout(resolve2, milliseconds));
+  return new Promise((resolve3) => setTimeout(resolve3, milliseconds));
 }
 
 // src/opencode/server.ts
-import { randomBytes as randomBytes3 } from "node:crypto";
+import { randomBytes as randomBytes4 } from "node:crypto";
 import { spawn } from "node:child_process";
 import { constants as fsConstants } from "node:fs";
-import { access as access3, chmod as chmod4, copyFile, mkdir as mkdir5, readFile as readFile4, rename as rename4, rm, writeFile as writeFile4 } from "node:fs/promises";
-import { dirname as dirname4, join as join4 } from "node:path";
+import { access as access3, chmod as chmod5, copyFile, mkdir as mkdir7, readFile as readFile6, rename as rename5, rm, writeFile as writeFile6 } from "node:fs/promises";
+import { dirname as dirname4, join as join7 } from "node:path";
 import { createOpencodeClient } from "@opencode-ai/sdk/v2";
 
 // src/opencode/variant-bridge.ts
@@ -2772,13 +3205,13 @@ function isRecord(value) {
 }
 
 // src/runtime/derivative.ts
-import { access as access2, readFile as readFile3 } from "node:fs/promises";
+import { access as access2, readFile as readFile5 } from "node:fs/promises";
 import { constants as constants2 } from "node:fs";
-import { dirname as dirname3, join as join3 } from "node:path";
+import { dirname as dirname3, join as join6 } from "node:path";
 var DERIVATIVE_MARKER_SCHEMA = 1;
 var DERIVATIVE_PRODUCT = "cuppet-opencode-derivative";
 function derivativeMarkerPath(binary) {
-  return join3(dirname3(binary), ".cuppet-derivative.json");
+  return join6(dirname3(binary), ".cuppet-derivative.json");
 }
 async function readDerivativeMarker(binary) {
   const path = derivativeMarkerPath(binary);
@@ -2789,7 +3222,7 @@ async function readDerivativeMarker(binary) {
   }
   let parsed;
   try {
-    parsed = JSON.parse(await readFile3(path, "utf8"));
+    parsed = JSON.parse(await readFile5(path, "utf8"));
   } catch {
     throw new Error(`OpenCode derivative marker is unreadable at ${path}`);
   }
@@ -2806,6 +3239,24 @@ function isDerivativeMarker(value) {
 }
 
 // src/opencode/server.ts
+var ORCHESTRATOR_INSTRUCTION = [
+  'You are the Cuppet master orchestrator. A worker subagent (task tool, agent id "general") executes implementation work for you.',
+  "Division of labor:",
+  "- YOU own all context work: before delegating, gather what you need yourself with cuppet_memory_search, cuppet_workspace_info, cuppet_graph_search, cuppet_graph_tree, and cuppet_graph_trace, and read the specific files you select.",
+  "- YOU plan, decompose the goal into self-contained tasks with exact file paths and acceptance criteria, delegate each to the worker with the task tool, review its diffs, and integrate or correct the result.",
+  "- THE WORKER only writes code. Never ask it to explore open-endedly; give it complete instructions and verify its output yourself afterwards.",
+  "- No automatic context will be injected into your turns. Anything you need must be retrieved explicitly and kept in your own working notes.",
+  "Finish a delegated task only after you have personally verified the result (read the changed files, run checks)."
+].join("\n");
+function orchestratorWorkerAgentConfig(model) {
+  return {
+    ...taskSubagentModelConfig(model),
+    description: "Cuppet worker subagent: executes precisely-scoped implementation tasks delegated by the master",
+    mode: "subagent",
+    steps: 96,
+    maxSteps: 96
+  };
+}
 function taskSubagentModelConfig(model) {
   if (!model) return {};
   const providerID = model.providerID === "vertex" ? "google-vertex" : model.providerID;
@@ -2842,14 +3293,14 @@ var DEFAULT_CUPPET_INSTRUCTION = [
 async function startOpenCodeServer(options) {
   await verifyVersion(options.binary);
   const derivative = await readDerivativeMarker(options.binary);
-  const password = randomBytes3(32).toString("base64url");
+  const password = randomBytes4(32).toString("base64url");
   const username = "cuppet";
-  const variantBridgePath = join4(options.paths.runtime, "opencode-model-variants.json");
-  const pluginStatusPath = join4(options.paths.runtime, "opencode-plugin-status.json");
-  const losslessPlanDirectory = join4(options.paths.projectStore, "lossless-plans");
-  await mkdir5(losslessPlanDirectory, { recursive: true, mode: 448 });
-  await chmod4(losslessPlanDirectory, 448);
-  const tuiPlugin = options.tuiPlugin ?? (options.plugin ? join4(dirname4(options.plugin), "tui.js") : void 0);
+  const variantBridgePath = join7(options.paths.runtime, "opencode-model-variants.json");
+  const pluginStatusPath = join7(options.paths.runtime, "opencode-plugin-status.json");
+  const losslessPlanDirectory = join7(options.paths.projectStore, "lossless-plans");
+  await mkdir7(losslessPlanDirectory, { recursive: true, mode: 448 });
+  await chmod5(losslessPlanDirectory, 448);
+  const tuiPlugin = options.tuiPlugin ?? (options.plugin ? join7(dirname4(options.plugin), "tui.js") : void 0);
   if (options.plugin) {
     await installOpenCodePlugin(options.plugin, options.paths.opencode.config, tuiPlugin);
   }
@@ -2898,7 +3349,8 @@ async function startOpenCodeServer(options) {
         permission: foregroundPermissions2(
           options.graphFirstGate ?? false,
           options.graphOnlySearch ?? false,
-          options.graphNativeProfile ?? false
+          options.graphNativeProfile ?? false,
+          options.orchestrator ?? false
         )
       },
       "cuppet-background": {
@@ -2910,9 +3362,10 @@ async function startOpenCodeServer(options) {
         maxSteps: 1,
         tools: { "*": false },
         permission: "deny"
-      }
+      },
+      ...options.orchestrator ? { worker: orchestratorWorkerAgentConfig(options.secondaryModel) } : {}
     },
-    instructions: options.instructions ?? [DEFAULT_CUPPET_INSTRUCTION],
+    instructions: options.orchestrator ? [ORCHESTRATOR_INSTRUCTION, ...options.instructions ?? []] : options.instructions ?? [DEFAULT_CUPPET_INSTRUCTION],
     experimental: { openTelemetry: false }
   };
   const child = spawn(
@@ -2936,6 +3389,7 @@ async function startOpenCodeServer(options) {
         CUPPET_PROJECT_ROOT: options.paths.projectRealpath,
         CUPPET_CONTEXT_COMPILER_AB: options.compiledContext ? "1" : "0",
         CUPPET_TASK_CONTEXT_AB: options.taskContext ? "1" : "0",
+        CUPPET_ORCHESTRATOR: options.orchestrator ? "1" : "0",
         ...options.taskContextTracePath ? { CUPPET_TASK_CONTEXT_TRACE_FILE: options.taskContextTracePath } : {},
         ...options.plugin ? {
           CUPPET_OPENCODE_VARIANTS_PATH: variantBridgePath,
@@ -2947,7 +3401,9 @@ async function startOpenCodeServer(options) {
         } : {},
         ...options.tst ? { CUPPET_TST_SOCKET: options.tst.socket, CUPPET_TST_TOKEN: options.tst.token } : {},
         CUPPET_LOSSLESS_PLAN_DIR: losslessPlanDirectory,
-        ...options.instructions !== void 0 ? { CUPPET_FOREGROUND_INSTRUCTION: options.instructions.join("\n\n") } : {},
+        ...options.instructions !== void 0 || options.orchestrator ? {
+          CUPPET_FOREGROUND_INSTRUCTION: (options.orchestrator ? [ORCHESTRATOR_INSTRUCTION, ...options.instructions ?? []] : options.instructions).join("\n\n")
+        } : {},
         ...options.graphFirstGate ? { CUPPET_GRAPH_FIRST_GATE: "1" } : {},
         ...options.graphOnlySearch ? { CUPPET_GRAPH_ONLY_SEARCH: "1" } : {},
         ...options.graphNativeProfile ? { CUPPET_GRAPH_NATIVE_PROFILE: "1" } : {}
@@ -2982,7 +3438,7 @@ async function startOpenCodeServer(options) {
         try {
           await Promise.race([
             client.global.dispose({ throwOnError: true }),
-            new Promise((resolve2) => setTimeout(resolve2, 1500))
+            new Promise((resolve3) => setTimeout(resolve3, 1500))
           ]);
         } catch {
         }
@@ -3002,35 +3458,35 @@ async function waitForCuppetAgents(client, directory, statusPath) {
     lastIDs = (response.data?.data ?? []).map((agent) => agent.id);
     const ids = new Set(lastIDs);
     if (ids.has("cuppet") && ids.has("cuppet-background")) return;
-    await new Promise((resolve2) => setTimeout(resolve2, 50));
+    await new Promise((resolve3) => setTimeout(resolve3, 50));
   } while (Date.now() < deadline);
-  const status = await readFile4(statusPath, "utf8").catch(() => void 0);
+  const status = await readFile6(statusPath, "utf8").catch(() => void 0);
   throw new Error(
     status ? `bundled OpenCode did not load the Cuppet v2 agents (plugin status: ${status.trim()}; agents: ${lastIDs.join(", ") || "none"})` : `bundled OpenCode did not start the Cuppet v2 plugin (agents: ${lastIDs.join(", ") || "none"})`
   );
 }
 async function installOpenCodePlugin(source, xdgConfig, tuiSource) {
-  const directory = join4(xdgConfig, "opencode", "plugins");
-  const destination = join4(directory, "cuppet.js");
-  const temporary = join4(directory, `.cuppet-${randomBytes3(6).toString("hex")}.tmp`);
-  await mkdir5(directory, { recursive: true, mode: 448 });
-  await chmod4(directory, 448);
+  const directory = join7(xdgConfig, "opencode", "plugins");
+  const destination = join7(directory, "cuppet.js");
+  const temporary = join7(directory, `.cuppet-${randomBytes4(6).toString("hex")}.tmp`);
+  await mkdir7(directory, { recursive: true, mode: 448 });
+  await chmod5(directory, 448);
   await copyFile(source, temporary);
-  await chmod4(temporary, 384);
-  await rename4(temporary, destination);
+  await chmod5(temporary, 384);
+  await rename5(temporary, destination);
   if (tuiSource) {
-    const tuiDirectory = join4(xdgConfig, "opencode", "tui-plugins");
-    const tuiDestination = join4(tuiDirectory, "cuppet-tui.js");
-    const tuiTemporary = join4(tuiDirectory, `.cuppet-tui-${randomBytes3(6).toString("hex")}.tmp`);
-    await mkdir5(tuiDirectory, { recursive: true, mode: 448 });
-    await chmod4(tuiDirectory, 448);
+    const tuiDirectory = join7(xdgConfig, "opencode", "tui-plugins");
+    const tuiDestination = join7(tuiDirectory, "cuppet-tui.js");
+    const tuiTemporary = join7(tuiDirectory, `.cuppet-tui-${randomBytes4(6).toString("hex")}.tmp`);
+    await mkdir7(tuiDirectory, { recursive: true, mode: 448 });
+    await chmod5(tuiDirectory, 448);
     await copyFile(tuiSource, tuiTemporary);
-    await chmod4(tuiTemporary, 384);
-    await rename4(tuiTemporary, tuiDestination);
-    await rm(join4(directory, "cuppet-tui.js"), { force: true });
-    await rm(join4(directory, "tui.json"), { force: true });
-    await writeFile4(
-      join4(xdgConfig, "opencode", "tui.json"),
+    await chmod5(tuiTemporary, 384);
+    await rename5(tuiTemporary, tuiDestination);
+    await rm(join7(directory, "cuppet-tui.js"), { force: true });
+    await rm(join7(directory, "tui.json"), { force: true });
+    await writeFile6(
+      join7(xdgConfig, "opencode", "tui.json"),
       `${JSON.stringify({ plugin: [tuiDestination] }, null, 2)}
 `,
       { mode: 384 }
@@ -3061,17 +3517,17 @@ async function synchronizeVariants(client, directory, path) {
       return !variants || [...variants].every((id) => model.variants.some((variant) => variant.id === id));
     });
     if (ready) return;
-    await new Promise((resolve2) => setTimeout(resolve2, 50));
+    await new Promise((resolve3) => setTimeout(resolve3, 50));
   } while (Date.now() < deadline);
   throw new Error("timed out waiting for the v2 catalog to load advertised model variants");
 }
 async function writeVariantBridge(path, bridge) {
-  const temporary = `${path}.${randomBytes3(6).toString("hex")}.tmp`;
-  await writeFile4(temporary, `${JSON.stringify(bridge)}
+  const temporary = `${path}.${randomBytes4(6).toString("hex")}.tmp`;
+  await writeFile6(temporary, `${JSON.stringify(bridge)}
 `, { mode: 384 });
-  await rename4(temporary, path);
+  await rename5(temporary, path);
 }
-function foregroundPermissions2(graphFirstGate = false, graphOnlySearch = false, graphNativeProfile = false) {
+function foregroundPermissions2(graphFirstGate = false, graphOnlySearch = false, graphNativeProfile = false, orchestrator = false) {
   const navigationEffect = graphFirstGate ? "ask" : "allow";
   const searchEffect = graphOnlySearch || graphNativeProfile ? "deny" : navigationEffect;
   return {
@@ -3108,7 +3564,7 @@ function foregroundPermissions2(graphFirstGate = false, graphOnlySearch = false,
     external_directory: "ask",
     webfetch: graphOnlySearch || graphNativeProfile ? "deny" : "ask",
     websearch: graphOnlySearch || graphNativeProfile ? "deny" : "ask",
-    task: graphOnlySearch || graphNativeProfile ? "deny" : "ask",
+    task: graphOnlySearch || graphNativeProfile ? "deny" : orchestrator ? "allow" : "ask",
     skill: graphNativeProfile ? "deny" : "ask"
   };
 }
@@ -3123,7 +3579,7 @@ function mutationPermissions() {
 async function resolveVertexEnvironment(environment = process.env, home = environment.HOME ?? environment.USERPROFILE) {
   const explicitPath = environment.GOOGLE_APPLICATION_CREDENTIALS?.trim();
   const explicitAvailable = explicitPath ? await isReadable(explicitPath) : false;
-  const defaultPath = home ? join4(home, ".config", "gcloud", "application_default_credentials.json") : void 0;
+  const defaultPath = home ? join7(home, ".config", "gcloud", "application_default_credentials.json") : void 0;
   const defaultAvailable = !explicitAvailable && defaultPath ? await isReadable(defaultPath) : false;
   const adcPath = explicitAvailable ? explicitPath : defaultAvailable ? defaultPath : void 0;
   const projectEntries = [
@@ -3167,14 +3623,14 @@ async function isReadable(path) {
   }
 }
 async function verifyVersion(binary) {
-  const output = await new Promise((resolve2, reject) => {
+  const output = await new Promise((resolve3, reject) => {
     const child = spawn(binary, ["--version"], { stdio: ["ignore", "pipe", "pipe"] });
     let text = "";
     child.stdout.on("data", (chunk) => text += chunk.toString("utf8"));
     child.stderr.on("data", (chunk) => text += chunk.toString("utf8"));
     child.once("error", reject);
     child.once("exit", (code) => {
-      if (code === 0) resolve2(text.trim());
+      if (code === 0) resolve3(text.trim());
       else reject(new Error(`OpenCode --version exited with code ${code}`));
     });
   });
@@ -3183,7 +3639,7 @@ async function verifyVersion(binary) {
   }
 }
 function waitForListening(child) {
-  return new Promise((resolve2, reject) => {
+  return new Promise((resolve3, reject) => {
     if (!child.stdout) return reject(new Error("OpenCode stdout is unavailable"));
     const stdout = child.stdout;
     let output = "";
@@ -3197,7 +3653,7 @@ function waitForListening(child) {
         const match = /^opencode server listening on (https?:\/\/\S+)/.exec(line.trim());
         if (!match?.[1]) continue;
         cleanup();
-        resolve2(match[1]);
+        resolve3(match[1]);
         return;
       }
     };
@@ -3237,9 +3693,9 @@ async function runNativeTui(options) {
   process.once("SIGINT", onInterrupt);
   process.once("SIGTERM", onTerminate);
   try {
-    return await new Promise((resolve2, reject) => {
+    return await new Promise((resolve3, reject) => {
       child.once("error", reject);
-      child.once("exit", (code, signal) => resolve2(code ?? signalExitCode(signal)));
+      child.once("exit", (code, signal) => resolve3(code ?? signalExitCode(signal)));
     });
   } finally {
     process.off("SIGINT", onInterrupt);
@@ -3264,13 +3720,1327 @@ function signalExitCode(signal) {
   return signals[signal] ?? 1;
 }
 
-// src/runtime/assets.ts
-import { createHash } from "node:crypto";
-import { constants as constants3, createReadStream } from "node:fs";
-import { access as access4, readFile as readFile5 } from "node:fs/promises";
-import { createRequire } from "node:module";
-import { delimiter, dirname as dirname5, join as join5, resolve } from "node:path";
+// src/remote/bridge.ts
+import { randomUUID as randomUUID2 } from "node:crypto";
+
+// src/remote/protocol.ts
+import { z as z3 } from "zod";
+var PROTOCOL_VERSION2 = 1;
+var MAX_FRAME_BYTES = 512 * 1024;
+var DEFAULT_DEVICE_SCOPES = [
+  "session.read",
+  "session.write",
+  "permission.write",
+  "question.write"
+];
+var VIEWER_DEVICE_SCOPES = ["session.read"];
+var envelopeBase = {
+  version: z3.literal(PROTOCOL_VERSION2),
+  hostId: z3.string().min(1).max(128),
+  sessionId: z3.string().min(1).max(256).optional(),
+  ts: z3.number().int().nonnegative()
+};
+var commandEnvelopeSchema = z3.object({
+  version: z3.literal(PROTOCOL_VERSION2),
+  hostId: z3.string().min(1).max(128).optional(),
+  sessionId: z3.string().min(1).max(256).optional(),
+  ts: z3.number().int().nonnegative(),
+  id: z3.string().min(1).max(128),
+  type: z3.string().min(1).max(64),
+  payload: z3.unknown().optional()
+});
+var resultFrameSchema = z3.object({
+  version: z3.literal(PROTOCOL_VERSION2),
+  replyTo: z3.string().min(1),
+  ok: z3.literal(true),
+  result: z3.unknown().optional()
+});
+var resultErrorFrameSchema = z3.object({
+  version: z3.literal(PROTOCOL_VERSION2),
+  replyTo: z3.string().min(1),
+  ok: z3.literal(false),
+  error: z3.string()
+});
+var eventFrameSchema = z3.object({
+  ...envelopeBase,
+  /** Host-assigned monotonic sequence for ordering + gap detection. */
+  seq: z3.number().int().nonnegative(),
+  type: z3.string().min(1).max(64),
+  payload: z3.unknown().optional()
+});
+var COMMAND_SCOPES = {
+  "host.get": "session.read",
+  "workspace.list": "session.read",
+  "session.list": "session.read",
+  "session.snapshot": "session.read",
+  "session.messages": "session.read",
+  "permission.list": "session.read",
+  "question.list": "session.read",
+  "model.list": "session.read",
+  "agent.mode.get": "session.read",
+  "workspace.attach": "session.write",
+  "session.new": "session.write",
+  "session.resume": "session.write",
+  "session.submit": "session.write",
+  "session.steer": "session.write",
+  "session.abort": "session.write",
+  "session.undo": "session.write",
+  "session.compact": "session.write",
+  "plan.set": "session.write",
+  "permission.reply": "permission.write",
+  "question.reply": "question.write",
+  "question.reject": "question.write",
+  "model.select": "model.write"
+};
+function scopeForCommand(type) {
+  return COMMAND_SCOPES[type] ?? null;
+}
+function encodeFrame(value) {
+  const data = JSON.stringify(value);
+  if (Buffer.byteLength(data, "utf8") > MAX_FRAME_BYTES) {
+    throw new Error(`frame exceeds ${MAX_FRAME_BYTES} bytes`);
+  }
+  return data;
+}
+function parseCommandFrame(data) {
+  if (Buffer.byteLength(data, "utf8") > MAX_FRAME_BYTES) throw new Error("frame too large");
+  const parsed = commandEnvelopeSchema.parse(JSON.parse(data));
+  if (!scopeForCommand(parsed.type)) throw new Error(`unsupported command type: ${parsed.type}`);
+  return parsed;
+}
+function publicEventFor(agentEvent) {
+  const type = typeof agentEvent.type === "string" ? agentEvent.type : "";
+  switch (type) {
+    case "text-delta":
+      return { type: "assistant.text.delta", payload: { text: agentEvent.text } };
+    case "reasoning-delta":
+      return { type: "assistant.reasoning.delta", payload: { text: agentEvent.text } };
+    case "tool-start":
+      return { type: "tool.started", payload: { callID: agentEvent.callID, name: agentEvent.name, input: agentEvent.input ?? null } };
+    case "tool-progress":
+      return { type: "tool.progress", payload: { callID: agentEvent.callID, message: agentEvent.message } };
+    case "tool-end":
+      return {
+        type: "tool.completed",
+        payload: {
+          callID: agentEvent.callID,
+          success: agentEvent.success === true,
+          name: agentEvent.name ?? null,
+          ...typeof agentEvent.diff === "string" ? { diff: agentEvent.diff } : {}
+        }
+      };
+    case "diff":
+      return { type: "diff.updated", payload: { diff: agentEvent.diff } };
+    case "permission":
+      return { type: "permission.requested", payload: { request: agentEvent.request } };
+    case "permission-resolved":
+      return {
+        type: "permission.resolved",
+        payload: { requestID: agentEvent.requestID, ...typeof agentEvent.reply === "string" ? { reply: agentEvent.reply } : {} }
+      };
+    case "question":
+      return { type: "question.requested", payload: { request: agentEvent.request } };
+    case "question-resolved":
+      return {
+        type: "question.resolved",
+        payload: { requestID: agentEvent.requestID, accepted: agentEvent.accepted === true }
+      };
+    case "idle":
+      return { type: "session.idle", payload: {} };
+    case "session":
+      return { type: "session.updated", payload: { sessionID: agentEvent.sessionID, agent: agentEvent.agent ?? null } };
+    case "usage":
+      return { type: "usage.updated", payload: { usage: agentEvent.usage, cost: agentEvent.cost } };
+    case "compaction":
+      return { type: "compaction", payload: { phase: agentEvent.phase } };
+    case "error":
+      return { type: "agent.error", payload: { message: agentEvent.message } };
+    case "step-limit":
+      return { type: "step.limit", payload: { steps: agentEvent.steps } };
+    default:
+      return void 0;
+  }
+}
+
+// src/remote/bridge.ts
+var DEDUPE_CAPACITY = 512;
+var PAIR_ATTEMPT_LIMIT = 3;
+var MINIMUM_CLIENT_VERSION = 1;
+var RemoteBridge = class {
+  #controller;
+  #router;
+  #transport;
+  #hostId;
+  #authenticateDevice;
+  #claimPairingInvite;
+  #buildAttachSnapshot;
+  #seq = 0;
+  /** Changes when a new host process takes authority for this host id. */
+  #connectionId = randomUUID2();
+  #unsubscribers = [];
+  #seenCommandIds = /* @__PURE__ */ new Map();
+  #offlineBuffer = [];
+  #devices = /* @__PURE__ */ new Map();
+  #pairAttemptsLeft = PAIR_ATTEMPT_LIMIT;
+  #started = false;
+  constructor(options) {
+    this.#controller = options.controller;
+    this.#router = new ControlRouter(options.controller);
+    this.#transport = options.transport;
+    this.#hostId = options.hostId;
+    this.#authenticateDevice = options.authenticateDevice;
+    this.#claimPairingInvite = options.claimPairingInvite;
+    this.#buildAttachSnapshot = options.buildAttachSnapshot;
+  }
+  start() {
+    if (this.#started) return;
+    this.#started = true;
+    this.#transport.start?.();
+    this.#unsubscribers.push(
+      this.#controller.onAgentEvent((event) => {
+        const publicEvent = publicEventFor(event);
+        if (!publicEvent) return;
+        this.#publish(publicEvent.type, publicEvent.payload, sessionIdOf(event));
+      }),
+      this.#controller.onChange((snapshot) => {
+        this.#publish("host.snapshot", snapshot);
+      })
+    );
+    this.#transport.onMessage((data) => void this.#handleIncoming(data).catch(() => this.#replyError("", "malformed frame")));
+    this.#transport.onStatusChange((connected) => {
+      if (!connected) {
+        this.#devices.clear();
+        return;
+      }
+      this.#pairAttemptsLeft = PAIR_ATTEMPT_LIMIT;
+      void this.#onConnected();
+    });
+  }
+  stop() {
+    if (!this.#started) return;
+    this.#started = false;
+    for (const unsubscribe of this.#unsubscribers.splice(0)) unsubscribe();
+    this.#devices.clear();
+    this.#offlineBuffer.length = 0;
+    try {
+      this.#transport.close();
+    } catch {
+    }
+  }
+  async #onConnected() {
+    try {
+      const payload = this.#buildAttachSnapshot ? await this.#buildAttachSnapshot() : {
+        snapshot: await this.#controller.status(),
+        permissions: await this.#controller.listPendingPermissions().catch(() => []),
+        questions: await this.#controller.listPendingQuestions().catch(() => [])
+      };
+      this.#sendRaw(encodeFrame({
+        version: PROTOCOL_VERSION2,
+        seq: ++this.#seq,
+        hostId: this.#hostId,
+        ts: Date.now(),
+        type: "host.attach",
+        payload: {
+          ...payload,
+          connectionId: this.#connectionId,
+          protocolVersion: PROTOCOL_VERSION2,
+          minimumClientVersion: MINIMUM_CLIENT_VERSION
+        }
+      }));
+    } catch {
+    }
+    for (const frame of this.#offlineBuffer.splice(0)) {
+      this.#sendRaw(encodeFrame(frame));
+    }
+  }
+  publish(type, payload) {
+    this.#publish(type, payload);
+  }
+  #publish(type, payload, sessionId) {
+    const frame = {
+      version: PROTOCOL_VERSION2,
+      seq: ++this.#seq,
+      hostId: this.#hostId,
+      ts: Date.now(),
+      type,
+      ...sessionId ? { sessionId } : {},
+      ...payload !== void 0 ? { payload } : {}
+    };
+    if (!this.#transport.connected) {
+      this.#offlineBuffer.push(frame);
+      if (this.#offlineBuffer.length > 256) this.#offlineBuffer.shift();
+      return;
+    }
+    this.#sendRaw(encodeFrame(frame));
+  }
+  #sendRaw(data) {
+    try {
+      this.#transport.send(data);
+    } catch {
+    }
+  }
+  async #handleIncoming(data) {
+    let parsed;
+    try {
+      parsed = JSON.parse(data);
+    } catch {
+      return this.#replyError("", "malformed frame");
+    }
+    const kind = typeof parsed.type === "string" ? parsed.type : "";
+    if (kind === "ping") return;
+    const requestDeviceId = typeof parsed.deviceId === "string" && parsed.deviceId ? parsed.deviceId : String(
+      parsed.payload?.deviceId ?? ""
+    );
+    if (kind === "device.hello") return this.#handleDeviceHello(parsed, requestDeviceId);
+    if (kind === "device.pair") return this.#handleDevicePair(parsed, requestDeviceId);
+    const device = requestDeviceId ? this.#devices.get(requestDeviceId) : void 0;
+    if (!device) {
+      const commandId = typeof parsed.id === "string" ? parsed.id : "";
+      this.#rejectDevice(requestDeviceId, "not authenticated");
+      if (!commandId) return;
+      return this.#resultError(commandId, "not authenticated", requestDeviceId);
+    }
+    let envelope;
+    try {
+      envelope = parseCommandFrame(data);
+    } catch (error) {
+      const fallbackId = typeof parsed.id === "string" ? parsed.id : "unknown";
+      return this.#resultError(fallbackId, `malformed command: ${error.message}`, requestDeviceId);
+    }
+    const dedupeKey = `${requestDeviceId}:${envelope.id}`;
+    if (this.#seenCommandIds.has(dedupeKey)) {
+      return this.#sendRaw(encodeFrame({
+        version: PROTOCOL_VERSION2,
+        replyTo: envelope.id,
+        ok: true,
+        result: { duplicate: true },
+        ...requestDeviceId ? { deviceId: requestDeviceId } : {}
+      }));
+    }
+    this.#remember(dedupeKey);
+    const requiredScope = scopeForCommand(envelope.type);
+    if (!requiredScope || !device.scopes.includes(requiredScope)) {
+      return this.#resultError(
+        envelope.id,
+        `missing scope '${requiredScope ?? "none"}' for ${envelope.type}`,
+        requestDeviceId
+      );
+    }
+    const actor = {
+      kind: "remote",
+      deviceID: requestDeviceId,
+      ...device.name ? { deviceName: device.name } : {},
+      scopes: device.scopes
+    };
+    try {
+      const result = await this.#router.execute(actor, envelope.type, envelope.payload ?? {});
+      this.#sendRaw(encodeFrame({
+        version: PROTOCOL_VERSION2,
+        replyTo: envelope.id,
+        ok: true,
+        ...result !== void 0 ? { result } : {},
+        ...requestDeviceId ? { deviceId: requestDeviceId } : {}
+      }));
+    } catch (error) {
+      this.#resultError(envelope.id, error instanceof Error ? error.message : String(error), requestDeviceId);
+    }
+  }
+  async #handleDevicePair(parsed, deviceId) {
+    const fail = (message2) => {
+      this.#sendRaw(encodeFrame({
+        version: PROTOCOL_VERSION2,
+        replyTo: "device-pair",
+        ok: false,
+        error: message2,
+        ...deviceId ? { deviceId } : {}
+      }));
+    };
+    if (!this.#claimPairingInvite) return fail("pairing unavailable");
+    if (this.#pairAttemptsLeft <= 0) return fail("too many pairing attempts");
+    this.#pairAttemptsLeft -= 1;
+    const payload = parsed.payload && typeof parsed.payload === "object" ? parsed.payload : {};
+    const code = typeof payload.code === "string" ? payload.code.trim().toUpperCase() : "";
+    const name = typeof payload.name === "string" ? payload.name : "";
+    const claimed = code ? await this.#claimPairingInvite(code, name).catch(() => void 0) : void 0;
+    if (!claimed) return fail("invalid or expired pairing code");
+    this.#sendRaw(encodeFrame({
+      version: PROTOCOL_VERSION2,
+      seq: ++this.#seq,
+      hostId: this.#hostId,
+      ts: Date.now(),
+      type: "device.paired",
+      payload: { deviceId: claimed.deviceId },
+      ...deviceId ? { deviceId } : {}
+    }));
+    this.#sendRaw(encodeFrame({
+      version: PROTOCOL_VERSION2,
+      replyTo: "device-pair",
+      ok: true,
+      result: { deviceId: claimed.deviceId, secret: claimed.secret, scopes: [...claimed.scopes] },
+      ...deviceId ? { deviceId } : {}
+    }));
+  }
+  async #handleDeviceHello(parsed, deviceId) {
+    const secret = String(parsed.payload?.secret ?? "");
+    if (!this.#authenticateDevice || !deviceId || !secret) {
+      this.#devices.delete(deviceId);
+      return this.#rejectDevice(deviceId, "authentication unavailable");
+    }
+    const device = await this.#authenticateDevice(deviceId, secret);
+    if (!device) {
+      this.#devices.delete(deviceId);
+      return this.#rejectDevice(deviceId, "unknown device credentials");
+    }
+    this.#devices.set(deviceId, { scopes: device.scopes, ...device.name ? { name: device.name } : {} });
+    this.#sendRaw(encodeFrame({ version: PROTOCOL_VERSION2, seq: ++this.#seq, hostId: this.#hostId, ts: Date.now(), type: "client.accept", payload: {}, deviceId }));
+    this.#sendRaw(encodeFrame({
+      version: PROTOCOL_VERSION2,
+      replyTo: "device-hello",
+      ok: true,
+      result: { deviceId, name: device.name ?? "", scopes: [...device.scopes] },
+      deviceId
+    }));
+  }
+  #rejectDevice(deviceId, message2) {
+    if (deviceId) {
+      this.#sendRaw(encodeFrame({ version: PROTOCOL_VERSION2, seq: ++this.#seq, hostId: this.#hostId, ts: Date.now(), type: "client.reject", payload: {}, deviceId }));
+    }
+    this.#sendRaw(encodeFrame({ version: PROTOCOL_VERSION2, replyTo: "device-hello", ok: false, error: message2, ...deviceId ? { deviceId } : {} }));
+  }
+  #remember(id) {
+    this.#seenCommandIds.set(id, true);
+    if (this.#seenCommandIds.size > DEDUPE_CAPACITY) {
+      const oldest = this.#seenCommandIds.keys().next().value;
+      if (oldest !== void 0) this.#seenCommandIds.delete(oldest);
+    }
+  }
+  #resultError(replyTo, message2, deviceId) {
+    this.#sendRaw(encodeFrame({
+      version: PROTOCOL_VERSION2,
+      replyTo,
+      ok: false,
+      error: message2,
+      ...deviceId ? { deviceId } : {}
+    }));
+  }
+  #replyError(_replyTo, message2) {
+    this.#publish("bridge.error", { message: message2 }, void 0);
+  }
+};
+function sessionIdOf(event) {
+  const id = event.sessionID;
+  return typeof id === "string" ? id : void 0;
+}
+
+// src/remote/connection.ts
+import { randomBytes as randomBytes5 } from "node:crypto";
+var RECONNECT_BASE_MS = 1e3;
+var RECONNECT_MAX_MS = 3e4;
+var HEARTBEAT_MS = 2e4;
+var OFFLINE_BUFFER_LIMIT = 256;
+var WebSocketTransport = class {
+  #socket;
+  #heartbeat;
+  #reconnectTimer;
+  #closed = false;
+  #connected = false;
+  #url;
+  #messageListeners = /* @__PURE__ */ new Set();
+  #statusListeners = /* @__PURE__ */ new Set();
+  #buffered = [];
+  constructor(url) {
+    this.#url = url;
+  }
+  get connected() {
+    return this.#connected;
+  }
+  onMessage(listener) {
+    this.#messageListeners.add(listener);
+  }
+  onStatusChange(listener) {
+    this.#statusListeners.add(listener);
+  }
+  start() {
+    this.#dial();
+  }
+  send(data) {
+    if (this.#socket && this.#connected && this.#socket.readyState === WebSocket.OPEN) {
+      this.#socket.send(data);
+      return;
+    }
+    this.#buffered.push(data);
+    if (this.#buffered.length > OFFLINE_BUFFER_LIMIT) this.#buffered.shift();
+  }
+  close() {
+    this.#closed = true;
+    if (this.#heartbeat) clearInterval(this.#heartbeat);
+    if (this.#reconnectTimer) clearTimeout(this.#reconnectTimer);
+    try {
+      this.#socket?.close();
+    } catch {
+    }
+  }
+  #setStatus(connected) {
+    if (this.#connected === connected) return;
+    this.#connected = connected;
+    for (const listener of this.#statusListeners) listener(connected);
+  }
+  #flushBuffer() {
+    const frames = this.#buffered.splice(0);
+    for (const frame of frames) {
+      if (this.#socket && this.#socket.readyState === WebSocket.OPEN) this.#socket.send(frame);
+    }
+  }
+  #dial(attempt = 0) {
+    if (this.#closed) return;
+    let socket;
+    try {
+      socket = new WebSocket(this.#url);
+    } catch {
+      this.#scheduleReconnect(attempt);
+      return;
+    }
+    socket.addEventListener("open", () => {
+      this.#socket = socket;
+      this.#setStatus(true);
+      this.#heartbeat = setInterval(() => {
+        try {
+          if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ v: 1, type: "ping" }));
+        } catch {
+        }
+      }, HEARTBEAT_MS);
+      this.#flushBuffer();
+    });
+    socket.addEventListener("message", (event) => {
+      const data = typeof event.data === "string" ? event.data : "";
+      for (const listener of this.#messageListeners) listener(data);
+    });
+    socket.addEventListener("close", () => {
+      if (this.#heartbeat) clearInterval(this.#heartbeat);
+      this.#setStatus(false);
+      this.#scheduleReconnect(attempt + 1);
+    });
+    socket.addEventListener("error", () => {
+      try {
+        socket.close();
+      } catch {
+      }
+    });
+  }
+  #scheduleReconnect(attempt) {
+    if (this.#closed) return;
+    const backoff = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** Math.min(attempt, 5));
+    const jitter = randomBytes5(2).readUInt16BE(0) / 65535;
+    this.#reconnectTimer = setTimeout(() => this.#dial(attempt + 1), backoff * (0.7 + 0.3 * jitter));
+  }
+};
+
+// src/remote/pairing.ts
+import { createHash, randomBytes as randomBytes6, timingSafeEqual } from "node:crypto";
+import { join as join8 } from "node:path";
+import { mkdir as mkdir8, readFile as readFile7, rm as rm2, writeFile as writeFile7 } from "node:fs/promises";
+function relayWebSocketUrl(relayUrl) {
+  const url = new URL(relayUrl);
+  if (url.protocol === "http:") url.protocol = "ws:";
+  else if (url.protocol === "https:") url.protocol = "wss:";
+  if (url.protocol !== "ws:" && url.protocol !== "wss:") {
+    throw new Error("relay URL must use http(s) or ws(s)");
+  }
+  url.pathname = "/ws";
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+var INVITE_TTL_MS = 2 * 6e4;
+function sha256(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
+async function createPairingInvite(remoteDir, options = {}) {
+  const invite = {
+    code: randomBytes6(6).toString("base64url").toUpperCase(),
+    createdAt: Date.now(),
+    expiresAt: Date.now() + (options.ttlMs ?? INVITE_TTL_MS),
+    role: options.role ?? "trusted"
+  };
+  await mkdir8(join8(remoteDir, "pending"), { recursive: true, mode: 448 });
+  await sweepExpiredInvites(remoteDir);
+  await writeFile7(
+    join8(remoteDir, "pending", `${invite.code}.json`),
+    JSON.stringify(invite),
+    { encoding: "utf8", mode: 384 }
+  );
+  let url;
+  if (options.relayUrl) {
+    const params = new URLSearchParams({ code: invite.code });
+    if (options.hostId) params.set("host", options.hostId);
+    const page = new URL(options.relayUrl);
+    if (page.protocol === "wss:") page.protocol = "https:";
+    else if (page.protocol === "ws:") page.protocol = "http:";
+    if (page.protocol !== "http:" && page.protocol !== "https:") {
+      throw new Error("relay URL must use http(s) or ws(s)");
+    }
+    page.pathname = "/app";
+    page.search = params.toString();
+    page.hash = "";
+    url = page.toString();
+  }
+  return { ...invite, url };
+}
+async function sweepExpiredInvites(remoteDir) {
+  try {
+    const { readdir } = await import("node:fs/promises");
+    const pendingDir = join8(remoteDir, "pending");
+    const files = (await readdir(pendingDir)).filter((file) => file.endsWith(".json"));
+    await Promise.all(files.map(async (file) => {
+      try {
+        const parsed = JSON.parse(await readFile7(join8(pendingDir, file), "utf8"));
+        if (typeof parsed.expiresAt !== "number" || parsed.expiresAt < Date.now()) {
+          await rm2(join8(pendingDir, file), { force: true });
+        }
+      } catch {
+        await rm2(join8(pendingDir, file), { force: true });
+      }
+    }));
+  } catch {
+  }
+}
+async function readInviteFile(path) {
+  try {
+    const parsed = JSON.parse(await readFile7(path, "utf8"));
+    if (typeof parsed.code !== "string" || typeof parsed.expiresAt !== "number") return void 0;
+    return parsed;
+  } catch {
+    return void 0;
+  }
+}
+async function claimPairingInvite(remoteDir, code, deviceName) {
+  if (!/^[A-Za-z0-9_-]+$/.test(code)) return void 0;
+  const { rename: rename6 } = await import("node:fs/promises");
+  const invitePath = join8(remoteDir, "pending", `${code}.json`);
+  const claimedPath = `${invitePath}.${randomBytes6(6).toString("hex")}.claiming`;
+  try {
+    await rename6(invitePath, claimedPath);
+  } catch {
+    return void 0;
+  }
+  try {
+    const invite = await readInviteFile(claimedPath);
+    if (!invite || invite.code !== code || invite.expiresAt < Date.now()) return void 0;
+    const deviceId = `dev_${randomBytes6(8).toString("hex")}`;
+    const secret = randomBytes6(32).toString("base64url");
+    const device = {
+      deviceId,
+      name: deviceName.slice(0, 64) || "unnamed device",
+      secretHash: sha256(secret),
+      scopes: invite.role === "viewer" ? VIEWER_DEVICE_SCOPES : DEFAULT_DEVICE_SCOPES,
+      createdAt: Date.now()
+    };
+    await mkdir8(join8(remoteDir, "devices"), { recursive: true, mode: 448 });
+    await writeFile7(
+      join8(remoteDir, "devices", `${deviceId}.json`),
+      JSON.stringify(device),
+      { encoding: "utf8", mode: 384 }
+    );
+    return { deviceId, secret, scopes: device.scopes, name: device.name };
+  } finally {
+    await rm2(claimedPath, { force: true }).catch(() => void 0);
+  }
+}
+async function listPairedDevices(remoteDir) {
+  try {
+    const { readdir } = await import("node:fs/promises");
+    const files = await readdir(join8(remoteDir, "devices"));
+    const devices = await Promise.all(
+      files.filter((file) => file.endsWith(".json")).map(async (file) => {
+        try {
+          const parsed = JSON.parse(await readFile7(join8(remoteDir, "devices", file), "utf8"));
+          return { deviceId: parsed.deviceId, name: parsed.name, scopes: parsed.scopes, createdAt: parsed.createdAt };
+        } catch {
+          return void 0;
+        }
+      })
+    );
+    return devices.filter((device) => Boolean(device));
+  } catch {
+    return [];
+  }
+}
+async function authenticateDevice(remoteDir, deviceId, secret) {
+  if (!/^[A-Za-z0-9_-]+$/.test(deviceId)) return void 0;
+  try {
+    const parsed = JSON.parse(await readFile7(join8(remoteDir, "devices", `${deviceId}.json`), "utf8"));
+    const provided = Buffer.from(sha256(secret));
+    const stored = Buffer.from(parsed.secretHash);
+    if (provided.length !== stored.length || !timingSafeEqual(provided, stored)) return void 0;
+    return { scopes: parsed.scopes, name: parsed.name };
+  } catch {
+    return void 0;
+  }
+}
+
+// src/remote/token.ts
+import { createHash as createHash2, createHmac, timingSafeEqual as timingSafeEqual2 } from "node:crypto";
+var BACKEND_SCOPE_MAP = {
+  "sessions:read": "session.read",
+  "sessions:write": "session.write",
+  "permissions:reply": "permission.write",
+  "questions:reply": "question.write"
+};
+function verifyRemoteToken(token, secret, expectedHostId, expectedDeviceId) {
+  const parts = token.split(".");
+  if (parts.length !== 3 || !secret) return void 0;
+  const [encodedHeader, encodedPayload, encodedSignature] = parts;
+  if (!encodedHeader || !encodedPayload || !encodedSignature) return void 0;
+  try {
+    const header = JSON.parse(Buffer.from(encodedHeader, "base64url").toString("utf8"));
+    if (header.alg !== "HS256" || header.typ !== "JWT") return void 0;
+    const key = createHash2("sha256").update(`cuppet-remote-v1:${secret}`).digest();
+    const expected = createHmac("sha256", key).update(`${encodedHeader}.${encodedPayload}`).digest();
+    const provided = Buffer.from(encodedSignature, "base64url");
+    if (provided.length !== expected.length || !timingSafeEqual2(provided, expected)) return void 0;
+    const payload = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
+    const now = Math.floor(Date.now() / 1e3);
+    if (payload.iss !== "cuppet-backend" || payload.aud !== "cuppet-relay" || typeof payload.sub !== "string" || payload.sub.length === 0 || payload.host !== expectedHostId || payload.device !== expectedDeviceId || typeof payload.exp !== "number" || payload.exp <= now || typeof payload.iat === "number" && payload.iat > now + 60) return void 0;
+    const scopes = Array.isArray(payload.scopes) ? payload.scopes.map((scope) => typeof scope === "string" ? BACKEND_SCOPE_MAP[scope] : void 0).filter((scope) => scope !== void 0) : [];
+    return scopes.length > 0 ? { scopes: [...new Set(scopes)] } : void 0;
+  } catch {
+    return void 0;
+  }
+}
+
+// src/remote/bootstrap.ts
+async function startRemoteControl(options) {
+  const write = options.write ?? ((line) => process.stdout.write(line));
+  const identity = await ensureHostIdentity(options.remoteDir);
+  write(`Remote control
+  host: ${identity.hostId} (${identity.deviceName})
+`);
+  for (const device of await listPairedDevices(options.remoteDir)) {
+    write(`  paired: ${device.name} [${device.deviceId}] ${device.scopes.join(",")}
+`);
+  }
+  let bridge;
+  if (options.relayUrl) {
+    const params = new URLSearchParams({
+      role: "host",
+      hostId: identity.hostId,
+      secret: options.hostSecret ?? ""
+    });
+    const transport = new WebSocketTransport(`${relayWebSocketUrl(options.relayUrl)}?${params}`);
+    bridge = new RemoteBridge({
+      controller: options.controller,
+      hostId: identity.hostId,
+      transport,
+      authenticateDevice: async (deviceId, secret) => {
+        const local = await authenticateDevice(options.remoteDir, deviceId, secret);
+        if (local) return local;
+        if (!options.remoteTokenSecret) return void 0;
+        return verifyRemoteToken(secret, options.remoteTokenSecret, identity.hostId, deviceId);
+      },
+      claimPairingInvite: (code, deviceName) => claimPairingInvite(options.remoteDir, code, deviceName),
+      buildAttachSnapshot: async () => ({
+        snapshot: options.controller.snapshot,
+        permissions: await options.controller.listPendingPermissions().catch(() => []),
+        questions: await options.controller.listPendingQuestions().catch(() => [])
+      })
+    });
+    bridge.start();
+    write(`  relay: dialing ${options.relayUrl}
+`);
+  } else {
+    write("  set CUPPET_RELAY_URL or pass --relay-url <wss://\u2026> to connect the bridge\n");
+  }
+  let invite;
+  if (options.createInvite ?? true) {
+    invite = await createPairingInvite(options.remoteDir, {
+      ...options.relayUrl ? { relayUrl: options.relayUrl } : {},
+      hostId: identity.hostId
+    });
+    write(`  pair a device \u2014 code ${invite.code} expires ${new Date(invite.expiresAt).toISOString()}
+`);
+    if (invite.url) {
+      write(`  ${invite.url}
+`);
+      const qr = await renderTerminalQr(invite.url);
+      if (qr) write(`${qr}
+`);
+    }
+  }
+  return {
+    identity,
+    invite,
+    bridge,
+    stop() {
+      bridge?.stop();
+    }
+  };
+}
+async function renderTerminalQr(text) {
+  try {
+    const qrcode = await import("qrcode");
+    return await qrcode.toString(text, { type: "terminal", small: true });
+  } catch {
+    return "";
+  }
+}
+
+// src/remote/enroll.ts
+import { hostname as hostname2 } from "node:os";
+import { homedir as homedir3 } from "node:os";
+import { join as join9 } from "node:path";
+async function runEnroll(options, write = (line) => process.stdout.write(line)) {
+  if (!options.token) {
+    throw new Error("A Cuppet session token is required for enrollment (use the --token flag or set CUPPET_TOKEN)");
+  }
+  if (!/^https?:\/\//.test(options.apiBase)) {
+    throw new Error(`--api-base must be an http(s) URL, got ${options.apiBase}`);
+  }
+  const identity = await ensureHostIdentity(join9(homedir3(), ".cuppet", "v2", "remote"));
+  const displayName = options.name?.trim() || identity.deviceName || hostname2();
+  const response = await fetch(`${options.apiBase.replace(/\/$/, "")}/remote/hosts`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${options.token}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      hostId: identity.hostId,
+      displayName,
+      platform: process.platform
+    })
+  });
+  if (response.status === 409) {
+    throw new Error("This machine is already registered to a different Cuppet account.");
+  }
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`Enrollment failed (${response.status}): ${body.slice(0, 300) || response.statusText}`);
+  }
+  write(`Enrolled ${displayName} [${identity.hostId}] with ${options.apiBase}
+`);
+  write("Start coding remotely with:\n");
+  write("  cuppet remote-control --relay-url <wss://\u2026>\n");
+}
+
+// src/remote/relay.ts
+import { createHash as createHash3, randomBytes as randomBytes7, timingSafeEqual as timingSafeEqual3 } from "node:crypto";
+import { createServer as createServer2 } from "node:http";
+import { readFile as readFile8 } from "node:fs/promises";
+import { dirname as dirname5, extname, join as join10, normalize } from "node:path";
+var MAX_FRAME_BYTES2 = 512 * 1024;
+var REPLAY_LIMIT = 200;
+var RATE_WINDOW_MS = 1e4;
+var RATE_LIMIT = 240;
+function sha2562(value) {
+  return createHash3("sha256").update(value).digest("hex");
+}
+var CuppetRelay = class {
+  #http;
+  #rooms = /* @__PURE__ */ new Map();
+  #options;
+  constructor(options = {}) {
+    this.#options = options;
+    this.#http = createServer2((request, response) => void this.#handleHttp(request, response));
+    this.#http.on("upgrade", (request, socket) => this.#handleUpgrade(request, socket));
+  }
+  get port() {
+    const address = this.#http.address();
+    return typeof address === "object" && address ? address.port : this.#options.port ?? 0;
+  }
+  async listen(port, bind) {
+    return new Promise((resolvePromise, rejectPromise) => {
+      this.#http.once("error", rejectPromise);
+      this.#http.listen(port, bind ?? this.#options.bind ?? "0.0.0.0", () => resolvePromise());
+    });
+  }
+  close() {
+    this.#http.close();
+    for (const room of this.#rooms.values()) {
+      room.host?.destroy();
+      for (const device of room.devices.values()) device.socket.destroy();
+    }
+    this.#rooms.clear();
+  }
+  async #loadAuthorizedHosts() {
+    if (!this.#options.authFile) return void 0;
+    try {
+      const parsed = JSON.parse(await readFile8(this.#options.authFile, "utf8"));
+      return parsed.hosts ?? {};
+    } catch {
+      return {};
+    }
+  }
+  async #handleHttp(request, response) {
+    const url = new URL(request.url ?? "/", "http://localhost");
+    if (url.pathname === "/healthz") {
+      response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ ok: true }));
+      return;
+    }
+    const isHostManagement = request.method === "POST" && url.pathname === "/hosts" || request.method === "DELETE" && url.pathname.startsWith("/hosts/");
+    if (isHostManagement) {
+      if (!this.#authorizeAdmin(request)) {
+        response.writeHead(401, { "content-type": "text/plain" }).end("unauthorized\n");
+        return;
+      }
+      if (request.method === "POST") {
+        let body = "";
+        request.on("data", (chunk) => {
+          body += chunk;
+          if (body.length > 16384) request.destroy();
+        });
+        request.on("end", () => {
+          void this.#upsertHost(body).then((ok) => {
+            response.writeHead(ok ? 200 : 400).end(ok ? "ok\n" : "bad request\n");
+          });
+        });
+        return;
+      }
+      const hostId = decodeURIComponent(url.pathname.slice("/hosts/".length));
+      response.writeHead(200).end(`${await this.#removeHost(hostId) ? "removed" : "unknown"}
+`);
+      return;
+    }
+    if (!this.#options.appDirectory || !url.pathname.startsWith("/app")) {
+      response.writeHead(404, { "content-type": "text/plain" }).end("cuppet relay\n");
+      return;
+    }
+    const relative = url.pathname === "/app" ? "/index.html" : url.pathname.slice("/app".length);
+    const safe = normalize(relative).replace(/^([.][.][/\\])+/, "");
+    try {
+      const body = await readFile8(join10(this.#options.appDirectory, safe));
+      const types = {
+        ".html": "text/html",
+        ".js": "text/javascript",
+        ".css": "text/css",
+        ".webmanifest": "application/manifest+json",
+        ".svg": "image/svg+xml",
+        ".png": "image/png"
+      };
+      response.writeHead(200, { "content-type": types[extname(safe)] ?? "application/octet-stream" }).end(body);
+    } catch {
+      response.writeHead(404).end("not found");
+    }
+  }
+  #authorizeAdmin(request) {
+    if (!this.#options.adminToken) return false;
+    const header = request.headers.authorization ?? "";
+    const provided = Buffer.from(header.replace(/^Bearer\s+/i, ""));
+    const expected = Buffer.from(this.#options.adminToken);
+    return provided.length === expected.length && timingSafeEqual3(provided, expected);
+  }
+  async #upsertHost(body) {
+    if (!this.#options.authFile) return false;
+    try {
+      const parsed = JSON.parse(body);
+      if (typeof parsed.hostId !== "string" || !/^[\w.-]{1,128}$/.test(parsed.hostId)) return false;
+      if (typeof parsed.secret !== "string" || parsed.secret.length < 16) return false;
+      const current = await this.#loadAuthorizedHosts() ?? {};
+      current[parsed.hostId] = sha2562(parsed.secret);
+      const { mkdir: mkdir11, writeFile: writeFile9 } = await import("node:fs/promises");
+      await mkdir11(dirname5(this.#options.authFile), { recursive: true, mode: 448 });
+      await writeFile9(this.#options.authFile, `${JSON.stringify({ hosts: current }, null, 2)}
+`, { mode: 384 });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  async #removeHost(hostId) {
+    if (!this.#options.authFile || !/^[\w.-]{1,128}$/.test(hostId)) return false;
+    const current = await this.#loadAuthorizedHosts() ?? {};
+    if (!(hostId in current)) return false;
+    delete current[hostId];
+    const { writeFile: writeFile9 } = await import("node:fs/promises");
+    await writeFile9(this.#options.authFile, `${JSON.stringify({ hosts: current }, null, 2)}
+`, { mode: 384 });
+    return true;
+  }
+  async #handleUpgrade(request, rawSocket) {
+    const socket = rawSocket;
+    const url = new URL(request.url ?? "/", "http://localhost");
+    if (url.pathname !== "/ws") {
+      socket.destroy();
+      return;
+    }
+    const origins = this.#options.allowedOrigins ?? [];
+    if (origins.length > 0) {
+      const origin = request.headers.origin;
+      if (origin && !origins.includes(origin)) {
+        socket.destroy();
+        return;
+      }
+    }
+    const key = request.headers["sec-websocket-key"];
+    if (!key) {
+      socket.destroy();
+      return;
+    }
+    const acceptKey = createHash3("sha1").update(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").digest("base64");
+    socket.write(
+      `HTTP/1.1 101 Switching Protocols\r
+Upgrade: websocket\r
+Connection: Upgrade\r
+Sec-WebSocket-Accept: ${acceptKey}\r
+\r
+`
+    );
+    socket.setNoDelay(true);
+    let windowStart = Date.now();
+    let messageCount = 0;
+    const overBudget = () => {
+      const now = Date.now();
+      if (now - windowStart >= RATE_WINDOW_MS) {
+        windowStart = now;
+        messageCount = 0;
+      }
+      messageCount += 1;
+      return messageCount > RATE_LIMIT;
+    };
+    const role = url.searchParams.get("role");
+    const hostId = url.searchParams.get("hostId") ?? "";
+    let deviceId;
+    let room;
+    let selfRegistration;
+    if (role === "host") {
+      const secret = url.searchParams.get("secret") ?? "";
+      const expected = await this.#loadAuthorizedHosts();
+      if (expected && Object.keys(expected).length > 0) {
+        const stored = expected[hostId];
+        const provided = Buffer.from(sha2562(secret));
+        const storedBuffer = Buffer.from(stored ?? "");
+        if (!stored || provided.length !== storedBuffer.length || !timingSafeEqual3(provided, storedBuffer)) {
+          closeSocket(socket, 4002, "host unauthorized");
+          return;
+        }
+      }
+      room = this.#room(hostId);
+      selfRegistration = this.#wrap(socket);
+      room.host?.destroy();
+      for (const device of room.devices.values()) device.socket.destroy();
+      room.devices.clear();
+      room.replay.length = 0;
+      room.host = selfRegistration;
+    } else if (role === "device") {
+      room = this.#room(hostId);
+      deviceId = url.searchParams.get("deviceId") ?? "";
+      const maxDevices = this.#options.maxDevicesPerRoom ?? 8;
+      if (!deviceId || deviceId.length > 128 || !room.devices.has(deviceId) && room.devices.size >= maxDevices) {
+        closeSocket(socket, 4003, "invalid device");
+        return;
+      }
+      if (!room.host) {
+        closeSocket(socket, 4001, "host offline");
+        return;
+      }
+      const registration = {
+        socket: this.#wrap(socket),
+        authenticated: false
+      };
+      const previous = room.devices.get(deviceId);
+      previous?.socket.destroy();
+      room.devices.set(deviceId, registration);
+      selfRegistration = registration;
+      const secret = url.searchParams.get("secret");
+      if (secret !== null) {
+        room.host.send(JSON.stringify({
+          version: 1,
+          seq: 0,
+          hostId,
+          ts: Date.now(),
+          type: "device.hello",
+          deviceId,
+          payload: { deviceId, secret }
+        }));
+      }
+    } else {
+      socket.destroy();
+      return;
+    }
+    let buffered = Buffer.alloc(0);
+    socket.on("data", (chunk) => {
+      buffered = Buffer.concat([buffered, chunk]);
+      for (; ; ) {
+        let decoded;
+        try {
+          decoded = decodeFrame(buffered);
+        } catch {
+          socket.destroy();
+          return;
+        }
+        if (!decoded) break;
+        buffered = buffered.subarray(decoded.consumed);
+        if (decoded.opcode === 8) {
+          socket.destroy();
+          return;
+        }
+        if (decoded.opcode === 9) {
+          writeFrame(socket, 10, decoded.payload);
+          continue;
+        }
+        if (decoded.opcode !== 1) continue;
+        if (overBudget()) {
+          socket.destroy();
+          return;
+        }
+        let parsed;
+        try {
+          parsed = JSON.parse(decoded.payload.toString("utf8"));
+        } catch {
+          continue;
+        }
+        this.#dispatch(role ?? "", hostId, deviceId ?? "", parsed, selfRegistration);
+      }
+    });
+    socket.on("error", () => socket.destroy());
+    socket.on("close", () => {
+      if (role === "host") {
+        if (room && room.host === selfRegistration) {
+          room.devices.forEach((device) => device.socket.destroy());
+          room.devices.clear();
+          room.host = void 0;
+        }
+        return;
+      }
+      if (room && deviceId && room.devices.get(deviceId) === selfRegistration) {
+        room.devices.delete(deviceId);
+      }
+    });
+  }
+  #dispatch(role, hostId, deviceId, message2, registration) {
+    const room = this.#rooms.get(hostId);
+    if (!room) return;
+    const type = String(message2.type ?? "");
+    if (role === "device") {
+      const host = room.host;
+      const device = room.devices.get(deviceId);
+      if (!host || !device || device !== registration) return;
+      if (type === "ping") return;
+      if (!device.authenticated && type !== "device.pair") return;
+      host.send(JSON.stringify({ ...message2, deviceId }));
+      return;
+    }
+    if (room.host !== registration) return;
+    if (type === "client.accept" || type === "client.reject") {
+      const target = String(message2.deviceId ?? "");
+      const device = room.devices.get(target);
+      if (!device) return;
+      if (type === "client.reject") {
+        device.authenticated = false;
+        device.socket.send(JSON.stringify(message2));
+        device.socket.destroy();
+        room.devices.delete(target);
+        return;
+      }
+      device.authenticated = true;
+      device.socket.send(JSON.stringify(message2));
+      for (const frame of room.replay) device.socket.send(JSON.stringify(frame));
+      return;
+    }
+    if (type.startsWith("command.result") || message2.replyTo !== void 0) {
+      const target = String(message2.deviceId ?? "");
+      if (target) {
+        const device = room.devices.get(target);
+        if (device) {
+          device.socket.send(JSON.stringify(message2));
+        }
+      }
+      return;
+    }
+    if (type === "device.paired") {
+      const target = String(message2.deviceId ?? "");
+      const device = room.devices.get(target);
+      if (device) device.socket.send(JSON.stringify(message2));
+      return;
+    }
+    for (const device of [...room.devices.values()]) {
+      if (device.authenticated) device.socket.send(JSON.stringify(message2));
+    }
+    if (isReplayableEvent(type) && typeof message2.seq === "number") {
+      room.replay.push(message2);
+      if (room.replay.length > REPLAY_LIMIT) room.replay.shift();
+    }
+  }
+  #room(hostId) {
+    let room = this.#rooms.get(hostId);
+    if (!room) {
+      room = { devices: /* @__PURE__ */ new Map(), replay: [] };
+      this.#rooms.set(hostId, room);
+    }
+    return room;
+  }
+  #wrap(socket) {
+    const wrapped = {
+      readyState: 1,
+      send(data) {
+        writeFrame(socket, 1, Buffer.from(data, "utf8"));
+      },
+      destroy() {
+        socket.destroy();
+      }
+    };
+    return wrapped;
+  }
+};
+function isReplayableEvent(type) {
+  return type !== "client.accept" && type !== "client.reject" && type !== "device.paired";
+}
+function writeFrame(socket, opcode, payload) {
+  const length = payload.length;
+  let header;
+  if (length < 126) {
+    header = Buffer.from([128 | opcode, length]);
+  } else if (length < 65536) {
+    header = Buffer.alloc(4);
+    header[0] = 128 | opcode;
+    header[1] = 126;
+    header.writeUInt16BE(length, 2);
+  } else {
+    header = Buffer.alloc(10);
+    header[0] = 128 | opcode;
+    header[1] = 127;
+    header.writeBigUInt64BE(BigInt(length), 2);
+  }
+  socket.write(Buffer.concat([header, payload]));
+}
+function closeSocket(socket, code, reason) {
+  const reasonBytes = Buffer.from(reason.slice(0, 100), "utf8");
+  const payload = Buffer.alloc(2 + reasonBytes.length);
+  payload.writeUInt16BE(code, 0);
+  reasonBytes.copy(payload, 2);
+  try {
+    writeFrame(socket, 8, payload);
+  } catch {
+  }
+  socket.destroy();
+}
+function decodeFrame(buffer) {
+  if (buffer.length < 2) return void 0;
+  const first = buffer[0];
+  const second = buffer[1];
+  if (first === void 0 || second === void 0) return void 0;
+  const opcode = first & 15;
+  const masked = (second & 128) !== 0;
+  let length = second & 127;
+  let offset = 2;
+  if (length === 126) {
+    if (buffer.length < 4) return void 0;
+    length = buffer.readUInt16BE(2);
+    offset = 4;
+  } else if (length === 127) {
+    if (buffer.length < 10) return void 0;
+    const big = buffer.readBigUInt64BE(2);
+    if (big > BigInt(MAX_FRAME_BYTES2)) throw new Error("frame too large");
+    length = Number(big);
+    offset = 10;
+  }
+  const maskLength = masked ? 4 : 0;
+  if (buffer.length < offset + maskLength + length) return void 0;
+  let payload = buffer.subarray(offset + maskLength, offset + maskLength + length);
+  if (masked) {
+    const mask = buffer.subarray(offset, offset + maskLength);
+    const unmasked = Buffer.alloc(length);
+    for (let index = 0; index < length; index += 1) {
+      const payloadByte = payload[index];
+      const maskByte = mask[index % 4];
+      if (payloadByte === void 0 || maskByte === void 0) break;
+      unmasked[index] = payloadByte ^ maskByte;
+    }
+    payload = unmasked;
+  }
+  return { opcode, payload, consumed: offset + maskLength + length };
+}
+function generateSecret() {
+  return randomBytes7(32).toString("base64url");
+}
+
+// src/remote/relay-main.ts
+import { mkdir as mkdir9, readFile as readFile9, writeFile as writeFile8 } from "node:fs/promises";
+import { dirname as dirname6, join as join11, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+var DEFAULT_RELAY_PORT = 8787;
+async function defaultAppDir() {
+  const moduleDir = dirname6(fileURLToPath(import.meta.url));
+  const candidates = [join11(moduleDir, "app"), join11(moduleDir, "../src/remote/app"), join11(moduleDir, "../relay-app")];
+  for (const candidate of candidates) {
+    try {
+      await readFile9(join11(candidate, "index.html"));
+      return candidate;
+    } catch {
+    }
+  }
+  return void 0;
+}
+async function runRelayServer(options, write = (line) => process.stdout.write(line)) {
+  const authFile = options.authFile;
+  if (authFile && !await fileExists(authFile)) {
+    await mkdir9(resolve(authFile, ".."), { recursive: true, mode: 448 });
+    await writeFile8(authFile, `${JSON.stringify({ hosts: {} }, null, 2)}
+`, { encoding: "utf8", mode: 384 });
+    write(`relay auth: created ${authFile}
+`);
+  }
+  const token = options.adminToken ?? generateSecret();
+  const appDir = options.appDir ? resolve(options.appDir) : await defaultAppDir();
+  const relay = new CuppetRelay({
+    port: options.port,
+    ...authFile ? { authFile } : {},
+    ...appDir ? { appDirectory: appDir } : {},
+    adminToken: token,
+    ...options.origins.length > 0 ? { allowedOrigins: options.origins } : {}
+  });
+  await relay.listen(options.port);
+  write(`Cuppet relay listening on port ${relay.port}
+`);
+  write(`  health: http://0.0.0.0:${relay.port}/healthz
+`);
+  if (!authFile) {
+    write("  WARNING: no --auth-file set \u2014 host authentication is disabled (development mode).\n");
+  }
+  if (options.adminToken) {
+    write(`  manage hosts: POST/DELETE /hosts with Authorization: Bearer <admin-token>
+`);
+  } else {
+    write(`  admin token (for POST /hosts enrollment): ${token}
+`);
+    write("  pass --admin-token to pin it instead of generating one per start\n");
+  }
+  if (appDir) {
+    write(`  pwa: http://0.0.0.0:${relay.port}/app
+`);
+  }
+  await shutdownSignal();
+  relay.close();
+}
+async function fileExists(path) {
+  try {
+    await readFile9(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function shutdownSignal() {
+  return new Promise((resolvePromise) => {
+    let signaled = false;
+    const onSignal = () => {
+      if (signaled) process.exit(130);
+      signaled = true;
+      process.removeListener("SIGINT", onSignal);
+      process.removeListener("SIGTERM", onSignal);
+      resolvePromise();
+    };
+    process.once("SIGINT", onSignal);
+    process.once("SIGTERM", onSignal);
+  });
+}
+
+// src/runtime/assets.ts
+import { createHash as createHash4 } from "node:crypto";
+import { constants as constants3, createReadStream } from "node:fs";
+import { access as access4, readFile as readFile10 } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { delimiter, dirname as dirname7, join as join12, resolve as resolve2 } from "node:path";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
 var packageNames = {
   "darwin-arm64": "@cuppet/runtime-darwin-arm64",
   "darwin-x64": "@cuppet/runtime-darwin-x64",
@@ -3287,10 +5057,10 @@ async function resolveRuntimeAssets() {
     const assets = {
       source: "development",
       diagnostics,
-      ...opencodeOverride ? { opencode: resolve(opencodeOverride) } : {},
-      ...tstOverride ? { tst: resolve(tstOverride) } : {},
-      ...pluginOverride ? { plugin: resolve(pluginOverride) } : {},
-      ...tuiPluginOverride ? { tuiPlugin: resolve(tuiPluginOverride) } : {}
+      ...opencodeOverride ? { opencode: resolve2(opencodeOverride) } : {},
+      ...tstOverride ? { tst: resolve2(tstOverride) } : {},
+      ...pluginOverride ? { plugin: resolve2(pluginOverride) } : {},
+      ...tuiPluginOverride ? { tuiPlugin: resolve2(tuiPluginOverride) } : {}
     };
     await fillDevelopmentDefaults(assets);
     await checkPresence(assets);
@@ -3304,15 +5074,15 @@ async function resolveRuntimeAssets() {
   try {
     const require2 = createRequire(import.meta.url);
     const manifestPath = require2.resolve(`${packageName}/manifest.json`);
-    const root = dirname5(manifestPath);
-    const manifest = JSON.parse(await readFile5(manifestPath, "utf8"));
+    const root = dirname7(manifestPath);
+    const manifest = JSON.parse(await readFile10(manifestPath, "utf8"));
     validateManifest(manifest);
     const assets = {
       source: "package",
-      opencode: join5(root, "bin", "opencode"),
-      tst: join5(root, "bin", "tst-daemon"),
-      plugin: join5(root, "plugin", "index.js"),
-      tuiPlugin: join5(root, "plugin", "tui.js"),
+      opencode: join12(root, "bin", "opencode"),
+      tst: join12(root, "bin", "tst-daemon"),
+      plugin: join12(root, "plugin", "index.js"),
+      tuiPlugin: join12(root, "plugin", "tui.js"),
       manifest,
       diagnostics
     };
@@ -3330,19 +5100,19 @@ async function resolveRuntimeAssets() {
   }
 }
 async function fillDevelopmentDefaults(assets) {
-  const moduleDirectory = dirname5(fileURLToPath(import.meta.url));
+  const moduleDirectory = dirname7(fileURLToPath2(import.meta.url));
   const repositoryRoot = await findRepositoryRoot(moduleDirectory);
   const key = `${process.platform}-${process.arch}`;
   const packageName = packageNames[key];
   const runtimeDirectory = runtimeDirectories[key];
-  const localRuntimeCandidate = repositoryRoot && runtimeDirectory ? resolve(repositoryRoot, "artifacts", runtimeDirectory) : void 0;
+  const localRuntimeCandidate = repositoryRoot && runtimeDirectory ? resolve2(repositoryRoot, "artifacts", runtimeDirectory) : void 0;
   const localRuntime = localRuntimeCandidate && await verifyLocalRuntime(localRuntimeCandidate, assets.diagnostics) ? localRuntimeCandidate : void 0;
   let globalPackageRoot;
   if (packageName) {
     try {
       const require2 = createRequire(import.meta.url);
       const manifestPath = require2.resolve(`${packageName}/manifest.json`);
-      globalPackageRoot = dirname5(manifestPath);
+      globalPackageRoot = dirname7(manifestPath);
     } catch {
     }
   }
@@ -3350,36 +5120,36 @@ async function fillDevelopmentDefaults(assets) {
   const pathTst = await findInPath("tst-daemon");
   const candidates = {
     opencode: [
-      ...localRuntime ? [resolve(localRuntime, "bin/opencode")] : [],
-      ...repositoryRoot && runtimeDirectory ? [resolve(repositoryRoot, "packages", runtimeDirectory, "bin/opencode")] : [],
-      ...globalPackageRoot ? [resolve(globalPackageRoot, "bin/opencode")] : [],
+      ...localRuntime ? [resolve2(localRuntime, "bin/opencode")] : [],
+      ...repositoryRoot && runtimeDirectory ? [resolve2(repositoryRoot, "packages", runtimeDirectory, "bin/opencode")] : [],
+      ...globalPackageRoot ? [resolve2(globalPackageRoot, "bin/opencode")] : [],
       ...pathOpencode ? [pathOpencode] : []
     ],
     tst: [
-      resolve(process.cwd(), "target/release/tst-daemon"),
-      resolve(process.cwd(), "target/debug/tst-daemon"),
-      ...localRuntime ? [resolve(localRuntime, "bin/tst-daemon")] : [],
+      resolve2(process.cwd(), "target/release/tst-daemon"),
+      resolve2(process.cwd(), "target/debug/tst-daemon"),
+      ...localRuntime ? [resolve2(localRuntime, "bin/tst-daemon")] : [],
       ...repositoryRoot ? [
-        resolve(repositoryRoot, "target/release/tst-daemon"),
-        resolve(repositoryRoot, "target/debug/tst-daemon")
+        resolve2(repositoryRoot, "target/release/tst-daemon"),
+        resolve2(repositoryRoot, "target/debug/tst-daemon")
       ] : [],
-      ...repositoryRoot && runtimeDirectory ? [resolve(repositoryRoot, "packages", runtimeDirectory, "bin/tst-daemon")] : [],
-      ...globalPackageRoot ? [resolve(globalPackageRoot, "bin/tst-daemon")] : [],
+      ...repositoryRoot && runtimeDirectory ? [resolve2(repositoryRoot, "packages", runtimeDirectory, "bin/tst-daemon")] : [],
+      ...globalPackageRoot ? [resolve2(globalPackageRoot, "bin/tst-daemon")] : [],
       ...pathTst ? [pathTst] : []
     ],
     plugin: [
-      resolve(process.cwd(), "packages/opencode-plugin/dist/index.js"),
-      ...localRuntime ? [resolve(localRuntime, "plugin/index.js")] : [],
-      ...repositoryRoot ? [resolve(repositoryRoot, "packages/opencode-plugin/dist/index.js")] : [],
-      ...repositoryRoot && runtimeDirectory ? [resolve(repositoryRoot, "packages", runtimeDirectory, "plugin/index.js")] : [],
-      ...globalPackageRoot ? [resolve(globalPackageRoot, "plugin/index.js")] : []
+      resolve2(process.cwd(), "packages/opencode-plugin/dist/index.js"),
+      ...localRuntime ? [resolve2(localRuntime, "plugin/index.js")] : [],
+      ...repositoryRoot ? [resolve2(repositoryRoot, "packages/opencode-plugin/dist/index.js")] : [],
+      ...repositoryRoot && runtimeDirectory ? [resolve2(repositoryRoot, "packages", runtimeDirectory, "plugin/index.js")] : [],
+      ...globalPackageRoot ? [resolve2(globalPackageRoot, "plugin/index.js")] : []
     ],
     tuiPlugin: [
-      resolve(process.cwd(), "packages/opencode-plugin/dist/tui.js"),
-      ...localRuntime ? [resolve(localRuntime, "plugin/tui.js")] : [],
-      ...repositoryRoot ? [resolve(repositoryRoot, "packages/opencode-plugin/dist/tui.js")] : [],
-      ...repositoryRoot && runtimeDirectory ? [resolve(repositoryRoot, "packages", runtimeDirectory, "plugin/tui.js")] : [],
-      ...globalPackageRoot ? [resolve(globalPackageRoot, "plugin/tui.js")] : []
+      resolve2(process.cwd(), "packages/opencode-plugin/dist/tui.js"),
+      ...localRuntime ? [resolve2(localRuntime, "plugin/tui.js")] : [],
+      ...repositoryRoot ? [resolve2(repositoryRoot, "packages/opencode-plugin/dist/tui.js")] : [],
+      ...repositoryRoot && runtimeDirectory ? [resolve2(repositoryRoot, "packages", runtimeDirectory, "plugin/tui.js")] : [],
+      ...globalPackageRoot ? [resolve2(globalPackageRoot, "plugin/tui.js")] : []
     ]
   };
   if (!assets.opencode) assets.opencode = await firstExisting(candidates.opencode);
@@ -3393,7 +5163,7 @@ async function findInPath(binaryName) {
   const directories = pathEnv.split(delimiter);
   for (const directory of directories) {
     if (!directory) continue;
-    const candidate = join5(directory, binaryName);
+    const candidate = join12(directory, binaryName);
     try {
       await access4(candidate, constants3.X_OK);
       return candidate;
@@ -3409,17 +5179,17 @@ var runtimeDirectories = {
   "linux-x64": "runtime-linux-x64-gnu"
 };
 async function verifyLocalRuntime(root, diagnostics) {
-  const manifestPath = resolve(root, "manifest.json");
+  const manifestPath = resolve2(root, "manifest.json");
   try {
     await access4(manifestPath, constants3.R_OK);
   } catch {
     return false;
   }
   try {
-    const manifest = JSON.parse(await readFile5(manifestPath, "utf8"));
+    const manifest = JSON.parse(await readFile10(manifestPath, "utf8"));
     validateManifest(manifest);
     await verifyChecksums(root, manifest);
-    await readDerivativeMarker(resolve(root, "bin/opencode"));
+    await readDerivativeMarker(resolve2(root, "bin/opencode"));
     return true;
   } catch (error) {
     diagnostics.push(`Local runtime artifact is invalid: ${error.message}`);
@@ -3430,11 +5200,11 @@ async function findRepositoryRoot(start) {
   let directory = start;
   for (let depth = 0; depth < 8; depth += 1) {
     try {
-      const metadata = JSON.parse(await readFile5(resolve(directory, "package.json"), "utf8"));
+      const metadata = JSON.parse(await readFile10(resolve2(directory, "package.json"), "utf8"));
       if (metadata.name === "cuppet-monorepo") return directory;
     } catch {
     }
-    const parent = dirname5(directory);
+    const parent = dirname7(directory);
     if (parent === directory) break;
     directory = parent;
   }
@@ -3493,12 +5263,12 @@ async function verifyChecksums(root, manifest) {
   for (const relative of required) {
     const expected = manifest.files[relative];
     if (!expected) throw new Error(`manifest has no checksum for ${relative}`);
-    const actual = await sha256(join5(root, relative));
+    const actual = await sha2563(join12(root, relative));
     if (actual !== expected) throw new Error(`checksum mismatch for ${relative}`);
   }
 }
-async function sha256(path) {
-  const hash = createHash("sha256");
+async function sha2563(path) {
+  const hash = createHash4("sha256");
   for await (const chunk of createReadStream(path)) hash.update(chunk);
   return hash.digest("hex");
 }
@@ -3514,31 +5284,31 @@ async function firstExisting(paths) {
 }
 
 // src/runtime/paths.ts
-import { createHash as createHash2, randomBytes as randomBytes4 } from "node:crypto";
-import { chmod as chmod5, mkdir as mkdir6, realpath } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join as join6 } from "node:path";
-async function createRuntimePaths(projectDirectory, baseDirectory = join6(homedir(), ".cuppet", "v2")) {
+import { createHash as createHash5, randomBytes as randomBytes8 } from "node:crypto";
+import { chmod as chmod6, mkdir as mkdir10, realpath } from "node:fs/promises";
+import { homedir as homedir4 } from "node:os";
+import { join as join13 } from "node:path";
+async function createRuntimePaths(projectDirectory, baseDirectory = join13(homedir4(), ".cuppet", "v2")) {
   const projectRealpath = await realpath(projectDirectory);
   const base = baseDirectory;
-  const projectID = createHash2("sha256").update(projectRealpath).digest("hex");
-  const launchID = `${process.pid}-${randomBytes4(8).toString("hex")}`;
-  const runtime = join6(base, "run", launchID);
+  const projectID = createHash5("sha256").update(projectRealpath).digest("hex");
+  const launchID = `${process.pid}-${randomBytes8(8).toString("hex")}`;
+  const runtime = join13(base, "run", launchID);
   const paths = {
     base,
     projectRealpath,
     projectID,
-    projectStore: join6(base, "projects", projectID),
-    globalStore: join6(base, "global"),
-    preferences: join6(base, "preferences.json"),
-    logs: join6(base, "logs"),
+    projectStore: join13(base, "projects", projectID),
+    globalStore: join13(base, "global"),
+    preferences: join13(base, "preferences.json"),
+    logs: join13(base, "logs"),
     runtime,
-    tstSocket: join6(runtime, "tst.sock"),
+    tstSocket: join13(runtime, "tst.sock"),
     opencode: {
-      config: join6(base, "opencode", "config"),
-      data: join6(base, "opencode", "data"),
-      cache: join6(base, "opencode", "cache"),
-      state: join6(base, "opencode", "state")
+      config: join13(base, "opencode", "config"),
+      data: join13(base, "opencode", "data"),
+      cache: join13(base, "opencode", "cache"),
+      state: join13(base, "opencode", "state")
     }
   };
   const privateDirectories = [
@@ -3552,19 +5322,19 @@ async function createRuntimePaths(projectDirectory, baseDirectory = join6(homedi
     paths.opencode.cache,
     paths.opencode.state
   ];
-  await Promise.all(privateDirectories.map((directory) => mkdir6(directory, { recursive: true, mode: 448 })));
-  await Promise.all(privateDirectories.map((directory) => chmod5(directory, 448)));
+  await Promise.all(privateDirectories.map((directory) => mkdir10(directory, { recursive: true, mode: 448 })));
+  await Promise.all(privateDirectories.map((directory) => chmod6(directory, 448)));
   return paths;
 }
 
 // src/tst/supervisor.ts
-import { randomBytes as randomBytes5 } from "node:crypto";
+import { randomBytes as randomBytes9 } from "node:crypto";
 import { spawn as spawn3 } from "node:child_process";
 
 // src/tst/client.ts
 import { EventEmitter as EventEmitter4 } from "node:events";
 import { createConnection } from "node:net";
-var MAX_FRAME_BYTES = 16 * 1024 * 1024;
+var MAX_FRAME_BYTES3 = 16 * 1024 * 1024;
 var TstClient = class _TstClient extends EventEmitter4 {
   #socket;
   #nextID = 1;
@@ -3579,9 +5349,9 @@ var TstClient = class _TstClient extends EventEmitter4 {
     socket.on("close", () => this.#disconnect(new Error("TST socket closed")));
   }
   static async connect(socketPath, token) {
-    const socket = await new Promise((resolve2, reject) => {
+    const socket = await new Promise((resolve3, reject) => {
       const candidate = createConnection(socketPath);
-      candidate.once("connect", () => resolve2(candidate));
+      candidate.once("connect", () => resolve3(candidate));
       candidate.once("error", reject);
     });
     const client = new _TstClient(socket);
@@ -3598,12 +5368,12 @@ var TstClient = class _TstClient extends EventEmitter4 {
     if (this.#closed) return Promise.reject(new Error("TST client is closed"));
     const id = this.#nextID++;
     const payload = Buffer.from(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
-    if (payload.length > MAX_FRAME_BYTES) return Promise.reject(new Error("TST request exceeds frame limit"));
+    if (payload.length > MAX_FRAME_BYTES3) return Promise.reject(new Error("TST request exceeds frame limit"));
     const header = Buffer.allocUnsafe(4);
     header.writeUInt32BE(payload.length);
-    return new Promise((resolve2, reject) => {
+    return new Promise((resolve3, reject) => {
       this.#pending.set(id, {
-        resolve: (value) => resolve2(value),
+        resolve: (value) => resolve3(value),
         reject
       });
       this.#socket.write(Buffer.concat([header, payload]), (error) => {
@@ -3634,7 +5404,7 @@ var TstClient = class _TstClient extends EventEmitter4 {
     this.#buffer = Buffer.concat([this.#buffer, chunk]);
     while (this.#buffer.length >= 4) {
       const length = this.#buffer.readUInt32BE(0);
-      if (length === 0 || length > MAX_FRAME_BYTES) {
+      if (length === 0 || length > MAX_FRAME_BYTES3) {
         this.destroy();
         return;
       }
@@ -3673,7 +5443,7 @@ var TstClient = class _TstClient extends EventEmitter4 {
 
 // src/tst/supervisor.ts
 async function startTstDaemon(binary, paths, logger) {
-  const token = randomBytes5(32).toString("hex");
+  const token = randomBytes9(32).toString("hex");
   const child = spawn3(
     binary,
     [
@@ -3702,7 +5472,7 @@ async function startTstDaemon(binary, paths, logger) {
         try {
           await Promise.race([
             client.call("shutdown"),
-            new Promise((resolve2) => setTimeout(resolve2, 1500))
+            new Promise((resolve3) => setTimeout(resolve3, 1500))
           ]);
         } finally {
           client.destroy();
@@ -3719,14 +5489,14 @@ async function startTstDaemon(binary, paths, logger) {
 }
 async function waitForExit(child) {
   if (child.exitCode !== null) return;
-  await new Promise((resolve2) => {
+  await new Promise((resolve3) => {
     const timer = setTimeout(() => {
       child.off("exit", onExit);
-      resolve2();
+      resolve3();
     }, 5e3);
     const onExit = () => {
       clearTimeout(timer);
-      resolve2();
+      resolve3();
     };
     child.once("exit", onExit);
   });
@@ -3740,20 +5510,61 @@ async function waitForClient(child, socket, token) {
       return await TstClient.connect(socket, token);
     } catch (error) {
       lastError = error;
-      await new Promise((resolve2) => setTimeout(resolve2, 75));
+      await new Promise((resolve3) => setTimeout(resolve3, 75));
     }
   }
   throw new Error(`Timed out waiting for TST daemon: ${lastError?.message ?? "socket unavailable"}`);
 }
 
 // src/cli.tsx
+var HELP = `Cuppet ${CUPPET_VERSION}
+
+Usage:
+  cuppet [flags]                     interactive TUI session
+  cuppet --remote-control            TUI + remote control from phone/browser
+  cuppet remote-control              headless host (no TUI) for servers/tmux
+  cuppet relay [--port <n>]          self-hosted Cuppet relay
+  cuppet remote-enroll               register this machine with a Cuppet account
+
+Flags:
+  --doctor                           print runtime diagnostics and exit
+  --prompt <text>                    run one prompt headlessly and exit
+  --relay-url <wss://\u2026>              relay endpoint for remote control
+                                     (env CUPPET_RELAY_URL)
+  CUPPET_REMOTE_TOKEN_SECRET         optional shared secret for backend-issued
+                                     short-lived mobile credentials
+  -c, --continue                     pass --continue to the TUI
+  -s, --session <id>                 pass --session to the TUI
+  --fork                             pass --fork to the TUI
+  -h, --help                         show this help
+  -v, --version                      print version
+
+Relay flags:
+  --port <n>                         listen port (default 8787)
+  --auth-file <path>                 JSON file of authorized hosts; enables auth
+  --admin-token <token>              token for POST/DELETE /hosts enrollment
+  --app-dir <path>                   serve a static PWA at /app
+  --allow-origin <origin>            allowed browser Origin (repeatable)
+
+Enrollment flags:
+  --api-base <url>                   Cuppet API base (default https://api.cuppet.in)
+  --token <jwt>                      Cuppet session token (env CUPPET_TOKEN)
+  --name <label>                     display name for this machine
+
+Remote control flow:
+  1. cuppet remote-control --relay-url wss://relay.example.com
+     (set CUPPET_RELAY_HOST_SECRET after enrolling the host with the relay)
+  2. scan the printed QR / open the pairing URL within 2 minutes
+  3. control the session from the phone while the machine stays authoritative
+
+Managed-token flow:
+  Set CUPPET_REMOTE_TOKEN_SECRET to the Sydney REMOTE_TOKEN_SECRET value on
+  the host; mobile then refreshes short-lived credentials through the backend.
+`;
 async function main() {
   const arguments_ = parseArguments(process.argv.slice(2));
   if (arguments_.help) {
-    process.stdout.write(`Cuppet ${CUPPET_VERSION}
-
-Usage: cuppet [--doctor] [--prompt <text>] [-c|--continue] [-s|--session <id>] [--fork]
-`);
+    process.stdout.write(HELP);
     return;
   }
   if (arguments_.version) {
@@ -3763,6 +5574,24 @@ Usage: cuppet [--doctor] [--prompt <text>] [-c|--continue] [-s|--session <id>] [
   }
   const major = Number(process.versions.node.split(".")[0]);
   if (major < 22) throw new Error(`Node.js 22+ is required; current runtime is ${process.version}`);
+  if (arguments_.mode === "relay-server") {
+    await runRelayServer({
+      port: arguments_.relayPort ?? DEFAULT_RELAY_PORT,
+      ...arguments_.relayAuthFile ? { authFile: arguments_.relayAuthFile } : {},
+      ...arguments_.relayAppDir ? { appDir: arguments_.relayAppDir } : {},
+      ...arguments_.relayAdminToken ? { adminToken: arguments_.relayAdminToken } : {},
+      origins: arguments_.relayOrigins
+    });
+    return;
+  }
+  if (arguments_.mode === "enroll") {
+    await runEnroll({
+      apiBase: arguments_.enrollApiBase ?? process.env.CUPPET_API_BASE ?? "https://api.cuppet.in",
+      ...arguments_.enrollToken ? { token: arguments_.enrollToken } : process.env.CUPPET_TOKEN ? { token: process.env.CUPPET_TOKEN } : {},
+      ...arguments_.enrollName ? { name: arguments_.enrollName } : {}
+    });
+    return;
+  }
   const paths = await createRuntimePaths(process.cwd());
   const logger = new RedactedLogger(paths.logs);
   const assets = await resolveRuntimeAssets();
@@ -3773,6 +5602,7 @@ Usage: cuppet [--doctor] [--prompt <text>] [-c|--continue] [-s|--session <id>] [
   let opencode;
   let controller;
   let control;
+  let remote;
   let tuiExitCode = 0;
   const controlAddress = createControlAddress(paths);
   try {
@@ -3823,6 +5653,20 @@ Usage: cuppet [--doctor] [--prompt <text>] [-c|--continue] [-s|--session <id>] [
       return;
     }
     control = await CuppetControlServer.start(controller, paths, controlAddress);
+    const relayUrl = arguments_.relayUrl ?? process.env.CUPPET_RELAY_URL;
+    if (arguments_.mode === "headless-remote" || arguments_.remoteControl || relayUrl) {
+      remote = await startRemoteControl({
+        controller,
+        remoteDir: join14(paths.base, "remote"),
+        ...relayUrl ? { relayUrl } : {},
+        ...process.env.CUPPET_RELAY_HOST_SECRET ? { hostSecret: process.env.CUPPET_RELAY_HOST_SECRET } : {},
+        ...process.env.CUPPET_REMOTE_TOKEN_SECRET ? { remoteTokenSecret: process.env.CUPPET_REMOTE_TOKEN_SECRET } : {}
+      });
+    }
+    if (arguments_.mode === "headless-remote") {
+      await shutdownSignal();
+      return;
+    }
     tuiExitCode = await runNativeTui({
       binary: assets.opencode,
       url: opencode.url,
@@ -3838,30 +5682,88 @@ Usage: cuppet [--doctor] [--prompt <text>] [-c|--continue] [-s|--session <id>] [
       }
     });
   } finally {
+    remote?.stop();
     await control?.close().catch(() => void 0);
     await controller?.close().catch(() => void 0);
     await opencode?.close().catch(() => void 0);
     await tst?.close().catch(() => void 0);
-    await rm2(paths.runtime, { recursive: true, force: true }).catch(() => void 0);
+    await rm3(paths.runtime, { recursive: true, force: true }).catch(() => void 0);
   }
   if (tuiExitCode !== 0) process.exitCode = tuiExitCode;
 }
 function parseArguments(arguments_) {
-  const result = { doctor: false, help: false, version: false, tuiArguments: [] };
-  for (let index = 0; index < arguments_.length; index += 1) {
-    const argument = arguments_[index];
+  const result = { doctor: false, help: false, version: false, mode: "tui", relayOrigins: [], tuiArguments: [] };
+  const rest = [...arguments_];
+  if (rest[0] === "remote-control") {
+    result.mode = "headless-remote";
+    rest.shift();
+  } else if (rest[0] === "relay") {
+    result.mode = "relay-server";
+    rest.shift();
+  } else if (rest[0] === "remote-enroll") {
+    result.mode = "enroll";
+    rest.shift();
+  }
+  for (let index = 0; index < rest.length; index += 1) {
+    const argument = rest[index];
     if (argument === "--doctor") result.doctor = true;
-    else if (argument === "--help" || argument === "-h") result.help = true;
+    else if (argument === "--remote-control") result.remoteControl = true;
+    else if (argument === "--relay-url") {
+      const value = rest[index + 1];
+      if (!value) throw new Error("--relay-url requires a value");
+      result.relayUrl = value;
+      index += 1;
+    } else if (argument === "--port") {
+      const value = Number(rest[index + 1]);
+      if (!Number.isInteger(value) || value <= 0 || value > 65535) throw new Error("--port requires a port number");
+      result.relayPort = value;
+      index += 1;
+    } else if (argument === "--auth-file") {
+      const value = rest[index + 1];
+      if (!value) throw new Error("--auth-file requires a path");
+      result.relayAuthFile = value;
+      index += 1;
+    } else if (argument === "--app-dir") {
+      const value = rest[index + 1];
+      if (!value) throw new Error("--app-dir requires a path");
+      result.relayAppDir = value;
+      index += 1;
+    } else if (argument === "--admin-token") {
+      const value = rest[index + 1];
+      if (!value) throw new Error("--admin-token requires a value");
+      result.relayAdminToken = value;
+      index += 1;
+    } else if (argument === "--allow-origin") {
+      const value = rest[index + 1];
+      if (!value) throw new Error("--allow-origin requires an origin");
+      result.relayOrigins.push(value);
+      index += 1;
+    } else if (argument === "--api-base") {
+      const value = rest[index + 1];
+      if (!value) throw new Error("--api-base requires a URL");
+      result.enrollApiBase = value;
+      index += 1;
+    } else if (argument === "--token") {
+      const value = rest[index + 1];
+      if (!value) throw new Error("--token requires a value");
+      result.enrollToken = value;
+      index += 1;
+    } else if (argument === "--name") {
+      const value = rest[index + 1];
+      if (!value) throw new Error("--name requires a value");
+      result.enrollName = value;
+      index += 1;
+    } else if (argument === "--help" || argument === "-h") result.help = true;
     else if (argument === "--version" || argument === "-v") result.version = true;
     else if (argument === "--prompt") {
-      const prompt = arguments_[index + 1];
+      const prompt = rest[index + 1];
       if (!prompt) throw new Error("--prompt requires a value");
       result.prompt = prompt;
       index += 1;
     } else if (argument === "--continue" || argument === "-c") {
       result.tuiArguments.push("--continue");
     } else if (argument === "--session" || argument === "-s") {
-      const session = arguments_[index + 1];
+      const session = rest[index + 1];
       if (!session) throw new Error(`${argument} requires a session id`);
       result.tuiArguments.push("--session", session);
       index += 1;

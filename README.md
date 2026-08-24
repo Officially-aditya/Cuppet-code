@@ -49,6 +49,19 @@ installing them, so the global commands never symlink back into the checkout
 `cupet` then launches Cuppet from any directory; `cuppet` remains available as
 the canonical command. The standard `cc` C compiler is never shadowed.
 
+## Release and remote host setup
+
+The complete release checklist is in [`docs/releasing.md`](docs/releasing.md).
+The npm package contains the CLI and relay PWA; the four platform runtime
+packages contain the bundled OpenCode and Rust binaries. CI publishes all five
+packages and creates downloadable runtime archives.
+
+Remote-token secrets are runtime-only. Set `REMOTE_TOKEN_SECRET` on the
+Sydney API and the same value as `CUPPET_REMOTE_TOKEN_SECRET` on the local
+Cuppet-code host. Set `REMOTE_RELAY_URL` on Sydney and `CUPPET_RELAY_URL` on
+the host. Never put these values in `package.json`, npm, or the provider
+credential store.
+
 On first launch, Cuppet asks for a platform before showing models. Choose
 Anthropic, OpenAI, Google (Gemini API), Vertex AI (Google Cloud ADC), or
 OpenCode; if needed, the matching OpenCode authentication flow appears before

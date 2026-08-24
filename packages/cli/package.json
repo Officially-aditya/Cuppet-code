@@ -24,6 +24,7 @@
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "dev": "tsx src/cli.tsx",
     "prepack": "node ../../scripts/prepare-cli-package.mjs && npm run build",
+    "postpack": "node ../../scripts/cleanup-cli-package.mjs",
     "test": "node --import tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit"
   },

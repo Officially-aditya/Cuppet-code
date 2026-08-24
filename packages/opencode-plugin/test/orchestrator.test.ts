@@ -2,7 +2,12 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { transformCuppetModelContext, clearCuppetContextState, orchestratorModeEnabled } from '../src/context.js'
 
-function turn(index: number, text = `request ${index}`) {
+type TestMessage = {
+  info: Record<string, unknown>
+  parts: Array<{ type: string; text: string; synthetic?: boolean }>
+}
+
+function turn(index: number, text = `request ${index}`): TestMessage[] {
   return [
     {
       info: { id: `user-${index}`, role: 'user' },
@@ -70,7 +75,7 @@ test('without orchestrator mode the same request still injects normally', async 
     },
     async turnCompleted() {},
   }
-  const output = { messages: [{ info: { id: 'user-0', role: 'user' }, parts: [{ type: 'text', text: 'Build the thing' }] }] }
+  const output: { messages: TestMessage[] } = { messages: [{ info: { id: 'user-0', role: 'user' }, parts: [{ type: 'text', text: 'Build the thing' }] }] }
   await transformCuppetModelContext(
     { sessionID: 'normal-session', agent: 'cuppet', phase: 'foreground', history: { estimatedTokens: 1, usableTokens: 100_000 } },
     output,

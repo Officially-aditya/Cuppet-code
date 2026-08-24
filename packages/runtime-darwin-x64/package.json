@@ -1,1 +1,1 @@
-{"name":"@cuppet-code/runtime-darwin-x64","version":"0.2.0-alpha.1","license":"Apache-2.0","files":["bin","plugin","manifest.json","LICENSE*","NOTICE*","THIRD_PARTY_NOTICES.md","sbom.spdx.json"]}
+{"name":"@cuppet-code/runtime-darwin-x64","version":"0.2.0-alpha.1","license":"Apache-2.0","repository":"https://github.com/Officially-aditya/Cuppet-code.git","files":["bin","plugin","manifest.json","LICENSE*","NOTICE*","THIRD_PARTY_NOTICES.md","sbom.spdx.json"]}

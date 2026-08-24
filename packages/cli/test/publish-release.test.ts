@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -51,11 +51,77 @@ process.stdout.write(JSON.stringify(args[1].split('@').at(-1)))
   }
 })
 
-function runPublisher(cwd: string, bin: string): Promise<{ code: number; stdout: string; stderr: string }> {
+test('release publisher can mirror runtimes to an alternate registry without publishing the CLI', async () => {
+  const fixture = await mkdtemp(join(tmpdir(), 'cuppet-publish-release-'))
+  try {
+    const version = '0.2.0-alpha.1'
+    const registry = 'https://npm.pkg.github.com'
+    await writeFile(join(fixture, 'package.json'), JSON.stringify({ version }))
+    const directory = join(fixture, 'artifacts/runtime-linux-x64-gnu')
+    await mkdir(directory, { recursive: true })
+    await writeFile(join(directory, 'manifest.json'), '{}')
+    await writeFile(join(directory, 'package.json'), JSON.stringify({
+      name: '@cuppet-code/runtime-linux-x64-gnu',
+      version,
+    }))
+
+    const bin = join(fixture, 'bin')
+    await mkdir(bin)
+    const log = join(fixture, 'npm.log')
+    const fakeNpm = join(bin, 'npm')
+    await writeFile(fakeNpm, `#!/usr/bin/env node
+import { appendFileSync } from 'node:fs'
+const args = process.argv.slice(2)
+appendFileSync(process.env.NPM_LOG, JSON.stringify(args) + '\\n')
+if (args[0] === 'view') {
+  process.stderr.write('E404')
+  process.exit(1)
+}
+if (args[0] === 'publish') process.exit(0)
+console.error('unexpected npm command: ' + args.join(' '))
+process.exit(2)
+`)
+    await chmod(fakeNpm, 0o755)
+
+    const result = await runPublisher(fixture, bin, [
+      `--registry=${registry}`,
+      '--runtimes-only',
+      '--expected=1',
+    ], { NPM_LOG: log })
+    assert.equal(result.code, 0, result.stderr)
+
+    const commands = (await readFile(log, 'utf8')).trim().split('\n').map((line) => JSON.parse(line) as string[])
+    assert.equal(commands.length, 2)
+    const [viewCommand, publishCommand] = commands
+    assert.ok(viewCommand)
+    assert.ok(publishCommand)
+    assert.equal(viewCommand[0], 'view')
+    assert.equal(publishCommand[0], 'publish')
+    for (const command of commands) {
+      const registryIndex = command.indexOf('--registry')
+      assert.equal(command.at(registryIndex + 1), registry)
+    }
+    assert.ok(!publishCommand.includes('--workspace=cuppet'))
+  } finally {
+    await rm(fixture, { recursive: true, force: true })
+  }
+})
+
+function runPublisher(
+  cwd: string,
+  bin: string,
+  arguments_: string[] = [],
+  extraEnvironment: Record<string, string> = {},
+): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(process.execPath, [publisher, join(cwd, 'artifacts')], {
+    const child = spawn(process.execPath, [publisher, join(cwd, 'artifacts'), ...arguments_], {
       cwd,
-      env: { ...process.env, NODE_AUTH_TOKEN: 'test-token', PATH: `${bin}:${process.env.PATH ?? ''}` },
+      env: {
+        ...process.env,
+        NODE_AUTH_TOKEN: 'test-token',
+        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        ...extraEnvironment,
+      },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
     let stdout = ''

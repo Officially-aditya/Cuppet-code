@@ -4,8 +4,9 @@ The release has four parts:
 
 1. The `cuppet` npm CLI package.
 2. Four platform runtime npm packages containing OpenCode and `tst-daemon`.
-3. Downloadable GitHub Release assets.
-4. Runtime configuration for the Sydney API, relay, and Cuppet-code host.
+3. Scoped runtime package mirrors in GitHub Packages.
+4. Downloadable GitHub Release assets.
+5. Runtime configuration for the Sydney API, relay, and Cuppet-code host.
 
 The release workflow builds and publishes the first three. Human-owned accounts,
 certificates, DNS, and production secrets are deliberately not stored in this
@@ -33,6 +34,12 @@ The publish job then:
 - publishes the four `@cuppet-code/runtime-*` packages and `cuppet`;
 - creates a GitHub Release containing the four runtime archives, the npm
   tarball, and `SHA256SUMS`.
+
+The GitHub Packages job is a separate mirror path. It publishes every runtime
+artifact that finished successfully, so Linux runtime packages can be mirrored
+even while a macOS signing job is waiting for its Apple secrets. It never
+publishes the unscoped `cuppet` CLI because GitHub Packages only supports scoped
+npm package names.
 
 ## Human setup required once
 
@@ -65,10 +72,27 @@ APPLE_TEAM_ID
 APPLE_APP_PASSWORD
 ```
 
-### GitHub permissions
+### GitHub Packages
 
-The workflow needs package publishing and release creation permissions. Those
-are declared as `id-token: write` and `contents: write` in the workflow.
+The runtime package names already use the `@cuppet-code` scope, and their
+`repository` metadata links them to this repository. The workflow uses the
+built-in `GITHUB_TOKEN`, with `packages: write`; no second registry token is
+needed when the repository has access to the `cuppet-code` GitHub organization.
+
+GitHub Packages creates new npm packages as private by default. After the first
+mirror run, open each package's settings and choose its intended visibility.
+Making a package public is irreversible, and GitHub's npm registry generally
+still requires authentication when installing packages, even when they are
+public. For that reason, public end-user installation remains:
+
+```sh
+npm install --global cuppet@0.2.0-alpha.1
+```
+
+If the `cuppet-code` namespace is not a GitHub organization that can accept the
+workflow token, create a classic GitHub token with `write:packages` and add it
+as a repository secret named `GH_PACKAGES_TOKEN`. The workflow uses that secret
+automatically when present.
 
 ## Release steps
 
@@ -84,7 +108,8 @@ are declared as `id-token: write` and `contents: write` in the workflow.
 
 5. Pushing the tag starts the `release` workflow automatically. If you use
    **Run workflow** instead, enter the exact tag.
-6. Wait for all four platform jobs and the publish job to finish.
+6. Wait for the platform jobs, the npm publish job, the GitHub Packages mirror,
+   and the GitHub Release creation to finish.
 7. Install the published package on a clean Node 22 machine:
 
    ```sh

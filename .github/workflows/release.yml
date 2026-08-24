@@ -16,10 +16,12 @@ env:
 permissions:
   contents: write
   id-token: write
+  packages: write
 
 jobs:
   build-platform:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: macos-15-intel
@@ -137,3 +139,40 @@ jobs:
           else
             gh release create "$RELEASE_TAG" release-assets/* --verify-tag --title "$RELEASE_TAG" --generate-notes
           fi
+
+  publish-github-packages:
+    if: always() && needs.build-platform.result != 'cancelled'
+    needs: build-platform
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: cuppet-*
+          path: artifacts
+          merge-multiple: true
+      - run: npm ci
+      - name: Configure GitHub Packages authentication
+        run: npm config set //npm.pkg.github.com/:_authToken "$NODE_AUTH_TOKEN"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN || github.token }}
+      - name: Verify available runtime packages
+        run: |
+          EXPECTED_PACKAGES="$(find artifacts -name manifest.json -type f | wc -l | tr -d ' ')"
+          if [ "$EXPECTED_PACKAGES" -lt 1 ]; then
+            echo "No platform artifacts were uploaded"
+            exit 1
+          fi
+          node scripts/verify-release.mjs artifacts --expected="$EXPECTED_PACKAGES"
+      - name: Publish scoped runtime packages to GitHub Packages
+        run: |
+          EXPECTED_PACKAGES="$(find artifacts -name manifest.json -type f | wc -l | tr -d ' ')"
+          node scripts/publish-release.mjs artifacts --registry=https://npm.pkg.github.com --runtimes-only --expected="$EXPECTED_PACKAGES"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN || github.token }}

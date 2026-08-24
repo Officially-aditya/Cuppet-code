@@ -54,7 +54,8 @@ the canonical command. The standard `cc` C compiler is never shadowed.
 The complete release checklist is in [`docs/releasing.md`](docs/releasing.md).
 The npm package contains the CLI and relay PWA; the four platform runtime
 packages contain the bundled OpenCode and Rust binaries. CI publishes all five
-packages and creates downloadable runtime archives.
+packages to npm, mirrors the scoped runtime packages to GitHub Packages, and
+creates downloadable runtime archives.
 
 Remote-token secrets are runtime-only. Set `REMOTE_TOKEN_SECRET` on the
 Sydney API and the same value as `CUPPET_REMOTE_TOKEN_SECRET` on the local

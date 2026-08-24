@@ -1434,7 +1434,8 @@ fn identifier_tokens(value: &str) -> Vec<String> {
             continue;
         }
         if let Some(previous) = index.checked_sub(1).map(|offset| chars[offset]) {
-            if ch.is_uppercase() && (previous.is_lowercase() || previous.is_numeric()) && !current.is_empty() {
+            if ch.is_uppercase() && (previous.is_lowercase() || previous.is_numeric()) && !current.is_empty()
+            {
                 tokens.push(current.to_lowercase());
                 current.clear();
             }

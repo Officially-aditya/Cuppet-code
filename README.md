@@ -1,4 +1,7 @@
-# Cuppet public alpha
+# Cuppet Code
+
+> A local-first coding agent with OpenCode's terminal workflow, durable memory,
+> and a Tree-sitter code graph.
 
 Cuppet is a modified OpenCode 1.18.4 derivative with a native Solid/OpenTUI
 terminal client, backed by a private OpenCode server and a native Rust
@@ -13,6 +16,49 @@ worktree. Provider credentials, tools,
 sessions, model routing, diffs, permissions, compaction, and undo stay inside
 OpenCode. Cuppet stores non-secret UI/model selections, bounded in-memory
 session continuity records, and verified durable project/global memory.
+
+## Features
+
+| Area | What Cuppet provides |
+| --- | --- |
+| Native coding workspace | OpenCode's terminal UI with sessions, diffs, questions, compaction, undo, model selection, effort variants, and native plan mode. |
+| Tiered memory | Recent-turn STM, verified project/global long-term memory, bounded retrieval, and explicit remember/forget/clear controls. |
+| Code intelligence | A Rust Tree-sitter daemon that indexes files, symbols, relationships, and dependencies for focused navigation and context. |
+| Lossless plans | Full plan phases stay recoverable through `cuppet_plan` while the visible TodoWrite checklist reflects the current work and clears after completion. |
+| Background enrichment | An optional secondary model records bounded, verified turn context, diffs, and validation signals after foreground work becomes idle. |
+| Provider choice | Connect Anthropic, OpenAI, Google/Gemini, Vertex AI, or OpenCode, then choose separate primary and secondary models. |
+| Remote control | Pair a phone or browser through the relay to inspect sessions, submit or steer work, compact, undo, and answer permission or question requests. |
+| Local-first operation | Private project storage, launch-scoped Unix sockets, scoped remote commands, protected credential paths, and degraded OpenCode-only mode when TST is unavailable. |
+| Permission-aware execution | Foreground shell commands run automatically by default; file edits, sensitive files, external directories, and background workers retain their safety rules. |
+
+## Quick start
+
+```sh
+npm install --global cuppet
+cd path/to/your-project
+cuppet
+```
+
+On first launch, choose a platform and primary/secondary models. Use
+`cuppet --doctor` if the runtime, provider, storage, or graph needs checking.
+The source-checkout alias `cupet` launches the same CLI.
+
+### Useful in-app commands
+
+| Command | Purpose |
+| --- | --- |
+| `/platform` or `/login` | Choose a provider platform and connect it. |
+| `/model` and `/effort` | Select the active model and its effort/variant. |
+| `/plan` | Toggle between native plan mode and build mode. |
+| `/memory` | Inspect memory and code-graph health. |
+| `/background` | Pause or resume background memory enrichment. |
+| `/status` and `/doctor` | View runtime state or diagnose local health. |
+| `/steer` and `/abort` | Guide or stop the active foreground session. |
+| `/compact` and `/undo` | Compact the conversation or undo the latest change boundary. |
+
+For phone/browser control, start `cuppet --remote-control` and follow the
+pairing instructions shown in the terminal. The remote protocol and scope
+model are documented in [`docs/remote-protocol.md`](docs/remote-protocol.md).
 
 ## Requirements
 

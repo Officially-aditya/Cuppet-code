@@ -1,6 +1,8 @@
 import { EventEmitter } from 'node:events'
 import { constants } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { basename } from 'node:path'
 import { BackgroundWorker, type BackgroundStats } from './background/worker.js'
 import { readOrchestratorState, writeOrchestratorState } from './control/orchestrator-state.js'
 import { DEFAULT_STEP_LIMIT } from './constants.js'
@@ -536,6 +538,73 @@ export class CuppetController extends EventEmitter {
     else this.#background?.resume()
     await this.#preferences.update({ backgroundPaused: paused })
     this.#changed()
+  }
+
+  async listPendingPermissions(): Promise<Array<{ id: string; sessionID: string }>> {
+    return this.#gateway.listPendingPermissions()
+  }
+
+  async listPendingQuestions(): Promise<Array<Record<string, unknown>>> {
+    return this.#gateway.listPendingQuestions()
+  }
+
+  async replyQuestion(requestID: string, answers: string[][]): Promise<void> {
+    await this.#gateway.replyQuestion(requestID, answers)
+  }
+
+  async rejectQuestion(requestID: string): Promise<void> {
+    await this.#gateway.rejectQuestion(requestID)
+  }
+
+  async sessionMessages(sessionID: string): Promise<unknown[]> {
+    return this.#gateway.messages(sessionID)
+  }
+
+  /**
+   * The workspace the host process runs in — v1 exposes exactly one, with a
+   * friendly display name rather than a raw filesystem path.
+   */
+  workspaceInfo(): Record<string, unknown> {
+    const home = homedir()
+    const full = this.#paths.projectRealpath
+    const pathDisplay = home !== '/' && (full === home || full.startsWith(`${home}/`))
+      ? `~${full.slice(home.length)}`
+      : full
+    return {
+      workspaceId: this.#paths.projectID,
+      name: basename(full),
+      pathDisplay,
+      activeSessionId: this.#session?.id,
+    }
+  }
+
+  /** Whether a coding provider is configured and usable (BYOK check). */
+  providerStatus(): Record<string, unknown> {
+    const snapshot = this.snapshot
+    const platform = snapshot.platform
+    const providers = platform
+      ? this.#integrations
+          .filter((integration) => integrationMatchesPlatform(integration, platform))
+          .map((integration) => ({
+            id: integration.id,
+            name: integration.name,
+            connected: integration.connections.length > 0,
+          }))
+      : []
+    const configured = providers.some((provider) => provider.connected)
+    const selectedModel =
+      snapshot.primary?.providerID && snapshot.primary?.modelID
+        ? `${snapshot.primary.providerID}/${snapshot.primary.modelID}`
+        : null
+    return {
+      configured,
+      // Coding uses the foreground/primary model. The optional secondary
+      // model is a Cuppet background-agent concern and must not block BYOK.
+      ready: Boolean(configured && snapshot.primary),
+      providers,
+      selectedProvider: platform ?? null,
+      selectedModel,
+    }
   }
 
   async replyPermission(request: PermissionRequest, reply: 'once' | 'always' | 'reject', message?: string): Promise<void> {

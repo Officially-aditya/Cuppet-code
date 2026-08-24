@@ -1,0 +1,9 @@
+{
+  "name": "Cuppet Remote",
+  "short_name": "Cuppet",
+  "description": "Control your Cuppet coding agent from your phone.",
+  "start_url": "/app",
+  "display": "standalone",
+  "background_color": "#0b0e14",
+  "theme_color": "#0b0e14"
+}

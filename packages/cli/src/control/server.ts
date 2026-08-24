@@ -3,6 +3,7 @@ import { chmod, mkdir, unlink } from 'node:fs/promises'
 import { createServer, type Server, type Socket } from 'node:net'
 
 import type { CuppetController } from '../controller.js'
+import { ControlRouter } from './router.js'
 import { PLATFORM_OPTIONS } from '../platforms.js'
 import type { RuntimePaths } from '../runtime/paths.js'
 import type { Platform } from '../types.js'
@@ -16,11 +17,13 @@ export type ControlAddress = {
 
 export class CuppetControlServer {
   readonly #controller: CuppetController
+  readonly #router: ControlRouter
   readonly #server: Server
   readonly #address: ControlAddress
 
   private constructor(controller: CuppetController, server: Server, address: ControlAddress) {
     this.#controller = controller
+    this.#router = new ControlRouter(controller)
     this.#server = server
     this.#address = address
   }
@@ -101,6 +104,11 @@ export class CuppetControlServer {
   }
 
   async #call(method: string, params: Record<string, unknown>): Promise<unknown> {
+    // The router owns authorization + dispatch for everything a remote
+    // transport may also call, so local and remote surfaces stay in lockstep.
+    if (ControlRouter.handles(method)) {
+      return this.#router.execute({ kind: 'local' }, method, params)
+    }
     switch (method) {
       case 'status': return this.#controller.status()
       case 'doctor': return this.#controller.doctor()
@@ -126,14 +134,6 @@ export class CuppetControlServer {
         return this.#controller.remember(stringParam(params, 'key'), stringParam(params, 'value'), memoryScopeParam(params.scope))
       case 'memory.forget': return this.#controller.forget(stringParam(params, 'key'))
       case 'memory.clear': return this.#controller.clearMemory(scopeParam(params.scope))
-      case 'session.steer':
-        return this.#controller.steer(stringParam(params, 'instruction'), params.interrupt === true)
-      case 'session.compact':
-        await this.#controller.compact()
-        return { compacted: true }
-      case 'session.undo':
-        await this.#controller.undo()
-        return { undone: true }
       case 'plan.toggle':
         return {
           enabled: this.#controller.syncNativeAgent(
@@ -142,12 +142,6 @@ export class CuppetControlServer {
           ),
           agent: this.#controller.snapshot.planMode ? 'plan' : 'build',
         }
-      case 'plan.set': {
-        const agent = stringParam(params, 'agent')
-        if (agent !== 'plan' && agent !== 'build') throw new Error('plan.set agent must be plan or build')
-        const enabled = this.#controller.syncNativeAgent(agent, optionalStringParam(params, 'sessionID'))
-        return { enabled, agent }
-      }
       case 'session.adopt': return this.#controller.adoptSession(stringParam(params, 'sessionID'))
       case 'session.list': return this.#controller.listSessions()
       default: throw new Error(`unknown control method ${method}`)

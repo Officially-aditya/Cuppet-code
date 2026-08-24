@@ -81,6 +81,24 @@ export type PermissionRequest = {
   metadata?: Record<string, unknown>
 }
 
+export type QuestionOption = {
+  label?: string
+  description?: string
+  placeholder?: string
+}
+
+export type QuestionRequest = {
+  id: string
+  sessionID: string
+  questions: Array<{
+    question?: string
+    header?: string
+    options?: QuestionOption[]
+    multiple?: boolean
+  }>
+  metadata?: Record<string, unknown>
+}
+
 export type AgentEvent =
   | { type: 'text-delta'; sessionID: string; text: string }
   | { type: 'reasoning-delta'; sessionID: string; text: string }
@@ -102,6 +120,9 @@ export type AgentEvent =
     }
   | { type: 'diff'; sessionID: string; diff: unknown[] }
   | { type: 'permission'; request: PermissionRequest }
+  | { type: 'permission-resolved'; sessionID: string; requestID: string; reply?: 'once' | 'always' | 'reject' }
+  | { type: 'question'; request: QuestionRequest }
+  | { type: 'question-resolved'; sessionID: string; requestID: string; accepted: boolean }
   | { type: 'usage'; sessionID: string; usage: TokenUsage; cost: number }
   | { type: 'idle'; sessionID: string }
   | { type: 'session'; sessionID: string; agent?: string }

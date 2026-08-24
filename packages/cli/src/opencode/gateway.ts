@@ -454,6 +454,41 @@ export class OpenCodeGateway extends EventEmitter {
     )
   }
 
+  async listPendingPermissions(): Promise<Array<{ id: string; sessionID: string }>> {
+    return unwrap(
+      (await this.#client.permission.list({ directory: this.#directory })) as SdkResult<
+        Array<{ id: string; sessionID: string }>
+      >,
+    )
+  }
+
+  async listPendingQuestions(): Promise<Array<Record<string, unknown>>> {
+    const pending = unwrap(
+      (await this.#client.question.list({ directory: this.#directory })) as SdkResult<Array<unknown>>,
+    )
+    return pending.map((item) => record(item))
+  }
+
+  async replyQuestion(requestID: string, answers: string[][]): Promise<void> {
+    ensureSuccess(
+      (await this.#client.question.reply({
+        requestID,
+        directory: this.#directory,
+        // One QuestionAnswer (string[]) per question in the request.
+        answers,
+      })) as SdkResult<unknown>,
+    )
+  }
+
+  async rejectQuestion(requestID: string): Promise<void> {
+    ensureSuccess(
+      (await this.#client.question.reject({
+        requestID,
+        directory: this.#directory,
+      })) as SdkResult<unknown>,
+    )
+  }
+
   async denyPendingPermissions(sessionID: string): Promise<number> {
     const pending = unwrap(
       (await this.#client.permission.list({ directory: this.#directory })) as SdkResult<
@@ -651,6 +686,62 @@ export class OpenCodeEventNormalizer {
         }]
       case 'session.diff':
         return sessionID && Array.isArray(data.diff) ? [{ type: 'diff', sessionID, diff: data.diff }] : []
+      case 'question.asked':
+      case 'question.v2.asked':
+        if (!sessionID || typeof data.id !== 'string') return []
+        return [
+          {
+            type: 'question',
+            request: {
+              id: data.id,
+              sessionID,
+              questions: Array.isArray(data.questions)
+                ? data.questions.map((item: unknown) => {
+                    const entry = record(item)
+                    return {
+                      ...(typeof entry.question === 'string' ? { question: entry.question } : {}),
+                      ...(typeof entry.header === 'string' ? { header: entry.header } : {}),
+                      ...(Array.isArray(entry.options)
+                        ? {
+                            options: entry.options.map((option: unknown) => {
+                              const optionRecord = record(option)
+                              return {
+                                ...(typeof optionRecord.label === 'string' ? { label: optionRecord.label } : {}),
+                                ...(typeof optionRecord.description === 'string'
+                                  ? { description: optionRecord.description }
+                                  : {}),
+                                ...(typeof optionRecord.placeholder === 'string'
+                                  ? { placeholder: optionRecord.placeholder }
+                                  : {}),
+                              }
+                            })
+                          }
+                        : {}),
+                      ...(typeof entry.multiple === 'boolean' ? { multiple: entry.multiple } : {}),
+                    }
+                  })
+                : [],
+              ...(recordOrUndefined(data.metadata) ? { metadata: record(data.metadata) } : {}),
+            },
+          },
+        ]
+      case 'question.v2.replied':
+      case 'question.v2.rejected':
+        return typeof data.id === 'string' && sessionID
+          ? [{ type: 'question-resolved', sessionID, requestID: data.id, accepted: data.type === 'question.v2.replied' }]
+          : []
+      case 'permission.v2.replied':
+      case 'permission.replied':
+        return typeof data.id === 'string' && sessionID
+          ? [{
+              type: 'permission-resolved',
+              sessionID,
+              requestID: data.id,
+              ...(data.reply === 'once' || data.reply === 'always' || data.reply === 'reject'
+                ? { reply: data.reply }
+                : {}),
+            }]
+          : []
       case 'permission.v2.asked':
         return typeof data.id === 'string' && sessionID
           ? [{

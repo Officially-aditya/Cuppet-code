@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Cuppet Remote</title>
+<link rel="manifest" href="/app/manifest.webmanifest" />
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #2d333b; --text: #e6edf3;
+    --muted: #8b949e; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --err: #f85149;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 -apple-system, system-ui, sans-serif; }
+  header { position: sticky; top: 0; display: flex; gap: 8px; align-items: center; padding: 10px 14px;
+           background: var(--panel); border-bottom: 1px solid var(--border); z-index: 5; }
+  header .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--err); }
+  header .dot.on { background: var(--ok); }
+  header h1 { font-size: 16px; margin: 0 auto 0 0; font-weight: 600; }
+  header small { color: var(--muted); }
+  main { padding: 12px; padding-bottom: 120px; max-width: 720px; margin: 0 auto; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+  .card.user { border-color: var(--accent); }
+  .card .meta { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+  .tool { font-family: ui-monospace, monospace; font-size: 13px; color: var(--muted); }
+  .tool.ok::before { content: "✓ "; color: var(--ok); }
+  .tool.run::before { content: "▸ "; color: var(--accent); }
+  pre.diff { overflow-x: auto; font-size: 11px; background: var(--bg); padding: 8px; border-radius: 8px; white-space: pre-wrap; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  button { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
+           padding: 8px 12px; font-size: 14px; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { border-color: var(--err); color: var(--err); }
+  label { display: block; color: var(--muted); font-size: 13px; margin-top: 8px; }
+  input[type=text], input[type=password] { width: 100%; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); font-size: 15px; }
+  form.composer { position: fixed; bottom: 0; left: 0; right: 0; display: flex; gap: 8px; padding: 10px 12px;
+    background: var(--panel); border-top: 1px solid var(--border); }
+  form.composer input { flex: 1; }
+  .hidden { display: none !important; }
+  .qopt { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot" id="status-dot"></span>
+  <h1>Cuppet</h1>
+  <small id="host-label">disconnected</small>
+  <button id="btn-abort" class="danger hidden">Abort</button>
+</header>
+
+<main id="feed"></main>
+
+<section id="login" class="card">
+  <strong>Pair this device</strong>
+  <label>Relay WebSocket URL</label>
+  <input id="in-relay" type="text" placeholder="wss://relay.example/ws" />
+  <label>Host ID</label>
+  <input id="in-host" type="text" placeholder="host_…" />
+  <label>Device ID</label>
+  <input id="in-device" type="text" placeholder="dev_…" />
+  <label>Device secret</label>
+  <input id="in-secret" type="password" />
+  <div class="actions"><button class="primary" id="btn-connect">Connect</button></div>
+</section>
+
+<form class="composer hidden" id="composer">
+  <input id="in-message" type="text" placeholder="Message Cuppet…" autocomplete="off" />
+  <button type="submit" class="primary">Send</button>
+</form>
+
+<script type="module">
+const $ = (id) => document.getElementById(id)
+const feed = $('feed')
+let socket, seq = 0, pending = new Map()
+const state = { hostId: '', busy: false }
+
+function save() {
+  localStorage.setItem('cuppet-remote', JSON.stringify({
+    relay: $('in-relay').value, hostId: $('in-host').value,
+    deviceId: $('in-device').value, secret: $('in-secret').value,
+  }))
+}
+function load() {
+  try { return JSON.parse(localStorage.getItem('cuppet-remote') ?? '{}') } catch { return {} }
+}
+function el(kind, meta, bodyHtml) {
+  const div = document.createElement('div')
+  div.className = 'card' + (kind === 'user' ? ' user' : '')
+  div.innerHTML = `${meta ? `<div class="meta">${meta}</div>` : ''}${bodyHtml}`
+  feed.appendChild(div)
+  window.scrollTo(0, document.body.scrollHeight)
+  return div
+}
+function setStatus(on, label) {
+  $('status-dot').classList.toggle('on', on)
+  $('host-label').textContent = label ?? (on ? 'connected' : 'offline')
+}
+
+function sendCommand(type, payload = {}, sessionId) {
+  const id = 'cmd_' + crypto.randomUUID()
+  const frame = { version: 1, id, type, hostId: state.hostId, ts: Date.now(), payload }
+  if (sessionId) frame.sessionId = sessionId
+  socket.send(JSON.stringify(frame))
+  return new Promise((resolve, reject) => pending.set(id, { resolve, reject }))
+}
+
+function cardForPermission(request) {
+  const action = String(request.action ?? 'unknown')
+  const resources = (request.resources ?? []).join(', ')
+  const node = el('', `Permission required · ${action}`, `<div class="tool">${resources || ''}</div>`)
+  const actions = document.createElement('div'); actions.className = 'actions'
+  for (const [label, reply] of [['Reject', 'reject'], ['Allow once', 'once'], ['Always', 'always']]) {
+    const b = document.createElement('button')
+    b.textContent = label
+    b.className = reply === 'reject' ? 'danger' : ''
+    b.onclick = () => { sendCommand('permission.reply', { request, reply }).then(() => node.remove()); actions.remove() }
+    actions.appendChild(b)
+  }
+  node.appendChild(actions)
+}
+function cardForQuestion(request) {
+  const first = request.questions?.[0] ?? {}
+  const options = first.options ?? []
+  const node = el('', 'Cuppet needs your input', `<strong>${first.question ?? ''}</strong>`)
+  const box = document.createElement('div'); box.className = 'qopt'
+  for (const option of options.slice(0, 8)) {
+    const b = document.createElement('button')
+    b.style.textAlign = 'left'; b.textContent = option.label ?? option.description ?? JSON.stringify(option)
+    b.onclick = () => { sendCommand('question.reply', { requestID: request.id, answers: [option.label ?? ''] }).then(() => node.remove()) }
+    box.appendChild(b)
+  }
+  if (!options.length) {
+    const input = document.createElement('input'); input.type = 'text'; input.placeholder = 'Type an answer…'
+    const b = document.createElement('button'); b.className = 'primary'; b.textContent = 'Send answer'
+    b.onclick = () => { sendCommand('question.reply', { requestID: request.id, answers: [input.value] }).then(() => node.remove()) }
+    box.append(input, b)
+  }
+  node.appendChild(box)
+}
+let currentTextCard = null
+function handleEvent(type, payload) {
+  switch (type) {
+    case 'assistant.text.delta': {
+      if (!currentTextCard) currentTextCard = el('', 'Cuppet', '<span></span>')
+      const span = currentTextCard.querySelector('span')
+      span.textContent += payload.text ?? ''
+      break
+    }
+    case 'tool.started':
+      currentTextCard = null
+      el('', '', `<div class="tool run">${payload.name ?? 'tool'}…</div>`).dataset.call = payload.callID
+      break
+    case 'tool.completed': {
+      const node = feed.querySelector(`[data-call="${payload.callID}"]`)
+      if (node) { const tool = node.querySelector('.tool'); if (tool) { tool.className = 'tool ok'; tool.textContent += payload.name ? '' : '' } }
+      if (payload.diff) el('', 'Diff', `<pre class="diff">${String(payload.diff).slice(0, 4000)}</pre>`)
+      break
+    }
+    case 'permission.requested': cardForPermission(payload.request ?? {}); break
+    case 'question.requested': cardForQuestion(payload.request ?? {}); break
+    case 'session.idle': state.busy = false; currentTextCard = null; break
+    case 'session.updated': state.busy = true; break
+    case 'agent.error': el('', '', `<div style="color:var(--err)">error: ${payload.message ?? ''}</div>`); break
+    default: break
+  }
+}
+
+function handleMessage(raw) {
+  let frame
+  try { frame = JSON.parse(raw) } catch { return }
+  if (frame.type === 'ping') return
+  // Replies to our commands.
+  if (frame.replyTo && pending.has(frame.replyTo)) {
+    const entry = pending.get(frame.replyTo)
+    pending.delete(frame.replyTo)
+    frame.ok ? entry.resolve(frame.result) : entry.reject(new Error(frame.error))
+    return
+  }
+  if (frame.type === 'device.authenticated') { setStatus(true, frame.hostLabel ?? 'host online'); return }
+  if (frame.type === 'host.attach') {
+    setStatus(true)
+    const snapshot = frame.payload?.snapshot ?? {}
+    for (const request of frame.payload?.permissions ?? []) cardForPermission(request)
+    for (const request of frame.payload?.questions ?? []) cardForQuestion(request)
+    $('composer').classList.remove('hidden')
+    $('btn-abort').classList.remove('hidden')
+    return
+  }
+  if (typeof frame.seq === 'number' && frame.type) handleEvent(frame.type, frame.payload ?? {})
+}
+
+function connect() {
+  save()
+  const base = $('in-relay').value.replace(/\/$/, '')
+  const params = new URLSearchParams({
+    role: 'device', hostId: $('in-host').value, deviceId: $('in-device').value, secret: $('in-secret').value,
+  })
+  socket = new WebSocket(`${base}/ws?${params}`)
+  socket.onopen = () => {
+    setStatus(true, 'authenticating…')
+    // The host performs the credential check end-to-end.
+    socket.send(JSON.stringify({ version: 1, type: 'device.hello', payload: { deviceId: $('in-device').value, secret: $('in-secret').value }, ts: Date.now() }))
+    setTimeout(() => sendCommand('session.snapshot'), 300).valueOf && pending.set('noop', { resolve(){}, reject(){} }) && pending.delete('noop')
+  }
+  socket.onmessage = (event) => handleMessage(event.data)
+  socket.onclose = () => setStatus(false)
+}
+$('btn-connect').onclick = connect
+
+$('composer').addEventListener('submit', (event) => {
+  event.preventDefault()
+  const text = $('in-message').value.trim()
+  if (!text) return
+  el('user', 'You', text.replace(/</g, '&lt;'))
+  $('in-message').value = ''
+  const delivery = state.busy ? 'steer' : undefined
+  sendCommand(delivery === 'steer' ? 'session.steer' : 'session.submit',
+    delivery === 'steer' ? { instruction: text, interrupt: false } : { prompt: text }).catch((err) => alert(err.message))
+})
+$('btn-abort').onclick = () => sendCommand('session.abort')
+
+const saved = load()
+if (saved.relay) {
+  $('in-relay').value = saved.relay; $('in-host').value = saved.hostId ?? ''
+  $('in-device').value = saved.deviceId ?? ''; $('in-secret').value = saved.secret ?? ''
+}
+</script>
+</body>
+</html>

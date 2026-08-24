@@ -1,0 +1,340 @@
+import { randomUUID } from 'node:crypto'
+import type { CuppetController } from '../controller.js'
+import { ControlRouter, type ControlActor } from '../control/router.js'
+import {
+  encodeFrame,
+  parseCommandFrame,
+  publicEventFor,
+  scopeForCommand,
+  PROTOCOL_VERSION,
+  type EventFrame,
+  type ResultFrame,
+} from './protocol.js'
+import type { RemoteTransport } from './connection.js'
+
+export type BridgeOptions = {
+  controller: CuppetController
+  hostId: string
+  transport: RemoteTransport
+  /** Authenticates a device credential pair; undefined disables all commands. */
+  authenticateDevice?: (deviceID: string, secret: string) => Promise<{ scopes: readonly string[]; name?: string } | undefined>
+  /** Redeems a single-use pairing invite for new device credentials. */
+  claimPairingInvite?: (code: string, deviceName: string) => Promise<{
+    deviceId: string
+    secret: string
+    scopes: readonly string[]
+    name?: string
+  } | undefined>
+  /** Extra frames published right after (re)connect — attach snapshot etc. */
+  buildAttachSnapshot?: () => Promise<Record<string, unknown>>
+}
+
+const DEDUPE_CAPACITY = 512
+/** Pairing attempts allowed per connection before the bridge stops answering. */
+const PAIR_ATTEMPT_LIMIT = 3
+/** Bump when a protocol change requires clients to update. */
+export const MINIMUM_CLIENT_VERSION = 1
+
+/**
+ * RemoteBridge: publishes semantic controller events outbound and executes
+ * authorized remote commands against the shared ControlRouter. The relay and
+ * the phone are untrusted transports — every command is scope-checked here,
+ * duplicate command ids are executed exactly once, and reconnecting clients
+ * receive a full snapshot plus buffered events before live traffic resumes.
+ */
+export class RemoteBridge {
+  readonly #controller: CuppetController
+  readonly #router: ControlRouter
+  readonly #transport: RemoteTransport
+  readonly #hostId: string
+  readonly #authenticateDevice: BridgeOptions['authenticateDevice']
+  readonly #claimPairingInvite: BridgeOptions['claimPairingInvite']
+  readonly #buildAttachSnapshot: BridgeOptions['buildAttachSnapshot']
+  #seq = 0
+  /** Changes when a new host process takes authority for this host id. */
+  readonly #connectionId = randomUUID()
+  #unsubscribers: Array<() => void> = []
+  #seenCommandIds = new Map<string, true>()
+  #offlineBuffer: EventFrame[] = []
+  #devices = new Map<string, { scopes: readonly string[]; name?: string }>()
+  #pairAttemptsLeft = PAIR_ATTEMPT_LIMIT
+  #started = false
+
+  constructor(options: BridgeOptions) {
+    this.#controller = options.controller
+    this.#router = new ControlRouter(options.controller)
+    this.#transport = options.transport
+    this.#hostId = options.hostId
+    this.#authenticateDevice = options.authenticateDevice
+    this.#claimPairingInvite = options.claimPairingInvite
+    this.#buildAttachSnapshot = options.buildAttachSnapshot
+  }
+
+  start(): void {
+    if (this.#started) return
+    this.#started = true
+    // Transports that dial lazily (WebSocketTransport) must be told to start.
+    this.#transport.start?.()
+    this.#unsubscribers.push(
+      this.#controller.onAgentEvent((event) => {
+        const publicEvent = publicEventFor(event as unknown as Record<string, unknown>)
+        if (!publicEvent) return
+        this.#publish(publicEvent.type, publicEvent.payload, sessionIdOf(event))
+      }),
+      this.#controller.onChange((snapshot) => {
+        this.#publish('host.snapshot', snapshot)
+      }),
+    )
+    this.#transport.onMessage((data) => void this.#handleIncoming(data).catch(() => this.#replyError('', 'malformed frame')))
+    this.#transport.onStatusChange((connected) => {
+      if (!connected) {
+        // A relay reconnect is a new transport authority. Every device must
+        // perform the hello handshake again before it can issue commands.
+        this.#devices.clear()
+        return
+      }
+      this.#pairAttemptsLeft = PAIR_ATTEMPT_LIMIT
+      void this.#onConnected()
+    })
+  }
+
+  stop(): void {
+    if (!this.#started) return
+    this.#started = false
+    for (const unsubscribe of this.#unsubscribers.splice(0)) unsubscribe()
+    this.#devices.clear()
+    this.#offlineBuffer.length = 0
+    try {
+      this.#transport.close()
+    } catch {}
+  }
+
+  async #onConnected(): Promise<void> {
+    // Snapshot first, then any events buffered while offline: a reconnecting
+    // client never depends on having witnessed earlier live frames.
+    try {
+      const payload = this.#buildAttachSnapshot
+        ? await this.#buildAttachSnapshot()
+        : {
+            snapshot: await this.#controller.status(),
+            permissions: await this.#controller.listPendingPermissions().catch(() => []),
+            questions: await this.#controller.listPendingQuestions().catch(() => []),
+          }
+      this.#sendRaw(encodeFrame({
+        version: PROTOCOL_VERSION,
+        seq: ++this.#seq,
+        hostId: this.#hostId,
+        ts: Date.now(),
+        type: 'host.attach',
+        payload: {
+          ...payload,
+          connectionId: this.#connectionId,
+          protocolVersion: PROTOCOL_VERSION,
+          minimumClientVersion: MINIMUM_CLIENT_VERSION,
+        },
+      }))
+    } catch {}
+    for (const frame of this.#offlineBuffer.splice(0)) {
+      this.#sendRaw(encodeFrame(frame))
+    }
+  }
+
+  publish(type: string, payload: unknown): void {
+    this.#publish(type, payload)
+  }
+
+  #publish(type: string, payload: unknown, sessionId?: string): void {
+    const frame: EventFrame = {
+      version: PROTOCOL_VERSION,
+      seq: ++this.#seq,
+      hostId: this.#hostId,
+      ts: Date.now(),
+      type,
+      ...(sessionId ? { sessionId } : {}),
+      ...(payload !== undefined ? { payload } : {}),
+    }
+    if (!this.#transport.connected) {
+      this.#offlineBuffer.push(frame)
+      if (this.#offlineBuffer.length > 256) this.#offlineBuffer.shift()
+      return
+    }
+    this.#sendRaw(encodeFrame(frame))
+  }
+
+  #sendRaw(data: string): void {
+    try {
+      this.#transport.send(data)
+    } catch {}
+  }
+
+  async #handleIncoming(data: string): Promise<void> {
+    let parsed: Record<string, unknown>
+    try {
+      parsed = JSON.parse(data) as Record<string, unknown>
+    } catch {
+      return this.#replyError('', 'malformed frame')
+    }
+    const kind = typeof parsed.type === 'string' ? parsed.type : ''
+    if (kind === 'ping') return
+    const requestDeviceId =
+      typeof parsed.deviceId === 'string' && parsed.deviceId
+        ? parsed.deviceId
+        : String(
+            (parsed.payload as Record<string, unknown> | undefined)?.deviceId ?? '',
+          )
+    if (kind === 'device.hello') return this.#handleDeviceHello(parsed, requestDeviceId)
+    if (kind === 'device.pair') return this.#handleDevicePair(parsed, requestDeviceId)
+    const device = requestDeviceId ? this.#devices.get(requestDeviceId) : undefined
+    if (!device) {
+      // Answer with the sender's own id when present so clients fail fast
+      // instead of timing out; bare rejections still use client.reject.
+      const commandId = typeof parsed.id === 'string' ? parsed.id : ''
+      this.#rejectDevice(requestDeviceId, 'not authenticated')
+      if (!commandId) return
+      return this.#resultError(commandId, 'not authenticated', requestDeviceId)
+    }
+    let envelope
+    try {
+      envelope = parseCommandFrame(data)
+    } catch (error) {
+      // Answer the sender even for invalid frames so clients never hang.
+      const fallbackId = typeof parsed.id === 'string' ? parsed.id : 'unknown'
+      return this.#resultError(fallbackId, `malformed command: ${(error as Error).message}`, requestDeviceId)
+    }
+    // Idempotency: replays after network retries must not double-execute
+    // destructive commands like undo or submit.
+    const dedupeKey = `${requestDeviceId}:${envelope.id}`
+    if (this.#seenCommandIds.has(dedupeKey)) {
+      return this.#sendRaw(encodeFrame({
+        version: PROTOCOL_VERSION,
+        replyTo: envelope.id,
+        ok: true,
+        result: { duplicate: true },
+        ...(requestDeviceId ? { deviceId: requestDeviceId } : {}),
+      } satisfies ResultFrame))
+    }
+    this.#remember(dedupeKey)
+    const requiredScope = scopeForCommand(envelope.type)
+    if (!requiredScope || !device.scopes.includes(requiredScope)) {
+      return this.#resultError(
+        envelope.id,
+        `missing scope '${requiredScope ?? 'none'}' for ${envelope.type}`,
+        requestDeviceId,
+      )
+    }
+    const actor: ControlActor = {
+      kind: 'remote',
+      deviceID: requestDeviceId,
+      ...(device.name ? { deviceName: device.name } : {}),
+      scopes: device.scopes,
+    }
+    try {
+      const result = await this.#router.execute(actor, envelope.type, (envelope.payload as Record<string, unknown>) ?? {})
+      this.#sendRaw(encodeFrame({
+        version: PROTOCOL_VERSION,
+        replyTo: envelope.id,
+        ok: true,
+        ...(result !== undefined ? { result } : {}),
+        ...(requestDeviceId ? { deviceId: requestDeviceId } : {}),
+      } satisfies ResultFrame))
+    } catch (error) {
+      this.#resultError(envelope.id, error instanceof Error ? error.message : String(error), requestDeviceId)
+    }
+  }
+
+  async #handleDevicePair(parsed: Record<string, unknown>, deviceId: string): Promise<void> {
+    const fail = (message: string): void => {
+      this.#sendRaw(encodeFrame({
+        version: PROTOCOL_VERSION,
+        replyTo: 'device-pair',
+        ok: false,
+        error: message,
+        ...(deviceId ? { deviceId } : {}),
+      } satisfies ResultFrame & { deviceId?: string }))
+    }
+    if (!this.#claimPairingInvite) return fail('pairing unavailable')
+    if (this.#pairAttemptsLeft <= 0) return fail('too many pairing attempts')
+    this.#pairAttemptsLeft -= 1
+    const payload = parsed.payload && typeof parsed.payload === 'object' ? parsed.payload as Record<string, unknown> : {}
+    const code = typeof payload.code === 'string' ? payload.code.trim().toUpperCase() : ''
+    const name = typeof payload.name === 'string' ? payload.name : ''
+    // The claim itself validates existence, single use, and expiry.
+    const claimed = code ? await this.#claimPairingInvite(code, name).catch(() => undefined) : undefined
+    if (!claimed) return fail('invalid or expired pairing code')
+    this.#sendRaw(encodeFrame({
+      version: PROTOCOL_VERSION,
+      seq: ++this.#seq,
+      hostId: this.#hostId,
+      ts: Date.now(),
+      type: 'device.paired',
+      payload: { deviceId: claimed.deviceId },
+      ...(deviceId ? { deviceId } : {}),
+    }))
+    this.#sendRaw(encodeFrame({
+      version: PROTOCOL_VERSION,
+      replyTo: 'device-pair',
+      ok: true,
+      result: { deviceId: claimed.deviceId, secret: claimed.secret, scopes: [...claimed.scopes] },
+      ...(deviceId ? { deviceId } : {}),
+    } satisfies ResultFrame & { deviceId?: string }))
+  }
+
+  async #handleDeviceHello(parsed: Record<string, unknown>, deviceId: string): Promise<void> {
+    const secret = String((parsed.payload as Record<string, unknown> | undefined)?.secret ?? '')
+    if (!this.#authenticateDevice || !deviceId || !secret) {
+      this.#devices.delete(deviceId)
+      return this.#rejectDevice(deviceId, 'authentication unavailable')
+    }
+    const device = await this.#authenticateDevice(deviceId, secret)
+    if (!device) {
+      this.#devices.delete(deviceId)
+      return this.#rejectDevice(deviceId, 'unknown device credentials')
+    }
+    this.#devices.set(deviceId, { scopes: device.scopes, ...(device.name ? { name: device.name } : {}) })
+    // Tell the relay to start delivering live traffic to this device, then
+    // confirm the credential check to the device itself.
+    this.#sendRaw(encodeFrame({ version: PROTOCOL_VERSION, seq: ++this.#seq, hostId: this.#hostId, ts: Date.now(), type: 'client.accept', payload: {}, deviceId }))
+    this.#sendRaw(encodeFrame({
+      version: PROTOCOL_VERSION,
+      replyTo: 'device-hello',
+      ok: true,
+      result: { deviceId, name: device.name ?? '', scopes: [...device.scopes] },
+      deviceId,
+    } satisfies ResultFrame & { deviceId: string }))
+  }
+
+  #rejectDevice(deviceId: string, message: string): void {
+    if (deviceId) {
+      this.#sendRaw(encodeFrame({ version: PROTOCOL_VERSION, seq: ++this.#seq, hostId: this.#hostId, ts: Date.now(), type: 'client.reject', payload: {}, deviceId }))
+    }
+    this.#sendRaw(encodeFrame({ version: PROTOCOL_VERSION, replyTo: 'device-hello', ok: false, error: message, ...(deviceId ? { deviceId } : {}) } satisfies ResultFrame & { deviceId?: string }))
+  }
+
+  #remember(id: string): void {
+    this.#seenCommandIds.set(id, true)
+    if (this.#seenCommandIds.size > DEDUPE_CAPACITY) {
+      const oldest = this.#seenCommandIds.keys().next().value
+      if (oldest !== undefined) this.#seenCommandIds.delete(oldest)
+    }
+  }
+
+  #resultError(replyTo: string, message: string, deviceId?: string): void {
+    this.#sendRaw(encodeFrame({
+      version: PROTOCOL_VERSION,
+      replyTo,
+      ok: false,
+      error: message,
+      ...(deviceId ? { deviceId } : {}),
+    } satisfies ResultFrame))
+  }
+
+  #replyError(_replyTo: string, message: string): void {
+    // Malformed frames may lack a usable id; emit a diagnostic-only event.
+    this.#publish('bridge.error', { message }, undefined)
+  }
+}
+
+function sessionIdOf(event: unknown): string | undefined {
+  const id = (event as { sessionID?: unknown }).sessionID
+  return typeof id === 'string' ? id : undefined
+}

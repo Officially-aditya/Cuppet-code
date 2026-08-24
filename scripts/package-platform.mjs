@@ -42,14 +42,23 @@ const files = {
   'plugin/server.js': resolve('packages/opencode-plugin/dist/server.js'),
   'plugin/tui.js': resolve('packages/opencode-plugin/dist/tui.js'),
 }
+const sourcePackage = JSON.parse(await readFile(files['package.json'], 'utf8'))
 const daemonProtocol = (await capture(files['bin/tst-daemon'], ['--protocol'])).trim()
 if (daemonProtocol !== expectedTstProtocol) {
   throw new Error(`TST daemon protocol mismatch: expected ${expectedTstProtocol}, received ${daemonProtocol || 'no identity'}`)
 }
 for (const [destination, source] of Object.entries(files)) {
+  if (destination === 'package.json') continue
   const targetPath = join(output, destination)
   if (resolve(source) !== resolve(targetPath)) await copyFile(source, targetPath)
 }
+const packageMetadata = {
+  ...sourcePackage,
+  os: [platform],
+  cpu: [arch],
+  ...(libc ? { libc: [libc] } : {}),
+}
+await writeFile(join(output, 'package.json'), `${JSON.stringify(packageMetadata)}\n`)
 await chmod(join(output, 'bin/opencode'), 0o755)
 await chmod(join(output, 'bin/tst-daemon'), 0o755)
 await chmod(join(output, 'plugin/index.js'), 0o644)

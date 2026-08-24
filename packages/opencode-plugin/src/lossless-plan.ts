@@ -147,9 +147,45 @@ export class LosslessPlanStore {
     const plan = await this.get(sessionID)
     if (!plan || !Array.isArray(value)) return undefined
     const incoming = value.flatMap(todoEntry)
+    if (incoming.length === 0) {
+      // TodoWrite is a full replacement. An empty update is an explicit clear,
+      // not a request to restore the previous canonical plan. Keep the source
+      // plan available through cuppet_plan, but stop reintroducing its phases
+      // into the visible execution checklist.
+      let changed = false
+      for (const phase of plan.phases) {
+        if (isTerminalTodoStatus(phase.status)) continue
+        phase.status = 'cancelled'
+        changed = true
+      }
+      if (changed) {
+        plan.updatedAt = Date.now()
+        await this.#save(plan)
+      }
+      return []
+    }
+
     const used = new Set<number>()
-    const canonical = plan.phases.map((phase) => {
+    const matches = plan.phases.map((phase) => {
       const match = incoming.findIndex((todo, index) => !used.has(index) && matchesPhase(todo, phase))
+      if (match !== -1) used.add(match)
+      return match
+    })
+    // Without a stable/fuzzy match there is no evidence that this replacement
+    // belongs to the stored plan. Preserve the caller's current list instead
+    // of resurrecting an unrelated previous checklist.
+    if (used.size === 0) return incoming
+
+    for (const [phaseIndex, match] of matches.entries()) {
+      if (match !== -1) plan.phases[phaseIndex]!.status = incoming[match]!.status
+    }
+
+    // Once a phase reaches a terminal state it is no longer part of the
+    // active execution view. Re-emitting it as a fallback item is what made a
+    // completed sidebar checklist look like an older plan was stuck forever.
+    const canonical = plan.phases.flatMap((phase, phaseIndex) => {
+      if (isTerminalTodoStatus(phase.status)) return []
+      const match = matches[phaseIndex]!
       const todo = match === -1
         ? {
             content: `[${phase.id}] ${phase.summary}`,
@@ -157,14 +193,11 @@ export class LosslessPlanStore {
             priority: 'medium',
           }
         : incoming[match]!
-      if (match !== -1) used.add(match)
-      const normalized = {
+      return [{
         content: ensurePhaseID(todo.content, phase.id),
         status: todo.status,
         priority: todo.priority,
-      }
-      phase.status = normalized.status
-      return normalized
+      }]
     })
     const extras = incoming.filter((_, index) => !used.has(index))
     plan.updatedAt = Date.now()
@@ -390,6 +423,10 @@ function matchesPhase(todo: TodoEntry, phase: LosslessPlanPhase): boolean {
   if (titleTokens.length === 0) return false
   const overlap = titleTokens.filter((token) => todoTokens.has(token)).length
   return overlap >= Math.min(3, titleTokens.length) && overlap / titleTokens.length >= 0.6
+}
+
+function isTerminalTodoStatus(status: string): boolean {
+  return status === 'completed' || status === 'cancelled'
 }
 
 function todoEntry(value: unknown): TodoEntry[] {

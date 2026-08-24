@@ -4223,13 +4223,13 @@ import { createHash as createHash2 } from "node:crypto";
 import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { appendFile, readFile as readFile2, stat } from "node:fs/promises";
-import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join as join2, relative, resolve } from "node:path";
 import { promisify } from "node:util";
 
 // src/lossless-plan.ts
 import { createHash, randomBytes } from "node:crypto";
 import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { join as join2 } from "node:path";
+import { join } from "node:path";
 var SCHEMA_VERSION = 1;
 var MAX_SOURCE_BYTES = 1e6;
 var MIN_LONG_SPEC_LINES = 60;
@@ -4308,22 +4308,42 @@ var LosslessPlanStore = class {
     const plan = await this.get(sessionID);
     if (!plan || !Array.isArray(value)) return void 0;
     const incoming = value.flatMap(todoEntry);
+    if (incoming.length === 0) {
+      let changed = false;
+      for (const phase of plan.phases) {
+        if (isTerminalTodoStatus(phase.status)) continue;
+        phase.status = "cancelled";
+        changed = true;
+      }
+      if (changed) {
+        plan.updatedAt = Date.now();
+        await this.#save(plan);
+      }
+      return [];
+    }
     const used = /* @__PURE__ */ new Set();
-    const canonical = plan.phases.map((phase) => {
-      const match = incoming.findIndex((todo2, index) => !used.has(index) && matchesPhase(todo2, phase));
+    const matches = plan.phases.map((phase) => {
+      const match = incoming.findIndex((todo, index) => !used.has(index) && matchesPhase(todo, phase));
+      if (match !== -1) used.add(match);
+      return match;
+    });
+    if (used.size === 0) return incoming;
+    for (const [phaseIndex, match] of matches.entries()) {
+      if (match !== -1) plan.phases[phaseIndex].status = incoming[match].status;
+    }
+    const canonical = plan.phases.flatMap((phase, phaseIndex) => {
+      if (isTerminalTodoStatus(phase.status)) return [];
+      const match = matches[phaseIndex];
       const todo = match === -1 ? {
         content: `[${phase.id}] ${phase.summary}`,
         status: phase.status || "pending",
         priority: "medium"
       } : incoming[match];
-      if (match !== -1) used.add(match);
-      const normalized = {
+      return [{
         content: ensurePhaseID(todo.content, phase.id),
         status: todo.status,
         priority: todo.priority
-      };
-      phase.status = normalized.status;
-      return normalized;
+      }];
     });
     const extras = incoming.filter((_, index) => !used.has(index));
     plan.updatedAt = Date.now();
@@ -4382,7 +4402,7 @@ ${phase.text}`.toLowerCase().includes(query)).length > matches.length);
       await mkdir(this.#directory, { recursive: true, mode: 448 });
       await chmod(this.#directory, 448);
       const target = this.#path(snapshot.sessionID);
-      const temporary = join2(this.#directory, `.${createHash("sha256").update(snapshot.sessionID).digest("hex")}.${randomBytes(6).toString("hex")}.tmp`);
+      const temporary = join(this.#directory, `.${createHash("sha256").update(snapshot.sessionID).digest("hex")}.${randomBytes(6).toString("hex")}.tmp`);
       await writeFile(temporary, `${JSON.stringify(snapshot)}
 `, { mode: 384 });
       await rename(temporary, target);
@@ -4395,7 +4415,7 @@ ${phase.text}`.toLowerCase().includes(query)).length > matches.length);
     }
   }
   #path(sessionID) {
-    return join2(this.#directory, `${createHash("sha256").update(sessionID).digest("hex")}.json`);
+    return join(this.#directory, `${createHash("sha256").update(sessionID).digest("hex")}.json`);
   }
   #remember(plan) {
     const snapshot = clonePlan(plan);
@@ -4528,6 +4548,9 @@ function matchesPhase(todo, phase) {
   if (titleTokens.length === 0) return false;
   const overlap = titleTokens.filter((token) => todoTokens.has(token)).length;
   return overlap >= Math.min(3, titleTokens.length) && overlap / titleTokens.length >= 0.6;
+}
+function isTerminalTodoStatus(status) {
+  return status === "completed" || status === "cancelled";
 }
 function todoEntry(value) {
   const record = asRecord(value);
@@ -4823,7 +4846,7 @@ function orchestratorModeEnabled() {
   const socket = process.env.CUPPET_CONTROL_SOCKET;
   if (!socket) return false;
   try {
-    const parsed = JSON.parse(readFileSync(join(dirname(socket), "orchestrator.json"), "utf8"));
+    const parsed = JSON.parse(readFileSync(join2(dirname(socket), "orchestrator.json"), "utf8"));
     return parsed.enabled === true;
   } catch {
     return false;

@@ -97,6 +97,67 @@ test('lossless plans preserve preambles and full phase detail while restoring om
   }
 })
 
+test('TodoWrite clears the visible checklist instead of restoring completed plan phases', async () => {
+  const store = createLosslessPlanStore()
+  const sessionID = 'todo-clear-session'
+  const plan = await store.capture({
+    sessionID,
+    messageID: 'todo-clear-input',
+    prompt: longImplementationPlan(),
+    agent: 'cuppet',
+  })
+  assert.ok(plan)
+
+  const first = plan.phases[0]!
+  const active = await store.reconcileTodos(sessionID, [{
+    content: `[${first.id}] Work on the first phase`,
+    status: 'in_progress',
+    priority: 'high',
+  }])
+  assert.ok(active?.some((todo) => todo.status === 'in_progress'))
+
+  assert.deepEqual(await store.reconcileTodos(sessionID, []), [])
+
+  const restarted = await store.reconcileTodos(sessionID, [{
+    content: `[${first.id}] Resume the first phase`,
+    status: 'in_progress',
+    priority: 'high',
+  }])
+  assert.deepEqual(restarted?.map((todo) => todo.content.match(/\[(P\d+)\]/)?.[1]), [first.id])
+
+  const completed = await store.reconcileTodos(sessionID, [{
+    content: `[${first.id}] Finish the first phase`,
+    status: 'completed',
+    priority: 'high',
+  }])
+  assert.deepEqual(completed, [])
+})
+
+test('TodoWrite honors an unrelated replacement instead of resurrecting the prior plan', async () => {
+  const store = createLosslessPlanStore()
+  const sessionID = 'todo-replacement-session'
+  const plan = await store.capture({
+    sessionID,
+    messageID: 'todo-replacement-input',
+    prompt: longImplementationPlan(),
+    agent: 'cuppet',
+  })
+  assert.ok(plan)
+
+  await store.reconcileTodos(sessionID, [{
+    content: `[${plan.phases[0]!.id}] Start the stored plan`,
+    status: 'in_progress',
+    priority: 'high',
+  }])
+
+  const replacement = [{
+    content: 'Write the unrelated release notes',
+    status: 'in_progress',
+    priority: 'medium',
+  }]
+  assert.deepEqual(await store.reconcileTodos(sessionID, replacement), replacement)
+})
+
 test('a large phase remains retrievable in exact chunks instead of being silently truncated', async () => {
   const store = createLosslessPlanStore()
   const prompt = [
@@ -184,14 +245,17 @@ test('the plugin mutates TodoWrite arguments in place so OpenCode receives the r
     }, messages)
 
     const args = {
-      todos: [{ content: 'Start with only the first phase', status: 'in_progress', priority: 'high' }],
+      todos: [
+        { content: '[P01] Start with only the first phase', status: 'in_progress', priority: 'high' },
+        { content: 'Keep this unmatched implementation detail', status: 'pending', priority: 'medium' },
+      ],
     }
     await plugin['tool.execute.before']({ tool: 'todowrite', sessionID, callID: 'call-1' }, { args })
 
     assert.ok(args.todos.length > 1, 'the original TodoWrite argument object must gain the missing phases')
     const phaseIDs = args.todos.map((todo) => todo.content.match(/\[(P\d+)\]/)?.[1]).filter(Boolean)
     assert.ok(phaseIDs.length > 1, 'restored canonical tasks carry stable phase IDs')
-    assert.ok(args.todos.some((todo) => todo.content === 'Start with only the first phase'), 'unmatched model work is retained rather than discarded')
+    assert.ok(args.todos.some((todo) => todo.content === 'Keep this unmatched implementation detail'), 'unmatched model work is retained rather than discarded')
     const overview = await plugin.tool.cuppet_plan.execute({ action: 'overview' }, { sessionID })
     assert.notEqual(typeof overview, 'string')
     if (typeof overview !== 'string') assert.match(overview.output, /CANONICAL IMPLEMENTATION PLAN/)

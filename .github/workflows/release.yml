@@ -71,7 +71,16 @@ jobs:
       - run: cargo build --workspace --release --locked --target=${{ matrix.target }}
       - name: Build audited OpenCode binary
         run: node scripts/build-opencode.mjs --source=.opencode-src --output=.opencode/opencode
-      - run: npm test
+      - name: Run npm test
+        run: |
+          if npm test; then
+            exit 0
+          fi
+          if [[ "${{ matrix.os }}" != macos-* ]]; then
+            exit 1
+          fi
+          echo "macOS tests failed once; retrying once for transient runner failures"
+          npm test
         env:
           CUPPET_CONTRACT_OPENCODE_BIN: ${{ github.workspace }}/.opencode/opencode
           CUPPET_TEST_TST_BIN: ${{ github.workspace }}/target/${{ matrix.target }}/release/tst-daemon

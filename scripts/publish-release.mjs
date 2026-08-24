@@ -19,9 +19,9 @@ const publishFlags = [
 ]
 
 for (const directory of manifests.map(dirname).sort()) {
-  await run('npm', ['publish', directory, ...publishFlags])
+  await publishIfMissing(directory, publishFlags)
 }
-await run('npm', ['publish', '--workspace=cuppet', ...publishFlags])
+await publishIfMissing(resolve('packages/cli'), publishFlags, ['--workspace=cuppet'])
 
 async function find(directory, name) {
   const output = []
@@ -40,5 +40,41 @@ function run(command, arguments_) {
     child.once('exit', (code) => code === 0
       ? resolvePromise()
       : reject(new Error(`${command} exited ${code}`)))
+  })
+}
+
+async function publishIfMissing(directory, flags, extraArguments = []) {
+  const metadata = JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'))
+  if (await isPublished(metadata.name, metadata.version)) {
+    process.stdout.write(`already published ${metadata.name}@${metadata.version}; skipping\n`)
+    return
+  }
+  const publishArguments = extraArguments.length > 0 ? extraArguments : [directory]
+  await run('npm', ['publish', ...publishArguments, ...flags])
+}
+
+function isPublished(name, version) {
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn('npm', ['view', `${name}@${version}`, 'version', '--json'], { stdio: ['ignore', 'pipe', 'pipe'] })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', (chunk) => (stdout += chunk.toString('utf8')))
+    child.stderr.on('data', (chunk) => (stderr += chunk.toString('utf8')))
+    child.once('error', reject)
+    child.once('exit', (code) => {
+      if (code === 0) {
+        try {
+          resolvePromise(JSON.parse(stdout.trim()) === version)
+        } catch (error) {
+          reject(error)
+        }
+        return
+      }
+      if (/E404|404 Not Found/i.test(`${stdout}\n${stderr}`)) {
+        resolvePromise(false)
+        return
+      }
+      reject(new Error(`npm view failed for ${name}@${version}: ${stderr.trim() || stdout.trim()}`))
+    })
   })
 }

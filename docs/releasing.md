@@ -13,9 +13,9 @@ repository.
 
 ## What the workflow does
 
-[`release.yml`](../.github/workflows/release.yml) is started manually with an
-existing tag such as `v0.2.0-alpha.1`. The tag must equal `v` plus the root
-`package.json` version.
+[`release.yml`](../.github/workflows/release.yml) starts automatically when a
+`v*` tag is pushed. It can also be started manually with an existing tag such as
+`v0.2.0-alpha.1`. The tag must equal `v` plus the root `package.json` version.
 
 Each platform job uses Node 22, Bun 1.3.14, and Rust 1.88 to:
 
@@ -82,8 +82,8 @@ are declared as `id-token: write` and `contents: write` in the workflow.
    git push origin v0.2.0-alpha.1
    ```
 
-5. Open GitHub Actions, select `release`, choose **Run workflow**, and enter
-   the exact tag.
+5. Pushing the tag starts the `release` workflow automatically. If you use
+   **Run workflow** instead, enter the exact tag.
 6. Wait for all four platform jobs and the publish job to finish.
 7. Install the published package on a clean Node 22 machine:
 

@@ -22,6 +22,25 @@ session continuity records, and verified durable project/global memory.
 - The pinned OpenCode binary (a release package includes it; source builds can
   set `CUPPET_OPENCODE_BIN`)
 
+## Install from npm
+
+The published package includes the Cuppet CLI, relay app, and the
+platform-specific runtime. npm selects the matching runtime for your machine:
+
+```sh
+npm install --global cuppet@0.2.0-alpha.1
+cuppet --version
+```
+
+To install the newest published version instead, omit the version:
+
+```sh
+npm install --global cuppet
+```
+
+After installation, run `cuppet --doctor` to check the local runtime, provider
+configuration, and project storage.
+
 ## Develop
 
 ```sh

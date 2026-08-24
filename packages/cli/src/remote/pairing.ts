@@ -5,8 +5,8 @@ import { DEFAULT_DEVICE_SCOPES, VIEWER_DEVICE_SCOPES, type RemoteScope } from '.
 
 /**
  * Host-side device registry and pairing invitations. The relay transports
- * bytes; it never learns device credentials — the host is the authority for
- * which devices exist, what they may do, and when they are revoked.
+ * bytes; the host remains the authority for which devices exist, what they
+ * may do, and when they are revoked.
  */
 
 export type PairingInvite = {

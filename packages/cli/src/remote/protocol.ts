@@ -20,6 +20,7 @@ export const DEFAULT_DEVICE_SCOPES: RemoteScope[] = [
   'session.write',
   'permission.write',
   'question.write',
+  'model.write',
 ]
 export const VIEWER_DEVICE_SCOPES: RemoteScope[] = ['session.read']
 
@@ -96,6 +97,7 @@ export const COMMAND_SCOPES: Record<string, RemoteScope | null> = {
   'session.undo': 'session.write',
   'session.compact': 'session.write',
   'plan.set': 'session.write',
+  'agent.mode.set': 'session.write',
   'permission.reply': 'permission.write',
   'question.reply': 'question.write',
   'question.reject': 'question.write',
@@ -144,7 +146,7 @@ export function publicEventFor(agentEvent: Record<string, unknown>): { type: str
         },
       }
     case 'diff':
-      return { type: 'diff.updated', payload: { diff: agentEvent.diff } }
+      return { type: 'diff.updated', payload: { diff: diffTextFor(agentEvent.diff) } }
     case 'permission':
       return { type: 'permission.requested', payload: { request: agentEvent.request } }
     case 'permission-resolved':
@@ -175,4 +177,47 @@ export function publicEventFor(agentEvent: Record<string, unknown>): { type: str
       // Internal-only events (tst-notification etc.) never cross the wire.
       return undefined
   }
+}
+
+/**
+ * OpenCode's session.diff event is structured, while the public clients use
+ * the same unified-diff renderer as tool completions. Normalize both forms at
+ * the bridge so clients never have to know the internal event shape.
+ */
+function diffTextFor(value: unknown): string | undefined {
+  if (typeof value === 'string') return value.slice(0, 64 * 1024)
+  if (!Array.isArray(value)) return undefined
+
+  const chunks = value.flatMap((entry) => {
+    if (typeof entry === 'string') return [entry]
+    if (!entry || typeof entry !== 'object') return []
+    const item = entry as Record<string, unknown>
+    for (const key of ['diff', 'patch']) {
+      if (typeof item[key] === 'string') return [item[key] as string]
+    }
+    const rawPath = typeof item.file === 'string'
+      ? item.file
+      : typeof item.path === 'string'
+        ? item.path
+        : undefined
+    const hasBefore = typeof item.before === 'string'
+    const hasAfter = typeof item.after === 'string'
+    if (!rawPath || (!hasBefore && !hasAfter)) return []
+    const path = rawPath.replace(/^[/\\]+/, '').replace(/[\r\n]/g, '')
+    if (!path) return []
+    const before = hasBefore ? String(item.before).split(/\r?\n/) : []
+    const after = hasAfter ? String(item.after).split(/\r?\n/) : []
+    if (before.at(-1) === '') before.pop()
+    if (after.at(-1) === '') after.pop()
+    return [[
+      `diff --git a/${path} b/${path}`,
+      `--- a/${path}`,
+      `+++ b/${path}`,
+      '@@',
+      ...before.map((line) => `-${line}`),
+      ...after.map((line) => `+${line}`),
+    ].join('\n')]
+  })
+  const text = chunks.filter((chunk) => chunk.trim().length > 0).join('\n')
+  return text ? text.slice(0, 64 * 1024) : undefined
 }

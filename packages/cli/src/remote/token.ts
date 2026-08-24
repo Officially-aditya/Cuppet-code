@@ -6,18 +6,20 @@ const BACKEND_SCOPE_MAP: Record<string, RemoteScope> = {
   'sessions:write': 'session.write',
   'permissions:reply': 'permission.write',
   'questions:reply': 'question.write',
+  'models:write': 'model.write',
 }
 
 /**
  * Verify the optional short-lived credential minted by Sydney. The host does
- * this locally; the backend secret and the token never reach the relay.
+ * this locally. The relay is only a trusted transport for the short-lived
+ * token and does not verify or persist it.
  */
 export function verifyRemoteToken(
   token: string,
   secret: string,
   expectedHostId: string,
   expectedDeviceId: string,
-): { scopes: RemoteScope[] } | undefined {
+): { scopes: RemoteScope[]; expiresAt: number } | undefined {
   const parts = token.split('.')
   if (parts.length !== 3 || !secret) return undefined
   const [encodedHeader, encodedPayload, encodedSignature] = parts
@@ -53,7 +55,7 @@ export function verifyRemoteToken(
           .map((scope) => typeof scope === 'string' ? BACKEND_SCOPE_MAP[scope] : undefined)
           .filter((scope): scope is RemoteScope => scope !== undefined)
       : []
-    return scopes.length > 0 ? { scopes: [...new Set(scopes)] } : undefined
+    return scopes.length > 0 ? { scopes: [...new Set(scopes)], expiresAt: payload.exp } : undefined
   } catch {
     return undefined
   }

@@ -194,7 +194,7 @@ function connect() {
   save()
   const base = $('in-relay').value.replace(/\/$/, '')
   const params = new URLSearchParams({
-    role: 'device', hostId: $('in-host').value, deviceId: $('in-device').value, secret: $('in-secret').value,
+    role: 'device', hostId: $('in-host').value, deviceId: $('in-device').value,
   })
   socket = new WebSocket(`${base}/ws?${params}`)
   socket.onopen = () => {

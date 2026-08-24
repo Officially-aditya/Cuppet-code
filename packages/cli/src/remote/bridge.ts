@@ -17,7 +17,12 @@ export type BridgeOptions = {
   hostId: string
   transport: RemoteTransport
   /** Authenticates a device credential pair; undefined disables all commands. */
-  authenticateDevice?: (deviceID: string, secret: string) => Promise<{ scopes: readonly string[]; name?: string } | undefined>
+  authenticateDevice?: (deviceID: string, secret: string) => Promise<{
+    scopes: readonly string[]
+    name?: string
+    /** JWT expiry in Unix seconds; local paired credentials omit this. */
+    expiresAt?: number
+  } | undefined>
   /** Redeems a single-use pairing invite for new device credentials. */
   claimPairingInvite?: (code: string, deviceName: string) => Promise<{
     deviceId: string
@@ -56,7 +61,8 @@ export class RemoteBridge {
   #unsubscribers: Array<() => void> = []
   #seenCommandIds = new Map<string, true>()
   #offlineBuffer: EventFrame[] = []
-  #devices = new Map<string, { scopes: readonly string[]; name?: string }>()
+  #devices = new Map<string, { scopes: readonly string[]; name?: string; expiresAt?: number }>()
+  #deviceTimers = new Map<string, ReturnType<typeof setTimeout>>()
   #pairAttemptsLeft = PAIR_ATTEMPT_LIMIT
   #started = false
 
@@ -90,7 +96,7 @@ export class RemoteBridge {
       if (!connected) {
         // A relay reconnect is a new transport authority. Every device must
         // perform the hello handshake again before it can issue commands.
-        this.#devices.clear()
+        this.#clearDevices()
         return
       }
       this.#pairAttemptsLeft = PAIR_ATTEMPT_LIMIT
@@ -102,7 +108,7 @@ export class RemoteBridge {
     if (!this.#started) return
     this.#started = false
     for (const unsubscribe of this.#unsubscribers.splice(0)) unsubscribe()
-    this.#devices.clear()
+    this.#clearDevices()
     this.#offlineBuffer.length = 0
     try {
       this.#transport.close()
@@ -122,7 +128,9 @@ export class RemoteBridge {
           }
       this.#sendRaw(encodeFrame({
         version: PROTOCOL_VERSION,
-        seq: ++this.#seq,
+        // Attach is a control snapshot, not a stream event. Keeping it at
+        // seq=0 lets buffered events retain their original sequence numbers.
+        seq: 0,
         hostId: this.#hostId,
         ts: Date.now(),
         type: 'host.attach',
@@ -263,7 +271,7 @@ export class RemoteBridge {
     if (!claimed) return fail('invalid or expired pairing code')
     this.#sendRaw(encodeFrame({
       version: PROTOCOL_VERSION,
-      seq: ++this.#seq,
+      seq: 0,
       hostId: this.#hostId,
       ts: Date.now(),
       type: 'device.paired',
@@ -282,18 +290,24 @@ export class RemoteBridge {
   async #handleDeviceHello(parsed: Record<string, unknown>, deviceId: string): Promise<void> {
     const secret = String((parsed.payload as Record<string, unknown> | undefined)?.secret ?? '')
     if (!this.#authenticateDevice || !deviceId || !secret) {
-      this.#devices.delete(deviceId)
+      this.#clearDevice(deviceId)
       return this.#rejectDevice(deviceId, 'authentication unavailable')
     }
     const device = await this.#authenticateDevice(deviceId, secret)
     if (!device) {
-      this.#devices.delete(deviceId)
+      this.#clearDevice(deviceId)
       return this.#rejectDevice(deviceId, 'unknown device credentials')
     }
-    this.#devices.set(deviceId, { scopes: device.scopes, ...(device.name ? { name: device.name } : {}) })
+    this.#clearDevice(deviceId)
+    this.#devices.set(deviceId, {
+      scopes: device.scopes,
+      ...(device.name ? { name: device.name } : {}),
+      ...(device.expiresAt !== undefined ? { expiresAt: device.expiresAt } : {}),
+    })
+    this.#scheduleDeviceExpiry(deviceId, device.expiresAt)
     // Tell the relay to start delivering live traffic to this device, then
     // confirm the credential check to the device itself.
-    this.#sendRaw(encodeFrame({ version: PROTOCOL_VERSION, seq: ++this.#seq, hostId: this.#hostId, ts: Date.now(), type: 'client.accept', payload: {}, deviceId }))
+    this.#sendRaw(encodeFrame({ version: PROTOCOL_VERSION, seq: 0, hostId: this.#hostId, ts: Date.now(), type: 'client.accept', payload: {}, deviceId }))
     this.#sendRaw(encodeFrame({
       version: PROTOCOL_VERSION,
       replyTo: 'device-hello',
@@ -305,9 +319,36 @@ export class RemoteBridge {
 
   #rejectDevice(deviceId: string, message: string): void {
     if (deviceId) {
-      this.#sendRaw(encodeFrame({ version: PROTOCOL_VERSION, seq: ++this.#seq, hostId: this.#hostId, ts: Date.now(), type: 'client.reject', payload: {}, deviceId }))
+      this.#sendRaw(encodeFrame({ version: PROTOCOL_VERSION, seq: 0, hostId: this.#hostId, ts: Date.now(), type: 'client.reject', payload: {}, deviceId }))
     }
     this.#sendRaw(encodeFrame({ version: PROTOCOL_VERSION, replyTo: 'device-hello', ok: false, error: message, ...(deviceId ? { deviceId } : {}) } satisfies ResultFrame & { deviceId?: string }))
+  }
+
+  #scheduleDeviceExpiry(deviceId: string, expiresAt?: number): void {
+    if (expiresAt === undefined || !Number.isFinite(expiresAt)) return
+    const delay = Math.max(0, expiresAt * 1000 - Date.now())
+    const timer = setTimeout(() => {
+      const device = this.#devices.get(deviceId)
+      if (!device || device.expiresAt !== expiresAt) return
+      this.#devices.delete(deviceId)
+      this.#deviceTimers.delete(deviceId)
+      this.#rejectDevice(deviceId, 'remote credential expired')
+    }, delay)
+    timer.unref?.()
+    this.#deviceTimers.set(deviceId, timer)
+  }
+
+  #clearDevice(deviceId: string): void {
+    const timer = this.#deviceTimers.get(deviceId)
+    if (timer) clearTimeout(timer)
+    this.#deviceTimers.delete(deviceId)
+    this.#devices.delete(deviceId)
+  }
+
+  #clearDevices(): void {
+    for (const timer of this.#deviceTimers.values()) clearTimeout(timer)
+    this.#deviceTimers.clear()
+    this.#devices.clear()
   }
 
   #remember(id: string): void {

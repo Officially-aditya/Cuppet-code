@@ -20,7 +20,7 @@ test('host verifies backend remote tokens and maps their scopes', () => {
       sub: 'user_1',
       device: 'dev_1',
       host: 'host_1',
-      scopes: ['sessions:read', 'permissions:reply'],
+      scopes: ['sessions:read', 'permissions:reply', 'models:write'],
       iat: Math.floor(Date.now() / 1000),
       exp: Math.floor(Date.now() / 1000) + 300,
     }),
@@ -28,7 +28,10 @@ test('host verifies backend remote tokens and maps their scopes', () => {
     'host_1',
     'dev_1',
   )
-  assert.deepEqual(value?.scopes, ['session.read', 'permission.write'])
+  assert.deepEqual(value?.scopes, ['session.read', 'permission.write', 'model.write'])
+  const now = Math.floor(Date.now() / 1000)
+  assert.ok((value?.expiresAt ?? 0) >= now + 299)
+  assert.ok((value?.expiresAt ?? 0) <= now + 300)
 })
 
 test('host rejects tampered, expired, or differently bound remote tokens', () => {

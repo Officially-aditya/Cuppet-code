@@ -7,18 +7,21 @@ import { dirname, extname, join, normalize } from 'node:path'
  * Self-hostable Cuppet relay: one thin WebSocket "room" per host.
  *
  * Privacy posture: the relay routes envelopes and keeps presence plus a tiny
- * in-memory replay buffer only. Source code, credentials and durable session
+ * in-memory replay buffer only. Source code, provider keys and durable session
  * state stay on the developer machine; clients fetch transcripts from the
- * host after reconnect (host.attach) rather than from the relay.
+ * host after reconnect (host.attach) rather than from the relay. The relay is
+ * still a trusted transport: it can observe handshake payloads and live
+ * envelopes, so deploy it behind TLS and do not treat it as an E2EE boundary.
  *
- * Handshake (query params — TLS protects them; payload E2EE comes later):
+ * Handshake (only the host secret remains in the URL; device credentials are
+ * sent in the hello payload to avoid leaking them through URL logs):
  *   ws://…/ws?role=host&hostId=<id>&secret=<secret>
- *   ws://…/ws?role=device&hostId=<id>&deviceId=<id>&secret=<device secret>
+ *   ws://…/ws?role=device&hostId=<id>&deviceId=<id>
  *
  * Hosts are checked against AUTH_FILE {"hosts":{"<hostId>":"<sha256(secret)>"}}.
- * Devices are authenticated END-TO-END by the host: the relay forwards the
- * device.hello envelope and only starts delivering live traffic once the host
- * answers with client.accept/client.reject for that deviceId.
+ * Devices are authenticated by the host: the relay forwards the device.hello
+ * envelope and only starts delivering live traffic once the host answers with
+ * client.accept/client.reject for that deviceId.
  *
  * Management API (requires --admin-token):
  *   GET    /healthz
@@ -48,7 +51,7 @@ export type RelayOptions = {
   bind?: string
   /** Directory served under /app (the remote-control PWA), if any. */
   appDirectory?: string
-  /** JSON file mapping hostId → sha256(hostSecret). Absent/empty file = open dev mode. */
+  /** JSON file mapping hostId → sha256(hostSecret). Present means fail-closed. */
   authFile?: string
   /** When set, enables POST/DELETE /hosts management endpoints. */
   adminToken?: string
@@ -250,11 +253,12 @@ export class CuppetRelay {
     if (role === 'host') {
       const secret = url.searchParams.get('secret') ?? ''
       const expected = await this.#loadAuthorizedHosts()
-      // Open (development) mode when no auth file exists or it has no entries.
-      if (expected && Object.keys(expected).length > 0) {
+      // No auth file is explicit development mode. A present file, including
+      // an empty or unreadable one, must fail closed.
+      if (expected !== undefined) {
         const stored = expected[hostId]
         const provided = Buffer.from(sha256(secret))
-        const storedBuffer = Buffer.from(stored ?? '')
+        const storedBuffer = Buffer.from(typeof stored === 'string' ? stored : '')
         if (!stored || provided.length !== storedBuffer.length || !timingSafeEqual(provided, storedBuffer)) {
           closeSocket(socket, 4002, 'host unauthorized')
           return
@@ -293,20 +297,6 @@ export class CuppetRelay {
       room.devices.set(deviceId, registration)
       selfRegistration = registration
 
-      // Forward credentials end-to-end; the host decides. Connections without
-      // a secret param are pairing sockets that authenticate via device.pair.
-      const secret = url.searchParams.get('secret')
-      if (secret !== null) {
-        room.host.send(JSON.stringify({
-          version: 1,
-          seq: 0,
-          hostId,
-          ts: Date.now(),
-          type: 'device.hello',
-          deviceId,
-          payload: { deviceId, secret },
-        }))
-      }
     } else {
       socket.destroy()
       return
@@ -385,7 +375,7 @@ export class CuppetRelay {
       if (type === 'ping') return
       // A pairing socket may redeem its invite, but it must not be able to
       // send arbitrary commands before the host has accepted its credentials.
-      if (!device.authenticated && type !== 'device.pair') return
+      if (!device.authenticated && type !== 'device.pair' && type !== 'device.hello') return
       host.send(JSON.stringify({ ...message, deviceId }))
       return
     }

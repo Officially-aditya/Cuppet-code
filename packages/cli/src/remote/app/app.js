@@ -106,9 +106,17 @@
     setDot('off')
     const url =
       `${wsBase()}?role=device&hostId=${encodeURIComponent(hostId)}` +
-      `&deviceId=${encodeURIComponent(creds.deviceId)}&secret=${encodeURIComponent(creds.secret)}`
+      `&deviceId=${encodeURIComponent(creds.deviceId)}`
     ws = new WebSocket(url)
-    ws.addEventListener('open', () => { /* hello comes from the relay automatically */ })
+    ws.addEventListener('open', () => {
+      ws.send(JSON.stringify({
+        version: 1,
+        type: 'device.hello',
+        deviceId: creds.deviceId,
+        payload: { deviceId: creds.deviceId, secret: creds.secret },
+        ts: Date.now(),
+      }))
+    })
     ws.addEventListener('message', (event) => {
       let frame
       try { frame = JSON.parse(event.data) } catch { return }

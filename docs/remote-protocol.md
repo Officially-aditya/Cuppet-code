@@ -25,30 +25,36 @@ authority for every command; clients render semantic events only.
 { "version": 1, "replyTo": "c-123", "ok": false, "error": "…" }
 ```
 
-`seq` is monotonic for one host authority. `host.attach.payload.connectionId`
-changes when the host process is replaced, so clients reset their sequence
-cursor before applying the new authority's snapshot. Clients skip
-`seq <= lastSeq` (relay replay) and request a resnapshot when a gap is
-detected.
+`seq` is monotonic for one host authority. `host.attach`, `client.accept`, and
+`client.reject` are control frames and always use `seq: 0`; they do not move
+the event cursor. `host.attach.payload.connectionId` changes when the host
+process is replaced, so clients reset their sequence cursor before applying
+the new authority's snapshot. Clients skip `seq <= lastSeq` (relay replay)
+and request a resnapshot when a gap is detected.
 
 ## Handshake
 
 ```text
 ws://…/ws?role=host&hostId=…&secret=…
-ws://…/ws?role=device&hostId=…&deviceId=…[&secret=…]
+ws://…/ws?role=device&hostId=…&deviceId=…
 ```
 
-A device connection **without** `secret` is a pairing socket: it sends
-`device.pair {code, name}` and receives `replyTo: "device-pair"` with
-`{deviceId, secret, scopes}`. Codes are single-use, 2-minute TTL.
-On connect the host broadcasts `client.accept`/`client.reject`, then
-`host.attach`.
+A device sends either `device.pair {code, name}` or
+`device.hello {deviceId, secret}` after the socket opens. Pairing returns
+`replyTo: "device-pair"` with `{deviceId, secret, scopes}`; codes are
+single-use with a 2-minute TTL. After a successful hello the host sends
+`client.accept`, then `host.attach`.
 
 When managed credentials are enabled, Sydney mints a five-minute JWT bound to
 the user, host, device, and scopes. The host verifies it locally using
 `CUPPET_REMOTE_TOKEN_SECRET`; the relay only transports it and never verifies
-or stores it. Host-local pairing credentials remain supported for self-hosted
-deployments without the shared secret.
+or stores it. The host drops the device when the JWT expires. Host-local
+pairing credentials remain supported for self-hosted deployments without the
+shared secret.
+
+The relay is a trusted transport, not an end-to-end-encrypted boundary: it can
+observe handshake payloads and live envelopes. Run it behind TLS and never
+send provider API keys through it.
 
 Relay close codes: `4001` host offline · `4002` host unauthorized ·
 `4003` invalid device.
@@ -101,11 +107,11 @@ Local-only (`status`, `doctor`, memory, platform wiring) never crosses the wire.
 | --- | --- |
 | `assistant.text.delta` / `assistant.reasoning.delta` | `{text}` |
 | `tool.started` / `tool.progress` / `tool.completed` | `{callID,…}`, completed adds `{success, diff?}` |
-| `diff.updated` | `{diff}` |
+| `diff.updated` | `{diff: string}` unified diff text |
 | `permission.requested` / `permission.resolved` | `{request}` / `{requestID, reply?}` |
 | `question.requested` / `question.resolved` | `{request}` / `{requestID, accepted}` |
 | `usage.updated` | `{usage:{input,output}, cost}` |
-| `session.idle` / `session.updated` | |
+| `session.idle` / `session.updated` | `session.updated` adds `{sessionID, agent?}` |
 | `compaction`, `step.limit`, `agent.error` | |
 | `device.paired`, `client.accept`, `client.reject`, `bridge.error` | transport-level |
 

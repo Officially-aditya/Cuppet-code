@@ -117,6 +117,13 @@ test('mobile contract commands expose host, workspace, and agent mode state', as
 test('public protocol events map from internal AgentEvents and drop internals', () => {
   const delta = publicEventFor({ type: 'text-delta', sessionID: 'ses_1', text: 'hi' } as unknown as AgentEvent)
   assert.deepEqual(delta, { type: 'assistant.text.delta', payload: { text: 'hi' } })
+  const diff = publicEventFor({
+    type: 'diff',
+    sessionID: 'ses_1',
+    diff: [{ file: 'src/index.ts', before: 'old', after: 'new' }],
+  })
+  assert.match(String((diff?.payload as { diff?: unknown }).diff), /diff --git a\/src\/index\.ts b\/src\/index\.ts/)
+  assert.equal((diff?.payload as { diff?: unknown }).diff, 'diff --git a/src/index.ts b/src/index.ts\n--- a/src/index.ts\n+++ b/src/index.ts\n@@\n-old\n+new')
   assert.equal(publicEventFor({ type: 'tst-notification' } as unknown as AgentEvent), undefined)
 })
 
@@ -125,6 +132,7 @@ test('command frames are validated, size-capped, and restricted to known types',
     JSON.stringify({ version: 1, id: 'm1', type: 'session.steer', hostId: 'h1', ts: 1, payload: { instruction: 'x' } }),
   )
   assert.equal(frame.id, 'm1')
+  assert.equal(parseCommandFrame(JSON.stringify({ version: 1, id: 'm-mode', type: 'agent.mode.set', hostId: 'h1', ts: 1 })).type, 'agent.mode.set')
   assert.throws(() => parseCommandFrame(JSON.stringify({ version: 2, id: 'm2', type: 'session.list', hostId: 'h1', ts: 1 })))
   assert.throws(() => parseCommandFrame(JSON.stringify({ version: 1, id: 'm3', type: 'memory.clear', hostId: 'h1', ts: 1 })))
   assert.throws(() => encodeFrame('x'.repeat(MAX_FRAME_BYTES + 1)))
@@ -144,6 +152,7 @@ test('pairing invites are single-use, expiring, and produce revocable device cre
     const claimed = await claimPairingInvite(dir, invite.code, 'my phone')
     assert.ok(claimed)
     assert.ok(claimed.scopes.includes('session.write'))
+    assert.ok(claimed.scopes.includes('model.write'))
     assert.equal(await claimPairingInvite(dir, invite.code, 'replay'), undefined)
 
     const auth = await authenticateDevice(dir, claimed.deviceId, claimed.secret)
@@ -244,7 +253,7 @@ function command(id: string, type: string, payload: Record<string, unknown> = {}
   return { version: PROTOCOL_VERSION, id, type, hostId: 'host_t', ts: Date.now(), payload, deviceId: 'dev_t' }
 }
 
-function startBridge(options: { scopes?: string[]; controller?: Record<string, unknown> } = {}): {
+function startBridge(options: { scopes?: string[]; controller?: Record<string, unknown>; expiresAt?: number } = {}): {
   bridge: RemoteBridge
   transport: FakeTransport
   agentListeners: Array<(event: AgentEvent) => void>
@@ -257,13 +266,13 @@ function startBridge(options: { scopes?: string[]; controller?: Record<string, u
     onChange(listener: () => void) { changeListeners.push(listener); return () => undefined },
     ...options.controller,
   }) as never
-  const scopes = options.scopes ?? ['session.read', 'session.write', 'permission.write', 'question.write']
+  const scopes = options.scopes ?? ['session.read', 'session.write', 'permission.write', 'question.write', 'model.write']
   const bridge = new RemoteBridge({
     controller,
     hostId: 'host_t',
     transport: transport as never,
     authenticateDevice: async (deviceId: string, secret: string) =>
-      secret === 'good' ? { scopes, name: 'test' } : undefined,
+      secret === 'good' ? { scopes, name: 'test', ...(options.expiresAt !== undefined ? { expiresAt: options.expiresAt } : {}) } : undefined,
     buildAttachSnapshot: async () => ({ snapshot: { ready: true }, permissions: [], questions: [] }),
   })
   bridge.start()
@@ -362,10 +371,24 @@ test('reconnect delivers attach snapshot first, then buffered offline events', a
 
   const frames = transport.frames()
   assert.equal(frames[0]?.type, 'host.attach')
+  assert.equal(frames[0]?.seq, 0)
   assert.deepEqual(frames[0]?.payload?.snapshot, { ready: true })
   assert.equal(typeof frames[0]?.payload?.connectionId, 'string')
   const buffered = frames.find((frame) => frame.type === 'assistant.text.delta')
   assert.ok(buffered, 'offline-published event must be flushed after connect')
+  assert.equal(buffered?.seq, 1)
+})
+
+test('managed devices are rejected when their credential expires', async () => {
+  const { transport } = startBridge({ expiresAt: (Date.now() + 40) / 1000 })
+  transport.receive(hello())
+  await settle()
+  await new Promise((resolvePromise) => setTimeout(resolvePromise, 90))
+  assert.ok(transport.frames().some((frame) => frame.type === 'client.reject'))
+  assert.match(
+    String(transport.frames().find((frame) => frame.replyTo === 'device-hello' && frame.ok === false)?.error),
+    /expired/,
+  )
 })
 
 test('agent events stream as semantic protocol events with session ids', async () => {

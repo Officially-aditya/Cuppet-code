@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { RemoteBridge } from '../src/remote/bridge.js'
@@ -17,8 +17,12 @@ type Frame = Record<string, any>
 class DeviceClient {
   readonly frames: Frame[] = []
   readonly socket: WebSocket
+  readonly #deviceId: string
+  readonly #helloSecret: string | undefined
 
-  constructor(url: string) {
+  constructor(url: string, helloSecret?: string) {
+    this.#deviceId = new URL(url).searchParams.get('deviceId') ?? ''
+    this.#helloSecret = helloSecret
     this.socket = new WebSocket(url)
     this.socket.addEventListener('message', (event) => {
       try {
@@ -54,6 +58,15 @@ class DeviceClient {
     })
     await waitFor(() => this.socket.readyState === WebSocket.OPEN, timeoutMs, 'device open')
     if (process.env.DEBUG_DEVICE) console.log('DEVICE OPENED')
+    if (this.#helloSecret) {
+      this.send({
+        version: 1,
+        type: 'device.hello',
+        deviceId: this.#deviceId,
+        payload: { deviceId: this.#deviceId, secret: this.#helloSecret },
+        ts: Date.now(),
+      })
+    }
   }
 
   async next(
@@ -88,9 +101,8 @@ function hostUrl(port: number, hostId: string, secret?: string): string {
   return `ws://127.0.0.1:${port}/ws?${params}`
 }
 
-function deviceUrl(port: number, hostId: string, deviceId: string, secret?: string): string {
+function deviceUrl(port: number, hostId: string, deviceId: string, _secret?: string): string {
   const params = new URLSearchParams({ role: 'device', hostId, deviceId })
-  if (secret !== undefined) params.set('secret', secret)
   return `ws://127.0.0.1:${port}/ws?${params}`
 }
 
@@ -144,7 +156,9 @@ test('relay routes commands between an authenticated device and the host bridge 
     bridge = hostBridge
     await waitHostOnline(transport)
 
-    device = new DeviceClient(deviceUrl(relay.port, 'host_e2e', claimed.deviceId, claimed.secret))
+    const deviceAddress = deviceUrl(relay.port, 'host_e2e', claimed.deviceId)
+    assert.equal(new URL(deviceAddress).searchParams.has('secret'), false)
+    device = new DeviceClient(deviceAddress, claimed.secret)
     await device.open()
 
     const accepted = await device.next((frame) => frame.replyTo === 'device-hello' && frame.ok === true, 'hello accept')
@@ -220,8 +234,8 @@ test('relay and bridge isolate scopes for multiple authenticated devices', async
     bridge = started.bridge
     await waitHostOnline(started.transport)
 
-    const trustedDevice = new DeviceClient(deviceUrl(relay.port, 'host_device_scopes', trusted.deviceId, trusted.secret))
-    const viewerDevice = new DeviceClient(deviceUrl(relay.port, 'host_device_scopes', viewer.deviceId, viewer.secret))
+    const trustedDevice = new DeviceClient(deviceUrl(relay.port, 'host_device_scopes', trusted.deviceId), trusted.secret)
+    const viewerDevice = new DeviceClient(deviceUrl(relay.port, 'host_device_scopes', viewer.deviceId), viewer.secret)
     devices.push(trustedDevice, viewerDevice)
     await Promise.all([trustedDevice.open(), viewerDevice.open()])
     await Promise.all([
@@ -278,7 +292,7 @@ test('pairing over the wire claims single-use invites and rejects bad codes', as
 
     // Fresh credentials work against the normal hello flow.
     device.close()
-    device = new DeviceClient(deviceUrl(relay.port, 'host_pair', String(good.result?.deviceId), String(good.result?.secret)))
+    device = new DeviceClient(deviceUrl(relay.port, 'host_pair', String(good.result?.deviceId)), String(good.result?.secret))
     await device.open()
     await device.next((frame) => frame.type === 'client.accept', 'accept after pair')
   } finally {
@@ -286,6 +300,28 @@ test('pairing over the wire claims single-use invites and rejects bad codes', as
     bridge?.stop()
     relay.close()
     await rm(remoteDir, { recursive: true, force: true })
+  }
+})
+
+test('a configured but empty relay auth file fails closed', async () => {
+  const authFile = join(process.cwd(), `.relay-empty-auth-${Date.now()}.json`)
+  await writeFile(authFile, '{"hosts":{}}')
+  const relay = new CuppetRelay({ authFile })
+  await relay.listen(0)
+  try {
+    const intruder = new WebSocket(hostUrl(relay.port, 'host_not_enrolled', 'any-secret'))
+    const outcome = await new Promise<string>((resolvePromise) => {
+      const timer = setTimeout(() => resolvePromise('timeout'), 3000)
+      intruder.addEventListener('close', (event) => {
+        clearTimeout(timer)
+        resolvePromise(`closed:${event.code}`)
+      })
+      intruder.addEventListener('error', () => undefined)
+    })
+    assert.equal(outcome, 'closed:4002')
+  } finally {
+    relay.close()
+    await rm(authFile, { force: true })
   }
 })
 
@@ -319,7 +355,7 @@ test('relay enforces host secrets enrolled through the admin endpoint', async ()
     const { bridge: hostBridge, transport } = startBridge(relay.port, 'host_enrolled', remoteDir, 'a-sufficiently-long-secret')
     bridge = hostBridge
     await waitHostOnline(transport)
-    device = new DeviceClient(deviceUrl(relay.port, 'host_enrolled', claimed!.deviceId, claimed!.secret))
+    device = new DeviceClient(deviceUrl(relay.port, 'host_enrolled', claimed!.deviceId), claimed!.secret)
     await device.open()
     await device.next((frame) => frame.type === 'client.accept' && frame.deviceId === claimed!.deviceId, 'accepted with valid host secret')
 
@@ -378,7 +414,7 @@ test('agent events stream from the host through the relay to devices', async () 
     bridge.start()
     await waitHostOnline(transport)
 
-    device = new DeviceClient(deviceUrl(relay.port, 'host_events', claimed!.deviceId, claimed!.secret))
+    device = new DeviceClient(deviceUrl(relay.port, 'host_events', claimed!.deviceId), claimed!.secret)
     await device.open()
     await device.next((frame) => frame.replyTo === 'device-hello' && frame.ok === true, 'hello')
 
@@ -423,7 +459,7 @@ test('a reconnecting host replaces the old one without devices being dropped by 
     oldTransport = first.transport
     await waitHostOnline(oldTransport)
 
-    device = new DeviceClient(deviceUrl(relay.port, 'host_replace', claimed!.deviceId, claimed!.secret))
+    device = new DeviceClient(deviceUrl(relay.port, 'host_replace', claimed!.deviceId), claimed!.secret)
     await device.open()
     await device.next((frame) => frame.replyTo === 'device-hello' && frame.ok === true, 'hello via first host')
 
@@ -439,7 +475,7 @@ test('a reconnecting host replaces the old one without devices being dropped by 
     // The new host does not know previously-authenticated devices (auth is
     // host-local), so the device re-handshakes — exactly what the PWA does.
     device.close()
-    device = new DeviceClient(deviceUrl(relay.port, 'host_replace', claimed!.deviceId, claimed!.secret))
+    device = new DeviceClient(deviceUrl(relay.port, 'host_replace', claimed!.deviceId), claimed!.secret)
     await device.open()
     await device.next((frame) => frame.replyTo === 'device-hello' && frame.ok === true, 'hello via replacement host')
 

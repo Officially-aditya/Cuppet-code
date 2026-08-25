@@ -49,7 +49,16 @@ jobs:
       - run: npm run build:ts
       - run: cargo build --workspace --release --locked --target=${{ matrix.target }}
       - name: Build audited OpenCode binary
-        run: node scripts/build-opencode.mjs --source=.opencode-src --output=.opencode/opencode
+        shell: bash
+        run: |
+          set +e
+          node scripts/build-opencode.mjs --source=.opencode-src --output=.opencode/opencode 2>&1 | tee build-opencode.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            summary="$(tail -n 40 build-opencode.log | tr '\n' ' ' | sed 's/::/--/g')"
+            echo "::error title=OpenCode build failed::$summary"
+            exit "$status"
+          fi
       - name: Package Linux runtime
         run: node scripts/package-platform.mjs --target=${{ matrix.target }}
         env:

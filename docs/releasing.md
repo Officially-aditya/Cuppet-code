@@ -127,19 +127,19 @@ These values are not npm package contents:
 
 | Variable | Where it lives | Purpose |
 | --- | --- | --- |
-| `REMOTE_TOKEN_SECRET` | Sydney API environment | Signs five-minute mobile tokens |
+| `REMOTE_TOKEN_PRIVATE_KEY` | Sydney API environment | Base64 PKCS#8 Ed25519 private key that signs five-minute mobile tokens |
 | `REMOTE_RELAY_URL` | Sydney API environment | Relay address returned to mobile |
 | `REMOTE_RELAY_ADMIN_TOKEN` | Sydney API environment | Backend-only token for relay host management |
-| `CUPPET_REMOTE_TOKEN_SECRET` | Cuppet-code host environment | Verifies Sydney tokens locally |
+| `CUPPET_REMOTE_TOKEN_PUBLIC_KEY` | Optional Cuppet-code host override | Base64 Ed25519 public key; normal enrollment supplies and stores it automatically |
 | `CUPPET_RELAY_URL` | Cuppet-code host environment | Optional relay override; Sydney can supply it |
 | `CUPPET_RELAY_HOST_SECRET` | Cuppet-code host environment | Optional legacy/manual override |
 | `CUPPET_TOKEN` | Cuppet-code host environment | Authenticates automatic host enrollment |
 
-`REMOTE_TOKEN_SECRET` and `CUPPET_REMOTE_TOKEN_SECRET` must have the same value.
-`REMOTE_RELAY_ADMIN_TOKEN` remains on Sydney. When remote control starts,
-Cuppet-code generates and persists a unique host secret, sends it to the
-authenticated Sydney enrollment endpoint, and Sydney registers it with the
-relay. Users no longer need to hardcode `CUPPET_RELAY_HOST_SECRET`.
+`REMOTE_TOKEN_PRIVATE_KEY` remains only on Sydney. When remote control starts,
+Cuppet-code enrolls through the authenticated Sydney endpoint, receives and
+persists the matching public verification key, and generates a unique host
+secret for relay registration. Users do not need to configure a token secret or
+hardcode `CUPPET_RELAY_HOST_SECRET`.
 Provider API keys remain on the Cuppet-code machine and are never added to CI,
 npm, Sydney, or the phone.
 

@@ -45,12 +45,13 @@ A device sends either `device.pair {code, name}` or
 single-use with a 2-minute TTL. After a successful hello the host sends
 `client.accept`, then `host.attach`.
 
-When managed credentials are enabled, Sydney mints a five-minute JWT bound to
-the user, host, device, and scopes. The host verifies it locally using
-`CUPPET_REMOTE_TOKEN_SECRET`; the relay only transports it and never verifies
-or stores it. The host drops the device when the JWT expires. Host-local
-pairing credentials remain supported for self-hosted deployments without the
-shared secret.
+When managed credentials are enabled, Sydney mints a five-minute EdDSA JWT
+bound to the user, host, device, and scopes. Sydney keeps the Ed25519 private
+key; authenticated host enrollment delivers the matching public key to
+Cuppet-code, which verifies tokens locally. The relay only transports the JWT
+and never verifies or stores a signing secret. The host drops the device when
+the JWT expires. Host-local pairing credentials remain supported for
+self-hosted deployments without managed tokens.
 
 The relay is a trusted transport, not an end-to-end-encrypted boundary: it can
 observe handshake payloads and live envelopes. Run it behind TLS and never

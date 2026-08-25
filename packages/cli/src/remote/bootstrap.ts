@@ -1,7 +1,7 @@
 import type { CuppetController } from '../controller.js'
 import { RemoteBridge } from './bridge.js'
 import { WebSocketTransport } from './connection.js'
-import { ensureHostIdentity, type HostIdentity } from './identity.js'
+import { ensureHostIdentity, setRemoteTokenPublicKey, type HostIdentity } from './identity.js'
 import {
   authenticateDevice,
   claimPairingInvite,
@@ -21,8 +21,8 @@ export type RemoteControlOptions = {
   hostSecret?: string
   apiBase?: string
   authToken?: string
-  /** Same value as Sydney REMOTE_TOKEN_SECRET for managed mobile tokens. */
-  remoteTokenSecret?: string
+  /** Base64-encoded Ed25519 SPKI key; enrollment supplies and persists it automatically. */
+  remoteTokenPublicKey?: string
   /** Fresh pairing invite per session by default; disable for long-lived hosts. */
   createInvite?: boolean
   write?: (line: string) => void
@@ -43,9 +43,10 @@ export type RemoteControlSession = {
  */
 export async function startRemoteControl(options: RemoteControlOptions): Promise<RemoteControlSession> {
   const write = options.write ?? ((line: string) => process.stdout.write(line))
-  const identity = await ensureHostIdentity(options.remoteDir)
+  let identity = await ensureHostIdentity(options.remoteDir)
   let relayUrl = options.relayUrl
   const hostSecret = options.hostSecret ?? identity.relaySecret
+  let remoteTokenPublicKey = options.remoteTokenPublicKey ?? identity.remoteTokenPublicKey
 
   if (options.authToken) {
     const enrollment = await registerHost({
@@ -55,6 +56,10 @@ export async function startRemoteControl(options: RemoteControlOptions): Promise
       relaySecret: hostSecret,
     })
     relayUrl ??= enrollment.relayUrl
+    if (enrollment.remoteTokenPublicKey) {
+      identity = await setRemoteTokenPublicKey(options.remoteDir, enrollment.remoteTokenPublicKey)
+      remoteTokenPublicKey = identity.remoteTokenPublicKey
+    }
     if (enrollment.relayRegistered) write('  relay enrollment: registered\n')
   }
 
@@ -78,8 +83,8 @@ export async function startRemoteControl(options: RemoteControlOptions): Promise
       authenticateDevice: async (deviceId, secret) => {
         const local = await authenticateDevice(options.remoteDir, deviceId, secret)
         if (local) return local
-        if (!options.remoteTokenSecret) return undefined
-        return verifyRemoteToken(secret, options.remoteTokenSecret, identity.hostId, deviceId)
+        if (!remoteTokenPublicKey) return undefined
+        return verifyRemoteToken(secret, remoteTokenPublicKey, identity.hostId, deviceId)
       },
       claimPairingInvite: (code, deviceName) => claimPairingInvite(options.remoteDir, code, deviceName),
       buildAttachSnapshot: async () => ({

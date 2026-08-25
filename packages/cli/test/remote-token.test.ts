@@ -1,20 +1,22 @@
 import assert from 'node:assert/strict'
-import { createHash, createHmac } from 'node:crypto'
+import { generateKeyPairSync, sign } from 'node:crypto'
 import { test } from 'node:test'
 import { verifyRemoteToken } from '../src/remote/token.js'
 
-function token(secret: string, payload: Record<string, unknown>): string {
+const { privateKey, publicKey } = generateKeyPairSync('ed25519')
+const publicKeyBase64 = publicKey.export({ type: 'spki', format: 'der' }).toString('base64')
+
+function token(payload: Record<string, unknown>): string {
   const encode = (value: unknown): string => Buffer.from(JSON.stringify(value)).toString('base64url')
-  const header = encode({ alg: 'HS256', typ: 'JWT' })
+  const header = encode({ alg: 'EdDSA', typ: 'JWT' })
   const body = encode(payload)
-  const key = createHash('sha256').update(`cuppet-remote-v1:${secret}`).digest()
-  const signature = createHmac('sha256', key).update(`${header}.${body}`).digest('base64url')
+  const signature = sign(null, Buffer.from(`${header}.${body}`), privateKey).toString('base64url')
   return `${header}.${body}.${signature}`
 }
 
 test('host verifies backend remote tokens and maps their scopes', () => {
   const value = verifyRemoteToken(
-    token('a'.repeat(32), {
+    token({
       iss: 'cuppet-backend',
       aud: 'cuppet-relay',
       sub: 'user_1',
@@ -24,7 +26,7 @@ test('host verifies backend remote tokens and maps their scopes', () => {
       iat: Math.floor(Date.now() / 1000),
       exp: Math.floor(Date.now() / 1000) + 300,
     }),
-    'a'.repeat(32),
+    publicKeyBase64,
     'host_1',
     'dev_1',
   )
@@ -35,7 +37,6 @@ test('host verifies backend remote tokens and maps their scopes', () => {
 })
 
 test('host rejects tampered, expired, or differently bound remote tokens', () => {
-  const secret = 'b'.repeat(32)
   const payload = {
     iss: 'cuppet-backend',
     aud: 'cuppet-relay',
@@ -45,9 +46,10 @@ test('host rejects tampered, expired, or differently bound remote tokens', () =>
     scopes: ['sessions:read'],
     exp: Math.floor(Date.now() / 1000) - 1,
   }
-  const signed = token(secret, payload)
-  assert.equal(verifyRemoteToken(signed, secret, 'host_1', 'dev_1'), undefined)
-  assert.equal(verifyRemoteToken(`${signed}x`, secret, 'host_1', 'dev_1'), undefined)
-  const valid = token(secret, { ...payload, exp: Math.floor(Date.now() / 1000) + 300 })
-  assert.equal(verifyRemoteToken(valid, secret, 'host_2', 'dev_1'), undefined)
+  const signed = token(payload)
+  assert.equal(verifyRemoteToken(signed, publicKeyBase64, 'host_1', 'dev_1'), undefined)
+  assert.equal(verifyRemoteToken(`${signed}x`, publicKeyBase64, 'host_1', 'dev_1'), undefined)
+  const valid = token({ ...payload, exp: Math.floor(Date.now() / 1000) + 300 })
+  assert.equal(verifyRemoteToken(valid, publicKeyBase64, 'host_2', 'dev_1'), undefined)
+  assert.equal(verifyRemoteToken(valid, 'not-a-public-key', 'host_1', 'dev_1'), undefined)
 })

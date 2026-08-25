@@ -55,8 +55,8 @@ Flags:
                                      (env CUPPET_RELAY_URL; enrollment can supply it)
   CUPPET_TOKEN                       Cuppet session token for automatic enrollment
   CUPPET_API_BASE                    Cuppet API base for automatic enrollment
-  CUPPET_REMOTE_TOKEN_SECRET         optional shared secret for backend-issued
-                                     short-lived mobile credentials
+  CUPPET_REMOTE_TOKEN_PUBLIC_KEY     optional base64 Ed25519 key override;
+                                     enrollment supplies it automatically
   -c, --continue                     pass --continue to the TUI
   -s, --session <id>                 pass --session to the TUI
   --fork                             pass --fork to the TUI
@@ -82,8 +82,9 @@ Remote control flow:
   3. control the session from the phone while the machine stays authoritative
 
 Managed-token flow:
-  Set CUPPET_REMOTE_TOKEN_SECRET to the Sydney REMOTE_TOKEN_SECRET value on
-  the host; mobile then refreshes short-lived credentials through the backend.
+  Set CUPPET_TOKEN so enrollment can receive Sydney's public verification key;
+  mobile then refreshes short-lived credentials through the backend. The
+  Sydney private signing key never leaves the backend.
 `
 
 async function main(): Promise<void> {
@@ -196,7 +197,9 @@ async function main(): Promise<void> {
           ...(process.env.CUPPET_RELAY_HOST_SECRET ? { hostSecret: process.env.CUPPET_RELAY_HOST_SECRET } : {}),
           ...(process.env.CUPPET_TOKEN ? { authToken: process.env.CUPPET_TOKEN } : {}),
           ...(process.env.CUPPET_TOKEN ? { apiBase: process.env.CUPPET_API_BASE ?? 'https://api.cuppet.in' } : {}),
-          ...(process.env.CUPPET_REMOTE_TOKEN_SECRET ? { remoteTokenSecret: process.env.CUPPET_REMOTE_TOKEN_SECRET } : {}),
+          ...(process.env.CUPPET_REMOTE_TOKEN_PUBLIC_KEY
+            ? { remoteTokenPublicKey: process.env.CUPPET_REMOTE_TOKEN_PUBLIC_KEY }
+            : {}),
           write,
         })
       }

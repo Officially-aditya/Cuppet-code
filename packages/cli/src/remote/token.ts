@@ -1,4 +1,4 @@
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
+import { createPublicKey, verify as verifySignature } from 'node:crypto'
 import type { RemoteScope } from './protocol.js'
 
 const BACKEND_SCOPE_MAP: Record<string, RemoteScope> = {
@@ -16,25 +16,27 @@ const BACKEND_SCOPE_MAP: Record<string, RemoteScope> = {
  */
 export function verifyRemoteToken(
   token: string,
-  secret: string,
+  publicKey: string,
   expectedHostId: string,
   expectedDeviceId: string,
 ): { scopes: RemoteScope[]; expiresAt: number } | undefined {
   const parts = token.split('.')
-  if (parts.length !== 3 || !secret) return undefined
+  if (parts.length !== 3 || !publicKey) return undefined
   const [encodedHeader, encodedPayload, encodedSignature] = parts
   if (!encodedHeader || !encodedPayload || !encodedSignature) return undefined
 
   try {
     const header = JSON.parse(Buffer.from(encodedHeader, 'base64url').toString('utf8')) as Record<string, unknown>
-    if (header.alg !== 'HS256' || header.typ !== 'JWT') return undefined
+    if (header.alg !== 'EdDSA' || header.typ !== 'JWT') return undefined
 
-    const key = createHash('sha256').update(`cuppet-remote-v1:${secret}`).digest()
-    const expected = createHmac('sha256', key)
-      .update(`${encodedHeader}.${encodedPayload}`)
-      .digest()
+    const key = createPublicKey({
+      key: Buffer.from(publicKey, 'base64'),
+      format: 'der',
+      type: 'spki',
+    })
+    if (key.asymmetricKeyType !== 'ed25519') return undefined
     const provided = Buffer.from(encodedSignature, 'base64url')
-    if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) return undefined
+    if (!verifySignature(null, Buffer.from(`${encodedHeader}.${encodedPayload}`), key, provided)) return undefined
 
     const payload = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8')) as Record<string, unknown>
     const now = Math.floor(Date.now() / 1000)

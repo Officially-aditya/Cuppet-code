@@ -1,4 +1,4 @@
-import { generateKeyPairSync, randomBytes } from 'node:crypto'
+import { createPublicKey, generateKeyPairSync, randomBytes } from 'node:crypto'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
@@ -14,10 +14,12 @@ export type HostIdentity = {
   publicKeyPem: string
   privateKeyPem: string
   relaySecret: string
+  /** Base64-encoded Ed25519 SPKI key supplied by Sydney during enrollment. */
+  remoteTokenPublicKey?: string
   createdAt: string
 }
 
-const IDENTITY_VERSION = 2
+const IDENTITY_VERSION = 3
 
 export function hostIdentityPath(remoteDir: string): string {
   return join(remoteDir, 'host.json')
@@ -40,6 +42,7 @@ export async function ensureHostIdentity(remoteDir: string): Promise<HostIdentit
         relaySecret: typeof parsed.relaySecret === 'string' && parsed.relaySecret.length >= 32
           ? parsed.relaySecret
           : randomBytes(32).toString('hex'),
+        ...(typeof parsed.remoteTokenPublicKey === 'string' ? { remoteTokenPublicKey: parsed.remoteTokenPublicKey } : {}),
         createdAt: typeof parsed.createdAt === 'string' ? parsed.createdAt : new Date().toISOString(),
       }
       if (parsed.relaySecret !== identity.relaySecret) await writeIdentity(path, identity)
@@ -59,6 +62,30 @@ export async function ensureHostIdentity(remoteDir: string): Promise<HostIdentit
   }
   await writeIdentity(path, identity)
   return identity
+}
+
+export async function setRemoteTokenPublicKey(remoteDir: string, remoteTokenPublicKey: string): Promise<HostIdentity> {
+  if (!isEd25519PublicKey(remoteTokenPublicKey)) {
+    throw new Error('Sydney returned an invalid remote-token public key.')
+  }
+  const path = hostIdentityPath(remoteDir)
+  const identity = await ensureHostIdentity(remoteDir)
+  const updated = { ...identity, remoteTokenPublicKey }
+  await writeIdentity(path, updated)
+  return updated
+}
+
+function isEd25519PublicKey(value: string): boolean {
+  try {
+    const key = createPublicKey({
+      key: Buffer.from(value, 'base64'),
+      format: 'der',
+      type: 'spki',
+    })
+    return key.asymmetricKeyType === 'ed25519'
+  } catch {
+    return false
+  }
 }
 
 async function writeIdentity(path: string, identity: HostIdentity): Promise<void> {

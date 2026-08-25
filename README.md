@@ -130,10 +130,13 @@ packages contain the bundled OpenCode and Rust binaries. CI publishes all five
 packages to npm, mirrors the scoped runtime packages to GitHub Packages, and
 creates downloadable runtime archives.
 
-Remote-token secrets are runtime-only. Set `REMOTE_TOKEN_SECRET` on the
-Sydney API and the same value as `CUPPET_REMOTE_TOKEN_SECRET` on the local
-Cuppet-code host. Set `REMOTE_RELAY_URL` on Sydney and `CUPPET_RELAY_URL` on
-the host. Set `REMOTE_RELAY_ADMIN_TOKEN` only on Sydney; it is used by the
+Remote-token signing is runtime-only. Set `REMOTE_TOKEN_PRIVATE_KEY` on the
+Sydney API. It is a base64-encoded PKCS#8 Ed25519 private key and never leaves
+Sydney. During authenticated host enrollment, Sydney returns the derived public
+key; Cuppet-code validates and stores that public key automatically. Users do
+not copy a backend secret into their host environment. Set `REMOTE_RELAY_URL`
+on Sydney and `CUPPET_RELAY_URL` on the host when you need a manual relay
+override. Set `REMOTE_RELAY_ADMIN_TOKEN` only on Sydney; it is used by the
 backend to register each generated host credential with the relay. Cuppet
 generates and stores that per-host credential automatically when remote control
 starts. Never put these values in `package.json`, npm, or the provider

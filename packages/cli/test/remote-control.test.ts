@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { generateKeyPairSync } from 'node:crypto'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -21,6 +22,9 @@ import {
   revokeDevice,
 } from '../src/remote/pairing.js'
 import type { AgentEvent } from '../src/types.js'
+
+const { publicKey: remoteTokenPublicKey } = generateKeyPairSync('ed25519')
+const remoteTokenPublicKeyBase64 = remoteTokenPublicKey.export({ type: 'spki', format: 'der' }).toString('base64')
 
 const LOCAL: ControlActor = { kind: 'local' }
 
@@ -183,7 +187,7 @@ test('host identity creates and preserves an automatic relay secret', async () =
   }
 })
 
-test('remote enrollment sends the generated relay secret and receives relay settings', async () => {
+test('remote enrollment sends the generated relay secret and receives relay settings plus the token key', async () => {
   const dir = await mkdtemp(join(process.cwd(), '.remote-enrollment-'))
   try {
     const identity = await ensureHostIdentity(dir)
@@ -195,7 +199,11 @@ test('remote enrollment sends the generated relay secret and receives relay sett
       relaySecret: identity.relaySecret,
       fetcher: async (_input, init) => {
         requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>
-        return new Response(JSON.stringify({ relayUrl: 'wss://relay.example.test', relayRegistered: true }), {
+        return new Response(JSON.stringify({
+          relayUrl: 'wss://relay.example.test',
+          relayRegistered: true,
+          remoteTokenPublicKey: remoteTokenPublicKeyBase64,
+        }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         })
@@ -205,6 +213,7 @@ test('remote enrollment sends the generated relay secret and receives relay sett
     assert.equal(requestBody?.relaySecret, identity.relaySecret)
     assert.equal(enrollment.relayUrl, 'wss://relay.example.test')
     assert.equal(enrollment.relayRegistered, true)
+    assert.equal(enrollment.remoteTokenPublicKey, remoteTokenPublicKeyBase64)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -217,7 +226,7 @@ test('enabling remote control can enroll automatically before starting the bridg
     let calls = 0
     globalThis.fetch = async () => {
       calls += 1
-      return new Response(JSON.stringify({ relayRegistered: true }), {
+      return new Response(JSON.stringify({ relayRegistered: true, remoteTokenPublicKey: remoteTokenPublicKeyBase64 }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       })
@@ -230,6 +239,7 @@ test('enabling remote control can enroll automatically before starting the bridg
       write: () => undefined,
     })
     assert.equal(calls, 1)
+    assert.equal((await ensureHostIdentity(dir)).remoteTokenPublicKey, remoteTokenPublicKeyBase64)
     assert.equal(session.bridge, undefined)
     session.stop()
   } finally {

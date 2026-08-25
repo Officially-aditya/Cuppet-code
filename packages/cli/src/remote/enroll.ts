@@ -1,7 +1,7 @@
 import { hostname } from 'node:os'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { ensureHostIdentity } from './identity.js'
+import { ensureHostIdentity, setRemoteTokenPublicKey } from './identity.js'
 
 export type EnrollArguments = {
   apiBase: string
@@ -21,6 +21,8 @@ export type RegisterHostOptions = {
 export type HostEnrollment = {
   relayUrl?: string
   relayRegistered: boolean
+  /** Base64-encoded Ed25519 SPKI key used to verify Sydney-issued tokens. */
+  remoteTokenPublicKey?: string
 }
 
 export async function registerHost(options: RegisterHostOptions): Promise<HostEnrollment> {
@@ -58,6 +60,9 @@ export async function registerHost(options: RegisterHostOptions): Promise<HostEn
   return {
     ...(typeof payload.relayUrl === 'string' ? { relayUrl: payload.relayUrl } : {}),
     relayRegistered: payload.relayRegistered === true,
+    ...(typeof payload.remoteTokenPublicKey === 'string'
+      ? { remoteTokenPublicKey: payload.remoteTokenPublicKey }
+      : {}),
   }
 }
 
@@ -78,7 +83,8 @@ export async function runEnroll(
     throw new Error(`--api-base must be an http(s) URL, got ${options.apiBase}`)
   }
 
-  const identity = await ensureHostIdentity(join(homedir(), '.cuppet', 'v2', 'remote'))
+  const remoteDir = join(homedir(), '.cuppet', 'v2', 'remote')
+  let identity = await ensureHostIdentity(remoteDir)
   const displayName = options.name?.trim() || identity.deviceName || hostname()
   const enrollment = await registerHost({
     apiBase: options.apiBase,
@@ -87,6 +93,9 @@ export async function runEnroll(
     relaySecret: identity.relaySecret,
     displayName,
   })
+  if (enrollment.remoteTokenPublicKey) {
+    identity = await setRemoteTokenPublicKey(remoteDir, enrollment.remoteTokenPublicKey)
+  }
 
   write(`Enrolled ${displayName} [${identity.hostId}] with ${options.apiBase}\n`)
   if (enrollment.relayUrl) write(`Relay: ${enrollment.relayUrl}${enrollment.relayRegistered ? ' (registered)' : ''}\n`)

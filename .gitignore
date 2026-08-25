@@ -10,6 +10,7 @@ release-assets/
 .opencode/
 .opencode-src/
 .claude/
+.benchmarks/
 .env
 .env.*
 !.env.example

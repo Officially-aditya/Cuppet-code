@@ -1909,20 +1909,22 @@ var CuppetControlServer = class _CuppetControlServer {
   #router;
   #server;
   #address;
-  constructor(controller, server, address) {
+  #remote;
+  constructor(controller, server, address, remote) {
     this.#controller = controller;
     this.#router = new ControlRouter(controller);
     this.#server = server;
     this.#address = address;
+    this.#remote = remote;
   }
-  static async start(controller, paths, address = createControlAddress(paths)) {
+  static async start(controller, paths, address = createControlAddress(paths), options = {}) {
     const { socket } = address;
     await mkdir6(paths.runtime, { recursive: true, mode: 448 });
     await unlink(socket).catch((error) => {
       if (error.code !== "ENOENT") throw error;
     });
     const server = createServer();
-    const instance = new _CuppetControlServer(controller, server, address);
+    const instance = new _CuppetControlServer(controller, server, address, options.remote);
     server.on("connection", (connection) => instance.#handle(connection));
     await new Promise((resolve3, reject) => {
       server.once("error", reject);
@@ -2027,6 +2029,16 @@ var CuppetControlServer = class _CuppetControlServer {
           ),
           agent: this.#controller.snapshot.planMode ? "plan" : "build"
         };
+      case "remote.status":
+        return this.#remote?.status() ?? { running: false };
+      case "remote.start": {
+        if (!this.#remote) throw new Error("remote control is unavailable");
+        return this.#remote.start();
+      }
+      case "remote.stop": {
+        if (!this.#remote) throw new Error("remote control is unavailable");
+        return this.#remote.stop();
+      }
       case "session.adopt":
         return this.#controller.adoptSession(stringParam2(params, "sessionID"));
       case "session.list":
@@ -3731,7 +3743,8 @@ var DEFAULT_DEVICE_SCOPES = [
   "session.read",
   "session.write",
   "permission.write",
-  "question.write"
+  "question.write",
+  "model.write"
 ];
 var VIEWER_DEVICE_SCOPES = ["session.read"];
 var envelopeBase = {
@@ -3787,6 +3800,7 @@ var COMMAND_SCOPES = {
   "session.undo": "session.write",
   "session.compact": "session.write",
   "plan.set": "session.write",
+  "agent.mode.set": "session.write",
   "permission.reply": "permission.write",
   "question.reply": "question.write",
   "question.reject": "question.write",
@@ -3830,7 +3844,7 @@ function publicEventFor(agentEvent) {
         }
       };
     case "diff":
-      return { type: "diff.updated", payload: { diff: agentEvent.diff } };
+      return { type: "diff.updated", payload: { diff: diffTextFor(agentEvent.diff) } };
     case "permission":
       return { type: "permission.requested", payload: { request: agentEvent.request } };
     case "permission-resolved":
@@ -3861,6 +3875,38 @@ function publicEventFor(agentEvent) {
       return void 0;
   }
 }
+function diffTextFor(value) {
+  if (typeof value === "string") return value.slice(0, 64 * 1024);
+  if (!Array.isArray(value)) return void 0;
+  const chunks = value.flatMap((entry) => {
+    if (typeof entry === "string") return [entry];
+    if (!entry || typeof entry !== "object") return [];
+    const item = entry;
+    for (const key of ["diff", "patch"]) {
+      if (typeof item[key] === "string") return [item[key]];
+    }
+    const rawPath = typeof item.file === "string" ? item.file : typeof item.path === "string" ? item.path : void 0;
+    const hasBefore = typeof item.before === "string";
+    const hasAfter = typeof item.after === "string";
+    if (!rawPath || !hasBefore && !hasAfter) return [];
+    const path = rawPath.replace(/^[/\\]+/, "").replace(/[\r\n]/g, "");
+    if (!path) return [];
+    const before = hasBefore ? String(item.before).split(/\r?\n/) : [];
+    const after = hasAfter ? String(item.after).split(/\r?\n/) : [];
+    if (before.at(-1) === "") before.pop();
+    if (after.at(-1) === "") after.pop();
+    return [[
+      `diff --git a/${path} b/${path}`,
+      `--- a/${path}`,
+      `+++ b/${path}`,
+      "@@",
+      ...before.map((line) => `-${line}`),
+      ...after.map((line) => `+${line}`)
+    ].join("\n")];
+  });
+  const text = chunks.filter((chunk) => chunk.trim().length > 0).join("\n");
+  return text ? text.slice(0, 64 * 1024) : void 0;
+}
 
 // src/remote/bridge.ts
 var DEDUPE_CAPACITY = 512;
@@ -3881,6 +3927,7 @@ var RemoteBridge = class {
   #seenCommandIds = /* @__PURE__ */ new Map();
   #offlineBuffer = [];
   #devices = /* @__PURE__ */ new Map();
+  #deviceTimers = /* @__PURE__ */ new Map();
   #pairAttemptsLeft = PAIR_ATTEMPT_LIMIT;
   #started = false;
   constructor(options) {
@@ -3909,7 +3956,7 @@ var RemoteBridge = class {
     this.#transport.onMessage((data) => void this.#handleIncoming(data).catch(() => this.#replyError("", "malformed frame")));
     this.#transport.onStatusChange((connected) => {
       if (!connected) {
-        this.#devices.clear();
+        this.#clearDevices();
         return;
       }
       this.#pairAttemptsLeft = PAIR_ATTEMPT_LIMIT;
@@ -3920,7 +3967,7 @@ var RemoteBridge = class {
     if (!this.#started) return;
     this.#started = false;
     for (const unsubscribe of this.#unsubscribers.splice(0)) unsubscribe();
-    this.#devices.clear();
+    this.#clearDevices();
     this.#offlineBuffer.length = 0;
     try {
       this.#transport.close();
@@ -3936,7 +3983,9 @@ var RemoteBridge = class {
       };
       this.#sendRaw(encodeFrame({
         version: PROTOCOL_VERSION2,
-        seq: ++this.#seq,
+        // Attach is a control snapshot, not a stream event. Keeping it at
+        // seq=0 lets buffered events retain their original sequence numbers.
+        seq: 0,
         hostId: this.#hostId,
         ts: Date.now(),
         type: "host.attach",
@@ -4065,7 +4114,7 @@ var RemoteBridge = class {
     if (!claimed) return fail("invalid or expired pairing code");
     this.#sendRaw(encodeFrame({
       version: PROTOCOL_VERSION2,
-      seq: ++this.#seq,
+      seq: 0,
       hostId: this.#hostId,
       ts: Date.now(),
       type: "device.paired",
@@ -4083,16 +4132,22 @@ var RemoteBridge = class {
   async #handleDeviceHello(parsed, deviceId) {
     const secret = String(parsed.payload?.secret ?? "");
     if (!this.#authenticateDevice || !deviceId || !secret) {
-      this.#devices.delete(deviceId);
+      this.#clearDevice(deviceId);
       return this.#rejectDevice(deviceId, "authentication unavailable");
     }
     const device = await this.#authenticateDevice(deviceId, secret);
     if (!device) {
-      this.#devices.delete(deviceId);
+      this.#clearDevice(deviceId);
       return this.#rejectDevice(deviceId, "unknown device credentials");
     }
-    this.#devices.set(deviceId, { scopes: device.scopes, ...device.name ? { name: device.name } : {} });
-    this.#sendRaw(encodeFrame({ version: PROTOCOL_VERSION2, seq: ++this.#seq, hostId: this.#hostId, ts: Date.now(), type: "client.accept", payload: {}, deviceId }));
+    this.#clearDevice(deviceId);
+    this.#devices.set(deviceId, {
+      scopes: device.scopes,
+      ...device.name ? { name: device.name } : {},
+      ...device.expiresAt !== void 0 ? { expiresAt: device.expiresAt } : {}
+    });
+    this.#scheduleDeviceExpiry(deviceId, device.expiresAt);
+    this.#sendRaw(encodeFrame({ version: PROTOCOL_VERSION2, seq: 0, hostId: this.#hostId, ts: Date.now(), type: "client.accept", payload: {}, deviceId }));
     this.#sendRaw(encodeFrame({
       version: PROTOCOL_VERSION2,
       replyTo: "device-hello",
@@ -4103,9 +4158,33 @@ var RemoteBridge = class {
   }
   #rejectDevice(deviceId, message2) {
     if (deviceId) {
-      this.#sendRaw(encodeFrame({ version: PROTOCOL_VERSION2, seq: ++this.#seq, hostId: this.#hostId, ts: Date.now(), type: "client.reject", payload: {}, deviceId }));
+      this.#sendRaw(encodeFrame({ version: PROTOCOL_VERSION2, seq: 0, hostId: this.#hostId, ts: Date.now(), type: "client.reject", payload: {}, deviceId }));
     }
     this.#sendRaw(encodeFrame({ version: PROTOCOL_VERSION2, replyTo: "device-hello", ok: false, error: message2, ...deviceId ? { deviceId } : {} }));
+  }
+  #scheduleDeviceExpiry(deviceId, expiresAt) {
+    if (expiresAt === void 0 || !Number.isFinite(expiresAt)) return;
+    const delay2 = Math.max(0, expiresAt * 1e3 - Date.now());
+    const timer = setTimeout(() => {
+      const device = this.#devices.get(deviceId);
+      if (!device || device.expiresAt !== expiresAt) return;
+      this.#devices.delete(deviceId);
+      this.#deviceTimers.delete(deviceId);
+      this.#rejectDevice(deviceId, "remote credential expired");
+    }, delay2);
+    timer.unref?.();
+    this.#deviceTimers.set(deviceId, timer);
+  }
+  #clearDevice(deviceId) {
+    const timer = this.#deviceTimers.get(deviceId);
+    if (timer) clearTimeout(timer);
+    this.#deviceTimers.delete(deviceId);
+    this.#devices.delete(deviceId);
+  }
+  #clearDevices() {
+    for (const timer of this.#deviceTimers.values()) clearTimeout(timer);
+    this.#deviceTimers.clear();
+    this.#devices.clear();
   }
   #remember(id) {
     this.#seenCommandIds.set(id, true);
@@ -4384,7 +4463,8 @@ var BACKEND_SCOPE_MAP = {
   "sessions:read": "session.read",
   "sessions:write": "session.write",
   "permissions:reply": "permission.write",
-  "questions:reply": "question.write"
+  "questions:reply": "question.write",
+  "models:write": "model.write"
 };
 function verifyRemoteToken(token, secret, expectedHostId, expectedDeviceId) {
   const parts = token.split(".");
@@ -4402,7 +4482,7 @@ function verifyRemoteToken(token, secret, expectedHostId, expectedDeviceId) {
     const now = Math.floor(Date.now() / 1e3);
     if (payload.iss !== "cuppet-backend" || payload.aud !== "cuppet-relay" || typeof payload.sub !== "string" || payload.sub.length === 0 || payload.host !== expectedHostId || payload.device !== expectedDeviceId || typeof payload.exp !== "number" || payload.exp <= now || typeof payload.iat === "number" && payload.iat > now + 60) return void 0;
     const scopes = Array.isArray(payload.scopes) ? payload.scopes.map((scope) => typeof scope === "string" ? BACKEND_SCOPE_MAP[scope] : void 0).filter((scope) => scope !== void 0) : [];
-    return scopes.length > 0 ? { scopes: [...new Set(scopes)] } : void 0;
+    return scopes.length > 0 ? { scopes: [...new Set(scopes)], expiresAt: payload.exp } : void 0;
   } catch {
     return void 0;
   }
@@ -4704,10 +4784,10 @@ Sec-WebSocket-Accept: ${acceptKey}\r
     if (role === "host") {
       const secret = url.searchParams.get("secret") ?? "";
       const expected = await this.#loadAuthorizedHosts();
-      if (expected && Object.keys(expected).length > 0) {
+      if (expected !== void 0) {
         const stored = expected[hostId];
         const provided = Buffer.from(sha2562(secret));
-        const storedBuffer = Buffer.from(stored ?? "");
+        const storedBuffer = Buffer.from(typeof stored === "string" ? stored : "");
         if (!stored || provided.length !== storedBuffer.length || !timingSafeEqual3(provided, storedBuffer)) {
           closeSocket(socket, 4002, "host unauthorized");
           return;
@@ -4740,18 +4820,6 @@ Sec-WebSocket-Accept: ${acceptKey}\r
       previous?.socket.destroy();
       room.devices.set(deviceId, registration);
       selfRegistration = registration;
-      const secret = url.searchParams.get("secret");
-      if (secret !== null) {
-        room.host.send(JSON.stringify({
-          version: 1,
-          seq: 0,
-          hostId,
-          ts: Date.now(),
-          type: "device.hello",
-          deviceId,
-          payload: { deviceId, secret }
-        }));
-      }
     } else {
       socket.destroy();
       return;
@@ -4815,7 +4883,7 @@ Sec-WebSocket-Accept: ${acceptKey}\r
       const device = room.devices.get(deviceId);
       if (!host || !device || device !== registration) return;
       if (type === "ping") return;
-      if (!device.authenticated && type !== "device.pair") return;
+      if (!device.authenticated && type !== "device.pair" && type !== "device.hello") return;
       host.send(JSON.stringify({ ...message2, deviceId }));
       return;
     }
@@ -5652,16 +5720,33 @@ async function main() {
 `);
       return;
     }
-    control = await CuppetControlServer.start(controller, paths, controlAddress);
     const relayUrl = arguments_.relayUrl ?? process.env.CUPPET_RELAY_URL;
+    const startRemoteSession = async (write = (line) => process.stdout.write(line)) => {
+      if (!controller) throw new Error("Cuppet controller is unavailable");
+      if (!remote) {
+        remote = await startRemoteControl({
+          controller,
+          remoteDir: join14(paths.base, "remote"),
+          ...relayUrl ? { relayUrl } : {},
+          ...process.env.CUPPET_RELAY_HOST_SECRET ? { hostSecret: process.env.CUPPET_RELAY_HOST_SECRET } : {},
+          ...process.env.CUPPET_REMOTE_TOKEN_SECRET ? { remoteTokenSecret: process.env.CUPPET_REMOTE_TOKEN_SECRET } : {},
+          write
+        });
+      }
+      return remoteControlStatus(remote);
+    };
+    const remoteManager = {
+      start: () => startRemoteSession(() => void 0),
+      stop: () => {
+        remote?.stop();
+        remote = void 0;
+        return { running: false };
+      },
+      status: () => remote ? remoteControlStatus(remote) : { running: false }
+    };
+    control = await CuppetControlServer.start(controller, paths, controlAddress, { remote: remoteManager });
     if (arguments_.mode === "headless-remote" || arguments_.remoteControl || relayUrl) {
-      remote = await startRemoteControl({
-        controller,
-        remoteDir: join14(paths.base, "remote"),
-        ...relayUrl ? { relayUrl } : {},
-        ...process.env.CUPPET_RELAY_HOST_SECRET ? { hostSecret: process.env.CUPPET_RELAY_HOST_SECRET } : {},
-        ...process.env.CUPPET_REMOTE_TOKEN_SECRET ? { remoteTokenSecret: process.env.CUPPET_REMOTE_TOKEN_SECRET } : {}
-      });
+      await startRemoteSession();
     }
     if (arguments_.mode === "headless-remote") {
       await shutdownSignal();
@@ -5690,6 +5775,21 @@ async function main() {
     await rm3(paths.runtime, { recursive: true, force: true }).catch(() => void 0);
   }
   if (tuiExitCode !== 0) process.exitCode = tuiExitCode;
+}
+function remoteControlStatus(session) {
+  const invite = session.invite;
+  return {
+    running: true,
+    hostId: session.identity.hostId,
+    deviceName: session.identity.deviceName,
+    ...invite ? {
+      invite: {
+        code: invite.code,
+        expiresAt: invite.expiresAt,
+        ...invite.url ? { url: invite.url } : {}
+      }
+    } : {}
+  };
 }
 function parseArguments(arguments_) {
   const result = { doctor: false, help: false, version: false, mode: "tui", relayOrigins: [], tuiArguments: [] };

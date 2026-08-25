@@ -15,23 +15,52 @@ export type ControlAddress = {
   token: string
 }
 
+export type RemoteControlStatus = {
+  running: boolean
+  hostId?: string
+  deviceName?: string
+  invite?: {
+    code: string
+    expiresAt: number
+    url?: string
+  }
+}
+
+export type RemoteControlManager = {
+  start(): Promise<RemoteControlStatus>
+  stop(): RemoteControlStatus
+  status(): RemoteControlStatus
+}
+
+type ControlServerOptions = {
+  remote?: RemoteControlManager
+}
+
 export class CuppetControlServer {
   readonly #controller: CuppetController
   readonly #router: ControlRouter
   readonly #server: Server
   readonly #address: ControlAddress
+  readonly #remote: RemoteControlManager | undefined
 
-  private constructor(controller: CuppetController, server: Server, address: ControlAddress) {
+  private constructor(
+    controller: CuppetController,
+    server: Server,
+    address: ControlAddress,
+    remote?: RemoteControlManager,
+  ) {
     this.#controller = controller
     this.#router = new ControlRouter(controller)
     this.#server = server
     this.#address = address
+    this.#remote = remote
   }
 
   static async start(
     controller: CuppetController,
     paths: RuntimePaths,
     address = createControlAddress(paths),
+    options: ControlServerOptions = {},
   ): Promise<CuppetControlServer> {
     const { socket } = address
     await mkdir(paths.runtime, { recursive: true, mode: 0o700 })
@@ -39,7 +68,7 @@ export class CuppetControlServer {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     })
     const server = createServer()
-    const instance = new CuppetControlServer(controller, server, address)
+    const instance = new CuppetControlServer(controller, server, address, options.remote)
     server.on('connection', (connection) => instance.#handle(connection))
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject)
@@ -142,6 +171,15 @@ export class CuppetControlServer {
           ),
           agent: this.#controller.snapshot.planMode ? 'plan' : 'build',
         }
+      case 'remote.status': return this.#remote?.status() ?? { running: false }
+      case 'remote.start': {
+        if (!this.#remote) throw new Error('remote control is unavailable')
+        return this.#remote.start()
+      }
+      case 'remote.stop': {
+        if (!this.#remote) throw new Error('remote control is unavailable')
+        return this.#remote.stop()
+      }
       case 'session.adopt': return this.#controller.adoptSession(stringParam(params, 'sessionID'))
       case 'session.list': return this.#controller.listSessions()
       default: throw new Error(`unknown control method ${method}`)

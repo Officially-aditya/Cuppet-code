@@ -22,9 +22,23 @@ test('launch-scoped control API authenticates and exposes diagnostics', async (t
     async selectPlatform(platform: string) { selectedPlatform = platform },
   } as never
   const address = createControlAddress(paths)
+  let remoteRunning = false
+  const remote = {
+    async start() {
+      remoteRunning = true
+      return { running: true, hostId: 'host_test', deviceName: 'test-host' }
+    },
+    stop() {
+      remoteRunning = false
+      return { running: false }
+    },
+    status() {
+      return remoteRunning ? { running: true, hostId: 'host_test', deviceName: 'test-host' } : { running: false }
+    },
+  }
   let server: CuppetControlServer
   try {
-    server = await CuppetControlServer.start(controller, paths, address)
+    server = await CuppetControlServer.start(controller, paths, address, { remote })
   } catch (error) {
     await rm(runtime, { recursive: true, force: true })
     if ((error as NodeJS.ErrnoException).code === 'EPERM') {
@@ -44,6 +58,10 @@ test('launch-scoped control API authenticates and exposes diagnostics', async (t
     assert.equal((await client.call<{ selected: string }>('platform.select', { platform: 'vertex' })).selected, 'vertex')
     assert.deepEqual(await client.call('plan.set', { agent: 'plan' }), { enabled: true, agent: 'plan' })
     assert.deepEqual(await client.call('plan.toggle'), { enabled: false, agent: 'build' })
+    assert.deepEqual(await client.call('remote.status'), { running: false })
+    assert.deepEqual(await client.call('remote.start'), { running: true, hostId: 'host_test', deviceName: 'test-host' })
+    assert.deepEqual(await client.call('remote.status'), { running: true, hostId: 'host_test', deviceName: 'test-host' })
+    assert.deepEqual(await client.call('remote.stop'), { running: false })
     assert.equal((await stat(address.socket)).mode & 0o777, 0o600)
     await assert.rejects(() => new CuppetControlClient(address.socket, 'wrong').call('status'), /unauthorized/)
   } finally {

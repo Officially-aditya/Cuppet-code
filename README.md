@@ -53,12 +53,15 @@ The source-checkout alias `cupet` launches the same CLI.
 | `/memory` | Inspect memory and code-graph health. |
 | `/background` | Pause or resume background memory enrichment. |
 | `/status` and `/doctor` | View runtime state or diagnose local health. |
+| `/remote` or `/remote-control` | Start remote control and show the phone/browser pairing details. |
+| `/remote-stop` | Stop the active remote-control bridge. |
 | `/steer` and `/abort` | Guide or stop the active foreground session. |
 | `/compact` and `/undo` | Compact the conversation or undo the latest change boundary. |
 
-For phone/browser control, start `cuppet --remote-control` and follow the
-pairing instructions shown in the terminal. The remote protocol and scope
-model are documented in [`docs/remote-protocol.md`](docs/remote-protocol.md).
+For phone/browser control, run `/remote` inside the TUI or start
+`cuppet --remote-control` and follow the pairing details shown in the terminal.
+The remote protocol and scope model are documented in
+[`docs/remote-protocol.md`](docs/remote-protocol.md).
 
 ## Requirements
 

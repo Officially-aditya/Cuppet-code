@@ -2,7 +2,12 @@ import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { PreferenceStore } from './config/preferences.js'
 import { CuppetController } from './controller.js'
-import { CuppetControlServer, createControlAddress } from './control/server.js'
+import {
+  CuppetControlServer,
+  createControlAddress,
+  type RemoteControlManager,
+  type RemoteControlStatus,
+} from './control/server.js'
 import { OpenCodeGateway } from './opencode/gateway.js'
 import { startOpenCodeServer, type OpenCodeRuntime } from './opencode/server.js'
 import { runNativeTui } from './opencode/tui.js'
@@ -176,17 +181,36 @@ async function main(): Promise<void> {
       return
     }
 
-    control = await CuppetControlServer.start(controller, paths, controlAddress)
-
     const relayUrl = arguments_.relayUrl ?? process.env.CUPPET_RELAY_URL
+    const startRemoteSession = async (
+      write: (line: string) => void = (line) => process.stdout.write(line),
+    ): Promise<RemoteControlStatus> => {
+      if (!controller) throw new Error('Cuppet controller is unavailable')
+      if (!remote) {
+        remote = await startRemoteControl({
+          controller,
+          remoteDir: join(paths.base, 'remote'),
+          ...(relayUrl ? { relayUrl } : {}),
+          ...(process.env.CUPPET_RELAY_HOST_SECRET ? { hostSecret: process.env.CUPPET_RELAY_HOST_SECRET } : {}),
+          ...(process.env.CUPPET_REMOTE_TOKEN_SECRET ? { remoteTokenSecret: process.env.CUPPET_REMOTE_TOKEN_SECRET } : {}),
+          write,
+        })
+      }
+      return remoteControlStatus(remote)
+    }
+    const remoteManager: RemoteControlManager = {
+      start: () => startRemoteSession(() => undefined),
+      stop: () => {
+        remote?.stop()
+        remote = undefined
+        return { running: false }
+      },
+      status: () => remote ? remoteControlStatus(remote) : { running: false },
+    }
+    control = await CuppetControlServer.start(controller, paths, controlAddress, { remote: remoteManager })
+
     if (arguments_.mode === 'headless-remote' || arguments_.remoteControl || relayUrl) {
-      remote = await startRemoteControl({
-        controller,
-        remoteDir: join(paths.base, 'remote'),
-        ...(relayUrl ? { relayUrl } : {}),
-        ...(process.env.CUPPET_RELAY_HOST_SECRET ? { hostSecret: process.env.CUPPET_RELAY_HOST_SECRET } : {}),
-        ...(process.env.CUPPET_REMOTE_TOKEN_SECRET ? { remoteTokenSecret: process.env.CUPPET_REMOTE_TOKEN_SECRET } : {}),
-      })
+      await startRemoteSession()
     }
 
     if (arguments_.mode === 'headless-remote') {
@@ -216,6 +240,22 @@ async function main(): Promise<void> {
     await rm(paths.runtime, { recursive: true, force: true }).catch(() => undefined)
   }
   if (tuiExitCode !== 0) process.exitCode = tuiExitCode
+}
+
+function remoteControlStatus(session: RemoteControlSession): RemoteControlStatus {
+  const invite = session.invite
+  return {
+    running: true,
+    hostId: session.identity.hostId,
+    deviceName: session.identity.deviceName,
+    ...(invite ? {
+      invite: {
+        code: invite.code,
+        expiresAt: invite.expiresAt,
+        ...(invite.url ? { url: invite.url } : {}),
+      },
+    } : {}),
+  }
 }
 
 function parseArguments(arguments_: string[]): Arguments {

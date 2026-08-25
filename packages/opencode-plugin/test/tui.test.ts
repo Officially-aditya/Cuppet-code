@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import CuppetTuiPlugin, {
   formatDoctor,
   formatMemory,
+  formatRemoteControl,
   formatStatus,
   modelSelectionSequence,
   nextPlanAgent,
@@ -53,6 +54,9 @@ test('native TUI preserves Cuppet slash commands', async () => {
   for (const name of [
     'status',
     'doctor',
+    'remote',
+    'remote-control',
+    'remote-stop',
     'memory',
     'background',
     'orchestrator',
@@ -79,6 +83,23 @@ test('/plan toggles directly between native plan and build agents', () => {
   assert.equal(nextPlanAgent('build'), 'plan')
   assert.equal(nextPlanAgent({ name: 'plan' }), 'build')
   assert.equal(nextPlanAgent(undefined), 'plan')
+})
+
+test('remote control formatting keeps pairing details readable', () => {
+  const output = formatRemoteControl({
+    running: true,
+    hostId: 'host_test',
+    deviceName: 'MacBook',
+    invite: {
+      code: 'ABC123',
+      expiresAt: Date.parse('2026-08-25T12:00:00.000Z'),
+      url: 'https://relay.example.com/app?code=ABC123',
+    },
+  })
+  assert.match(output, /Host\s+MacBook · host_test/)
+  assert.match(output, /Pairing code\s+ABC123/)
+  assert.match(output, /Pairing URL\s+https:\/\/relay\.example\.com\/app\?code=ABC123/)
+  assert.match(output, /Expires\s+2026-08-25T12:00:00\.000Z/)
 })
 
 test('Cuppet status is formatted as a compact human-readable dialog', () => {

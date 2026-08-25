@@ -188,6 +188,44 @@ var CuppetTuiPlugin = {
         });
       }
     };
+    const showRemote = async () => {
+      try {
+        const status = await client.call("remote.start");
+        if (!api.ui.dialog || !api.ui.DialogAlert) {
+          const invite = record(status.invite);
+          api.ui.toast({
+            title: "Cuppet remote control",
+            variant: "success",
+            message: stringValue(invite.code) ? `Pairing code: ${invite.code}` : "Remote control is running."
+          });
+          return;
+        }
+        api.ui.dialog.setSize?.("large");
+        api.ui.dialog.replace(() => api.ui.DialogAlert({
+          title: "Cuppet remote control",
+          message: formatRemoteControl(status),
+          onConfirm: () => api.ui.dialog?.clear()
+        }));
+      } catch (error) {
+        api.ui.toast({
+          title: "Cuppet remote control",
+          variant: "error",
+          message: error instanceof Error ? error.message : String(error)
+        });
+      }
+    };
+    const stopRemote = async () => {
+      try {
+        await client.call("remote.stop");
+        api.ui.toast({ title: "Cuppet remote control", variant: "success", message: "Remote control stopped." });
+      } catch (error) {
+        api.ui.toast({
+          title: "Cuppet remote control",
+          variant: "error",
+          message: error instanceof Error ? error.message : String(error)
+        });
+      }
+    };
     const showReport = async (title, method, formatter) => {
       if (!api.ui.dialog || !api.ui.DialogAlert) {
         api.ui.toast({ title, variant: "warning", message: "This report dialog is unavailable." });
@@ -226,6 +264,25 @@ var CuppetTuiPlugin = {
           namespace: "palette",
           slashName: "doctor",
           run: () => showReport("Cuppet doctor", "doctor", formatDoctor)
+        },
+        {
+          name: "cuppet.remote",
+          title: "Start Cuppet remote control",
+          desc: "Start phone/browser pairing for the current Cuppet host",
+          category: "Cuppet",
+          namespace: "palette",
+          slashName: "remote",
+          slashAliases: ["remote-control"],
+          run: showRemote
+        },
+        {
+          name: "cuppet.remote.stop",
+          title: "Stop Cuppet remote control",
+          desc: "Disconnect the current phone/browser bridge",
+          category: "Cuppet",
+          namespace: "palette",
+          slashName: "remote-stop",
+          run: stopRemote
         },
         {
           name: "cuppet.memory",
@@ -512,6 +569,19 @@ function formatStatus(value) {
     row("Graph", `${graphState} \xB7 ${formatCount(numberValue(graph.files))} files \xB7 ${formatCount(numberValue(graph.symbols))} syms \xB7 ${formatCount(numberValue(graph.edges))} edges`)
   ].join("\n");
 }
+function formatRemoteControl(value) {
+  const status = record(value);
+  if (!booleanValue(status.running)) return "Remote control is stopped.";
+  const invite = record(status.invite);
+  const expiresAt = numberValue(invite.expiresAt);
+  return [
+    row("Host", `${stringValue(status.deviceName) ?? "this machine"} \xB7 ${stringValue(status.hostId) ?? "unknown"}`),
+    row("Pairing code", stringValue(invite.code) ?? "not available"),
+    ...stringValue(invite.url) ? [row("Pairing URL", stringValue(invite.url))] : [],
+    ...expiresAt ? [row("Expires", new Date(expiresAt).toISOString())] : [],
+    row("Relay", stringValue(invite.url) ? "ready for phone/browser pairing" : "set CUPPET_RELAY_URL to enable the relay")
+  ].join("\n");
+}
 function formatDoctor(value) {
   const doctor = record(value);
   const engine = record(doctor.opencode);
@@ -580,7 +650,7 @@ function booleanValue(value) {
   return value === true;
 }
 function row(label, value) {
-  return `  ${label.padEnd(12)}${shorten(value, 42)}`;
+  return `  ${label.padEnd(13)}${shorten(value, 42)}`;
 }
 function shorten(value, width) {
   return value.length <= width ? value : `${value.slice(0, width - 1)}\u2026`;
@@ -640,6 +710,7 @@ export {
   tui_default as default,
   formatDoctor,
   formatMemory,
+  formatRemoteControl,
   formatStatus,
   modelSelectionSequence,
   nextPlanAgent,

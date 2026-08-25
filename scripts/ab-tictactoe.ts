@@ -15,6 +15,7 @@ import { startTstDaemon, type TstRuntime } from '../packages/cli/src/tst/supervi
 import type { AgentEvent, ModelRef, TokenUsage } from '../packages/cli/src/types.js'
 import { DEEPSEEK_HARNESS_CODING_SYSTEM_PROMPT, summarizeDeepSeekEvents } from './lib/deepseek-harness.js'
 import { withDeepSeekBenchmarkHarness } from './lib/deepseek-benchmark.js'
+import { seedCuppetOpenCodeProviderState } from './lib/cuppet-opencode-state.js'
 
 type Arm = 'opencode' | 'cuppet' | 'deepseek-harness'
 type Mark = 'X' | 'O'
@@ -221,6 +222,7 @@ async function runTrial(options: { arm: Arm; model: ModelRef; repeat: number; ro
   let stepLimitHit = false
 
   try {
+    await seedCuppetOpenCodeProviderState(paths)
     tst = await startTstDaemon(assets.tst!, paths, logger)
     opencode = await startOpenCodeServer({
       binary: assets.opencode!,

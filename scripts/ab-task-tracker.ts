@@ -13,6 +13,7 @@ import { startTstDaemon, type TstRuntime } from '../packages/cli/src/tst/supervi
 import type { AgentEvent, ModelRef, SessionInfo, TokenUsage } from '../packages/cli/src/types.js'
 import { DEEPSEEK_HARNESS_CODING_SYSTEM_PROMPT, summarizeDeepSeekEvents } from './lib/deepseek-harness.js'
 import { withDeepSeekBenchmarkHarness } from './lib/deepseek-benchmark.js'
+import { seedCuppetOpenCodeProviderState } from './lib/cuppet-opencode-state.js'
 
 type Arm = 'opencode' | 'cuppet' | 'kernel' | 'instruction-only' | 'current' | 'compiled' | 'graph-aware' | 'graph-first' | 'graph-only' | 'graph-native' | 'deepseek-harness'
 
@@ -734,7 +735,7 @@ async function runTrial(options: { arm: Arm; model: ModelRef; repeat: number; ro
   const runtimeRoot = join(options.root, `runtime-${options.arm}-${options.repeat + 1}`)
   await rm(runtimeRoot, { recursive: true, force: true })
   const paths = await createRuntimePaths(workspace, runtimeRoot)
-  await seedOpenCodeProviderState(paths)
+    await seedCuppetOpenCodeProviderState(paths)
   const logger = new RedactedLogger(paths.logs)
   let tst: TstRuntime | undefined
   let opencode: OpenCodeRuntime | undefined
@@ -1366,40 +1367,6 @@ function parseBenchmarkArms(value: string | undefined): [Arm, Arm] | undefined {
     throw new Error('CUPPET_TASK_TRACKER_ARMS must contain two distinct arms from cuppet,deepseek-harness')
   }
   return arms as [Arm, Arm]
-}
-
-async function seedOpenCodeProviderState(paths: Awaited<ReturnType<typeof createRuntimePaths>>): Promise<void> {
-  const persistentRoot = join(process.env.HOME ?? '', '.cuppet', 'v2', 'opencode')
-  const files = [
-    {
-      source: join(persistentRoot, 'data', 'opencode', 'auth.json'),
-      target: join(paths.opencode.data, 'opencode', 'auth.json'),
-    },
-    {
-      source: join(persistentRoot, 'data', 'opencode', 'opencode.db'),
-      target: join(paths.opencode.data, 'opencode', 'opencode.db'),
-    },
-    {
-      source: join(persistentRoot, 'data', 'opencode', 'opencode.db-wal'),
-      target: join(paths.opencode.data, 'opencode', 'opencode.db-wal'),
-    },
-    {
-      source: join(persistentRoot, 'data', 'opencode', 'opencode.db-shm'),
-      target: join(paths.opencode.data, 'opencode', 'opencode.db-shm'),
-    },
-    {
-      source: join(persistentRoot, 'cache', 'opencode', 'models.json'),
-      target: join(paths.opencode.cache, 'opencode', 'models.json'),
-    },
-  ]
-  for (const file of files) {
-    try {
-      await mkdir(dirname(file.target), { recursive: true, mode: 0o700 })
-      await cp(file.source, file.target, { force: true })
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-    }
-  }
 }
 
 async function waitForIndex(runtime: TstRuntime): Promise<void> {

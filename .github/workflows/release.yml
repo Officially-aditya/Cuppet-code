@@ -122,6 +122,8 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+      - name: Restore runtime executable permissions
+        run: chmod 755 artifacts/**/bin/opencode artifacts/**/bin/tst-daemon
       - run: npm ci
       - run: npm run build:ts
       - name: Create and verify installable npm bundle
@@ -168,6 +170,8 @@ jobs:
           pattern: cuppet-*
           path: artifacts
           merge-multiple: true
+      - name: Restore runtime executable permissions
+        run: chmod 755 artifacts/**/bin/opencode artifacts/**/bin/tst-daemon
       - run: npm ci
       - name: Configure GitHub Packages authentication
         run: npm config set //npm.pkg.github.com/:_authToken "$NODE_AUTH_TOKEN"

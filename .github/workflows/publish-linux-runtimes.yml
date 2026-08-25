@@ -74,6 +74,8 @@ jobs:
           pattern: cuppet-*
           path: artifacts
           merge-multiple: true
+      - name: Restore runtime executable permissions
+        run: chmod 755 artifacts/runtime-*/bin/opencode artifacts/runtime-*/bin/tst-daemon
       - run: npm ci
       - run: npm run package:cli
       - name: Verify Linux runtime packages

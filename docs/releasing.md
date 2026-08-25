@@ -129,14 +129,19 @@ These values are not npm package contents:
 | --- | --- | --- |
 | `REMOTE_TOKEN_SECRET` | Sydney API environment | Signs five-minute mobile tokens |
 | `REMOTE_RELAY_URL` | Sydney API environment | Relay address returned to mobile |
+| `REMOTE_RELAY_ADMIN_TOKEN` | Sydney API environment | Backend-only token for relay host management |
 | `CUPPET_REMOTE_TOKEN_SECRET` | Cuppet-code host environment | Verifies Sydney tokens locally |
-| `CUPPET_RELAY_URL` | Cuppet-code host environment | Relay address dialed by the host |
-| `CUPPET_RELAY_HOST_SECRET` | Cuppet-code host environment | Authenticates the host to an authenticated relay |
+| `CUPPET_RELAY_URL` | Cuppet-code host environment | Optional relay override; Sydney can supply it |
+| `CUPPET_RELAY_HOST_SECRET` | Cuppet-code host environment | Optional legacy/manual override |
+| `CUPPET_TOKEN` | Cuppet-code host environment | Authenticates automatic host enrollment |
 
 `REMOTE_TOKEN_SECRET` and `CUPPET_REMOTE_TOKEN_SECRET` must have the same value.
-The relay admin token and host secret are separate secrets. Provider API keys
-remain on the Cuppet-code machine and are never added to CI, npm, Sydney, or
-the phone.
+`REMOTE_RELAY_ADMIN_TOKEN` remains on Sydney. When remote control starts,
+Cuppet-code generates and persists a unique host secret, sends it to the
+authenticated Sydney enrollment endpoint, and Sydney registers it with the
+relay. Users no longer need to hardcode `CUPPET_RELAY_HOST_SECRET`.
+Provider API keys remain on the Cuppet-code machine and are never added to CI,
+npm, Sydney, or the phone.
 
 For local Docker Compose, put the backend values in
 `sydney-backend/.env`. Compose passes `.env` to both containers, but only the

@@ -10,6 +10,7 @@ import {
   relayWebSocketUrl,
   type PairingInvite,
 } from './pairing.js'
+import { registerHost } from './enroll.js'
 import { verifyRemoteToken } from './token.js'
 
 export type RemoteControlOptions = {
@@ -18,6 +19,8 @@ export type RemoteControlOptions = {
   remoteDir: string
   relayUrl?: string
   hostSecret?: string
+  apiBase?: string
+  authToken?: string
   /** Same value as Sydney REMOTE_TOKEN_SECRET for managed mobile tokens. */
   remoteTokenSecret?: string
   /** Fresh pairing invite per session by default; disable for long-lived hosts. */
@@ -41,19 +44,33 @@ export type RemoteControlSession = {
 export async function startRemoteControl(options: RemoteControlOptions): Promise<RemoteControlSession> {
   const write = options.write ?? ((line: string) => process.stdout.write(line))
   const identity = await ensureHostIdentity(options.remoteDir)
+  let relayUrl = options.relayUrl
+  const hostSecret = options.hostSecret ?? identity.relaySecret
+
+  if (options.authToken) {
+    const enrollment = await registerHost({
+      apiBase: options.apiBase ?? 'https://api.cuppet.in',
+      token: options.authToken,
+      identity,
+      relaySecret: hostSecret,
+    })
+    relayUrl ??= enrollment.relayUrl
+    if (enrollment.relayRegistered) write('  relay enrollment: registered\n')
+  }
+
   write(`Remote control\n  host: ${identity.hostId} (${identity.deviceName})\n`)
   for (const device of await listPairedDevices(options.remoteDir)) {
     write(`  paired: ${device.name} [${device.deviceId}] ${device.scopes.join(',')}\n`)
   }
 
   let bridge: RemoteBridge | undefined
-  if (options.relayUrl) {
+  if (relayUrl) {
     const params = new URLSearchParams({
       role: 'host',
       hostId: identity.hostId,
-      secret: options.hostSecret ?? '',
+      secret: hostSecret,
     })
-    const transport = new WebSocketTransport(`${relayWebSocketUrl(options.relayUrl)}?${params}`)
+    const transport = new WebSocketTransport(`${relayWebSocketUrl(relayUrl)}?${params}`)
     bridge = new RemoteBridge({
       controller: options.controller,
       hostId: identity.hostId,
@@ -72,7 +89,7 @@ export async function startRemoteControl(options: RemoteControlOptions): Promise
       }),
     })
     bridge.start()
-    write(`  relay: dialing ${options.relayUrl}\n`)
+    write(`  relay: dialing ${relayUrl}\n`)
   } else {
     write('  set CUPPET_RELAY_URL or pass --relay-url <wss://…> to connect the bridge\n')
   }
@@ -80,7 +97,7 @@ export async function startRemoteControl(options: RemoteControlOptions): Promise
   let invite: PairingInvite & { url: string | undefined } | undefined
   if (options.createInvite ?? true) {
     invite = await createPairingInvite(options.remoteDir, {
-      ...(options.relayUrl ? { relayUrl: options.relayUrl } : {}),
+      ...(relayUrl ? { relayUrl } : {}),
       hostId: identity.hostId,
     })
     write(`  pair a device — code ${invite.code} expires ${new Date(invite.expiresAt).toISOString()}\n`)

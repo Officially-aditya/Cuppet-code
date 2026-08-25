@@ -52,7 +52,9 @@ Flags:
   --doctor                           print runtime diagnostics and exit
   --prompt <text>                    run one prompt headlessly and exit
   --relay-url <wss://…>              relay endpoint for remote control
-                                     (env CUPPET_RELAY_URL)
+                                     (env CUPPET_RELAY_URL; enrollment can supply it)
+  CUPPET_TOKEN                       Cuppet session token for automatic enrollment
+  CUPPET_API_BASE                    Cuppet API base for automatic enrollment
   CUPPET_REMOTE_TOKEN_SECRET         optional shared secret for backend-issued
                                      short-lived mobile credentials
   -c, --continue                     pass --continue to the TUI
@@ -74,8 +76,8 @@ Enrollment flags:
   --name <label>                     display name for this machine
 
 Remote control flow:
-  1. cuppet remote-control --relay-url wss://relay.example.com
-     (set CUPPET_RELAY_HOST_SECRET after enrolling the host with the relay)
+  1. cuppet remote-control
+     (Cuppet generates and enrolls the host relay credential automatically)
   2. scan the printed QR / open the pairing URL within 2 minutes
   3. control the session from the phone while the machine stays authoritative
 
@@ -192,6 +194,8 @@ async function main(): Promise<void> {
           remoteDir: join(paths.base, 'remote'),
           ...(relayUrl ? { relayUrl } : {}),
           ...(process.env.CUPPET_RELAY_HOST_SECRET ? { hostSecret: process.env.CUPPET_RELAY_HOST_SECRET } : {}),
+          ...(process.env.CUPPET_TOKEN ? { authToken: process.env.CUPPET_TOKEN } : {}),
+          ...(process.env.CUPPET_TOKEN ? { apiBase: process.env.CUPPET_API_BASE ?? 'https://api.cuppet.in' } : {}),
           ...(process.env.CUPPET_REMOTE_TOKEN_SECRET ? { remoteTokenSecret: process.env.CUPPET_REMOTE_TOKEN_SECRET } : {}),
           write,
         })

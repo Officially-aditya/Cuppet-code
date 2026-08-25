@@ -60,6 +60,11 @@ The source-checkout alias `cupet` launches the same CLI.
 
 For phone/browser control, run `/remote` inside the TUI or start
 `cuppet --remote-control` and follow the pairing details shown in the terminal.
+When `CUPPET_TOKEN` is available, enabling remote control automatically creates
+the machine's relay credential, registers the host with Sydney and the relay,
+and uses the relay URL returned by Sydney. `CUPPET_API_BASE` can override the
+default API during local development. Without a token, local pairing still
+works when `CUPPET_RELAY_URL` is already configured.
 The remote protocol and scope model are documented in
 [`docs/remote-protocol.md`](docs/remote-protocol.md).
 
@@ -128,7 +133,10 @@ creates downloadable runtime archives.
 Remote-token secrets are runtime-only. Set `REMOTE_TOKEN_SECRET` on the
 Sydney API and the same value as `CUPPET_REMOTE_TOKEN_SECRET` on the local
 Cuppet-code host. Set `REMOTE_RELAY_URL` on Sydney and `CUPPET_RELAY_URL` on
-the host. Never put these values in `package.json`, npm, or the provider
+the host. Set `REMOTE_RELAY_ADMIN_TOKEN` only on Sydney; it is used by the
+backend to register each generated host credential with the relay. Cuppet
+generates and stores that per-host credential automatically when remote control
+starts. Never put these values in `package.json`, npm, or the provider
 credential store.
 
 On first launch, Cuppet asks for a platform before showing models. Choose

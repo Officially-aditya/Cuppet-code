@@ -4,6 +4,9 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { ControlRouter, type ControlActor } from '../src/control/router.js'
 import { RemoteBridge } from '../src/remote/bridge.js'
+import { startRemoteControl } from '../src/remote/bootstrap.js'
+import { registerHost } from '../src/remote/enroll.js'
+import { ensureHostIdentity } from '../src/remote/identity.js'
 import {
   MAX_FRAME_BYTES,
   PROTOCOL_VERSION,
@@ -163,6 +166,74 @@ test('pairing invites are single-use, expiring, and produce revocable device cre
     await revokeDevice(dir, claimed.deviceId)
     assert.equal(await authenticateDevice(dir, claimed.deviceId, claimed.secret), undefined)
   } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('host identity creates and preserves an automatic relay secret', async () => {
+  const dir = await mkdtemp(join(process.cwd(), '.identity-relay-secret-'))
+  try {
+    const first = await ensureHostIdentity(dir)
+    const second = await ensureHostIdentity(dir)
+    assert.equal(first.hostId, second.hostId)
+    assert.match(first.relaySecret, /^[a-f0-9]{64}$/)
+    assert.equal(second.relaySecret, first.relaySecret)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('remote enrollment sends the generated relay secret and receives relay settings', async () => {
+  const dir = await mkdtemp(join(process.cwd(), '.remote-enrollment-'))
+  try {
+    const identity = await ensureHostIdentity(dir)
+    let requestBody: Record<string, unknown> | undefined
+    const enrollment = await registerHost({
+      apiBase: 'https://api.example.test',
+      token: 'session-token',
+      identity,
+      relaySecret: identity.relaySecret,
+      fetcher: async (_input, init) => {
+        requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>
+        return new Response(JSON.stringify({ relayUrl: 'wss://relay.example.test', relayRegistered: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      },
+    })
+    assert.equal(requestBody?.hostId, identity.hostId)
+    assert.equal(requestBody?.relaySecret, identity.relaySecret)
+    assert.equal(enrollment.relayUrl, 'wss://relay.example.test')
+    assert.equal(enrollment.relayRegistered, true)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('enabling remote control can enroll automatically before starting the bridge', async () => {
+  const dir = await mkdtemp(join(process.cwd(), '.remote-auto-start-'))
+  const originalFetch = globalThis.fetch
+  try {
+    let calls = 0
+    globalThis.fetch = async () => {
+      calls += 1
+      return new Response(JSON.stringify({ relayRegistered: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    }
+    const session = await startRemoteControl({
+      controller: stubController() as never,
+      remoteDir: dir,
+      apiBase: 'https://api.example.test',
+      authToken: 'session-token',
+      write: () => undefined,
+    })
+    assert.equal(calls, 1)
+    assert.equal(session.bridge, undefined)
+    session.stop()
+  } finally {
+    globalThis.fetch = originalFetch
     await rm(dir, { recursive: true, force: true })
   }
 })

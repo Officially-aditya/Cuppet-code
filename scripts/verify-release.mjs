@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { join, resolve } from 'node:path'
+import { canExecuteRuntime } from './release-platform.mjs'
 
 const root = resolve(process.argv[2] ?? 'artifacts')
 const expectedTstProtocol = 'cuppet.tst.v3'
@@ -42,9 +43,11 @@ for (const manifestPath of manifests) {
       throw new Error(`binary is not executable: ${path}`)
     }
   }
-  const daemonProtocol = (await capture(join(directory, 'bin/tst-daemon'), ['--protocol'])).trim()
-  if (daemonProtocol !== expectedTstProtocol) {
-    throw new Error(`TST daemon protocol mismatch in ${directory}: expected ${expectedTstProtocol}, received ${daemonProtocol || 'no identity'}`)
+  if (canExecuteRuntime(manifest)) {
+    const daemonProtocol = (await capture(join(directory, 'bin/tst-daemon'), ['--protocol'])).trim()
+    if (daemonProtocol !== expectedTstProtocol) {
+      throw new Error(`TST daemon protocol mismatch in ${directory}: expected ${expectedTstProtocol}, received ${daemonProtocol || 'no identity'}`)
+    }
   }
   const marker = JSON.parse(await readFile(join(directory, 'bin/.cuppet-derivative.json'), 'utf8'))
   if (

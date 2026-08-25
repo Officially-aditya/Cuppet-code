@@ -3,7 +3,7 @@ name: publish Linux runtimes
 on:
   push:
     branches:
-      - publish-missing-linux-runtimes
+      - 'publish-missing-linux-runtimes-*'
   workflow_dispatch:
 
 permissions:

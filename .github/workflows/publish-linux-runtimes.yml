@@ -58,6 +58,7 @@ jobs:
         with:
           name: cuppet-${{ matrix.target }}
           path: artifacts/
+          include-hidden-files: true
 
   publish:
     needs: build-platform

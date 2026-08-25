@@ -1,0 +1,84 @@
+name: publish Linux runtimes
+
+on:
+  push:
+    branches:
+      - publish-missing-linux-runtimes
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-platform:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            package_dir: runtime-linux-x64-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            package_dir: runtime-linux-arm64-gnu
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: anomalyco/opencode
+          ref: 49c69c5ed3ccf706b61b3febb43c8aaff7f8325e
+          path: .opencode-src
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.88
+          targets: ${{ matrix.target }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-${{ runner.arch }}-bun-opencode-${{ hashFiles('.opencode-src/bun.lock') }}
+      - run: npm ci
+      - run: npm run build:ts
+      - run: cargo build --workspace --release --locked --target=${{ matrix.target }}
+      - name: Build audited OpenCode binary
+        run: node scripts/build-opencode.mjs --source=.opencode-src --output=.opencode/opencode
+      - name: Package Linux runtime
+        run: node scripts/package-platform.mjs --target=${{ matrix.target }}
+        env:
+          CUPPET_OPENCODE_BIN: ${{ github.workspace }}/.opencode/opencode
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cuppet-${{ matrix.target }}
+          path: artifacts/
+
+  publish:
+    needs: build-platform
+    runs-on: ubuntu-24.04
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: cuppet-*
+          path: artifacts
+          merge-multiple: true
+      - run: npm ci
+      - run: npm run package:cli
+      - name: Verify Linux runtime packages
+        run: node scripts/verify-release.mjs artifacts --expected=2
+      - name: Publish Linux runtime packages
+        run: node scripts/publish-release.mjs artifacts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,4 +1,4 @@
-import { access } from 'node:fs/promises'
+import { access, copyFile, lstat, mkdtemp, rm, symlink } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -39,6 +39,8 @@ export type DeepSeekHarnessOptions = {
   workspace: string
   sessionRoot: string
   harnessRoot?: string
+  cordisConfig?: string
+  dshHome?: string
   model?: string
   provider?: string
   maxTokens?: number
@@ -53,9 +55,56 @@ export const DEEPSEEK_HARNESS_CODING_SYSTEM_PROMPT =
 
 export async function createDeepSeekHarness(options: DeepSeekHarnessOptions): Promise<RuntimeHarness> {
   const harnessRoot = resolve(options.harnessRoot ?? process.env.CUPPET_DSH_ROOT ?? join(process.cwd(), '.benchmarks', 'deepseek-harness'))
-  const runner = join(harnessRoot, 'packages', 'examples', 'jsonrpc-demo', 'lib', 'bin.js')
-  const config = join(harnessRoot, 'examples', 'jsonrpc-agent', 'minimal.cordis.yml')
-  await Promise.all([access(runner), access(config)])
+  const runner = join(
+    harnessRoot,
+    'python',
+    'sdk-runtime',
+    'node_modules',
+    '@deepseek-ai',
+    'dsh-sdk-jsonrpc-demo',
+    'lib',
+    'packaged-bin.js',
+  )
+  const requestedConfig = resolve(options.cordisConfig ?? join(harnessRoot, 'examples', 'jsonrpc-agent', 'minimal.cordis.yml'))
+  let stagedConfigRoot: string | undefined
+  const config = options.cordisConfig === undefined
+    ? requestedConfig
+    : await (async () => {
+      await access(requestedConfig)
+      stagedConfigRoot = await mkdtemp(join(harnessRoot, '.cuppet-cordis-'))
+      const stagedConfig = join(stagedConfigRoot, 'config.cordis.yml')
+      await copyFile(requestedConfig, stagedConfig)
+      return stagedConfig
+    })()
+  try {
+    await Promise.all([access(runner), access(config)])
+  } catch (error) {
+    if (stagedConfigRoot) await rm(stagedConfigRoot, { recursive: true, force: true })
+    throw error
+  }
+  const runtimeCredentialPluginLink = join(
+    harnessRoot,
+    'python',
+    'sdk-runtime',
+    'node_modules',
+    '@deepseek-ai',
+    'dsh-credentials-local',
+  )
+  let createdRuntimeCredentialPluginLink = false
+  try {
+    await lstat(runtimeCredentialPluginLink)
+  } catch {
+    await symlink(
+      join(harnessRoot, 'packages', 'credentials', 'credentials-local'),
+      runtimeCredentialPluginLink,
+    )
+    createdRuntimeCredentialPluginLink = true
+  }
+
+  const cleanup = async (): Promise<void> => {
+    if (createdRuntimeCredentialPluginLink) await rm(runtimeCredentialPluginLink, { force: true })
+    if (stagedConfigRoot) await rm(stagedConfigRoot, { recursive: true, force: true })
+  }
 
   const clientModule = await import(pathToFileURL(join(harnessRoot, 'packages', 'sdk', 'client', 'lib', 'index.js')).href) as {
     DeepSeekHarness: new (options: {
@@ -73,14 +122,15 @@ export async function createDeepSeekHarness(options: DeepSeekHarnessOptions): Pr
     DSH_MODEL: options.model ?? 'deepseek-v4-flash',
     DSH_SESSION_ROOT: resolve(options.sessionRoot),
   }
+  if (options.dshHome) env.DSH_HOME = resolve(options.dshHome)
   if (options.baseURL) env.DEEPSEEK_BASE_URL = options.baseURL
   if (options.apiKey) env.DEEPSEEK_API_KEY = options.apiKey
   if (options.systemPrompt) env.DSH_SYSTEM_PROMPT = options.systemPrompt
 
-  return new clientModule.DeepSeekHarness({
+  const runtime = new clientModule.DeepSeekHarness({
     launch: {
       command: process.execPath,
-      args: [runner],
+      args: ['--preserve-symlinks-main', runner],
       cwd: harnessRoot,
       env,
       ...(options.requestTimeoutMs === undefined ? {} : { requestTimeoutMs: options.requestTimeoutMs }),
@@ -90,6 +140,16 @@ export async function createDeepSeekHarness(options: DeepSeekHarnessOptions): Pr
     model: options.model ?? 'deepseek-v4-flash',
     ...(options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens }),
   })
+  return {
+    run: (input, runOptions) => runtime.run(input, runOptions),
+    close: async () => {
+      try {
+        await runtime.close()
+      } finally {
+        await cleanup()
+      }
+    },
+  }
 }
 
 export async function runDeepSeekHarness(

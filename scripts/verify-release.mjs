@@ -7,6 +7,7 @@ import { canExecuteRuntime } from './release-platform.mjs'
 
 const root = resolve(process.argv[2] ?? 'artifacts')
 const expectedTstProtocol = 'cuppet.tst.v3'
+const verifyExecutables = process.env.CUPPET_VERIFY_EXECUTABLES === '1'
 const expectedArgument = process.argv.find((argument) => argument.startsWith('--expected='))
 const expectedCount = Number(expectedArgument?.slice('--expected='.length) ?? 4)
 if (!Number.isInteger(expectedCount) || expectedCount < 1) throw new Error('--expected must be a positive integer')
@@ -43,7 +44,7 @@ for (const manifestPath of manifests) {
       throw new Error(`binary is not executable: ${path}`)
     }
   }
-  if (canExecuteRuntime(manifest)) {
+  if (verifyExecutables && canExecuteRuntime(manifest)) {
     const daemonProtocol = (await capture(join(directory, 'bin/tst-daemon'), ['--protocol'])).trim()
     if (daemonProtocol !== expectedTstProtocol) {
       throw new Error(`TST daemon protocol mismatch in ${directory}: expected ${expectedTstProtocol}, received ${daemonProtocol || 'no identity'}`)

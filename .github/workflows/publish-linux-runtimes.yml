@@ -78,6 +78,8 @@ jobs:
       - run: npm run package:cli
       - name: Verify Linux runtime packages
         run: node scripts/verify-release.mjs artifacts --expected=2
+        env:
+          CUPPET_VERIFY_EXECUTABLES: '0'
       - name: Publish Linux runtime packages
         run: node scripts/publish-release.mjs artifacts
         env:

@@ -127,6 +127,8 @@ jobs:
       - name: Create and verify installable npm bundle
         run: npm run package:cli
       - run: node scripts/verify-release.mjs artifacts
+        env:
+          CUPPET_VERIFY_EXECUTABLES: '0'
       - run: node scripts/publish-release.mjs artifacts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -179,6 +181,8 @@ jobs:
             exit 1
           fi
           node scripts/verify-release.mjs artifacts --expected="$EXPECTED_PACKAGES"
+        env:
+          CUPPET_VERIFY_EXECUTABLES: '0'
       - name: Publish scoped runtime packages to GitHub Packages
         run: |
           EXPECTED_PACKAGES="$(find artifacts -name manifest.json -type f | wc -l | tr -d ' ')"

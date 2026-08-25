@@ -11,8 +11,9 @@ import { createRuntimePaths } from '../packages/cli/src/runtime/paths.js'
 import { buildCuppetContext } from '../packages/cli/src/tst/context.js'
 import { startTstDaemon, type TstRuntime } from '../packages/cli/src/tst/supervisor.js'
 import type { AgentEvent, ModelRef, SessionInfo, TokenUsage } from '../packages/cli/src/types.js'
+import { createDeepSeekHarness, DEEPSEEK_HARNESS_CODING_SYSTEM_PROMPT, summarizeDeepSeekEvents } from './lib/deepseek-harness.js'
 
-type Arm = 'opencode' | 'cuppet' | 'kernel' | 'instruction-only' | 'current' | 'compiled' | 'graph-aware' | 'graph-first' | 'graph-only' | 'graph-native'
+type Arm = 'opencode' | 'cuppet' | 'kernel' | 'instruction-only' | 'current' | 'compiled' | 'graph-aware' | 'graph-first' | 'graph-only' | 'graph-native' | 'deepseek-harness'
 
 type ArmConfig = {
   includeContext: boolean
@@ -56,6 +57,10 @@ const armConfigs: Record<Arm, ArmConfig> = {
   opencode: {
     includeContext: false,
     description: 'legacy OpenCode baseline with the existing Cuppet server instruction and no retrieved context',
+  },
+  'deepseek-harness': {
+    includeContext: false,
+    description: 'DeepSeek Harness agent with the same task prompt and OpenRouter model',
   },
   cuppet: {
     includeContext: true,
@@ -215,6 +220,9 @@ type Trial = {
   usage: TokenUsage
   uncachedInputTokens: number
   totalModelTokens: number
+  modelCalls: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
   cost: number
   toolCalls: number
   toolCounts: Record<string, number>
@@ -273,6 +281,7 @@ const singleArm = requestedSingleArm && Object.hasOwn(armConfigs, requestedSingl
 if (requestedSingleArm && !singleArm) {
   throw new Error(`unknown CUPPET_TASK_TRACKER_SINGLE_ARM: ${requestedSingleArm}`)
 }
+const benchmarkArms = parseBenchmarkArms(process.env.CUPPET_TASK_TRACKER_ARMS)
 const followupEnabled = process.env.CUPPET_TASK_TRACKER_FOLLOWUP === '1'
 // The run command should set CUPPET_TTT_ALLOW_EXTERNAL=1 for both arms. This
 // keeps daemon state-directory discovery from becoming a Cuppet-only failure.
@@ -549,7 +558,9 @@ let reportWritten = false
 
 try {
   for (let repeat = 0; repeat < repeats; repeat += 1) {
-    const order: Arm[] = singleArm
+    const order: Arm[] = benchmarkArms
+      ? repeat % 2 === 0 ? benchmarkArms : [benchmarkArms[1], benchmarkArms[0]]
+      : singleArm
       ? [singleArm]
       : graphFirstIsolation
       ? graphFirstOrders[repeat % graphFirstOrders.length]!
@@ -578,7 +589,7 @@ try {
         promptIsolation,
         followupEnabled,
         repeats,
-        expectedTrials: repeats * (singleArm ? 1 : graphFirstIsolation ? graphFirstArmNames.length : graphOnlyIsolation ? graphOnlyArmNames.length : graphNativeIsolation ? graphNativeArmNames.length : contextIsolation ? contextArmNames.length : promptIsolation ? isolationArmNames.length : 2),
+        expectedTrials: repeats * (benchmarkArms?.length ?? (singleArm ? 1 : graphFirstIsolation ? graphFirstArmNames.length : graphOnlyIsolation ? graphOnlyArmNames.length : graphNativeIsolation ? graphNativeArmNames.length : contextIsolation ? contextArmNames.length : promptIsolation ? isolationArmNames.length : 2)),
         completedTrials: trials.length,
         trials,
       })
@@ -586,7 +597,9 @@ try {
     }
   }
 
-  const summary = graphFirstIsolation
+  const summary = benchmarkArms
+    ? summarizePair(trials, benchmarkArms[0], benchmarkArms[1])
+    : graphFirstIsolation
     ? summarizeGraphFirst(trials)
     : graphOnlyIsolation
       ? summarizeGraphOnly(trials)
@@ -598,14 +611,16 @@ try {
         ? summarizePromptIsolation(trials)
       : summarize(trials)
   const report = {
-    schema: graphFirstIsolation ? 3 : graphOnlyIsolation ? 4 : graphNativeIsolation ? 5 : contextIsolation ? 6 : promptIsolation ? 2 : 1,
+    schema: benchmarkArms ? 7 : graphFirstIsolation ? 3 : graphOnlyIsolation ? 4 : graphNativeIsolation ? 5 : contextIsolation ? 6 : promptIsolation ? 2 : 1,
     createdAt: new Date().toISOString(),
     project,
     task: 'Rename Task.dueDate to deadline, add priority-aware indexed filtering, reject past deadlines, and fix deadline-loss plus stale-index bugs.',
     model,
-    kernel: { name: 'official OpenCode', version: '1.18.4' },
+    kernel: { name: benchmarkArms ? 'DeepSeek Harness + Cuppet' : 'official OpenCode', version: '1.18.4' },
     followupEnabled,
-    design: graphFirstIsolation
+    design: benchmarkArms
+      ? 'two-arm DeepSeek Harness/Cuppet comparison; fresh repository copies; identical task/model/evaluator; Cuppet adds bounded TST context; arm order alternates; hidden suite is generated outside trial workspaces; mutations are isolated per trial'
+      : graphFirstIsolation
       ? 'two-arm enforced graph-first comparison; fresh repository copies; identical task/model/tools/context; balanced arm order; graph-first receives a mandatory model navigation preflight; pre-graph non-graph permissions are denied in the graph-first arm; hidden suite is generated outside trial workspaces; mutations are isolated per trial'
       : graphOnlyIsolation
         ? 'two-arm enforced graph-only file-navigation comparison; fresh repository copies; identical task/model/tools/context; balanced arm order; graph-only receives a mandatory model graph preflight; glob/grep/LSP and non-validation bash are disabled in the graph-only task session; hidden suite is generated outside trial workspaces; mutations are isolated per trial'
@@ -618,7 +633,9 @@ try {
         : promptIsolation
           ? 'four-arm prompt isolation; five repeats per arm; fresh repository copies; identical task/model/tools/permissions; balanced arm order; hidden suite is generated outside trial workspaces; mutations are isolated per trial'
       : 'paired fresh repository copies; identical task/model/tools/permissions; Cuppet adds bounded TST context; arm order alternates; hidden suite is generated outside trial workspaces; mutations are isolated per trial',
-    arms: graphFirstIsolation
+    arms: benchmarkArms
+      ? Object.fromEntries(benchmarkArms.map((arm) => [arm, armConfigs[arm]]))
+      : graphFirstIsolation
       ? Object.fromEntries(Object.entries(armConfigs).filter(([arm]) => graphFirstArmNames.includes(arm as typeof graphFirstArmNames[number])))
       : graphOnlyIsolation
         ? Object.fromEntries(Object.entries(armConfigs).filter(([arm]) => graphOnlyArmNames.includes(arm as typeof graphOnlyArmNames[number])))
@@ -649,7 +666,9 @@ try {
   const resultsDirectory = resolve(project, 'benchmarks', 'results')
   await mkdir(resultsDirectory, { recursive: true })
   const stamp = new Date().toISOString().replaceAll(':', '-')
-  const resultPrefix = graphFirstIsolation
+  const resultPrefix = benchmarkArms
+    ? 'ab-task-tracker-deepseek-cuppet'
+    : graphFirstIsolation
     ? 'ab-task-tracker-graph-first'
     : graphOnlyIsolation
       ? 'ab-task-tracker-graph-only'
@@ -665,7 +684,9 @@ try {
   await writeFile(jsonPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8')
   await writeFile(
     markdownPath,
-    graphFirstIsolation
+    benchmarkArms
+      ? renderPairMarkdown(report as Parameters<typeof renderPairMarkdown>[0])
+      : graphFirstIsolation
       ? renderGraphFirstMarkdown(report as Parameters<typeof renderGraphFirstMarkdown>[0])
       : graphOnlyIsolation
         ? renderGraphOnlyMarkdown(report as Parameters<typeof renderGraphOnlyMarkdown>[0])
@@ -692,7 +713,7 @@ try {
     promptIsolation,
     followupEnabled,
     repeats,
-    expectedTrials: repeats * (singleArm ? 1 : graphFirstIsolation ? graphFirstArmNames.length : graphOnlyIsolation ? graphOnlyArmNames.length : graphNativeIsolation ? graphNativeArmNames.length : contextIsolation ? contextArmNames.length : promptIsolation ? isolationArmNames.length : 2),
+    expectedTrials: repeats * (benchmarkArms?.length ?? (singleArm ? 1 : graphFirstIsolation ? graphFirstArmNames.length : graphOnlyIsolation ? graphOnlyArmNames.length : graphNativeIsolation ? graphNativeArmNames.length : contextIsolation ? contextArmNames.length : promptIsolation ? isolationArmNames.length : 2)),
     completedTrials: trials.length,
     trials,
     error: error instanceof Error ? error.message : String(error),
@@ -708,6 +729,7 @@ async function runTrial(options: { arm: Arm; model: ModelRef; repeat: number; ro
   const armConfig = armConfigs[options.arm]
   const workspace = join(options.root, `${options.arm}-${options.repeat + 1}`)
   await cloneProject(project, workspace)
+  if (options.arm === 'deepseek-harness') return runDeepSeekTaskTrackerTrial(options, workspace)
   const runtimeRoot = join(options.root, `runtime-${options.arm}-${options.repeat + 1}`)
   await rm(runtimeRoot, { recursive: true, force: true })
   const paths = await createRuntimePaths(workspace, runtimeRoot)
@@ -1004,6 +1026,9 @@ async function runTrial(options: { arm: Arm; model: ModelRef; repeat: number; ro
       usage: completed.tokens,
       uncachedInputTokens: completed.tokens.input,
       totalModelTokens: completed.tokens.input + completed.tokens.output + completed.tokens.reasoning,
+      modelCalls: 0,
+      cacheReadTokens: completed.tokens.cacheRead,
+      cacheWriteTokens: completed.tokens.cacheWrite,
       cost: completed.cost,
       toolCalls,
       toolCounts,
@@ -1042,8 +1067,129 @@ async function runTrial(options: { arm: Arm; model: ModelRef; repeat: number; ro
   }
 }
 
+async function runDeepSeekTaskTrackerTrial(
+  options: { arm: Arm; model: ModelRef; repeat: number; root: string; hiddenSuitePath: string },
+  workspace: string,
+): Promise<Trial> {
+  const started = performance.now()
+  let sessionID = `deepseek-harness-${options.repeat + 1}`
+  let answer = ''
+  let failure: string | undefined
+  let attempts = 1
+  let evaluation: WorkspaceEvaluation | undefined
+  const events: Array<Parameters<typeof summarizeDeepSeekEvents>[0][number]> = []
+  let harness: Awaited<ReturnType<typeof createDeepSeekHarness>> | undefined
+  try {
+    harness = await createDeepSeekHarness({
+      workspace,
+      sessionRoot: join(options.root, `sessions-deepseek-harness-${options.repeat + 1}`),
+      model: options.model.modelID,
+      provider: 'deepseek-official',
+      baseURL: process.env.CUPPET_DSH_BASE_URL ?? 'https://openrouter.ai/api/v1',
+      apiKey: process.env.OPENROUTER_API_KEY,
+      maxTokens: 16_384,
+      requestTimeoutMs: 15 * 60_000,
+      systemPrompt: `${DEEPSEEK_HARNESS_CODING_SYSTEM_PROMPT}\nWorkspace root: ${workspace}. Use absolute paths under this directory only.`,
+    })
+    const first = await harness.run(taskPrompt)
+    sessionID = first.sessionId
+    answer = first.finalResponse
+    events.push(...first.events)
+    if (followupEnabled) {
+      const followup = await harness.run(followUpPrompt, { sessionId: sessionID })
+      answer = followup.finalResponse
+      events.push(...followup.events)
+    }
+    evaluation = await evaluateWorkspace(workspace, options.hiddenSuitePath)
+    let repairAttempts = 0
+    while (!evaluation.success && repairAttempts < verifyRetryLimit()) {
+      const failed = Object.entries(evaluation.checks)
+        .filter(([, check]) => !check.passed)
+        .map(([name, check]) => `- ${name}: ${check.detail}`)
+      if (failed.length === 0) break
+      const repairPrompt = [
+        'Your previous attempt did not fully satisfy the task. A deterministic verifier reported these exact problems:',
+        ...failed.map((line) => line.slice(0, 300)),
+        'Fix only these verified problems in the task-tracker workspace, keep existing tests passing, re-inspect your changes, then reply.',
+      ].join('\n')
+      repairAttempts += 1
+      const repair = await harness.run(repairPrompt, { sessionId: sessionID })
+      answer = repair.finalResponse
+      events.push(...repair.events)
+      evaluation = await evaluateWorkspace(workspace, options.hiddenSuitePath)
+    }
+    attempts = 1 + repairAttempts
+  } catch (error) {
+    failure = error instanceof Error ? error.message : String(error)
+  } finally {
+    await harness?.close().catch(() => undefined)
+  }
+  const finalEvaluation = evaluation ?? await evaluateWorkspace(workspace, options.hiddenSuitePath)
+  const usage = summarizeDeepSeekEvents(events)
+  const success = !failure && finalEvaluation.success
+  return {
+    repeat: options.repeat + 1,
+    arm: options.arm,
+    workspace,
+    sessionID,
+    success,
+    attempts,
+    ...(attempts > 1 ? { repaired: success } : {}),
+    acceptanceScore: finalEvaluation.acceptanceScore,
+    contextTokens: 0,
+    taskContextChars: 0,
+    taskContextHighConfidence: 0,
+    taskContextMediumConfidence: 0,
+    contextEnabled: false,
+    instructionMode: options.arm,
+    instructionApplied: null,
+    durationMs: Math.round(performance.now() - started),
+    usage: {
+      input: usage.inputTokens,
+      output: usage.outputTokens,
+      reasoning: usage.reasoningTokens,
+      cacheRead: usage.cacheReadTokens,
+      cacheWrite: usage.cacheWriteTokens,
+    },
+    uncachedInputTokens: usage.uncachedInputTokens,
+    totalModelTokens: usage.totalModelTokens,
+    modelCalls: usage.modelCalls,
+    cacheReadTokens: usage.cacheReadTokens,
+    cacheWriteTokens: usage.cacheWriteTokens,
+    cost: 0,
+    toolCalls: usage.toolCalls,
+    toolCounts: {},
+    firstToolName: null,
+    graphSearchCalls: 0,
+    graphOutputBytes: 0,
+    graphToolTrace: [],
+    graphBeforeWorkspace: false,
+    firstToolMs: null,
+    firstGraphMs: null,
+    firstWorkspaceToolMs: null,
+    firstWorkspaceToolName: null,
+    firstSearchMs: null,
+    firstEditMs: null,
+    firstBashMs: null,
+    permissionRequests: 0,
+    rejectedPermissions: 0,
+    graphGateRejections: 0,
+    unexpectedRejectedPermissions: 0,
+    blockedFileSearchRequests: 0,
+    graphRedirectMessages: 0,
+    blockedFileSearchCalls: 0,
+    blockedBashRequests: 0,
+    graphGateEnabled: false,
+    graphPreflightPassed: true,
+    permissionActions: [],
+    answer,
+    evaluation: finalEvaluation,
+    ...(failure ? { error: failure } : {}),
+  }
+}
+
 async function cloneProject(source: string, destination: string): Promise<void> {
-  const excluded = new Set(['.git', 'node_modules', 'target', 'dist', '.cuppet'])
+  const excluded = new Set(['.git', 'node_modules', 'target', 'dist', '.cuppet', '.benchmarks'])
   await rm(destination, { recursive: true, force: true })
   await cp(source, destination, {
     recursive: true,
@@ -1217,6 +1363,15 @@ function formatModel(model: ModelRef): string {
   return `${model.providerID}/${model.modelID}${model.variant ? `@${model.variant}` : ''}`
 }
 
+function parseBenchmarkArms(value: string | undefined): [Arm, Arm] | undefined {
+  if (!value) return undefined
+  const arms = value.split(',').map((arm) => arm.trim())
+  if (arms.length !== 2 || arms[0] === arms[1] || arms.some((arm) => !['cuppet', 'deepseek-harness'].includes(arm))) {
+    throw new Error('CUPPET_TASK_TRACKER_ARMS must contain two distinct arms from cuppet,deepseek-harness')
+  }
+  return arms as [Arm, Arm]
+}
+
 async function seedOpenCodeProviderState(paths: Awaited<ReturnType<typeof createRuntimePaths>>): Promise<void> {
   const persistentRoot = join(process.env.HOME ?? '', '.cuppet', 'v2', 'opencode')
   const files = [
@@ -1363,6 +1518,18 @@ function summarize(values: Trial[]) {
   }
 }
 
+function summarizePair(values: Trial[], baselineArm: Arm, candidateArm: Arm) {
+  const baseline = summarizeIsolationArm(values, baselineArm)
+  const candidate = summarizeIsolationArm(values, candidateArm)
+  return {
+    baselineArm,
+    candidateArm,
+    baseline,
+    candidate,
+    comparison: compareIsolationArms(candidate, baseline),
+  }
+}
+
 type IsolationArm = typeof isolationArmNames[number]
 
 function summarizeIsolationArm(values: Trial[], arm: Arm) {
@@ -1377,6 +1544,8 @@ function summarizeIsolationArm(values: Trial[], arm: Arm) {
     medianLatencyMs: median(selected.map((trial) => trial.durationMs)),
     medianUncachedInputTokens: median(selected.map((trial) => trial.uncachedInputTokens)),
     medianTotalModelTokens: median(selected.map((trial) => trial.totalModelTokens)),
+    medianCacheReadTokens: median(selected.map((trial) => trial.cacheReadTokens)),
+    medianCacheWriteTokens: median(selected.map((trial) => trial.cacheWriteTokens)),
     medianCost: median(selected.map((trial) => trial.cost)),
     medianSuccessfulLatencyMs: median(successful.map((trial) => trial.durationMs)),
     medianSuccessfulUncachedInputTokens: median(successful.map((trial) => trial.uncachedInputTokens)),
@@ -1481,6 +1650,7 @@ function compareContextArms(candidate: ReturnType<typeof summarizeIsolationArm>,
     successfulInputReduction: ratio(baseline.medianSuccessfulUncachedInputTokens - candidate.medianSuccessfulUncachedInputTokens, baseline.medianSuccessfulUncachedInputTokens),
     successfulTotalModelTokenReduction: ratio(baseline.medianSuccessfulTotalModelTokens - candidate.medianSuccessfulTotalModelTokens, baseline.medianSuccessfulTotalModelTokens),
     successfulCostReduction: ratio(baseline.medianSuccessfulCost - candidate.medianSuccessfulCost, baseline.medianSuccessfulCost),
+    cacheReadReduction: ratio(baseline.medianCacheReadTokens - candidate.medianCacheReadTokens, baseline.medianCacheReadTokens),
     hop1OrLessDelta: candidate.hop1OrLess - baseline.hop1OrLess,
     hop2Delta: candidate.hop2 - baseline.hop2,
     regressionDelta: candidate.regression - baseline.regression,
@@ -1491,6 +1661,10 @@ function compareIsolationArms(candidate: ReturnType<typeof summarizeIsolationArm
   return {
     completionRateDelta: candidate.completionRate - baseline.completionRate,
     acceptanceScoreDelta: candidate.meanAcceptanceScore - baseline.meanAcceptanceScore,
+    latencyReduction: ratio(baseline.medianLatencyMs - candidate.medianLatencyMs, baseline.medianLatencyMs),
+    uncachedInputReduction: ratio(baseline.medianUncachedInputTokens - candidate.medianUncachedInputTokens, baseline.medianUncachedInputTokens),
+    totalModelTokenReduction: ratio(baseline.medianTotalModelTokens - candidate.medianTotalModelTokens, baseline.medianTotalModelTokens),
+    cacheReadReduction: ratio(baseline.medianCacheReadTokens - candidate.medianCacheReadTokens, baseline.medianCacheReadTokens),
     successfulLatencyReduction: ratio(baseline.medianSuccessfulLatencyMs - candidate.medianSuccessfulLatencyMs, baseline.medianSuccessfulLatencyMs),
     successfulInputReduction: ratio(baseline.medianSuccessfulUncachedInputTokens - candidate.medianSuccessfulUncachedInputTokens, baseline.medianSuccessfulUncachedInputTokens),
     successfulTotalModelTokenReduction: ratio(baseline.medianSuccessfulTotalModelTokens - candidate.medianSuccessfulTotalModelTokens, baseline.medianSuccessfulTotalModelTokens),
@@ -1769,6 +1943,66 @@ function renderPromptIsolationMarkdown(report: {
     }),
     '',
     `Interpretation must remain task-specific. The prompt wording effect is the graph-aware/current comparison; the context effect is current/instruction-only. ${report.repeats} repeats per arm provide directional evidence, not a product-wide statistical claim.`,
+    '',
+  ].join('\n')
+}
+
+function renderPairMarkdown(report: {
+  createdAt: string
+  model: ModelRef
+  repeats: number
+  summary: ReturnType<typeof summarizePair>
+  trials: Trial[]
+}): string {
+  const { baseline, candidate, comparison, baselineArm, candidateArm } = report.summary
+  const percent = (value: number) => `${(value * 100).toFixed(1)}%`
+  const rows = [
+    ['Successful trials', `${baseline.successes}/${baseline.trials}`, `${candidate.successes}/${candidate.trials}`, percent(comparison.completionRateDelta)],
+    ['Mean acceptance score', percent(baseline.meanAcceptanceScore), percent(candidate.meanAcceptanceScore), percent(comparison.acceptanceScoreDelta)],
+    ['Median latency', `${baseline.medianLatencyMs} ms`, `${candidate.medianLatencyMs} ms`, `${percent(comparison.successfulLatencyReduction)} reduction on successful trials`],
+    ['Median uncached input', `${baseline.medianUncachedInputTokens}`, `${candidate.medianUncachedInputTokens}`, `${percent(comparison.uncachedInputReduction)} reduction`],
+    ['Median total model tokens', `${baseline.medianTotalModelTokens}`, `${candidate.medianTotalModelTokens}`, `${percent(comparison.totalModelTokenReduction)} reduction`],
+    ['Median cache-read tokens', `${baseline.medianCacheReadTokens}`, `${candidate.medianCacheReadTokens}`, `${percent(comparison.cacheReadReduction)} reduction`],
+    ['Mean tool calls', baseline.meanToolCalls.toFixed(1), candidate.meanToolCalls.toFixed(1), 'lower is more efficient'],
+    ['Median injected context', `${baseline.medianContextTokens}`, `${candidate.medianContextTokens}`, 'Cuppet retrieval overhead'],
+  ]
+  const hopRows = [
+    ['Rename + validation (hop ≤ 1)', percent(baseline.hop1OrLess), percent(candidate.hop1OrLess), percent(comparison.hop1OrLessDelta)],
+    ['Two-hop deadline propagation', percent(baseline.hop2), percent(candidate.hop2), percent(comparison.hop2Delta)],
+    ['Regression checks', percent(baseline.regression), percent(candidate.regression), percent(comparison.regressionDelta)],
+  ]
+  return [
+    '# Task Tracker DeepSeek Harness/Cuppet benchmark',
+    '',
+    `- Created: ${report.createdAt}`,
+    `- Model: \`${formatModel(report.model)}\``,
+    `- Paired repeats: ${report.repeats}`,
+    `- Baseline: ${baselineArm}.`,
+    `- Candidate: ${candidateArm}.`,
+    '- Every trial used a fresh isolated repository copy, the same task prompt, and the same deterministic hidden evaluator.',
+    '- Input tokens are uncached prompt tokens; cache-read tokens are reported separately.',
+    '',
+    `| Metric | ${baselineArm} | ${candidateArm} | Candidate vs baseline |`,
+    '|---|---:|---:|---:|',
+    ...rows.map((row) => `| ${row[0]} | ${row[1]} | ${row[2]} | ${row[3]} |`),
+    '',
+    '## Acceptance by navigation depth',
+    '',
+    `| Check group | ${baselineArm} | ${candidateArm} | Candidate vs baseline |`,
+    '|---|---:|---:|---:|',
+    ...hopRows.map((row) => `| ${row[0]} | ${row[1]} | ${row[2]} | ${row[3]} |`),
+    '',
+    '## Trial details',
+    '',
+    ...report.trials.flatMap((trial) => {
+      const failed = Object.entries(trial.evaluation.checks).filter(([, check]) => !check.passed).map(([name, check]) => `${name}: ${check.detail}`)
+      return [
+        `- Repeat ${trial.repeat}, ${trial.arm}: ${trial.success ? 'success' : 'incomplete'}; acceptance ${(trial.acceptanceScore * 100).toFixed(1)}%; uncached input ${trial.uncachedInputTokens}; cache-read ${trial.cacheReadTokens}.`,
+        ...(failed.length > 0 ? [`  - Failed: ${failed.join(' · ')}`] : []),
+      ]
+    }),
+    '',
+    'Interpretation: task-specific paired evidence. The token result should be read together with completion and acceptance scores.',
     '',
   ].join('\n')
 }

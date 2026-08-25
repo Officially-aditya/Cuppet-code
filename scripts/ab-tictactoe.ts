@@ -13,8 +13,9 @@ import { createRuntimePaths } from '../packages/cli/src/runtime/paths.js'
 import { buildCuppetContext } from '../packages/cli/src/tst/context.js'
 import { startTstDaemon, type TstRuntime } from '../packages/cli/src/tst/supervisor.js'
 import type { AgentEvent, ModelRef, TokenUsage } from '../packages/cli/src/types.js'
+import { DEEPSEEK_HARNESS_CODING_SYSTEM_PROMPT, runDeepSeekHarness } from './lib/deepseek-harness.js'
 
-type Arm = 'opencode' | 'cuppet'
+type Arm = 'opencode' | 'cuppet' | 'deepseek-harness'
 type Mark = 'X' | 'O'
 type Cell = Mark | null
 type Board = readonly Cell[]
@@ -92,6 +93,9 @@ type Trial = {
   usage: TokenUsage
   uncachedInputTokens: number
   totalModelTokens: number
+  modelCalls: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
   cost: number
   toolCalls: number
   permissionRequests: number
@@ -105,6 +109,7 @@ type Trial = {
 const execFileAsync = promisify(execFile)
 const project = resolve(process.cwd())
 const taskRepeats = Math.max(1, Math.min(5, Number(process.env.CUPPET_TTT_REPEATS ?? '2') || 2))
+const benchmarkArms = parseArms(process.env.CUPPET_TTT_ARMS) ?? ['opencode', 'cuppet'] as [Arm, Arm]
 const keepWorkspaces = process.env.CUPPET_TTT_KEEP_WORKSPACES === '1'
 const allowExternalDirectory = process.env.CUPPET_TTT_ALLOW_EXTERNAL === '1'
 const taskPrompt = `
@@ -147,23 +152,27 @@ const trials: Trial[] = []
 
 try {
   for (let repeat = 0; repeat < taskRepeats; repeat += 1) {
-    const order: Arm[] = repeat % 2 === 0 ? ['opencode', 'cuppet'] : ['cuppet', 'opencode']
+    const order: Arm[] = repeat % 2 === 0 ? benchmarkArms : [benchmarkArms[1], benchmarkArms[0]]
     for (const arm of order) {
       process.stdout.write(`\n[${repeat + 1}/${taskRepeats}] Tic-Tac-Toe coding task · ${arm}\n`)
       trials.push(await runTrial({ arm, model, repeat, root }))
     }
   }
 
+  const summary = process.env.CUPPET_TTT_ARMS
+    ? summarizePair(trials, benchmarkArms[0], benchmarkArms[1])
+    : summarize(trials)
   const report = {
     schema: 2,
     createdAt: new Date().toISOString(),
     project,
     task: 'Create a complete TypeScript Tic-Tac-Toe game with engine, AI, CLI, tests, and scripts.',
     model,
+    arms: benchmarkArms,
     kernel: { name: 'official OpenCode', version: '1.18.4' },
     design: 'paired fresh repository copies; identical task/model/tools/permissions; Cuppet adds bounded TST context; arm order alternates; mutations are isolated per trial',
     repeats: taskRepeats,
-    summary: summarize(trials),
+    summary,
     trials: trials.map((trial) => (keepWorkspaces ? trial : { ...trial, workspace: '<removed after evaluation>' })),
   }
 
@@ -173,7 +182,13 @@ try {
   const jsonPath = join(resultsDirectory, `ab-tic-tac-toe-${stamp}.json`)
   const markdownPath = join(resultsDirectory, `ab-tic-tac-toe-${stamp}.md`)
   await writeFile(jsonPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8')
-  await writeFile(markdownPath, renderMarkdown(report), 'utf8')
+  await writeFile(
+    markdownPath,
+    process.env.CUPPET_TTT_ARMS
+      ? renderPairMarkdown(report as Parameters<typeof renderPairMarkdown>[0])
+      : renderMarkdown(report as Parameters<typeof renderMarkdown>[0]),
+    'utf8',
+  )
 
   process.stdout.write(`\n${JSON.stringify(report.summary, null, 2)}\n`)
   process.stdout.write(`Raw result: ${jsonPath}\nSummary: ${markdownPath}\n`)
@@ -184,6 +199,7 @@ try {
 async function runTrial(options: { arm: Arm; model: ModelRef; repeat: number; root: string }): Promise<Trial> {
   const workspace = join(options.root, `${options.arm}-${options.repeat + 1}`)
   await cloneProject(project, workspace)
+  if (options.arm === 'deepseek-harness') return runDeepSeekTrial(options, workspace)
   const runtimeRoot = join(options.root, `runtime-${options.arm}-${options.repeat + 1}`)
   const paths = await createRuntimePaths(workspace, runtimeRoot)
   const logger = new RedactedLogger(paths.logs)
@@ -259,6 +275,9 @@ async function runTrial(options: { arm: Arm; model: ModelRef; repeat: number; ro
       usage: completed.tokens,
       uncachedInputTokens: completed.tokens.input,
       totalModelTokens: completed.tokens.input + completed.tokens.output + completed.tokens.reasoning,
+      modelCalls: 0,
+      cacheReadTokens: completed.tokens.cacheRead,
+      cacheWriteTokens: completed.tokens.cacheWrite,
       cost: completed.cost,
       toolCalls,
       permissionRequests: permissionRequests.length,
@@ -275,8 +294,75 @@ async function runTrial(options: { arm: Arm; model: ModelRef; repeat: number; ro
   }
 }
 
+async function runDeepSeekTrial(options: { arm: Arm; model: ModelRef; repeat: number; root: string }, workspace: string): Promise<Trial> {
+  const started = performance.now()
+  let sessionID = `deepseek-harness-${options.repeat + 1}`
+  let answer = ''
+  let usage = {
+    modelCalls: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    reasoningTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    uncachedInputTokens: 0,
+    totalModelTokens: 0,
+    toolCalls: 0,
+  }
+  let error: string | undefined
+  try {
+    const result = await runDeepSeekHarness({
+      workspace,
+      sessionRoot: join(options.root, `sessions-deepseek-harness-${options.repeat + 1}`),
+      model: options.model.modelID,
+      provider: 'deepseek-official',
+      baseURL: process.env.CUPPET_DSH_BASE_URL ?? 'https://openrouter.ai/api/v1',
+      apiKey: process.env.OPENROUTER_API_KEY,
+      maxTokens: 16_384,
+      requestTimeoutMs: 10 * 60_000,
+      systemPrompt: `${DEEPSEEK_HARNESS_CODING_SYSTEM_PROMPT}\nWorkspace root: ${workspace}. Use absolute paths under this directory only.`,
+    }, taskPrompt)
+    sessionID = result.sessionID
+    answer = result.answer
+    usage = result.usage
+  } catch (failure) {
+    error = failure instanceof Error ? failure.message : String(failure)
+  }
+  const evaluation = await evaluateWorkspace(workspace)
+  return {
+    repeat: options.repeat + 1,
+    arm: options.arm,
+    workspace,
+    sessionID,
+    success: !error && evaluation.success,
+    acceptanceScore: evaluation.acceptanceScore,
+    contextTokens: 0,
+    durationMs: Math.round(performance.now() - started),
+    usage: {
+      input: usage.inputTokens,
+      output: usage.outputTokens,
+      reasoning: usage.reasoningTokens,
+      cacheRead: usage.cacheReadTokens,
+      cacheWrite: usage.cacheWriteTokens,
+    },
+    uncachedInputTokens: usage.uncachedInputTokens,
+    totalModelTokens: usage.totalModelTokens,
+    modelCalls: usage.modelCalls,
+    cacheReadTokens: usage.cacheReadTokens,
+    cacheWriteTokens: usage.cacheWriteTokens,
+    cost: 0,
+    toolCalls: usage.toolCalls,
+    permissionRequests: 0,
+    rejectedPermissions: 0,
+    permissionActions: [],
+    answer,
+    evaluation,
+    ...(error ? { error } : {}),
+  }
+}
+
 async function cloneProject(source: string, destination: string): Promise<void> {
-  const excluded = new Set(['.git', 'node_modules', 'target', 'dist', '.cuppet'])
+  const excluded = new Set(['.git', 'node_modules', 'target', 'dist', '.cuppet', '.benchmarks'])
   await cp(source, destination, {
     recursive: true,
     filter: (entry) => {
@@ -287,6 +373,7 @@ async function cloneProject(source: string, destination: string): Promise<void> 
     },
   })
   await symlink(join(source, 'node_modules'), join(destination, 'node_modules'), 'dir')
+  if (process.env.CUPPET_TTT_ARMS) await rm(join(destination, 'games', 'tic-tac-toe'), { recursive: true, force: true })
 }
 
 async function evaluateWorkspace(workspace: string): Promise<WorkspaceEvaluation> {
@@ -531,6 +618,15 @@ function parseModel(value: string | undefined): ModelRef | undefined {
   return { providerID: value.slice(0, slash), modelID: value.slice(slash + 1) }
 }
 
+function parseArms(value: string | undefined): [Arm, Arm] | undefined {
+  if (!value) return undefined
+  const arms = value.split(',').map((arm) => arm.trim())
+  if (arms.length !== 2 || arms[0] === arms[1] || arms.some((arm) => !['opencode', 'cuppet', 'deepseek-harness'].includes(arm))) {
+    throw new Error('CUPPET_TTT_ARMS must contain two distinct arms from opencode,cuppet,deepseek-harness')
+  }
+  return arms as [Arm, Arm]
+}
+
 async function waitForIndex(runtime: TstRuntime): Promise<void> {
   const deadline = Date.now() + 3 * 60_000
   while (Date.now() < deadline) {
@@ -593,6 +689,43 @@ function summarize(values: Trial[]) {
   }
 }
 
+function summarizePair(values: Trial[], baselineArm: Arm, candidateArm: Arm) {
+  const armSummary = (arm: Arm) => {
+    const selected = values.filter((trial) => trial.arm === arm)
+    const successful = selected.filter((trial) => trial.success)
+    return {
+      trials: selected.length,
+      successes: successful.length,
+      completionRate: ratio(successful.length, selected.length),
+      meanAcceptanceScore: mean(selected.map((trial) => trial.acceptanceScore)),
+      medianLatencyMs: median(selected.map((trial) => trial.durationMs)),
+      medianUncachedInputTokens: median(selected.map((trial) => trial.uncachedInputTokens)),
+      medianTotalModelTokens: median(selected.map((trial) => trial.totalModelTokens)),
+      medianModelCalls: median(selected.map((trial) => trial.modelCalls)),
+      medianCacheReadTokens: median(selected.map((trial) => trial.cacheReadTokens)),
+      medianCacheWriteTokens: median(selected.map((trial) => trial.cacheWriteTokens)),
+      meanToolCalls: mean(selected.map((trial) => trial.toolCalls)),
+      medianContextTokens: median(selected.map((trial) => trial.contextTokens)),
+    }
+  }
+  const baseline = armSummary(baselineArm)
+  const candidate = armSummary(candidateArm)
+  return {
+    baselineArm,
+    candidateArm,
+    baseline,
+    candidate,
+    comparison: {
+      completionRateDelta: candidate.completionRate - baseline.completionRate,
+      acceptanceScoreDelta: candidate.meanAcceptanceScore - baseline.meanAcceptanceScore,
+      latencyReduction: ratio(baseline.medianLatencyMs - candidate.medianLatencyMs, baseline.medianLatencyMs),
+      uncachedInputReduction: ratio(baseline.medianUncachedInputTokens - candidate.medianUncachedInputTokens, baseline.medianUncachedInputTokens),
+      totalModelTokenReduction: ratio(baseline.medianTotalModelTokens - candidate.medianTotalModelTokens, baseline.medianTotalModelTokens),
+      cacheReadReduction: ratio(baseline.medianCacheReadTokens - candidate.medianCacheReadTokens, baseline.medianCacheReadTokens),
+    },
+  }
+}
+
 function renderMarkdown(report: { createdAt: string; model: ModelRef; repeats: number; summary: ReturnType<typeof summarize>; trials: Trial[] }): string {
   const { opencode, cuppet, comparison } = report.summary
   const money = (value: number) => `$${value.toFixed(6)}`
@@ -631,6 +764,47 @@ function renderMarkdown(report: { createdAt: string; model: ModelRef; repeats: n
     }),
     '',
     'Interpretation: this is a small paired coding benchmark. Treat deltas as directional until more independent repeats and tasks are collected.',
+    '',
+  ].join('\n')
+}
+
+function renderPairMarkdown(report: { createdAt: string; model: ModelRef; repeats: number; summary: ReturnType<typeof summarizePair>; trials: Trial[] }): string {
+  const { baseline, candidate, comparison, baselineArm, candidateArm } = report.summary
+  const percent = (value: number) => `${(value * 100).toFixed(1)}%`
+  const rows = [
+    ['Successful trials', `${baseline.successes}/${baseline.trials}`, `${candidate.successes}/${candidate.trials}`, percent(comparison.completionRateDelta)],
+    ['Mean acceptance score', percent(baseline.meanAcceptanceScore), percent(candidate.meanAcceptanceScore), percent(comparison.acceptanceScoreDelta)],
+    ['Median latency', `${baseline.medianLatencyMs} ms`, `${candidate.medianLatencyMs} ms`, `${percent(comparison.latencyReduction)} reduction`],
+    ['Median uncached input', `${baseline.medianUncachedInputTokens}`, `${candidate.medianUncachedInputTokens}`, `${percent(comparison.uncachedInputReduction)} reduction`],
+    ['Median total model tokens', `${baseline.medianTotalModelTokens}`, `${candidate.medianTotalModelTokens}`, `${percent(comparison.totalModelTokenReduction)} reduction`],
+    ['Median cache-read tokens', `${baseline.medianCacheReadTokens}`, `${candidate.medianCacheReadTokens}`, `${percent(comparison.cacheReadReduction)} reduction`],
+    ['Median model calls', `${baseline.medianModelCalls}`, `${candidate.medianModelCalls}`, 'lower is more efficient'],
+    ['Mean tool calls', baseline.meanToolCalls.toFixed(1), candidate.meanToolCalls.toFixed(1), 'lower is more efficient'],
+    ['Median injected context', `${baseline.medianContextTokens}`, `${candidate.medianContextTokens}`, 'Cuppet retrieval overhead'],
+  ]
+  return [
+    '# Tic-Tac-Toe coding benchmark',
+    '',
+    `- Created: ${report.createdAt}`,
+    `- Model: \`${report.model.providerID}/${report.model.modelID}\``,
+    `- Paired repeats: ${report.repeats}`,
+    `- Baseline: ${baselineArm}.`,
+    `- Candidate: ${candidateArm}.`,
+    '- Every trial used a fresh isolated repository copy and the same task prompt.',
+    '- Input tokens are the uncached prompt tokens reported by each runtime; cache-read tokens are reported separately.',
+    '',
+    `| Metric | ${baselineArm} | ${candidateArm} | Candidate vs baseline |`,
+    '|---|---:|---:|---:|',
+    ...rows.map((row) => `| ${row[0]} | ${row[1]} | ${row[2]} | ${row[3]} |`),
+    '',
+    '## Trial acceptance details',
+    '',
+    ...report.trials.map((trial) => {
+      const checks = Object.entries(trial.evaluation.checks).map(([name, check]) => `${check.passed ? '✓' : '✗'} ${name}`).join(', ')
+      return `- Repeat ${trial.repeat}, ${trial.arm}: ${trial.success ? 'success' : 'incomplete'}; score ${(trial.acceptanceScore * 100).toFixed(1)}%; uncached input ${trial.uncachedInputTokens}; ${checks}`
+    }),
+    '',
+    'Interpretation: task-specific paired evidence; consider token deltas together with acceptance outcomes and repeat count.',
     '',
   ].join('\n')
 }

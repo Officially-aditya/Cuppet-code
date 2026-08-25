@@ -7,6 +7,7 @@ export type DeepSeekHarnessEvent = {
   data?: {
     message?: { content?: unknown }
     usage?: Record<string, unknown>
+    reason?: { error?: { message?: unknown } }
   }
 }
 
@@ -44,7 +45,11 @@ export type DeepSeekHarnessOptions = {
   requestTimeoutMs?: number
   baseURL?: string
   apiKey?: string
+  systemPrompt?: string
 }
+
+export const DEEPSEEK_HARNESS_CODING_SYSTEM_PROMPT =
+  'Work directly in the assigned workspace and make one coherent implementation pass. Use str_replace_editor for file edits. The external benchmark evaluator owns tests, typechecking, and CLI validation: do not create bespoke diagnostic scripts, repeatedly rewrite tests, or debug by trial and error. Create only the required source, focused test, and package-script files, inspect each once as needed, then stop. Do not use unavailable tools, access credentials, or access the network from workspace tools.'
 
 export async function createDeepSeekHarness(options: DeepSeekHarnessOptions): Promise<RuntimeHarness> {
   const harnessRoot = resolve(options.harnessRoot ?? process.env.CUPPET_DSH_ROOT ?? join(process.cwd(), '.benchmarks', 'deepseek-harness'))
@@ -70,6 +75,7 @@ export async function createDeepSeekHarness(options: DeepSeekHarnessOptions): Pr
   }
   if (options.baseURL) env.DEEPSEEK_BASE_URL = options.baseURL
   if (options.apiKey) env.DEEPSEEK_API_KEY = options.apiKey
+  if (options.systemPrompt) env.DSH_SYSTEM_PROMPT = options.systemPrompt
 
   return new clientModule.DeepSeekHarness({
     launch: {
@@ -94,11 +100,16 @@ export async function runDeepSeekHarness(
   const harness = await createDeepSeekHarness(options)
   try {
     const result = await harness.run(prompt, sessionID === undefined ? undefined : { sessionId: sessionID })
+    const usage = summarizeDeepSeekEvents(result.events)
+    if (usage.modelCalls === 0) {
+      const failure = result.events.find((event) => typeof event.data?.reason?.error?.message === 'string')?.data?.reason?.error?.message
+      throw new Error(typeof failure === 'string' ? failure : 'DeepSeek Harness returned no assistant model events')
+    }
     return {
       sessionID: result.sessionId,
       answer: result.finalResponse,
       events: result.events,
-      usage: summarizeDeepSeekEvents(result.events),
+      usage,
     }
   } finally {
     await harness.close()

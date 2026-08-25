@@ -200,7 +200,13 @@ try {
 async function runTrial(options: { arm: Arm; model: ModelRef; repeat: number; root: string }): Promise<Trial> {
   const workspace = join(options.root, `${options.arm}-${options.repeat + 1}`)
   await cloneProject(project, workspace)
-  if (options.arm === 'deepseek-harness') return runDeepSeekTrial(options, workspace)
+  if (options.arm === 'deepseek-harness') {
+    try {
+      return await runDeepSeekTrial(options, workspace)
+    } finally {
+      await cleanupTrialArtifacts(options.root, options.arm, options.repeat)
+    }
+  }
   const runtimeRoot = join(options.root, `runtime-${options.arm}-${options.repeat + 1}`)
   const paths = await createRuntimePaths(workspace, runtimeRoot)
   const logger = new RedactedLogger(paths.logs)
@@ -292,7 +298,19 @@ async function runTrial(options: { arm: Arm; model: ModelRef; repeat: number; ro
     gateway?.close()
     await opencode?.close().catch(() => undefined)
     await tst?.close().catch(() => undefined)
+    await cleanupTrialArtifacts(options.root, options.arm, options.repeat)
   }
+}
+
+async function cleanupTrialArtifacts(root: string, arm: Arm, repeat: number): Promise<void> {
+  if (keepWorkspaces) return
+  await Promise.all([
+    rm(join(root, `${arm}-${repeat + 1}`), { recursive: true, force: true }),
+    rm(join(root, `runtime-${arm}-${repeat + 1}`), { recursive: true, force: true }),
+    ...(arm === 'deepseek-harness'
+      ? [rm(join(root, `sessions-deepseek-harness-${repeat + 1}`), { recursive: true, force: true })]
+      : []),
+  ])
 }
 
 async function runDeepSeekTrial(options: { arm: Arm; model: ModelRef; repeat: number; root: string }, workspace: string): Promise<Trial> {

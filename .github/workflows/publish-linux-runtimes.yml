@@ -79,6 +79,19 @@ jobs:
         run: chmod 755 artifacts/runtime-*/bin/opencode artifacts/runtime-*/bin/tst-daemon
       - run: npm ci
       - run: npm run package:cli
+      - name: Verify npm authentication
+        shell: bash
+        run: |
+          set +e
+          npm whoami --registry=https://registry.npmjs.org 2>&1 | tee npm-whoami.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            summary="$(tail -n 20 npm-whoami.log | tr '\n' ' ' | sed 's/::/--/g')"
+            echo "::error title=npm authentication failed::$summary"
+            exit "$status"
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Verify Linux runtime packages
         shell: bash
         run: |
@@ -99,7 +112,7 @@ jobs:
           node scripts/publish-release.mjs artifacts --expected=2 2>&1 | tee publish-release.log
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then
-            summary="$(tail -n 8 publish-release.log | tr '\n' ' ' | sed 's/::/--/g')"
+            summary="$(tail -n 40 publish-release.log | tr '\n' ' ' | sed 's/::/--/g')"
             echo "::error title=npm publication failed::$summary"
             exit "$status"
           fi

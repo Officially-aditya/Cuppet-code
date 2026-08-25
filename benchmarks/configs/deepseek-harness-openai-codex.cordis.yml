@@ -17,7 +17,9 @@
     providers:
       openai-codex:
         reasoning: max
-        streamIdleTimeoutMs: 172800000
+        # Keep a stalled benchmark stream bounded; active tool/model chunks
+        # continue to reset this timer during a normal long coding turn.
+        streamIdleTimeoutMs: 900000
         models:
           - id: !!js process.env.DSH_MODEL ?? 'gpt-5.6-luna'
 

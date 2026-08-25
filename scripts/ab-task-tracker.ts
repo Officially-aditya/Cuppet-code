@@ -11,7 +11,8 @@ import { createRuntimePaths } from '../packages/cli/src/runtime/paths.js'
 import { buildCuppetContext } from '../packages/cli/src/tst/context.js'
 import { startTstDaemon, type TstRuntime } from '../packages/cli/src/tst/supervisor.js'
 import type { AgentEvent, ModelRef, SessionInfo, TokenUsage } from '../packages/cli/src/types.js'
-import { createDeepSeekHarness, DEEPSEEK_HARNESS_CODING_SYSTEM_PROMPT, summarizeDeepSeekEvents } from './lib/deepseek-harness.js'
+import { DEEPSEEK_HARNESS_CODING_SYSTEM_PROMPT, summarizeDeepSeekEvents } from './lib/deepseek-harness.js'
+import { withDeepSeekBenchmarkHarness } from './lib/deepseek-benchmark.js'
 
 type Arm = 'opencode' | 'cuppet' | 'kernel' | 'instruction-only' | 'current' | 'compiled' | 'graph-aware' | 'graph-first' | 'graph-only' | 'graph-native' | 'deepseek-harness'
 
@@ -1078,51 +1079,46 @@ async function runDeepSeekTaskTrackerTrial(
   let attempts = 1
   let evaluation: WorkspaceEvaluation | undefined
   const events: Array<Parameters<typeof summarizeDeepSeekEvents>[0][number]> = []
-  let harness: Awaited<ReturnType<typeof createDeepSeekHarness>> | undefined
   try {
-    harness = await createDeepSeekHarness({
+    await withDeepSeekBenchmarkHarness({
       workspace,
       sessionRoot: join(options.root, `sessions-deepseek-harness-${options.repeat + 1}`),
       model: options.model.modelID,
-      provider: 'deepseek-official',
-      baseURL: process.env.CUPPET_DSH_BASE_URL ?? 'https://openrouter.ai/api/v1',
-      apiKey: process.env.OPENROUTER_API_KEY,
       maxTokens: 16_384,
       requestTimeoutMs: 15 * 60_000,
       systemPrompt: `${DEEPSEEK_HARNESS_CODING_SYSTEM_PROMPT}\nWorkspace root: ${workspace}. Use absolute paths under this directory only.`,
-    })
-    const first = await harness.run(taskPrompt)
-    sessionID = first.sessionId
-    answer = first.finalResponse
-    events.push(...first.events)
-    if (followupEnabled) {
-      const followup = await harness.run(followUpPrompt, { sessionId: sessionID })
-      answer = followup.finalResponse
-      events.push(...followup.events)
-    }
-    evaluation = await evaluateWorkspace(workspace, options.hiddenSuitePath)
-    let repairAttempts = 0
-    while (!evaluation.success && repairAttempts < verifyRetryLimit()) {
-      const failed = Object.entries(evaluation.checks)
-        .filter(([, check]) => !check.passed)
-        .map(([name, check]) => `- ${name}: ${check.detail}`)
-      if (failed.length === 0) break
-      const repairPrompt = [
-        'Your previous attempt did not fully satisfy the task. A deterministic verifier reported these exact problems:',
-        ...failed.map((line) => line.slice(0, 300)),
-        'Fix only these verified problems in the task-tracker workspace, keep existing tests passing, re-inspect your changes, then reply.',
-      ].join('\n')
-      repairAttempts += 1
-      const repair = await harness.run(repairPrompt, { sessionId: sessionID })
-      answer = repair.finalResponse
-      events.push(...repair.events)
+    }, async (harness) => {
+      const first = await harness.run(taskPrompt)
+      sessionID = first.sessionId
+      answer = first.finalResponse
+      events.push(...first.events)
+      if (followupEnabled) {
+        const followup = await harness.run(followUpPrompt, { sessionId: sessionID })
+        answer = followup.finalResponse
+        events.push(...followup.events)
+      }
       evaluation = await evaluateWorkspace(workspace, options.hiddenSuitePath)
-    }
-    attempts = 1 + repairAttempts
+      let repairAttempts = 0
+      while (!evaluation.success && repairAttempts < verifyRetryLimit()) {
+        const failed = Object.entries(evaluation.checks)
+          .filter(([, check]) => !check.passed)
+          .map(([name, check]) => `- ${name}: ${check.detail}`)
+        if (failed.length === 0) break
+        const repairPrompt = [
+          'Your previous attempt did not fully satisfy the task. A deterministic verifier reported these exact problems:',
+          ...failed.map((line) => line.slice(0, 300)),
+          'Fix only these verified problems in the task-tracker workspace, keep existing tests passing, re-inspect your changes, then reply.',
+        ].join('\n')
+        repairAttempts += 1
+        const repair = await harness.run(repairPrompt, { sessionId: sessionID })
+        answer = repair.finalResponse
+        events.push(...repair.events)
+        evaluation = await evaluateWorkspace(workspace, options.hiddenSuitePath)
+      }
+      attempts = 1 + repairAttempts
+    })
   } catch (error) {
     failure = error instanceof Error ? error.message : String(error)
-  } finally {
-    await harness?.close().catch(() => undefined)
   }
   const finalEvaluation = evaluation ?? await evaluateWorkspace(workspace, options.hiddenSuitePath)
   const usage = summarizeDeepSeekEvents(events)

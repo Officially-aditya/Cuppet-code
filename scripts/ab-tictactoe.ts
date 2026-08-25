@@ -13,7 +13,8 @@ import { createRuntimePaths } from '../packages/cli/src/runtime/paths.js'
 import { buildCuppetContext } from '../packages/cli/src/tst/context.js'
 import { startTstDaemon, type TstRuntime } from '../packages/cli/src/tst/supervisor.js'
 import type { AgentEvent, ModelRef, TokenUsage } from '../packages/cli/src/types.js'
-import { DEEPSEEK_HARNESS_CODING_SYSTEM_PROMPT, runDeepSeekHarness } from './lib/deepseek-harness.js'
+import { DEEPSEEK_HARNESS_CODING_SYSTEM_PROMPT, summarizeDeepSeekEvents } from './lib/deepseek-harness.js'
+import { withDeepSeekBenchmarkHarness } from './lib/deepseek-benchmark.js'
 
 type Arm = 'opencode' | 'cuppet' | 'deepseek-harness'
 type Mark = 'X' | 'O'
@@ -311,17 +312,23 @@ async function runDeepSeekTrial(options: { arm: Arm; model: ModelRef; repeat: nu
   }
   let error: string | undefined
   try {
-    const result = await runDeepSeekHarness({
+    const result = await withDeepSeekBenchmarkHarness({
       workspace,
       sessionRoot: join(options.root, `sessions-deepseek-harness-${options.repeat + 1}`),
       model: options.model.modelID,
-      provider: 'deepseek-official',
-      baseURL: process.env.CUPPET_DSH_BASE_URL ?? 'https://openrouter.ai/api/v1',
-      apiKey: process.env.OPENROUTER_API_KEY,
       maxTokens: 16_384,
       requestTimeoutMs: 10 * 60_000,
       systemPrompt: `${DEEPSEEK_HARNESS_CODING_SYSTEM_PROMPT}\nWorkspace root: ${workspace}. Use absolute paths under this directory only.`,
-    }, taskPrompt)
+    }, async (harness) => {
+      const response = await harness.run(taskPrompt)
+      const summarized = summarizeDeepSeekEvents(response.events)
+      if (summarized.modelCalls === 0) throw new Error('DeepSeek Harness returned no assistant model events')
+      return {
+        sessionID: response.sessionId,
+        answer: response.finalResponse,
+        usage: summarized,
+      }
+    })
     sessionID = result.sessionID
     answer = result.answer
     usage = result.usage

@@ -11,7 +11,7 @@ import {
 import { OpenCodeGateway } from './opencode/gateway.js'
 import { startOpenCodeServer, type OpenCodeRuntime } from './opencode/server.js'
 import { runNativeTui } from './opencode/tui.js'
-import { CUPPET_VERSION } from './constants.js'
+import { CUPPET_VERSION, DEFAULT_CUPPET_API_BASE } from './constants.js'
 import { startRemoteControl, type RemoteControlSession } from './remote/bootstrap.js'
 import { runEnroll } from './remote/enroll.js'
 import { DEFAULT_RELAY_PORT, runRelayServer, shutdownSignal } from './remote/relay-main.js'
@@ -71,7 +71,7 @@ Relay flags:
   --allow-origin <origin>            allowed browser Origin (repeatable)
 
 Enrollment flags:
-  --api-base <url>                   Cuppet API base (default https://api.cuppet.in)
+  --api-base <url>                   Cuppet API base (default ${DEFAULT_CUPPET_API_BASE})
   --token <jwt>                      Cuppet session token (env CUPPET_TOKEN)
   --name <label>                     display name for this machine
 
@@ -113,7 +113,7 @@ async function main(): Promise<void> {
 
   if (arguments_.mode === 'enroll') {
     await runEnroll({
-      apiBase: arguments_.enrollApiBase ?? process.env.CUPPET_API_BASE ?? 'https://api.cuppet.in',
+      apiBase: arguments_.enrollApiBase ?? process.env.CUPPET_API_BASE ?? DEFAULT_CUPPET_API_BASE,
       ...(arguments_.enrollToken
         ? { token: arguments_.enrollToken }
         : process.env.CUPPET_TOKEN
@@ -197,7 +197,7 @@ async function main(): Promise<void> {
           ...(process.env.CUPPET_RELAY_HOST_SECRET ? { hostSecret: process.env.CUPPET_RELAY_HOST_SECRET } : {}),
           ...(process.env.CUPPET_TOKEN ? { authToken: process.env.CUPPET_TOKEN } : {}),
           ...(!relayUrl || process.env.CUPPET_TOKEN
-            ? { apiBase: process.env.CUPPET_API_BASE ?? 'https://api.cuppet.in' }
+            ? { apiBase: process.env.CUPPET_API_BASE ?? DEFAULT_CUPPET_API_BASE }
             : {}),
           setup: !process.env.CUPPET_TOKEN && !relayUrl,
           ...(process.env.CUPPET_REMOTE_TOKEN_PUBLIC_KEY

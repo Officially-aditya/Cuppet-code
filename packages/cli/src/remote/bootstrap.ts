@@ -13,6 +13,7 @@ import {
 import { registerHost } from './enroll.js'
 import { verifyRemoteToken } from './token.js'
 import { runRemoteSetup } from './setup.js'
+import { DEFAULT_CUPPET_API_BASE } from '../constants.js'
 
 export type RemoteControlOptions = {
   controller: CuppetController
@@ -53,7 +54,7 @@ export async function startRemoteControl(options: RemoteControlOptions): Promise
 
   if (options.authToken) {
     const enrollment = await registerHost({
-      apiBase: options.apiBase ?? 'https://api.cuppet.in',
+      apiBase: options.apiBase ?? DEFAULT_CUPPET_API_BASE,
       token: options.authToken,
       identity,
       relaySecret: hostSecret,
@@ -66,7 +67,7 @@ export async function startRemoteControl(options: RemoteControlOptions): Promise
     if (enrollment.relayRegistered) write('  relay enrollment: registered\n')
   } else if (options.setup && !relayUrl) {
     const enrollment = await runRemoteSetup({
-      apiBase: options.apiBase ?? 'https://api.cuppet.in',
+      apiBase: options.apiBase ?? DEFAULT_CUPPET_API_BASE,
       identity,
       write,
     })

@@ -65,8 +65,9 @@ the machine's relay credential, registers the host with Sydney and the relay,
 and uses the relay URL returned by Sydney. Without a token or a manually set
 `CUPPET_RELAY_URL`, Cuppet creates a short-lived setup QR in the terminal.
 Scan it in the signed-in Cuppet mobile app and confirm the computer; the CLI
-then completes host and relay enrollment automatically. `CUPPET_API_BASE` can
-override the default API during local development. A manually configured
+then completes host and relay enrollment automatically. `CUPPET_API_BASE`
+defaults to `https://api.cuppet.in` and can override the API during local
+development. A manually configured
 `CUPPET_RELAY_URL` keeps the local/self-hosted pairing flow available.
 The remote protocol and scope model are documented in
 [`docs/remote-protocol.md`](docs/remote-protocol.md).

@@ -36,6 +36,7 @@ const RATE_WINDOW_MS = 10_000
 const RATE_LIMIT = 240
 const PAIR_ATTEMPT_LIMIT = 3
 const HOST_ID_PATTERN = /^[\w.-]{1,128}$/
+export const DEFAULT_RELAY_BIND = '127.0.0.1'
 
 type SocketLike = {
   readyState: number
@@ -77,6 +78,10 @@ export function isValidRelayHostId(value: string): boolean {
   return HOST_ID_PATTERN.test(value)
 }
 
+export function resolveRelayBind(bind?: string): string {
+  return bind?.trim() || DEFAULT_RELAY_BIND
+}
+
 /** Counts every decoded WebSocket frame, before routing by frame type. */
 export function createSlidingWindowRateLimiter(
   limit = RATE_LIMIT,
@@ -116,7 +121,7 @@ export class CuppetRelay {
   async listen(port: number, bind?: string): Promise<void> {
     return new Promise((resolvePromise, rejectPromise) => {
       this.#http.once('error', rejectPromise)
-      this.#http.listen(port, bind ?? this.#options.bind ?? '0.0.0.0', () => resolvePromise())
+      this.#http.listen(port, resolveRelayBind(bind ?? this.#options.bind), () => resolvePromise())
     })
   }
 

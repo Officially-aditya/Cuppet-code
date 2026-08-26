@@ -1,5 +1,4 @@
-import { generateSecret } from './relay.js'
-import { CuppetRelay } from './relay.js'
+import { CuppetRelay, DEFAULT_RELAY_BIND, generateSecret, resolveRelayBind } from './relay.js'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -7,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 export type RelayServerArguments = {
   port: number
   authFile?: string
+  bind?: string
   appDir?: string
   adminToken?: string
   origins: string[]
@@ -16,6 +16,16 @@ export const DEFAULT_RELAY_PORT = 8787
 
 export function defaultRelayAuthPath(): string {
   return join(process.cwd(), 'cuppet-relay-auth.json')
+}
+
+export function resolveRelayServerSecurity(options: Pick<RelayServerArguments, 'authFile' | 'bind'>): {
+  authFile: string
+  bind: string
+} {
+  return {
+    authFile: resolve(options.authFile ?? defaultRelayAuthPath()),
+    bind: resolveRelayBind(options.bind),
+  }
 }
 
 /**
@@ -45,27 +55,26 @@ export async function runRelayServer(
   options: RelayServerArguments,
   write: (line: string) => void = (line) => process.stdout.write(line),
 ): Promise<void> {
-  const authFile = options.authFile
-  if (authFile && !(await fileExists(authFile))) {
-    await mkdir(resolve(authFile, '..'), { recursive: true, mode: 0o700 })
-    await writeFile(authFile, `${JSON.stringify({ hosts: {} }, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
-    write(`relay auth: created ${authFile}\n`)
-  }
+  const { authFile, bind } = resolveRelayServerSecurity(options)
+  await ensureRelayAuthFile(authFile, write)
 
   const token = options.adminToken ?? generateSecret()
   const appDir = options.appDir ? resolve(options.appDir) : await defaultAppDir()
   const relay = new CuppetRelay({
     port: options.port,
-    ...(authFile ? { authFile } : {}),
+    authFile,
+    bind,
     ...(appDir ? { appDirectory: appDir } : {}),
     adminToken: token,
     ...(options.origins.length > 0 ? { allowedOrigins: options.origins } : {}),
   })
-  await relay.listen(options.port)
+  await relay.listen(options.port, bind)
+  const endpointHost = bind.includes(':') ? `[${bind}]` : bind
   write(`Cuppet relay listening on port ${relay.port}\n`)
-  write(`  health: http://0.0.0.0:${relay.port}/healthz\n`)
-  if (!authFile) {
-    write('  WARNING: no --auth-file set — host authentication is disabled (development mode).\n')
+  write(`  health: http://${endpointHost}:${relay.port}/healthz\n`)
+  write(`  auth file: ${authFile}\n`)
+  if (bind !== DEFAULT_RELAY_BIND) {
+    write('  WARNING: non-loopback binds use plain HTTP/WS; terminate TLS before exposing this relay.\n')
   }
   if (options.adminToken) {
     write(`  manage hosts: POST/DELETE /hosts with Authorization: Bearer <admin-token>\n`)
@@ -74,10 +83,20 @@ export async function runRelayServer(
     write('  pass --admin-token to pin it instead of generating one per start\n')
   }
   if (appDir) {
-    write(`  pwa: http://0.0.0.0:${relay.port}/app\n`)
+    write(`  pwa: http://${endpointHost}:${relay.port}/app\n`)
   }
   await shutdownSignal()
   relay.close()
+}
+
+export async function ensureRelayAuthFile(
+  authFile: string,
+  write: (line: string) => void = () => undefined,
+): Promise<void> {
+  if (await fileExists(authFile)) return
+  await mkdir(dirname(authFile), { recursive: true, mode: 0o700 })
+  await writeFile(authFile, `${JSON.stringify({ hosts: {} }, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
+  write(`relay auth: created ${authFile}\n`)
 }
 
 async function fileExists(path: string): Promise<boolean> {

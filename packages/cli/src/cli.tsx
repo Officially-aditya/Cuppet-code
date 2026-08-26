@@ -30,6 +30,7 @@ type Arguments = {
   relayUrl?: string
   relayPort?: number
   relayAuthFile?: string
+  relayBind?: string
   relayAppDir?: string
   relayAdminToken?: string
   relayOrigins: string[]
@@ -65,7 +66,8 @@ Flags:
 
 Relay flags:
   --port <n>                         listen port (default 8787)
-  --auth-file <path>                 JSON file of authorized hosts; enables auth
+  --bind <address>                   bind address (default 127.0.0.1)
+  --auth-file <path>                 JSON file of authorized hosts (default ./cuppet-relay-auth.json)
   --admin-token <token>              token for POST/DELETE /hosts enrollment
   --app-dir <path>                   serve a static PWA at /app
   --allow-origin <origin>            allowed browser Origin (repeatable)
@@ -104,6 +106,7 @@ async function main(): Promise<void> {
     await runRelayServer({
       port: arguments_.relayPort ?? DEFAULT_RELAY_PORT,
       ...(arguments_.relayAuthFile ? { authFile: arguments_.relayAuthFile } : {}),
+      ...(arguments_.relayBind ? { bind: arguments_.relayBind } : {}),
       ...(arguments_.relayAppDir ? { appDir: arguments_.relayAppDir } : {}),
       ...(arguments_.relayAdminToken ? { adminToken: arguments_.relayAdminToken } : {}),
       origins: arguments_.relayOrigins,
@@ -300,6 +303,11 @@ function parseArguments(arguments_: string[]): Arguments {
       const value = rest[index + 1]
       if (!value) throw new Error('--auth-file requires a path')
       result.relayAuthFile = value
+      index += 1
+    } else if (argument === '--bind') {
+      const value = rest[index + 1]?.trim()
+      if (!value) throw new Error('--bind requires an address')
+      result.relayBind = value
       index += 1
     } else if (argument === '--app-dir') {
       const value = rest[index + 1]

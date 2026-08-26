@@ -63,6 +63,12 @@ The requested repeat was stopped after stage 7 once it reproduced the same `inde
 
 This explains the apparent 2/10 result: the marathon’s regression guard correctly propagates the broken `indexes` state into later stages, but those seven red rows are cascade failures rather than seven independent task failures. The marathon correctness comparison should remain provisional until OpenCode and Cuppet are rerun with this contract satisfied.
 
+## Why the earlier run passed `indexes`
+
+The retained workspaces from the earlier complete MiniDB marathon show the difference. The earlier OpenCode implementation guarded unique-index checks and index maintenance with `if (value === undefined) continue`; the earlier Cuppet implementation used the equivalent `if (!(field in doc)) continue`. The current GPT-5.6 OpenCode and Cuppet workspaces omit those guards, so both converge on the same missing-field defect. This is a generated-implementation difference, not evidence that the verifier randomly changed its expectation.
+
+The earlier complete MiniDB marathon requested `opencode/x-preview-f-free` and recorded 9/10 for each arm. The report that records 10/10 for both is the separate ten-project web suite, not this MiniDB marathon. The latest marathon requested `openai/gpt-5.6-luna`, so these are not literally the same model/provider/prompt setup.
+
 ## Context-only combined totals
 
 These totals are descriptive, not a single normalized score: the suites have different task shapes and the marathon contains cascading state.

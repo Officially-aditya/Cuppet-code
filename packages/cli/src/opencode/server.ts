@@ -9,6 +9,7 @@ import type { RuntimePaths } from '../runtime/paths.js'
 import type { RedactedLogger } from '../runtime/logger.js'
 import { buildVariantBridge, type VariantBridge } from './variant-bridge.js'
 import { readDerivativeMarker } from '../runtime/derivative.js'
+import { BASH_PERMISSION } from './safe-bash.js'
 import type { ModelRef } from '../types.js'
 
 export type OpenCodeRuntime = {
@@ -447,7 +448,7 @@ export function foregroundPermissions(graphFirstGate = false, graphOnlySearch = 
     cuppet_graph_trace: 'allow',
     edit: mutationPermissions(),
     write: mutationPermissions(),
-    bash: 'allow',
+    bash: BASH_PERMISSION,
     external_directory: 'ask',
     webfetch: graphOnlySearch || graphNativeProfile ? 'deny' : 'ask',
     websearch: graphOnlySearch || graphNativeProfile ? 'deny' : 'ask',

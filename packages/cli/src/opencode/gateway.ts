@@ -17,6 +17,7 @@ import type {
   SessionInfo,
   TokenUsage,
 } from '../types.js'
+import { BASH_PERMISSION } from './safe-bash.js'
 
 type Client = ReturnType<typeof createOpencodeClient>
 type SdkResult<T> = { data?: T; error?: unknown; response?: Response }
@@ -967,7 +968,7 @@ export class OpenCodeEventNormalizer {
   }
 }
 
-function foregroundPermissions(graphFirstGate = false, graphOnlySearch = false, graphNativeProfile = false) {
+export function foregroundPermissions(graphFirstGate = false, graphOnlySearch = false, graphNativeProfile = false) {
   const navigationAction = graphFirstGate ? 'ask' : 'allow'
   const searchAction = graphOnlySearch || graphNativeProfile ? 'deny' : navigationAction
   return [
@@ -1001,7 +1002,7 @@ function foregroundPermissions(graphFirstGate = false, graphOnlySearch = false, 
     { permission: 'edit', pattern: '**/.claude.json', action: 'deny' as const },
     { permission: 'edit', pattern: '**/.cuppet/credentials.json', action: 'deny' as const },
     { permission: 'edit', pattern: '**/.cuppet/ltm-trie.json', action: 'deny' as const },
-    { permission: 'bash', pattern: '*', action: 'allow' as const },
+    { permission: 'bash', pattern: '*', action: BASH_PERMISSION },
     { permission: 'external_directory', pattern: '*', action: 'ask' as const },
     { permission: 'webfetch', pattern: '*', action: graphOnlySearch || graphNativeProfile ? 'deny' as const : 'ask' as const },
     { permission: 'websearch', pattern: '*', action: graphOnlySearch || graphNativeProfile ? 'deny' as const : 'ask' as const },

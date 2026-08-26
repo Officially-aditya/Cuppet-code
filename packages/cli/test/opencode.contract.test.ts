@@ -67,12 +67,14 @@ test('pinned OpenCode binary exposes the v2 catalog and stable cross-provider ex
     assert.ok(cuppet.permissions.some((rule) => rule.action === 'read' && rule.resource === '**/.env' && rule.effect === 'ask'))
     assert.ok(cuppet.permissions.some((rule) => rule.action === 'read' && rule.resource === '**/.claude.json' && rule.effect === 'deny'))
     assert.ok(cuppet.permissions.some((rule) => rule.action === 'edit' && rule.resource === '*' && rule.effect === 'ask'))
+    assert.ok(cuppet.permissions.some((rule) => rule.action === 'bash' && rule.resource === '*' && rule.effect === 'ask'))
     assert.equal(cuppet.permissions.some((rule) => rule.action === 'read_file'), false)
     const legacyAgents = await runtime.client.app.agents({ directory: paths.projectRealpath })
     const legacyCuppet = legacyAgents.data?.find((agent) => agent.name === 'cuppet')
     assert.ok(legacyCuppet, 'the Cuppet agent should also be visible to the stable provider/session engine')
     assert.ok(legacyCuppet.permission.some((rule) => rule.permission === 'read' && rule.pattern === '*' && rule.action === 'allow'))
     assert.ok(legacyCuppet.permission.some((rule) => rule.permission === 'edit' && rule.pattern === '*' && rule.action === 'ask'))
+    assert.ok(legacyCuppet.permission.some((rule) => rule.permission === 'bash' && rule.pattern === '*' && rule.action === 'ask'))
     const expectedSubagentModel = {
       providerID: 'cuppet-contract',
       modelID: 'contract-model',

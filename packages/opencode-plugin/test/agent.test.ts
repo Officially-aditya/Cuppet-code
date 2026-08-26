@@ -37,7 +37,7 @@ test('Promise plugin registers both Cuppet agents and reloads the pinned v2 doma
   assert.equal(reloads, 1, 'OpenCode 1.18.4 requires an explicit reload after an async external transform')
   assert.deepEqual(agents.get('cuppet')?.permissions, foregroundPermissionRules())
   const cuppetPermissions = agents.get('cuppet')?.permissions as Array<{ action: string; effect: string }>
-  assert.ok(cuppetPermissions.some((rule) => rule.action === 'bash' && rule.effect === 'allow'))
+  assert.ok(cuppetPermissions.some((rule) => rule.action === 'bash' && rule.effect === 'ask'))
   assert.equal(agents.get('cuppet')?.steps, 128)
   assert.equal(agents.get('cuppet')?.hidden, false)
   assert.equal(agents.get('build')?.steps, 128)

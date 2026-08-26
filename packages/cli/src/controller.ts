@@ -8,6 +8,7 @@ import { readOrchestratorState, writeOrchestratorState } from './control/orchest
 import { DEFAULT_STEP_LIMIT } from './constants.js'
 import type { PreferenceStore } from './config/preferences.js'
 import type { OpenCodeGateway } from './opencode/gateway.js'
+import { shouldAutoApproveBash } from './opencode/safe-bash.js'
 import type { RuntimeAssets } from './runtime/assets.js'
 import type { RuntimePaths } from './runtime/paths.js'
 import type { VertexRuntimeStatus } from './opencode/server.js'
@@ -863,6 +864,18 @@ export class CuppetController extends EventEmitter {
       if (!this.#interactive) {
         await this.#gateway.replyPermission(event.request.sessionID, event.request.id, 'reject').catch(() => undefined)
         return
+      }
+      if (shouldAutoApproveBash(event.request)) {
+        try {
+          // Do not save an OpenCode permission pattern: each command must pass
+          // the strict classifier again before it receives an automatic reply.
+          await this.#gateway.replyPermission(event.request.sessionID, event.request.id, 'once')
+          this.#changed()
+          return
+        } catch {
+          // If OpenCode cannot accept the automatic reply, preserve the normal
+          // permission prompt instead of leaving the request hidden and stuck.
+        }
       }
     }
     if (event.type === 'idle') {

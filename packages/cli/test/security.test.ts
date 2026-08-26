@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { foregroundPermissions as gatewayForegroundPermissions } from '../src/opencode/gateway.js'
 import { foregroundPermissions, GRAPH_NATIVE_TOOL_PROFILE } from '../src/opencode/server.js'
 import { redact } from '../src/runtime/logger.js'
 
@@ -39,7 +40,16 @@ test('OpenCode permissions use real actions and ordered sensitive resource rules
   assert.equal(edit['**/.claude.json'], 'deny')
   assert.equal('read_file' in permissions, false)
   assert.equal('write_file' in permissions, false)
-  assert.equal(permissions.bash, 'allow')
+  assert.equal(permissions.bash, 'ask')
+  assert.equal(permissions.external_directory, 'ask')
+  assert.equal(
+    gatewayForegroundPermissions().find((rule) => rule.permission === 'bash' && rule.pattern === '*')?.action,
+    'ask',
+  )
+  assert.equal(
+    gatewayForegroundPermissions().find((rule) => rule.permission === 'external_directory' && rule.pattern === '*')?.action,
+    'ask',
+  )
 })
 
 test('graph-native profile removes legacy discovery tools from the agent action space', () => {

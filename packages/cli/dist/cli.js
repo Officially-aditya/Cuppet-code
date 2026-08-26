@@ -714,10 +714,65 @@ async function writeOrchestratorState(paths, enabled) {
 
 // src/constants.ts
 var CUPPET_VERSION = "0.2.0-alpha.1";
+var DEFAULT_CUPPET_API_BASE = "https://connect.cuppet.in";
 var OPENCODE_VERSION = "1.18.4";
 var OPENCODE_REVISION = "49c69c5ed3ccf706b61b3febb43c8aaff7f8325e";
 var TST_PROTOCOL_VERSION = "cuppet.tst.v3";
 var DEFAULT_STEP_LIMIT = 128;
+
+// src/opencode/safe-bash.ts
+var BASH_PERMISSION = "ask";
+var MAX_COMMAND_LENGTH = 256;
+var PLAIN_COMMAND = /^[A-Za-z0-9._:=+-]+(?: [A-Za-z0-9._:=+-]+)*$/;
+var STATUS_FLAGS = /* @__PURE__ */ new Set(["--short", "--branch", "--porcelain", "--porcelain=v1", "-s", "-b", "-sb"]);
+var LOG_FLAGS = /* @__PURE__ */ new Set(["--oneline", "--no-decorate", "--no-show-signature", "--all", "-1"]);
+var BRANCH_FLAGS = /* @__PURE__ */ new Set(["--show-current", "--all", "--verbose", "-a", "-v", "-vv"]);
+var LS_FILES_FLAGS = /* @__PURE__ */ new Set(["--cached", "--modified", "--deleted", "--others", "--exclude-standard", "--stage"]);
+var LS_FLAGS = /* @__PURE__ */ new Set(["-a", "-l", "-h", "-la", "-al", "-lah", "-lha", "--all", "--long", "--human-readable"]);
+var VERSION_COMMANDS = /* @__PURE__ */ new Set([
+  "git --version",
+  "node --version",
+  "npm --version",
+  "pnpm --version",
+  "yarn --version",
+  "bun --version",
+  "deno --version",
+  "python --version",
+  "python3 --version",
+  "cargo --version",
+  "rustc --version",
+  "go version"
+]);
+function isSafeAutoBashCommand(command) {
+  if (command.length === 0 || command.length > MAX_COMMAND_LENGTH || command.trim() !== command || !PLAIN_COMMAND.test(command)) return false;
+  if (VERSION_COMMANDS.has(command)) return true;
+  const tokens = command.split(" ");
+  if (tokens.length === 1) return tokens[0] === "pwd" || tokens[0] === "ls";
+  if (tokens[0] === "ls") return tokens.slice(1).every((token) => LS_FLAGS.has(token));
+  if (tokens[0] !== "git") return false;
+  const [_, subcommand, ...arguments_] = tokens;
+  switch (subcommand) {
+    case "status":
+      return arguments_.every((argument) => STATUS_FLAGS.has(argument));
+    case "log":
+      return arguments_.includes("--oneline") && arguments_.every((argument) => LOG_FLAGS.has(argument));
+    case "branch":
+      return arguments_.every((argument) => BRANCH_FLAGS.has(argument));
+    case "ls-files":
+      return arguments_.every((argument) => LS_FILES_FLAGS.has(argument));
+    case "rev-parse":
+      return arguments_.length === 1 && (/* @__PURE__ */ new Set([
+        "--show-toplevel",
+        "--is-inside-work-tree",
+        "--git-dir"
+      ])).has(arguments_[0]);
+    default:
+      return false;
+  }
+}
+function shouldAutoApproveBash(request) {
+  return request.action === "bash" && request.resources.length === 1 && isSafeAutoBashCommand(request.resources[0] ?? "");
+}
 
 // src/platforms.ts
 var PLATFORM_OPTIONS = [
@@ -1435,6 +1490,14 @@ var CuppetController = class extends EventEmitter2 {
         await this.#gateway.replyPermission(event.request.sessionID, event.request.id, "reject").catch(() => void 0);
         return;
       }
+      if (shouldAutoApproveBash(event.request)) {
+        try {
+          await this.#gateway.replyPermission(event.request.sessionID, event.request.id, "once");
+          this.#changed();
+          return;
+        } catch {
+        }
+      }
     }
     if (event.type === "idle") {
       this.#running = false;
@@ -1637,11 +1700,11 @@ import { homedir as homedir2 } from "node:os";
 import { join as join5 } from "node:path";
 
 // src/remote/identity.ts
-import { generateKeyPairSync, randomBytes as randomBytes2 } from "node:crypto";
+import { createPublicKey, generateKeyPairSync, randomBytes as randomBytes2 } from "node:crypto";
 import { hostname } from "node:os";
 import { join as join4 } from "node:path";
 import { chmod as chmod3, mkdir as mkdir5, readFile as readFile4, writeFile as writeFile5 } from "node:fs/promises";
-var IDENTITY_VERSION = 1;
+var IDENTITY_VERSION = 3;
 function hostIdentityPath(remoteDir) {
   return join4(remoteDir, "host.json");
 }
@@ -1650,13 +1713,17 @@ async function ensureHostIdentity(remoteDir) {
   try {
     const parsed = JSON.parse(await readFile4(path, "utf8"));
     if (typeof parsed.hostId === "string" && typeof parsed.publicKeyPem === "string" && typeof parsed.privateKeyPem === "string") {
-      return {
+      const identity2 = {
         hostId: parsed.hostId,
         deviceName: typeof parsed.deviceName === "string" ? parsed.deviceName : hostname(),
         publicKeyPem: parsed.publicKeyPem,
         privateKeyPem: parsed.privateKeyPem,
+        relaySecret: typeof parsed.relaySecret === "string" && parsed.relaySecret.length >= 32 ? parsed.relaySecret : randomBytes2(32).toString("hex"),
+        ...typeof parsed.remoteTokenPublicKey === "string" ? { remoteTokenPublicKey: parsed.remoteTokenPublicKey } : {},
         createdAt: typeof parsed.createdAt === "string" ? parsed.createdAt : (/* @__PURE__ */ new Date()).toISOString()
       };
+      if (parsed.relaySecret !== identity2.relaySecret) await writeIdentity(path, identity2);
+      return identity2;
     }
   } catch {
   }
@@ -1666,9 +1733,36 @@ async function ensureHostIdentity(remoteDir) {
     deviceName: hostname(),
     publicKeyPem: publicKey.export({ type: "spki", format: "pem" }).toString(),
     privateKeyPem: privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
+    relaySecret: randomBytes2(32).toString("hex"),
     createdAt: (/* @__PURE__ */ new Date()).toISOString()
   };
-  await mkdir5(remoteDir, { recursive: true, mode: 448 });
+  await writeIdentity(path, identity);
+  return identity;
+}
+async function setRemoteTokenPublicKey(remoteDir, remoteTokenPublicKey) {
+  if (!isEd25519PublicKey(remoteTokenPublicKey)) {
+    throw new Error("Sydney returned an invalid remote-token public key.");
+  }
+  const path = hostIdentityPath(remoteDir);
+  const identity = await ensureHostIdentity(remoteDir);
+  const updated = { ...identity, remoteTokenPublicKey };
+  await writeIdentity(path, updated);
+  return updated;
+}
+function isEd25519PublicKey(value) {
+  try {
+    const key = createPublicKey({
+      key: Buffer.from(value, "base64"),
+      format: "der",
+      type: "spki"
+    });
+    return key.asymmetricKeyType === "ed25519";
+  } catch {
+    return false;
+  }
+}
+async function writeIdentity(path, identity) {
+  await mkdir5(join4(path, ".."), { recursive: true, mode: 448 });
   await writeFile5(
     path,
     `${JSON.stringify({ version: IDENTITY_VERSION, ...identity }, null, 2)}
@@ -1676,7 +1770,6 @@ async function ensureHostIdentity(remoteDir) {
     { encoding: "utf8", mode: 384 }
   );
   await chmod3(path, 384);
-  return identity;
 }
 async function loadHostIdentityOrNull(remoteDir) {
   try {
@@ -2909,7 +3002,7 @@ function foregroundPermissions(graphFirstGate = false, graphOnlySearch = false, 
     { permission: "edit", pattern: "**/.claude.json", action: "deny" },
     { permission: "edit", pattern: "**/.cuppet/credentials.json", action: "deny" },
     { permission: "edit", pattern: "**/.cuppet/ltm-trie.json", action: "deny" },
-    { permission: "bash", pattern: "*", action: "allow" },
+    { permission: "bash", pattern: "*", action: BASH_PERMISSION },
     { permission: "external_directory", pattern: "*", action: "ask" },
     { permission: "webfetch", pattern: "*", action: graphOnlySearch || graphNativeProfile ? "deny" : "ask" },
     { permission: "websearch", pattern: "*", action: graphOnlySearch || graphNativeProfile ? "deny" : "ask" },
@@ -3572,7 +3665,7 @@ function foregroundPermissions2(graphFirstGate = false, graphOnlySearch = false,
     cuppet_graph_trace: "allow",
     edit: mutationPermissions(),
     write: mutationPermissions(),
-    bash: "allow",
+    bash: BASH_PERMISSION,
     external_directory: "ask",
     webfetch: graphOnlySearch || graphNativeProfile ? "deny" : "ask",
     websearch: graphOnlySearch || graphNativeProfile ? "deny" : "ask",
@@ -3910,7 +4003,6 @@ function diffTextFor(value) {
 
 // src/remote/bridge.ts
 var DEDUPE_CAPACITY = 512;
-var PAIR_ATTEMPT_LIMIT = 3;
 var MINIMUM_CLIENT_VERSION = 1;
 var RemoteBridge = class {
   #controller;
@@ -3928,7 +4020,6 @@ var RemoteBridge = class {
   #offlineBuffer = [];
   #devices = /* @__PURE__ */ new Map();
   #deviceTimers = /* @__PURE__ */ new Map();
-  #pairAttemptsLeft = PAIR_ATTEMPT_LIMIT;
   #started = false;
   constructor(options) {
     this.#controller = options.controller;
@@ -3959,7 +4050,6 @@ var RemoteBridge = class {
         this.#clearDevices();
         return;
       }
-      this.#pairAttemptsLeft = PAIR_ATTEMPT_LIMIT;
       void this.#onConnected();
     });
   }
@@ -4105,8 +4195,6 @@ var RemoteBridge = class {
       }));
     };
     if (!this.#claimPairingInvite) return fail("pairing unavailable");
-    if (this.#pairAttemptsLeft <= 0) return fail("too many pairing attempts");
-    this.#pairAttemptsLeft -= 1;
     const payload = parsed.payload && typeof parsed.payload === "object" ? parsed.payload : {};
     const code = typeof payload.code === "string" ? payload.code.trim().toUpperCase() : "";
     const name = typeof payload.name === "string" ? payload.name : "";
@@ -4394,11 +4482,11 @@ async function readInviteFile(path) {
 }
 async function claimPairingInvite(remoteDir, code, deviceName) {
   if (!/^[A-Za-z0-9_-]+$/.test(code)) return void 0;
-  const { rename: rename6 } = await import("node:fs/promises");
+  const { rename: rename7 } = await import("node:fs/promises");
   const invitePath = join8(remoteDir, "pending", `${code}.json`);
   const claimedPath = `${invitePath}.${randomBytes6(6).toString("hex")}.claiming`;
   try {
-    await rename6(invitePath, claimedPath);
+    await rename7(invitePath, claimedPath);
   } catch {
     return void 0;
   }
@@ -4457,8 +4545,75 @@ async function authenticateDevice(remoteDir, deviceId, secret) {
   }
 }
 
+// src/remote/enroll.ts
+import { hostname as hostname2 } from "node:os";
+import { homedir as homedir3 } from "node:os";
+import { join as join9 } from "node:path";
+async function registerHost(options) {
+  if (!/^https?:\/\//.test(options.apiBase)) {
+    throw new Error(`--api-base must be an http(s) URL, got ${options.apiBase}`);
+  }
+  if (options.relaySecret.length < 32) {
+    throw new Error("relay secret must be at least 32 characters");
+  }
+  const fetcher = options.fetcher ?? fetch;
+  const response = await fetcher(`${options.apiBase.replace(/\/$/, "")}/remote/hosts`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${options.token}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      hostId: options.identity.hostId,
+      displayName: options.displayName?.trim() || options.identity.deviceName || hostname2(),
+      platform: process.platform,
+      relaySecret: options.relaySecret
+    })
+  });
+  if (response.status === 409) {
+    throw new Error("This machine is already registered to a different Cuppet account.");
+  }
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`Enrollment failed (${response.status}): ${body.slice(0, 300) || response.statusText}`);
+  }
+  const payload = await response.json().catch(() => ({}));
+  return {
+    ...typeof payload.relayUrl === "string" ? { relayUrl: payload.relayUrl } : {},
+    relayRegistered: payload.relayRegistered === true,
+    ...typeof payload.remoteTokenPublicKey === "string" ? { remoteTokenPublicKey: payload.remoteTokenPublicKey } : {}
+  };
+}
+async function runEnroll(options, write = (line) => process.stdout.write(line)) {
+  if (!options.token) {
+    throw new Error("A Cuppet session token is required for enrollment (use the --token flag or set CUPPET_TOKEN)");
+  }
+  if (!/^https?:\/\//.test(options.apiBase)) {
+    throw new Error(`--api-base must be an http(s) URL, got ${options.apiBase}`);
+  }
+  const remoteDir = join9(homedir3(), ".cuppet", "v2", "remote");
+  let identity = await ensureHostIdentity(remoteDir);
+  const displayName = options.name?.trim() || identity.deviceName || hostname2();
+  const enrollment = await registerHost({
+    apiBase: options.apiBase,
+    token: options.token,
+    identity,
+    relaySecret: identity.relaySecret,
+    displayName
+  });
+  if (enrollment.remoteTokenPublicKey) {
+    identity = await setRemoteTokenPublicKey(remoteDir, enrollment.remoteTokenPublicKey);
+  }
+  write(`Enrolled ${displayName} [${identity.hostId}] with ${options.apiBase}
+`);
+  if (enrollment.relayUrl) write(`Relay: ${enrollment.relayUrl}${enrollment.relayRegistered ? " (registered)" : ""}
+`);
+  write("Start coding remotely with:\n");
+  write("  cuppet remote-control\n");
+}
+
 // src/remote/token.ts
-import { createHash as createHash2, createHmac, timingSafeEqual as timingSafeEqual2 } from "node:crypto";
+import { createPublicKey as createPublicKey2, verify as verifySignature } from "node:crypto";
 var BACKEND_SCOPE_MAP = {
   "sessions:read": "session.read",
   "sessions:write": "session.write",
@@ -4466,18 +4621,22 @@ var BACKEND_SCOPE_MAP = {
   "questions:reply": "question.write",
   "models:write": "model.write"
 };
-function verifyRemoteToken(token, secret, expectedHostId, expectedDeviceId) {
+function verifyRemoteToken(token, publicKey, expectedHostId, expectedDeviceId) {
   const parts = token.split(".");
-  if (parts.length !== 3 || !secret) return void 0;
+  if (parts.length !== 3 || !publicKey) return void 0;
   const [encodedHeader, encodedPayload, encodedSignature] = parts;
   if (!encodedHeader || !encodedPayload || !encodedSignature) return void 0;
   try {
     const header = JSON.parse(Buffer.from(encodedHeader, "base64url").toString("utf8"));
-    if (header.alg !== "HS256" || header.typ !== "JWT") return void 0;
-    const key = createHash2("sha256").update(`cuppet-remote-v1:${secret}`).digest();
-    const expected = createHmac("sha256", key).update(`${encodedHeader}.${encodedPayload}`).digest();
+    if (header.alg !== "EdDSA" || header.typ !== "JWT") return void 0;
+    const key = createPublicKey2({
+      key: Buffer.from(publicKey, "base64"),
+      format: "der",
+      type: "spki"
+    });
+    if (key.asymmetricKeyType !== "ed25519") return void 0;
     const provided = Buffer.from(encodedSignature, "base64url");
-    if (provided.length !== expected.length || !timingSafeEqual2(provided, expected)) return void 0;
+    if (!verifySignature(null, Buffer.from(`${encodedHeader}.${encodedPayload}`), key, provided)) return void 0;
     const payload = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
     const now = Math.floor(Date.now() / 1e3);
     if (payload.iss !== "cuppet-backend" || payload.aud !== "cuppet-relay" || typeof payload.sub !== "string" || payload.sub.length === 0 || payload.host !== expectedHostId || payload.device !== expectedDeviceId || typeof payload.exp !== "number" || payload.exp <= now || typeof payload.iat === "number" && payload.iat > now + 60) return void 0;
@@ -4488,10 +4647,151 @@ function verifyRemoteToken(token, secret, expectedHostId, expectedDeviceId) {
   }
 }
 
+// src/remote/setup.ts
+async function runRemoteSetup(options) {
+  if (!/^https?:\/\//.test(options.apiBase)) {
+    throw new Error(`--api-base must be an http(s) URL, got ${options.apiBase}`);
+  }
+  const fetcher = options.fetcher ?? fetch;
+  const session = await createSetupSession(options, fetcher);
+  session.setupUrl = addApiBase(session.setupUrl, options.apiBase);
+  const write = options.write ?? ((line) => process.stdout.write(line));
+  write("  Cuppet setup \u2014 scan this QR in the signed-in Cuppet app\n");
+  write(`  ${session.setupUrl}
+`);
+  const qr = await renderSetupQr(session.setupUrl);
+  if (qr) write(`${qr}
+`);
+  write(`  waiting for approval (${new Date(session.expiresAt).toISOString()})\u2026
+`);
+  const deadline = Date.now() + (options.timeoutMs ?? 10 * 6e4);
+  const pollIntervalMs = options.pollIntervalMs ?? 1500;
+  while (Date.now() < deadline) {
+    const status = await requestSetupStatus(options, session, fetcher);
+    if (status.status === "expired") {
+      throw new Error("The Cuppet setup QR expired. Run remote control again to create a new one.");
+    }
+    if (status.status === "approved") {
+      return await claimSetup(options, session, fetcher);
+    }
+    await wait(pollIntervalMs);
+  }
+  throw new Error("Timed out waiting for Cuppet approval. Run remote control again to create a new QR.");
+}
+async function createSetupSession(options, fetcher) {
+  const response = await fetcher(`${options.apiBase.replace(/\/$/, "")}/remote/setup/sessions`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      hostId: options.identity.hostId,
+      displayName: options.displayName?.trim() || options.identity.deviceName,
+      platform: process.platform
+    })
+  });
+  const payload = await readPayload(response);
+  if (!response.ok) throw new Error(`Remote setup failed (${response.status}): ${errorMessage2(payload)}`);
+  if (typeof payload.setupId !== "string" || typeof payload.setupCode !== "string" || typeof payload.pollSecret !== "string" || typeof payload.setupUrl !== "string") {
+    throw new Error("Remote setup returned an invalid session.");
+  }
+  return payload;
+}
+async function requestSetupStatus(options, session, fetcher) {
+  const response = await fetcher(
+    `${options.apiBase.replace(/\/$/, "")}/remote/setup/sessions/${encodeURIComponent(session.setupId)}/status`,
+    { headers: { authorization: `Bearer ${session.pollSecret}` } }
+  );
+  const payload = await readPayload(response);
+  if (!response.ok) throw new Error(`Remote setup status failed (${response.status}): ${errorMessage2(payload)}`);
+  const status = payload.status;
+  if (status !== "pending" && status !== "approved" && status !== "claimed" && status !== "expired") {
+    throw new Error("Remote setup returned an invalid status.");
+  }
+  return { status };
+}
+async function claimSetup(options, session, fetcher) {
+  const response = await fetcher(
+    `${options.apiBase.replace(/\/$/, "")}/remote/setup/sessions/${encodeURIComponent(session.setupId)}/claim`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${session.pollSecret}`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ relaySecret: options.identity.relaySecret })
+    }
+  );
+  const payload = await readPayload(response);
+  if (!response.ok) throw new Error(`Remote setup claim failed (${response.status}): ${errorMessage2(payload)}`);
+  if (typeof payload.relayUrl !== "string" || payload.relayUrl.length === 0 || payload.relayRegistered !== true) {
+    throw new Error("Remote setup did not return a registered relay.");
+  }
+  return {
+    relayUrl: payload.relayUrl,
+    relayRegistered: true,
+    ...typeof payload.remoteTokenPublicKey === "string" ? { remoteTokenPublicKey: payload.remoteTokenPublicKey } : {}
+  };
+}
+async function readPayload(response) {
+  const payload = await response.json().catch(() => ({}));
+  return payload && typeof payload === "object" ? payload : {};
+}
+function errorMessage2(payload) {
+  const error = payload.error;
+  if (error && typeof error === "object" && typeof error.message === "string") {
+    return error.message;
+  }
+  return "unexpected server response";
+}
+async function renderSetupQr(text) {
+  try {
+    const qrcode = await import("qrcode");
+    return await qrcode.toString(text, { type: "terminal", small: true });
+  } catch {
+    return "";
+  }
+}
+function wait(milliseconds) {
+  return new Promise((resolve3) => setTimeout(resolve3, milliseconds));
+}
+function addApiBase(setupUrl, apiBase) {
+  const url = new URL(setupUrl);
+  url.searchParams.set("api", apiBase.replace(/\/$/, ""));
+  return url.toString();
+}
+
 // src/remote/bootstrap.ts
 async function startRemoteControl(options) {
   const write = options.write ?? ((line) => process.stdout.write(line));
-  const identity = await ensureHostIdentity(options.remoteDir);
+  let identity = await ensureHostIdentity(options.remoteDir);
+  let relayUrl = options.relayUrl;
+  const hostSecret = options.hostSecret ?? identity.relaySecret;
+  let remoteTokenPublicKey = options.remoteTokenPublicKey ?? identity.remoteTokenPublicKey;
+  if (options.authToken) {
+    const enrollment = await registerHost({
+      apiBase: options.apiBase ?? DEFAULT_CUPPET_API_BASE,
+      token: options.authToken,
+      identity,
+      relaySecret: hostSecret
+    });
+    relayUrl ??= enrollment.relayUrl;
+    if (enrollment.remoteTokenPublicKey) {
+      identity = await setRemoteTokenPublicKey(options.remoteDir, enrollment.remoteTokenPublicKey);
+      remoteTokenPublicKey = identity.remoteTokenPublicKey;
+    }
+    if (enrollment.relayRegistered) write("  relay enrollment: registered\n");
+  } else if (options.setup && !relayUrl) {
+    const enrollment = await runRemoteSetup({
+      apiBase: options.apiBase ?? DEFAULT_CUPPET_API_BASE,
+      identity,
+      write
+    });
+    relayUrl = enrollment.relayUrl;
+    if (enrollment.remoteTokenPublicKey) {
+      identity = await setRemoteTokenPublicKey(options.remoteDir, enrollment.remoteTokenPublicKey);
+      remoteTokenPublicKey = identity.remoteTokenPublicKey;
+    }
+    if (enrollment.relayRegistered) write("  relay enrollment: registered\n");
+  }
   write(`Remote control
   host: ${identity.hostId} (${identity.deviceName})
 `);
@@ -4500,13 +4800,13 @@ async function startRemoteControl(options) {
 `);
   }
   let bridge;
-  if (options.relayUrl) {
+  if (relayUrl) {
     const params = new URLSearchParams({
       role: "host",
       hostId: identity.hostId,
-      secret: options.hostSecret ?? ""
+      secret: hostSecret
     });
-    const transport = new WebSocketTransport(`${relayWebSocketUrl(options.relayUrl)}?${params}`);
+    const transport = new WebSocketTransport(`${relayWebSocketUrl(relayUrl)}?${params}`);
     bridge = new RemoteBridge({
       controller: options.controller,
       hostId: identity.hostId,
@@ -4514,8 +4814,8 @@ async function startRemoteControl(options) {
       authenticateDevice: async (deviceId, secret) => {
         const local = await authenticateDevice(options.remoteDir, deviceId, secret);
         if (local) return local;
-        if (!options.remoteTokenSecret) return void 0;
-        return verifyRemoteToken(secret, options.remoteTokenSecret, identity.hostId, deviceId);
+        if (!remoteTokenPublicKey) return void 0;
+        return verifyRemoteToken(secret, remoteTokenPublicKey, identity.hostId, deviceId);
       },
       claimPairingInvite: (code, deviceName) => claimPairingInvite(options.remoteDir, code, deviceName),
       buildAttachSnapshot: async () => ({
@@ -4525,7 +4825,7 @@ async function startRemoteControl(options) {
       })
     });
     bridge.start();
-    write(`  relay: dialing ${options.relayUrl}
+    write(`  relay: dialing ${relayUrl}
 `);
   } else {
     write("  set CUPPET_RELAY_URL or pass --relay-url <wss://\u2026> to connect the bridge\n");
@@ -4533,7 +4833,7 @@ async function startRemoteControl(options) {
   let invite;
   if (options.createInvite ?? true) {
     invite = await createPairingInvite(options.remoteDir, {
-      ...options.relayUrl ? { relayUrl: options.relayUrl } : {},
+      ...relayUrl ? { relayUrl } : {},
       hostId: identity.hostId
     });
     write(`  pair a device \u2014 code ${invite.code} expires ${new Date(invite.expiresAt).toISOString()}
@@ -4564,60 +4864,45 @@ async function renderTerminalQr(text) {
   }
 }
 
-// src/remote/enroll.ts
-import { hostname as hostname2 } from "node:os";
-import { homedir as homedir3 } from "node:os";
-import { join as join9 } from "node:path";
-async function runEnroll(options, write = (line) => process.stdout.write(line)) {
-  if (!options.token) {
-    throw new Error("A Cuppet session token is required for enrollment (use the --token flag or set CUPPET_TOKEN)");
-  }
-  if (!/^https?:\/\//.test(options.apiBase)) {
-    throw new Error(`--api-base must be an http(s) URL, got ${options.apiBase}`);
-  }
-  const identity = await ensureHostIdentity(join9(homedir3(), ".cuppet", "v2", "remote"));
-  const displayName = options.name?.trim() || identity.deviceName || hostname2();
-  const response = await fetch(`${options.apiBase.replace(/\/$/, "")}/remote/hosts`, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${options.token}`,
-      "content-type": "application/json"
-    },
-    body: JSON.stringify({
-      hostId: identity.hostId,
-      displayName,
-      platform: process.platform
-    })
-  });
-  if (response.status === 409) {
-    throw new Error("This machine is already registered to a different Cuppet account.");
-  }
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    throw new Error(`Enrollment failed (${response.status}): ${body.slice(0, 300) || response.statusText}`);
-  }
-  write(`Enrolled ${displayName} [${identity.hostId}] with ${options.apiBase}
-`);
-  write("Start coding remotely with:\n");
-  write("  cuppet remote-control --relay-url <wss://\u2026>\n");
-}
-
 // src/remote/relay.ts
-import { createHash as createHash3, randomBytes as randomBytes7, timingSafeEqual as timingSafeEqual3 } from "node:crypto";
+import { createHash as createHash2, randomBytes as randomBytes7, timingSafeEqual as timingSafeEqual2 } from "node:crypto";
 import { createServer as createServer2 } from "node:http";
-import { readFile as readFile8 } from "node:fs/promises";
+import { mkdir as mkdir9, readFile as readFile8, rename as rename6, writeFile as writeFile8 } from "node:fs/promises";
 import { dirname as dirname5, extname, join as join10, normalize } from "node:path";
 var MAX_FRAME_BYTES2 = 512 * 1024;
 var REPLAY_LIMIT = 200;
 var RATE_WINDOW_MS = 1e4;
 var RATE_LIMIT = 240;
+var PAIR_ATTEMPT_LIMIT = 3;
+var HOST_ID_PATTERN = /^[\w.-]{1,128}$/;
+var DEFAULT_RELAY_BIND = "127.0.0.1";
 function sha2562(value) {
-  return createHash3("sha256").update(value).digest("hex");
+  return createHash2("sha256").update(value).digest("hex");
+}
+function isValidRelayHostId(value) {
+  return HOST_ID_PATTERN.test(value);
+}
+function resolveRelayBind(bind) {
+  return bind?.trim() || DEFAULT_RELAY_BIND;
+}
+function createSlidingWindowRateLimiter(limit = RATE_LIMIT, windowMs = RATE_WINDOW_MS, now = Date.now) {
+  let windowStart = now();
+  let messageCount = 0;
+  return () => {
+    const current = now();
+    if (current - windowStart >= windowMs) {
+      windowStart = current;
+      messageCount = 0;
+    }
+    messageCount += 1;
+    return messageCount > limit;
+  };
 }
 var CuppetRelay = class {
   #http;
   #rooms = /* @__PURE__ */ new Map();
   #options;
+  #authWrite = Promise.resolve();
   constructor(options = {}) {
     this.#options = options;
     this.#http = createServer2((request, response) => void this.#handleHttp(request, response));
@@ -4630,7 +4915,7 @@ var CuppetRelay = class {
   async listen(port, bind) {
     return new Promise((resolvePromise, rejectPromise) => {
       this.#http.once("error", rejectPromise);
-      this.#http.listen(port, bind ?? this.#options.bind ?? "0.0.0.0", () => resolvePromise());
+      this.#http.listen(port, resolveRelayBind(bind ?? this.#options.bind), () => resolvePromise());
     });
   }
   close() {
@@ -4649,6 +4934,28 @@ var CuppetRelay = class {
     } catch {
       return {};
     }
+  }
+  async #withAuthorizedHosts(operation) {
+    let release = () => void 0;
+    const previous = this.#authWrite;
+    this.#authWrite = new Promise((resolvePromise) => {
+      release = resolvePromise;
+    });
+    await previous;
+    try {
+      return await operation(await this.#loadAuthorizedHosts() ?? {});
+    } finally {
+      release();
+    }
+  }
+  async #writeAuthorizedHosts(hosts) {
+    const authFile = this.#options.authFile;
+    if (!authFile) throw new Error("relay auth file is not configured");
+    await mkdir9(dirname5(authFile), { recursive: true, mode: 448 });
+    const temporary = `${authFile}.${randomBytes7(12).toString("hex")}.tmp`;
+    await writeFile8(temporary, `${JSON.stringify({ hosts }, null, 2)}
+`, { mode: 384 });
+    await rename6(temporary, authFile);
   }
   async #handleHttp(request, response) {
     const url = new URL(request.url ?? "/", "http://localhost");
@@ -4706,39 +5013,48 @@ var CuppetRelay = class {
     const header = request.headers.authorization ?? "";
     const provided = Buffer.from(header.replace(/^Bearer\s+/i, ""));
     const expected = Buffer.from(this.#options.adminToken);
-    return provided.length === expected.length && timingSafeEqual3(provided, expected);
+    return provided.length === expected.length && timingSafeEqual2(provided, expected);
   }
   async #upsertHost(body) {
     if (!this.#options.authFile) return false;
     try {
       const parsed = JSON.parse(body);
-      if (typeof parsed.hostId !== "string" || !/^[\w.-]{1,128}$/.test(parsed.hostId)) return false;
-      if (typeof parsed.secret !== "string" || parsed.secret.length < 16) return false;
-      const current = await this.#loadAuthorizedHosts() ?? {};
-      current[parsed.hostId] = sha2562(parsed.secret);
-      const { mkdir: mkdir11, writeFile: writeFile9 } = await import("node:fs/promises");
-      await mkdir11(dirname5(this.#options.authFile), { recursive: true, mode: 448 });
-      await writeFile9(this.#options.authFile, `${JSON.stringify({ hosts: current }, null, 2)}
-`, { mode: 384 });
+      const hostId = parsed.hostId;
+      const secret = parsed.secret;
+      if (typeof hostId !== "string" || !isValidRelayHostId(hostId)) return false;
+      if (typeof secret !== "string" || secret.length < 16) return false;
+      await this.#withAuthorizedHosts(async (current) => {
+        current[hostId] = sha2562(secret);
+        await this.#writeAuthorizedHosts(current);
+      });
       return true;
     } catch {
       return false;
     }
   }
   async #removeHost(hostId) {
-    if (!this.#options.authFile || !/^[\w.-]{1,128}$/.test(hostId)) return false;
-    const current = await this.#loadAuthorizedHosts() ?? {};
-    if (!(hostId in current)) return false;
-    delete current[hostId];
-    const { writeFile: writeFile9 } = await import("node:fs/promises");
-    await writeFile9(this.#options.authFile, `${JSON.stringify({ hosts: current }, null, 2)}
-`, { mode: 384 });
-    return true;
+    if (!this.#options.authFile || !isValidRelayHostId(hostId)) return false;
+    try {
+      return await this.#withAuthorizedHosts(async (current) => {
+        if (!(hostId in current)) return false;
+        delete current[hostId];
+        await this.#writeAuthorizedHosts(current);
+        return true;
+      });
+    } catch {
+      return false;
+    }
   }
   async #handleUpgrade(request, rawSocket) {
     const socket = rawSocket;
     const url = new URL(request.url ?? "/", "http://localhost");
     if (url.pathname !== "/ws") {
+      socket.destroy();
+      return;
+    }
+    const role = url.searchParams.get("role");
+    const hostId = url.searchParams.get("hostId") ?? "";
+    if (!isValidRelayHostId(hostId)) {
       socket.destroy();
       return;
     }
@@ -4755,7 +5071,7 @@ var CuppetRelay = class {
       socket.destroy();
       return;
     }
-    const acceptKey = createHash3("sha1").update(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").digest("base64");
+    const acceptKey = createHash2("sha1").update(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").digest("base64");
     socket.write(
       `HTTP/1.1 101 Switching Protocols\r
 Upgrade: websocket\r
@@ -4765,19 +5081,7 @@ Sec-WebSocket-Accept: ${acceptKey}\r
 `
     );
     socket.setNoDelay(true);
-    let windowStart = Date.now();
-    let messageCount = 0;
-    const overBudget = () => {
-      const now = Date.now();
-      if (now - windowStart >= RATE_WINDOW_MS) {
-        windowStart = now;
-        messageCount = 0;
-      }
-      messageCount += 1;
-      return messageCount > RATE_LIMIT;
-    };
-    const role = url.searchParams.get("role");
-    const hostId = url.searchParams.get("hostId") ?? "";
+    const overBudget = createSlidingWindowRateLimiter();
     let deviceId;
     let room;
     let selfRegistration;
@@ -4788,7 +5092,7 @@ Sec-WebSocket-Accept: ${acceptKey}\r
         const stored = expected[hostId];
         const provided = Buffer.from(sha2562(secret));
         const storedBuffer = Buffer.from(typeof stored === "string" ? stored : "");
-        if (!stored || provided.length !== storedBuffer.length || !timingSafeEqual3(provided, storedBuffer)) {
+        if (!stored || provided.length !== storedBuffer.length || !timingSafeEqual2(provided, storedBuffer)) {
           closeSocket(socket, 4002, "host unauthorized");
           return;
         }
@@ -4801,20 +5105,21 @@ Sec-WebSocket-Accept: ${acceptKey}\r
       room.replay.length = 0;
       room.host = selfRegistration;
     } else if (role === "device") {
-      room = this.#room(hostId);
+      room = this.#rooms.get(hostId);
       deviceId = url.searchParams.get("deviceId") ?? "";
       const maxDevices = this.#options.maxDevicesPerRoom ?? 8;
+      if (!room?.host) {
+        closeSocket(socket, 4001, "host offline");
+        return;
+      }
       if (!deviceId || deviceId.length > 128 || !room.devices.has(deviceId) && room.devices.size >= maxDevices) {
         closeSocket(socket, 4003, "invalid device");
         return;
       }
-      if (!room.host) {
-        closeSocket(socket, 4001, "host offline");
-        return;
-      }
       const registration = {
         socket: this.#wrap(socket),
-        authenticated: false
+        authenticated: false,
+        pairingAttempts: 0
       };
       const previous = room.devices.get(deviceId);
       previous?.socket.destroy();
@@ -4837,6 +5142,10 @@ Sec-WebSocket-Accept: ${acceptKey}\r
         }
         if (!decoded) break;
         buffered = buffered.subarray(decoded.consumed);
+        if (overBudget()) {
+          socket.destroy();
+          return;
+        }
         if (decoded.opcode === 8) {
           socket.destroy();
           return;
@@ -4846,10 +5155,6 @@ Sec-WebSocket-Accept: ${acceptKey}\r
           continue;
         }
         if (decoded.opcode !== 1) continue;
-        if (overBudget()) {
-          socket.destroy();
-          return;
-        }
         let parsed;
         try {
           parsed = JSON.parse(decoded.payload.toString("utf8"));
@@ -4866,11 +5171,13 @@ Sec-WebSocket-Accept: ${acceptKey}\r
           room.devices.forEach((device) => device.socket.destroy());
           room.devices.clear();
           room.host = void 0;
+          this.#pruneRoom(hostId, room);
         }
         return;
       }
       if (room && deviceId && room.devices.get(deviceId) === selfRegistration) {
         room.devices.delete(deviceId);
+        this.#pruneRoom(hostId, room);
       }
     });
   }
@@ -4883,6 +5190,22 @@ Sec-WebSocket-Accept: ${acceptKey}\r
       const device = room.devices.get(deviceId);
       if (!host || !device || device !== registration) return;
       if (type === "ping") return;
+      if (!device.authenticated && type === "device.pair") {
+        device.pairingAttempts += 1;
+        if (device.pairingAttempts > PAIR_ATTEMPT_LIMIT) {
+          device.socket.send(JSON.stringify({
+            version: 1,
+            replyTo: "device-pair",
+            ok: false,
+            error: "too many pairing attempts",
+            deviceId
+          }));
+          device.socket.destroy();
+          room.devices.delete(deviceId);
+          this.#pruneRoom(hostId, room);
+          return;
+        }
+      }
       if (!device.authenticated && type !== "device.pair" && type !== "device.hello") return;
       host.send(JSON.stringify({ ...message2, deviceId }));
       return;
@@ -4935,6 +5258,11 @@ Sec-WebSocket-Accept: ${acceptKey}\r
       this.#rooms.set(hostId, room);
     }
     return room;
+  }
+  #pruneRoom(hostId, room) {
+    if (!room.host && room.devices.size === 0 && this.#rooms.get(hostId) === room) {
+      this.#rooms.delete(hostId);
+    }
   }
   #wrap(socket) {
     const wrapped = {
@@ -5022,10 +5350,19 @@ function generateSecret() {
 }
 
 // src/remote/relay-main.ts
-import { mkdir as mkdir9, readFile as readFile9, writeFile as writeFile8 } from "node:fs/promises";
+import { mkdir as mkdir10, readFile as readFile9, writeFile as writeFile9 } from "node:fs/promises";
 import { dirname as dirname6, join as join11, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 var DEFAULT_RELAY_PORT = 8787;
+function defaultRelayAuthPath() {
+  return join11(process.cwd(), "cuppet-relay-auth.json");
+}
+function resolveRelayServerSecurity(options) {
+  return {
+    authFile: resolve(options.authFile ?? defaultRelayAuthPath()),
+    bind: resolveRelayBind(options.bind)
+  };
+}
 async function defaultAppDir() {
   const moduleDir = dirname6(fileURLToPath(import.meta.url));
   const candidates = [join11(moduleDir, "app"), join11(moduleDir, "../src/remote/app"), join11(moduleDir, "../relay-app")];
@@ -5039,30 +5376,28 @@ async function defaultAppDir() {
   return void 0;
 }
 async function runRelayServer(options, write = (line) => process.stdout.write(line)) {
-  const authFile = options.authFile;
-  if (authFile && !await fileExists(authFile)) {
-    await mkdir9(resolve(authFile, ".."), { recursive: true, mode: 448 });
-    await writeFile8(authFile, `${JSON.stringify({ hosts: {} }, null, 2)}
-`, { encoding: "utf8", mode: 384 });
-    write(`relay auth: created ${authFile}
-`);
-  }
+  const { authFile, bind } = resolveRelayServerSecurity(options);
+  await ensureRelayAuthFile(authFile, write);
   const token = options.adminToken ?? generateSecret();
   const appDir = options.appDir ? resolve(options.appDir) : await defaultAppDir();
   const relay = new CuppetRelay({
     port: options.port,
-    ...authFile ? { authFile } : {},
+    authFile,
+    bind,
     ...appDir ? { appDirectory: appDir } : {},
     adminToken: token,
     ...options.origins.length > 0 ? { allowedOrigins: options.origins } : {}
   });
-  await relay.listen(options.port);
+  await relay.listen(options.port, bind);
+  const endpointHost = bind.includes(":") ? `[${bind}]` : bind;
   write(`Cuppet relay listening on port ${relay.port}
 `);
-  write(`  health: http://0.0.0.0:${relay.port}/healthz
+  write(`  health: http://${endpointHost}:${relay.port}/healthz
 `);
-  if (!authFile) {
-    write("  WARNING: no --auth-file set \u2014 host authentication is disabled (development mode).\n");
+  write(`  auth file: ${authFile}
+`);
+  if (bind !== DEFAULT_RELAY_BIND) {
+    write("  WARNING: non-loopback binds use plain HTTP/WS; terminate TLS before exposing this relay.\n");
   }
   if (options.adminToken) {
     write(`  manage hosts: POST/DELETE /hosts with Authorization: Bearer <admin-token>
@@ -5073,11 +5408,19 @@ async function runRelayServer(options, write = (line) => process.stdout.write(li
     write("  pass --admin-token to pin it instead of generating one per start\n");
   }
   if (appDir) {
-    write(`  pwa: http://0.0.0.0:${relay.port}/app
+    write(`  pwa: http://${endpointHost}:${relay.port}/app
 `);
   }
   await shutdownSignal();
   relay.close();
+}
+async function ensureRelayAuthFile(authFile, write = () => void 0) {
+  if (await fileExists(authFile)) return;
+  await mkdir10(dirname6(authFile), { recursive: true, mode: 448 });
+  await writeFile9(authFile, `${JSON.stringify({ hosts: {} }, null, 2)}
+`, { encoding: "utf8", mode: 384 });
+  write(`relay auth: created ${authFile}
+`);
 }
 async function fileExists(path) {
   try {
@@ -5103,7 +5446,7 @@ function shutdownSignal() {
 }
 
 // src/runtime/assets.ts
-import { createHash as createHash4 } from "node:crypto";
+import { createHash as createHash3 } from "node:crypto";
 import { constants as constants3, createReadStream } from "node:fs";
 import { access as access4, readFile as readFile10 } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -5336,7 +5679,7 @@ async function verifyChecksums(root, manifest) {
   }
 }
 async function sha2563(path) {
-  const hash = createHash4("sha256");
+  const hash = createHash3("sha256");
   for await (const chunk of createReadStream(path)) hash.update(chunk);
   return hash.digest("hex");
 }
@@ -5352,14 +5695,14 @@ async function firstExisting(paths) {
 }
 
 // src/runtime/paths.ts
-import { createHash as createHash5, randomBytes as randomBytes8 } from "node:crypto";
-import { chmod as chmod6, mkdir as mkdir10, realpath } from "node:fs/promises";
+import { createHash as createHash4, randomBytes as randomBytes8 } from "node:crypto";
+import { chmod as chmod6, mkdir as mkdir11, realpath } from "node:fs/promises";
 import { homedir as homedir4 } from "node:os";
 import { join as join13 } from "node:path";
 async function createRuntimePaths(projectDirectory, baseDirectory = join13(homedir4(), ".cuppet", "v2")) {
   const projectRealpath = await realpath(projectDirectory);
   const base = baseDirectory;
-  const projectID = createHash5("sha256").update(projectRealpath).digest("hex");
+  const projectID = createHash4("sha256").update(projectRealpath).digest("hex");
   const launchID = `${process.pid}-${randomBytes8(8).toString("hex")}`;
   const runtime = join13(base, "run", launchID);
   const paths = {
@@ -5390,7 +5733,7 @@ async function createRuntimePaths(projectDirectory, baseDirectory = join13(homed
     paths.opencode.cache,
     paths.opencode.state
   ];
-  await Promise.all(privateDirectories.map((directory) => mkdir10(directory, { recursive: true, mode: 448 })));
+  await Promise.all(privateDirectories.map((directory) => mkdir11(directory, { recursive: true, mode: 448 })));
   await Promise.all(privateDirectories.map((directory) => chmod6(directory, 448)));
   return paths;
 }
@@ -5598,9 +5941,11 @@ Flags:
   --doctor                           print runtime diagnostics and exit
   --prompt <text>                    run one prompt headlessly and exit
   --relay-url <wss://\u2026>              relay endpoint for remote control
-                                     (env CUPPET_RELAY_URL)
-  CUPPET_REMOTE_TOKEN_SECRET         optional shared secret for backend-issued
-                                     short-lived mobile credentials
+                                     (env CUPPET_RELAY_URL; enrollment can supply it)
+  CUPPET_TOKEN                       Cuppet session token for automatic enrollment
+  CUPPET_API_BASE                    Cuppet API base for automatic enrollment
+  CUPPET_REMOTE_TOKEN_PUBLIC_KEY     optional base64 Ed25519 key override;
+                                     enrollment supplies it automatically
   -c, --continue                     pass --continue to the TUI
   -s, --session <id>                 pass --session to the TUI
   --fork                             pass --fork to the TUI
@@ -5609,25 +5954,27 @@ Flags:
 
 Relay flags:
   --port <n>                         listen port (default 8787)
-  --auth-file <path>                 JSON file of authorized hosts; enables auth
+  --bind <address>                   bind address (default 127.0.0.1)
+  --auth-file <path>                 JSON file of authorized hosts (default ./cuppet-relay-auth.json)
   --admin-token <token>              token for POST/DELETE /hosts enrollment
   --app-dir <path>                   serve a static PWA at /app
   --allow-origin <origin>            allowed browser Origin (repeatable)
 
 Enrollment flags:
-  --api-base <url>                   Cuppet API base (default https://api.cuppet.in)
+  --api-base <url>                   Cuppet API base (default ${DEFAULT_CUPPET_API_BASE})
   --token <jwt>                      Cuppet session token (env CUPPET_TOKEN)
   --name <label>                     display name for this machine
 
 Remote control flow:
-  1. cuppet remote-control --relay-url wss://relay.example.com
-     (set CUPPET_RELAY_HOST_SECRET after enrolling the host with the relay)
-  2. scan the printed QR / open the pairing URL within 2 minutes
-  3. control the session from the phone while the machine stays authoritative
+  1. cuppet remote-control
+  2. scan the printed Cuppet setup QR in the signed-in mobile app
+  3. Cuppet enrolls this computer and starts its outbound relay connection
+  4. control the session from the phone while the machine stays authoritative
 
 Managed-token flow:
-  Set CUPPET_REMOTE_TOKEN_SECRET to the Sydney REMOTE_TOKEN_SECRET value on
-  the host; mobile then refreshes short-lived credentials through the backend.
+  Set CUPPET_TOKEN so enrollment can receive Sydney's public verification key;
+  mobile then refreshes short-lived credentials through the backend. The
+  Sydney private signing key never leaves the backend.
 `;
 async function main() {
   const arguments_ = parseArguments(process.argv.slice(2));
@@ -5646,6 +5993,7 @@ async function main() {
     await runRelayServer({
       port: arguments_.relayPort ?? DEFAULT_RELAY_PORT,
       ...arguments_.relayAuthFile ? { authFile: arguments_.relayAuthFile } : {},
+      ...arguments_.relayBind ? { bind: arguments_.relayBind } : {},
       ...arguments_.relayAppDir ? { appDir: arguments_.relayAppDir } : {},
       ...arguments_.relayAdminToken ? { adminToken: arguments_.relayAdminToken } : {},
       origins: arguments_.relayOrigins
@@ -5654,7 +6002,7 @@ async function main() {
   }
   if (arguments_.mode === "enroll") {
     await runEnroll({
-      apiBase: arguments_.enrollApiBase ?? process.env.CUPPET_API_BASE ?? "https://api.cuppet.in",
+      apiBase: arguments_.enrollApiBase ?? process.env.CUPPET_API_BASE ?? DEFAULT_CUPPET_API_BASE,
       ...arguments_.enrollToken ? { token: arguments_.enrollToken } : process.env.CUPPET_TOKEN ? { token: process.env.CUPPET_TOKEN } : {},
       ...arguments_.enrollName ? { name: arguments_.enrollName } : {}
     });
@@ -5729,7 +6077,10 @@ async function main() {
           remoteDir: join14(paths.base, "remote"),
           ...relayUrl ? { relayUrl } : {},
           ...process.env.CUPPET_RELAY_HOST_SECRET ? { hostSecret: process.env.CUPPET_RELAY_HOST_SECRET } : {},
-          ...process.env.CUPPET_REMOTE_TOKEN_SECRET ? { remoteTokenSecret: process.env.CUPPET_REMOTE_TOKEN_SECRET } : {},
+          ...process.env.CUPPET_TOKEN ? { authToken: process.env.CUPPET_TOKEN } : {},
+          ...!relayUrl || process.env.CUPPET_TOKEN ? { apiBase: process.env.CUPPET_API_BASE ?? DEFAULT_CUPPET_API_BASE } : {},
+          setup: !process.env.CUPPET_TOKEN && !relayUrl,
+          ...process.env.CUPPET_REMOTE_TOKEN_PUBLIC_KEY ? { remoteTokenPublicKey: process.env.CUPPET_REMOTE_TOKEN_PUBLIC_KEY } : {},
           write
         });
       }
@@ -5822,6 +6173,11 @@ function parseArguments(arguments_) {
       const value = rest[index + 1];
       if (!value) throw new Error("--auth-file requires a path");
       result.relayAuthFile = value;
+      index += 1;
+    } else if (argument === "--bind") {
+      const value = rest[index + 1]?.trim();
+      if (!value) throw new Error("--bind requires an address");
+      result.relayBind = value;
       index += 1;
     } else if (argument === "--app-dir") {
       const value = rest[index + 1];

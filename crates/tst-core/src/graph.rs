@@ -265,13 +265,14 @@ pub struct SyntaxItem {
     pub span: SourceSpan,
 }
 
-const GRAPH_SNAPSHOT_VERSION: u32 = 1;
+const GRAPH_SNAPSHOT_VERSION: u32 = 2;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GraphSnapshot {
     pub version: u32,
     pub nodes: HashMap<String, GraphNode>,
     pub files: HashMap<String, ParsedFile>,
+    pub top_level_symbols: HashSet<String>,
 }
 
 pub struct CodeGraph {
@@ -315,6 +316,7 @@ impl CodeGraph {
             version: GRAPH_SNAPSHOT_VERSION,
             nodes: self.nodes.clone(),
             files: self.files.clone(),
+            top_level_symbols: self.top_level_symbols.clone(),
         };
         let bytes = rmp_serde::to_vec_named(&snapshot).context("serialize graph snapshot")?;
         let temp_path = path.with_extension("tmp");
@@ -334,7 +336,7 @@ impl CodeGraph {
         };
         self.nodes = snapshot.nodes;
         self.files = snapshot.files;
-        self.top_level_symbols.clear();
+        self.top_level_symbols = snapshot.top_level_symbols;
         self.rebuild_edges();
         self.progress.discovered = self.files.len();
         self.progress.indexed = self.files.len();
@@ -1623,7 +1625,7 @@ fn collect_syntax(
                 } else {
                     kind.to_owned()
                 };
-                let signature = first_line(text(node, source), 240);
+                let signature = symbol_signature(kind, &name);
                 nodes.insert(
                     id.clone(),
                     GraphNode {
@@ -1976,14 +1978,8 @@ fn text(node: Node<'_>, source: &[u8]) -> String {
     node.utf8_text(source).unwrap_or_default().trim().to_owned()
 }
 
-fn first_line(value: String, limit: usize) -> String {
-    value
-        .lines()
-        .next()
-        .unwrap_or_default()
-        .chars()
-        .take(limit)
-        .collect()
+fn symbol_signature(kind: &str, name: &str) -> String {
+    format!("{kind} {name}")
 }
 
 fn stable_id(input: &str) -> String {
@@ -2321,6 +2317,61 @@ mod tests {
         graph2.build().unwrap();
         assert_eq!(graph2.query("newSymbol", 5).len(), 1);
         assert!(graph2.query("oldSymbol", 5).is_empty());
+    }
+
+    #[test]
+    fn graph_snapshot_retains_unexported_top_level_symbols_for_plan_projection() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::write(
+            temp.path().join("app.ts"),
+            "function localHelper() { return true; }",
+        )
+        .unwrap();
+
+        let mut graph1 = CodeGraph::new(temp.path()).unwrap();
+        graph1.build().unwrap();
+        let snapshot_path = temp.path().join("graph.msgpack");
+        graph1.save_snapshot(&snapshot_path).unwrap();
+
+        let mut graph2 = CodeGraph::new(temp.path()).unwrap();
+        assert!(graph2.load_snapshot(&snapshot_path).unwrap());
+        assert!(graph2
+            .plan_projection(16_384)
+            .symbols
+            .iter()
+            .any(|symbol| symbol.name == "localHelper"));
+    }
+
+    #[test]
+    fn graph_signatures_and_snapshots_exclude_initializer_literals() {
+        let temp = tempfile::tempdir().unwrap();
+        let secret = "sk-graph-secret-should-not-leak";
+        fs::write(
+            temp.path().join("config.ts"),
+            format!("export const apiKey = \"{secret}\";\n"),
+        )
+        .unwrap();
+
+        let mut graph = CodeGraph::new(temp.path()).unwrap();
+        graph.build().unwrap();
+        let symbol = graph
+            .query("apiKey", 5)
+            .into_iter()
+            .find(|result| result.node.name == "apiKey")
+            .unwrap();
+        assert!(!symbol.node.signature.contains(secret));
+        assert!(graph
+            .plan_projection(16_384)
+            .symbols
+            .iter()
+            .all(|item| !item.signature.contains(secret)));
+
+        let snapshot_path = temp.path().join("graph.msgpack");
+        graph.save_snapshot(&snapshot_path).unwrap();
+        let snapshot = fs::read(snapshot_path).unwrap();
+        assert!(!snapshot
+            .windows(secret.len())
+            .any(|bytes| bytes == secret.as_bytes()));
     }
 
     #[test]

@@ -1,6 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { createServer, type IncomingMessage, type Server as HttpServer } from 'node:http'
-import { readFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, extname, join, normalize } from 'node:path'
 
 /**
@@ -34,6 +34,8 @@ const REPLAY_LIMIT = 200
 /** Per-connection message budget over a sliding window. */
 const RATE_WINDOW_MS = 10_000
 const RATE_LIMIT = 240
+const PAIR_ATTEMPT_LIMIT = 3
+const HOST_ID_PATTERN = /^[\w.-]{1,128}$/
 
 type SocketLike = {
   readyState: number
@@ -44,6 +46,7 @@ type SocketLike = {
 type DeviceRegistration = {
   socket: SocketLike
   authenticated: boolean
+  pairingAttempts: number
 }
 
 export type RelayOptions = {
@@ -70,10 +73,34 @@ function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
+export function isValidRelayHostId(value: string): boolean {
+  return HOST_ID_PATTERN.test(value)
+}
+
+/** Counts every decoded WebSocket frame, before routing by frame type. */
+export function createSlidingWindowRateLimiter(
+  limit = RATE_LIMIT,
+  windowMs = RATE_WINDOW_MS,
+  now: () => number = Date.now,
+): () => boolean {
+  let windowStart = now()
+  let messageCount = 0
+  return () => {
+    const current = now()
+    if (current - windowStart >= windowMs) {
+      windowStart = current
+      messageCount = 0
+    }
+    messageCount += 1
+    return messageCount > limit
+  }
+}
+
 export class CuppetRelay {
   readonly #http: HttpServer
   readonly #rooms = new Map<string, Room>()
   readonly #options: RelayOptions
+  #authWrite: Promise<void> = Promise.resolve()
 
   constructor(options: RelayOptions = {}) {
     this.#options = options
@@ -112,6 +139,29 @@ export class CuppetRelay {
     } catch {
       return {}
     }
+  }
+
+  async #withAuthorizedHosts<T>(operation: (hosts: Record<string, string>) => Promise<T>): Promise<T> {
+    let release: () => void = () => undefined
+    const previous = this.#authWrite
+    this.#authWrite = new Promise<void>((resolvePromise) => {
+      release = resolvePromise
+    })
+    await previous
+    try {
+      return await operation((await this.#loadAuthorizedHosts()) ?? {})
+    } finally {
+      release()
+    }
+  }
+
+  async #writeAuthorizedHosts(hosts: Record<string, string>): Promise<void> {
+    const authFile = this.#options.authFile
+    if (!authFile) throw new Error('relay auth file is not configured')
+    await mkdir(dirname(authFile), { recursive: true, mode: 0o700 })
+    const temporary = `${authFile}.${randomBytes(12).toString('hex')}.tmp`
+    await writeFile(temporary, `${JSON.stringify({ hosts }, null, 2)}\n`, { mode: 0o600 })
+    await rename(temporary, authFile)
   }
 
   async #handleHttp(request: IncomingMessage, response: import('node:http').ServerResponse): Promise<void> {
@@ -178,13 +228,14 @@ export class CuppetRelay {
     if (!this.#options.authFile) return false
     try {
       const parsed = JSON.parse(body) as { hostId?: unknown; secret?: unknown }
-      if (typeof parsed.hostId !== 'string' || !/^[\w.-]{1,128}$/.test(parsed.hostId)) return false
-      if (typeof parsed.secret !== 'string' || parsed.secret.length < 16) return false
-      const current = (await this.#loadAuthorizedHosts()) ?? {}
-      current[parsed.hostId] = sha256(parsed.secret)
-      const { mkdir, writeFile } = await import('node:fs/promises')
-      await mkdir(dirname(this.#options.authFile), { recursive: true, mode: 0o700 })
-      await writeFile(this.#options.authFile, `${JSON.stringify({ hosts: current }, null, 2)}\n`, { mode: 0o600 })
+      const hostId = parsed.hostId
+      const secret = parsed.secret
+      if (typeof hostId !== 'string' || !isValidRelayHostId(hostId)) return false
+      if (typeof secret !== 'string' || secret.length < 16) return false
+      await this.#withAuthorizedHosts(async (current) => {
+        current[hostId] = sha256(secret)
+        await this.#writeAuthorizedHosts(current)
+      })
       return true
     } catch {
       return false
@@ -192,19 +243,29 @@ export class CuppetRelay {
   }
 
   async #removeHost(hostId: string): Promise<boolean> {
-    if (!this.#options.authFile || !/^[\w.-]{1,128}$/.test(hostId)) return false
-    const current = (await this.#loadAuthorizedHosts()) ?? {}
-    if (!(hostId in current)) return false
-    delete current[hostId]
-    const { writeFile } = await import('node:fs/promises')
-    await writeFile(this.#options.authFile, `${JSON.stringify({ hosts: current }, null, 2)}\n`, { mode: 0o600 })
-    return true
+    if (!this.#options.authFile || !isValidRelayHostId(hostId)) return false
+    try {
+      return await this.#withAuthorizedHosts(async (current) => {
+        if (!(hostId in current)) return false
+        delete current[hostId]
+        await this.#writeAuthorizedHosts(current)
+        return true
+      })
+    } catch {
+      return false
+    }
   }
 
   async #handleUpgrade(request: IncomingMessage, rawSocket: import('node:stream').Duplex): Promise<void> {
     const socket = rawSocket as import('node:net').Socket
     const url = new URL(request.url ?? '/', 'http://localhost')
     if (url.pathname !== '/ws') {
+      socket.destroy()
+      return
+    }
+    const role = url.searchParams.get('role')
+    const hostId = url.searchParams.get('hostId') ?? ''
+    if (!isValidRelayHostId(hostId)) {
       socket.destroy()
       return
     }
@@ -230,21 +291,7 @@ export class CuppetRelay {
     )
     socket.setNoDelay(true)
 
-    // Sliding-window message budget per connection; abusive peers are dropped.
-    let windowStart = Date.now()
-    let messageCount = 0
-    const overBudget = (): boolean => {
-      const now = Date.now()
-      if (now - windowStart >= RATE_WINDOW_MS) {
-        windowStart = now
-        messageCount = 0
-      }
-      messageCount += 1
-      return messageCount > RATE_LIMIT
-    }
-
-    const role = url.searchParams.get('role')
-    const hostId = url.searchParams.get('hostId') ?? ''
+    const overBudget = createSlidingWindowRateLimiter()
     let deviceId: string | undefined
     let room: Room | undefined
     /** This connection's registration; stale close events must not evict successors. */
@@ -276,21 +323,22 @@ export class CuppetRelay {
       room.replay.length = 0
       room.host = selfRegistration
     } else if (role === 'device') {
-      room = this.#room(hostId)
+      room = this.#rooms.get(hostId)
       deviceId = url.searchParams.get('deviceId') ?? ''
       const maxDevices = this.#options.maxDevicesPerRoom ?? 8
-      if (!deviceId || deviceId.length > 128 || (!room.devices.has(deviceId) && room.devices.size >= maxDevices)) {
-        closeSocket(socket, 4003, 'invalid device')
-        return
-      }
-      if (!room.host) {
+      if (!room?.host) {
         // Tell the client why instead of leaving an opaque 1006 hangup.
         closeSocket(socket, 4001, 'host offline')
+        return
+      }
+      if (!deviceId || deviceId.length > 128 || (!room.devices.has(deviceId) && room.devices.size >= maxDevices)) {
+        closeSocket(socket, 4003, 'invalid device')
         return
       }
       const registration: DeviceRegistration = {
         socket: this.#wrap(socket),
         authenticated: false,
+        pairingAttempts: 0,
       }
       const previous = room.devices.get(deviceId)
       previous?.socket.destroy()
@@ -315,6 +363,10 @@ export class CuppetRelay {
         }
         if (!decoded) break
         buffered = buffered.subarray(decoded.consumed)
+        if (overBudget()) {
+          socket.destroy()
+          return
+        }
         if (decoded.opcode === 0x8) {
           socket.destroy()
           return
@@ -325,10 +377,6 @@ export class CuppetRelay {
           continue
         }
         if (decoded.opcode !== 0x1) continue
-        if (overBudget()) {
-          socket.destroy()
-          return
-        }
         let parsed: Record<string, unknown>
         try {
           parsed = JSON.parse(decoded.payload.toString('utf8')) as Record<string, unknown>
@@ -347,11 +395,13 @@ export class CuppetRelay {
           room.devices.forEach((device) => device.socket.destroy())
           room.devices.clear()
           room.host = undefined
+          this.#pruneRoom(hostId, room)
         }
         return
       }
       if (room && deviceId && room.devices.get(deviceId) === selfRegistration) {
         room.devices.delete(deviceId)
+        this.#pruneRoom(hostId, room)
       }
     })
   }
@@ -373,6 +423,22 @@ export class CuppetRelay {
       const device = room.devices.get(deviceId)
       if (!host || !device || device !== registration) return
       if (type === 'ping') return
+      if (!device.authenticated && type === 'device.pair') {
+        device.pairingAttempts += 1
+        if (device.pairingAttempts > PAIR_ATTEMPT_LIMIT) {
+          device.socket.send(JSON.stringify({
+            version: 1,
+            replyTo: 'device-pair',
+            ok: false,
+            error: 'too many pairing attempts',
+            deviceId,
+          }))
+          device.socket.destroy()
+          room.devices.delete(deviceId)
+          this.#pruneRoom(hostId, room)
+          return
+        }
+      }
       // A pairing socket may redeem its invite, but it must not be able to
       // send arbitrary commands before the host has accepted its credentials.
       if (!device.authenticated && type !== 'device.pair' && type !== 'device.hello') return
@@ -436,6 +502,12 @@ export class CuppetRelay {
       this.#rooms.set(hostId, room)
     }
     return room
+  }
+
+  #pruneRoom(hostId: string, room: Room): void {
+    if (!room.host && room.devices.size === 0 && this.#rooms.get(hostId) === room) {
+      this.#rooms.delete(hostId)
+    }
   }
 
   #wrap(socket: import('node:net').Socket): SocketLike {

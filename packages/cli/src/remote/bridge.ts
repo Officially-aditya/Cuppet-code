@@ -35,8 +35,6 @@ export type BridgeOptions = {
 }
 
 const DEDUPE_CAPACITY = 512
-/** Pairing attempts allowed per connection before the bridge stops answering. */
-const PAIR_ATTEMPT_LIMIT = 3
 /** Bump when a protocol change requires clients to update. */
 export const MINIMUM_CLIENT_VERSION = 1
 
@@ -63,7 +61,6 @@ export class RemoteBridge {
   #offlineBuffer: EventFrame[] = []
   #devices = new Map<string, { scopes: readonly string[]; name?: string; expiresAt?: number }>()
   #deviceTimers = new Map<string, ReturnType<typeof setTimeout>>()
-  #pairAttemptsLeft = PAIR_ATTEMPT_LIMIT
   #started = false
 
   constructor(options: BridgeOptions) {
@@ -99,7 +96,6 @@ export class RemoteBridge {
         this.#clearDevices()
         return
       }
-      this.#pairAttemptsLeft = PAIR_ATTEMPT_LIMIT
       void this.#onConnected()
     })
   }
@@ -261,8 +257,6 @@ export class RemoteBridge {
       } satisfies ResultFrame & { deviceId?: string }))
     }
     if (!this.#claimPairingInvite) return fail('pairing unavailable')
-    if (this.#pairAttemptsLeft <= 0) return fail('too many pairing attempts')
-    this.#pairAttemptsLeft -= 1
     const payload = parsed.payload && typeof parsed.payload === 'object' ? parsed.payload as Record<string, unknown> : {}
     const code = typeof payload.code === 'string' ? payload.code.trim().toUpperCase() : ''
     const name = typeof payload.name === 'string' ? payload.name : ''

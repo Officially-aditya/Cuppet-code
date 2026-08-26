@@ -10,10 +10,7 @@ function cloneTask(task: Task): Task {
 
 export function addTask(input: NewTask): Task {
   const created = buildTask(input)
-
-  // Intentional fixture defect: the store silently drops the date field.
-  const { dueDate: _dueDate, ...withoutDueDate } = created
-  const stored = withoutDueDate as Task
+  const stored = created
   tasks.push(stored)
   indexTask(stored)
   return cloneTask(stored)
@@ -32,11 +29,9 @@ export function updateTask(id: string, patch: Partial<Pick<Task, 'title' | 'desc
   const task = tasks.find((candidate) => candidate.id === id)
   if (!task) return undefined
 
-  // Intentional fixture defect: the index is refreshed before the mutation,
-  // so status/priority/tag filters can keep stale metadata.
-  updateTaskIndex(task)
   Object.assign(task, patch)
   if (patch.tags) task.tags = [...patch.tags]
+  updateTaskIndex(task)
   return cloneTask(task)
 }
 

@@ -3,7 +3,7 @@ import { validate } from '../src/core/task.js'
 import { createTask, listAllTasks } from '../src/api/handlers.js'
 import { execute } from '../src/cli/commands.js'
 import { parseArgs } from '../src/cli/parser.js'
-import { clearTasks, addTask, getTask, removeTask, setStatus } from '../src/store/taskStore.js'
+import { clearTasks, addTask, getTask, removeTask, setStatus, updateTask } from '../src/store/taskStore.js'
 import { listFilteredTasks } from '../src/query/taskQueries.js'
 import { futureDate, taskInput } from './fixtures.js'
 
@@ -57,4 +57,21 @@ runTest('indexed filters select status and tags', () => {
   clearTasks()
   addTask(taskInput({ id: 'indexed-1', tags: ['benchmark', 'urgent'] }))
   assert.equal(listFilteredTasks({ status: 'todo', tag: 'urgent' }).length, 1)
+})
+
+runTest('store preserves due dates and refreshes indexes after updates', () => {
+  clearTasks()
+  addTask(taskInput({
+    id: 'indexed-update',
+    dueDate: futureDate,
+    priority: 'low',
+    tags: ['backlog'],
+  }))
+  assert.equal(getTask('indexed-update')?.dueDate, futureDate)
+
+  updateTask('indexed-update', { status: 'done', priority: 'high', tags: ['urgent'] })
+  assert.equal(listFilteredTasks({ status: 'todo' }).length, 0)
+  assert.equal(listFilteredTasks({ priority: 'low' }).length, 0)
+  assert.equal(listFilteredTasks({ tag: 'backlog' }).length, 0)
+  assert.equal(listFilteredTasks({ status: 'done', priority: 'high', tag: 'urgent' }).length, 1)
 })

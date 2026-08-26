@@ -47,13 +47,16 @@ pub struct DurableStore {
     directory: PathBuf,
     snapshot_path: PathBuf,
     previous_path: PathBuf,
+    snapshot_generation_path: PathBuf,
     wal_path: PathBuf,
     _lock: File,
+    append_lock: File,
     wal: File,
     records: HashMap<String, MemoryRecord>,
     trie: TernaryTrie,
     recovery: RecoveryReport,
     exclusive: bool,
+    snapshot_generation: u64,
     wal_position: u64,
 }
 
@@ -78,33 +81,19 @@ impl DurableStore {
 
         let snapshot_path = directory.join("snapshot.msgpack");
         let previous_path = directory.join("snapshot.previous.msgpack");
+        let snapshot_generation_path = directory.join("snapshot.generation");
         let wal_path = directory.join("events.wal");
-        let mut recovery = RecoveryReport::clean();
+        let recovery = RecoveryReport::clean();
 
-        let records = match read_snapshot(&snapshot_path) {
-            Ok(Some(snapshot)) => migrate(snapshot)?.records,
-            Ok(None) => HashMap::new(),
-            Err(primary_error) => match read_snapshot(&previous_path) {
-                Ok(Some(snapshot)) => {
-                    recovery.used_previous_snapshot = true;
-                    recovery.warnings.push(format!(
-                        "primary snapshot invalid ({primary_error}); recovered previous snapshot"
-                    ));
-                    migrate(snapshot)?.records
-                }
-                Ok(None) => {
-                    recovery.warnings.push(format!(
-                        "primary snapshot invalid ({primary_error}); starting empty"
-                    ));
-                    HashMap::new()
-                }
-                Err(previous_error) => {
-                    return Err(anyhow!(
-                        "both snapshots are invalid: primary={primary_error}; previous={previous_error}"
-                    ));
-                }
-            },
-        };
+        let append_lock_path = directory.join("append.lock");
+        let append_lock = OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(&append_lock_path)
+            .with_context(|| format!("open append lock {}", append_lock_path.display()))?;
+        set_private_file_mode(&append_lock)?;
 
         let wal = OpenOptions::new()
             .create(true)
@@ -117,36 +106,81 @@ impl DurableStore {
             directory,
             snapshot_path,
             previous_path,
+            snapshot_generation_path,
             wal_path,
             _lock: lock,
+            append_lock,
             wal,
-            records,
+            records: HashMap::new(),
             trie: TernaryTrie::default(),
             recovery,
             exclusive,
+            snapshot_generation: 0,
             wal_position: 0,
         };
-        store.replay_wal()?;
+        store.with_append_lock(|store| {
+            store.reload_snapshot()?;
+            store.replay_wal()?;
+            Ok(())
+        })?;
         store.rebuild_trie();
         Ok(store)
     }
 
-    fn sync_wal_if_needed(&mut self) -> Result<()> {
-        if !self.exclusive {
-            let current_len = self.wal.metadata()?.len();
-            if current_len > self.wal_position {
-                self.replay_wal()?;
-                self.rebuild_trie();
-            }
+    fn with_append_lock<T>(&mut self, operation: impl FnOnce(&mut Self) -> Result<T>) -> Result<T> {
+        self.append_lock
+            .lock_exclusive()
+            .context("lock WAL append lock")?;
+        let result = operation(self);
+        let unlock = FileExt::unlock(&self.append_lock).context("unlock WAL append lock");
+        match (result, unlock) {
+            (Ok(value), Ok(())) => Ok(value),
+            (Err(error), _) => Err(error),
+            (Ok(_), Err(error)) => Err(error),
         }
+    }
+
+    fn reload_snapshot(&mut self) -> Result<()> {
+        let snapshot_path = self.snapshot_path.clone();
+        let previous_path = self.previous_path.clone();
+        let generation_path = self.snapshot_generation_path.clone();
+        self.records = load_snapshot_records(&snapshot_path, &previous_path, &mut self.recovery)?;
+        self.snapshot_generation = read_snapshot_generation(&generation_path)?;
+        self.wal_position = 0;
         Ok(())
     }
 
-    fn replay_wal(&mut self) -> Result<()> {
+    fn sync_wal_locked(&mut self) -> Result<bool> {
+        let generation = read_snapshot_generation(&self.snapshot_generation_path)?;
+        let mut changed = false;
+        if generation != self.snapshot_generation {
+            self.reload_snapshot()?;
+            changed = true;
+        }
+        changed |= self.replay_wal()?;
+        Ok(changed)
+    }
+
+    fn sync_wal_if_needed(&mut self) -> Result<()> {
+        self.with_append_lock(|store| {
+            if store.sync_wal_locked()? {
+                store.rebuild_trie();
+            }
+            Ok(())
+        })
+    }
+
+    fn replay_wal(&mut self) -> Result<bool> {
+        let mut changed = false;
+        let mut total = self.wal.metadata()?.len();
+        if total < self.wal_position {
+            self.reload_snapshot()?;
+            total = self.wal.metadata()?.len();
+            changed = true;
+        }
         self.wal.seek(SeekFrom::Start(self.wal_position))?;
-        let total = self.wal.metadata()?.len();
         if total <= self.wal_position {
-            return Ok(());
+            return Ok(changed);
         }
         let mut valid_end = self.wal_position;
         loop {
@@ -179,16 +213,18 @@ impl DurableStore {
             }
             let event: WalEvent = rmp_serde::from_slice(&payload).context("decode WAL event")?;
             self.apply(event);
+            changed = true;
             valid_end += 8 + length as u64;
         }
 
-        if self.exclusive && valid_end < total {
+        if valid_end < total {
             self.recovery.truncated_wal_bytes = total - valid_end;
             self.wal.set_len(valid_end)?;
             self.wal.sync_data()?;
+            changed = true;
         }
         self.wal_position = valid_end;
-        Ok(())
+        Ok(changed)
     }
 
     fn append(&mut self, event: &WalEvent) -> Result<()> {
@@ -196,13 +232,20 @@ impl DurableStore {
         if payload.len() > MAX_FRAME_BYTES {
             return Err(anyhow!("WAL event exceeds frame limit"));
         }
-        self.wal.seek(SeekFrom::End(0))?;
-        self.wal.write_all(&(payload.len() as u32).to_be_bytes())?;
-        self.wal.write_all(&crc32(&payload).to_be_bytes())?;
-        self.wal.write_all(&payload)?;
-        self.wal.sync_data()?;
-        self.wal_position = self.wal.metadata()?.len();
-        Ok(())
+        let mut frame = Vec::with_capacity(8 + payload.len());
+        frame.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+        frame.extend_from_slice(&crc32(&payload).to_be_bytes());
+        frame.extend_from_slice(&payload);
+        self.with_append_lock(|store| {
+            if store.sync_wal_locked()? {
+                store.rebuild_trie();
+            }
+            store.wal.seek(SeekFrom::End(0))?;
+            store.wal.write_all(&frame)?;
+            store.wal.sync_data()?;
+            store.wal_position = store.wal.metadata()?.len();
+            Ok(())
+        })
     }
 
     fn apply(&mut self, event: WalEvent) {
@@ -242,6 +285,7 @@ impl DurableStore {
     }
 
     pub fn tombstone(&mut self, id: &str, timestamp_ms: u64) -> Result<bool> {
+        self.sync_wal_if_needed()?;
         if !self.records.contains_key(id) {
             return Ok(false);
         }
@@ -256,6 +300,7 @@ impl DurableStore {
     }
 
     pub fn invalidate_path(&mut self, path: &str, current_hash: &str) -> Result<usize> {
+        self.sync_wal_if_needed()?;
         let before = self.records.values().filter(|record| record.stale).count();
         let event = WalEvent::StalePath {
             path: path.into(),
@@ -322,7 +367,6 @@ impl DurableStore {
     }
 
     pub fn compact(&mut self) -> Result<()> {
-        let _ = self.sync_wal_if_needed();
         if !self.exclusive {
             if self._lock.try_lock_exclusive().is_ok() {
                 self.exclusive = true;
@@ -330,34 +374,42 @@ impl DurableStore {
                 return self.flush();
             }
         }
-        self.records.retain(|_, record| !record.tombstone);
-        let snapshot = Snapshot {
-            schema: SNAPSHOT_SCHEMA_VERSION,
-            records: self.records.clone(),
-        };
-        let payload = rmp_serde::to_vec_named(&snapshot).context("encode snapshot")?;
-        let temporary = self.directory.join("snapshot.next.msgpack");
-        write_snapshot(&temporary, &payload)?;
-
-        if self.snapshot_path.exists() {
-            if self.previous_path.exists() {
-                fs::remove_file(&self.previous_path)?;
+        self.with_append_lock(|store| {
+            if store.sync_wal_locked()? {
+                store.rebuild_trie();
             }
-            fs::rename(&self.snapshot_path, &self.previous_path)?;
-        }
-        fs::rename(&temporary, &self.snapshot_path)?;
-        sync_directory(&self.directory)?;
+            store.records.retain(|_, record| !record.tombstone);
+            let snapshot = Snapshot {
+                schema: SNAPSHOT_SCHEMA_VERSION,
+                records: store.records.clone(),
+            };
+            let payload = rmp_serde::to_vec_named(&snapshot).context("encode snapshot")?;
+            let temporary = store.directory.join("snapshot.next.msgpack");
+            write_snapshot(&temporary, &payload)?;
 
-        self.wal.set_len(0)?;
-        self.wal.seek(SeekFrom::Start(0))?;
-        self.wal.sync_all()?;
-        self.wal_position = 0;
-        self.rebuild_trie();
-        Ok(())
+            if store.snapshot_path.exists() {
+                if store.previous_path.exists() {
+                    fs::remove_file(&store.previous_path)?;
+                }
+                fs::rename(&store.snapshot_path, &store.previous_path)?;
+            }
+            fs::rename(&temporary, &store.snapshot_path)?;
+            sync_directory(&store.directory)?;
+
+            let next_generation = store.snapshot_generation.checked_add(1).unwrap_or(1);
+            write_snapshot_generation(&store.snapshot_generation_path, next_generation)?;
+            store.snapshot_generation = next_generation;
+            store.wal.set_len(0)?;
+            store.wal.seek(SeekFrom::Start(0))?;
+            store.wal.sync_all()?;
+            store.wal_position = 0;
+            store.rebuild_trie();
+            Ok(())
+        })
     }
 
     pub fn flush(&mut self) -> Result<()> {
-        self.wal.sync_all().context("fsync WAL")
+        self.with_append_lock(|store| store.wal.sync_all().context("fsync WAL"))
     }
 
     pub fn recovery(&self) -> &RecoveryReport {
@@ -397,6 +449,63 @@ pub struct StoreStats {
     pub stale: usize,
     pub trie_nodes: usize,
     pub wal_bytes: u64,
+}
+
+fn load_snapshot_records(
+    snapshot_path: &Path,
+    previous_path: &Path,
+    recovery: &mut RecoveryReport,
+) -> Result<HashMap<String, MemoryRecord>> {
+    match read_snapshot(snapshot_path) {
+        Ok(Some(snapshot)) => Ok(migrate(snapshot)?.records),
+        Ok(None) => Ok(HashMap::new()),
+        Err(primary_error) => match read_snapshot(previous_path) {
+            Ok(Some(snapshot)) => {
+                recovery.used_previous_snapshot = true;
+                recovery.warnings.push(format!(
+                    "primary snapshot invalid ({primary_error}); recovered previous snapshot"
+                ));
+                Ok(migrate(snapshot)?.records)
+            }
+            Ok(None) => {
+                recovery.warnings.push(format!(
+                    "primary snapshot invalid ({primary_error}); starting empty"
+                ));
+                Ok(HashMap::new())
+            }
+            Err(previous_error) => Err(anyhow!(
+                "both snapshots are invalid: primary={primary_error}; previous={previous_error}"
+            )),
+        },
+    }
+}
+
+fn read_snapshot_generation(path: &Path) -> Result<u64> {
+    match fs::read_to_string(path) {
+        Ok(value) => value
+            .trim()
+            .parse()
+            .with_context(|| format!("parse snapshot generation {}", path.display())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(0),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn write_snapshot_generation(path: &Path, generation: u64) -> Result<()> {
+    let temporary = path.with_extension("next");
+    let mut file = OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open(&temporary)?;
+    set_private_file_mode(&file)?;
+    file.write_all(format!("{generation}\n").as_bytes())?;
+    file.sync_all()?;
+    fs::rename(&temporary, path)?;
+    if let Some(directory) = path.parent() {
+        sync_directory(directory)?;
+    }
+    Ok(())
 }
 
 fn read_snapshot(path: &Path) -> Result<Option<Snapshot>> {
@@ -554,6 +663,25 @@ mod tests {
     }
 
     #[test]
+    fn concurrent_writers_survive_compaction_without_losing_records() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut first = DurableStore::open(temp.path()).unwrap();
+        let mut second = DurableStore::open(temp.path()).unwrap();
+
+        first.upsert(record("1", "alpha")).unwrap();
+        second.upsert(record("2", "beta")).unwrap();
+        first.compact().unwrap();
+        second.upsert(record("3", "gamma")).unwrap();
+        drop(first);
+        drop(second);
+
+        let mut reopened = DurableStore::open(temp.path()).unwrap();
+        assert_eq!(reopened.exact("alpha").unwrap().id, "1");
+        assert_eq!(reopened.exact("beta").unwrap().id, "2");
+        assert_eq!(reopened.exact("gamma").unwrap().id, "3");
+    }
+
+    #[test]
     fn corrupt_primary_snapshot_falls_back_to_previous_snapshot() {
         let temp = tempfile::tempdir().unwrap();
         {
@@ -601,7 +729,13 @@ mod tests {
         let mut store = DurableStore::open(temp.path()).unwrap();
         store.upsert(record("1", "private")).unwrap();
         store.compact().unwrap();
-        for name in ["writer.lock", "events.wal", "snapshot.msgpack"] {
+        for name in [
+            "writer.lock",
+            "append.lock",
+            "events.wal",
+            "snapshot.msgpack",
+            "snapshot.generation",
+        ] {
             let mode = fs::metadata(temp.path().join(name)).unwrap().permissions().mode() & 0o777;
             assert_eq!(mode, 0o600, "{name} should be private");
         }

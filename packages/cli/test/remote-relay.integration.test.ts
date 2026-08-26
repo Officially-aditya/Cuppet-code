@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { RemoteBridge } from '../src/remote/bridge.js'
@@ -9,7 +9,7 @@ import {
   claimPairingInvite,
   createPairingInvite,
 } from '../src/remote/pairing.js'
-import { CuppetRelay } from '../src/remote/relay.js'
+import { CuppetRelay, createSlidingWindowRateLimiter, isValidRelayHostId } from '../src/remote/relay.js'
 
 type Frame = Record<string, any>
 
@@ -140,6 +140,20 @@ function startBridge(relayPort: number, hostId: string, remoteDir: string, hostS
 async function waitHostOnline(transport: WebSocketTransport): Promise<void> {
   await waitFor(() => transport.connected ? true : undefined, 5000, 'host transport connect')
 }
+
+test('relay validates room identifiers and counts every decoded frame', () => {
+  assert.equal(isValidRelayHostId('host.valid-1'), true)
+  assert.equal(isValidRelayHostId(''), false)
+  assert.equal(isValidRelayHostId('x'.repeat(129)), false)
+
+  let now = 0
+  const overBudget = createSlidingWindowRateLimiter(2, 100, () => now)
+  assert.equal(overBudget(), false)
+  assert.equal(overBudget(), false)
+  assert.equal(overBudget(), true)
+  now = 100
+  assert.equal(overBudget(), false)
+})
 
 test('relay routes commands between an authenticated device and the host bridge end to end', async () => {
   const relay = new CuppetRelay()
@@ -303,6 +317,56 @@ test('pairing over the wire claims single-use invites and rejects bad codes', as
   }
 })
 
+test('pairing failures are limited per device connection', async () => {
+  const relay = new CuppetRelay()
+  await relay.listen(0)
+  const remoteDir = await mkdtemp(join(process.cwd(), '.relay-pair-limit-'))
+  let bridge: RemoteBridge | undefined
+  const devices: DeviceClient[] = []
+  try {
+    const invite = await createPairingInvite(remoteDir, { ttlMs: 30_000 })
+    const { bridge: hostBridge, transport } = startBridge(relay.port, 'host_pair_limit', remoteDir)
+    bridge = hostBridge
+    await waitHostOnline(transport)
+
+    const exhausted = new DeviceClient(deviceUrl(relay.port, 'host_pair_limit', 'pair-limit-one'))
+    devices.push(exhausted)
+    await exhausted.open()
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      exhausted.send({
+        version: 1,
+        id: `bad-${attempt}`,
+        type: 'device.pair',
+        ts: Date.now(),
+        payload: { code: 'NOPE', name: 'x' },
+      })
+      await waitFor(
+        () => exhausted.frames.filter((frame) => frame.replyTo === 'device-pair' && frame.ok === false).length >= attempt || undefined,
+        5000,
+        `pairing rejection ${attempt}`,
+      )
+    }
+
+    const closed = new Promise<void>((resolvePromise) => {
+      exhausted.socket.addEventListener('close', () => resolvePromise(), { once: true })
+    })
+    exhausted.send({ version: 1, id: 'bad-final', type: 'device.pair', ts: Date.now(), payload: { code: 'NOPE', name: 'x' } })
+    await closed
+
+    const fresh = new DeviceClient(deviceUrl(relay.port, 'host_pair_limit', 'pair-limit-two'))
+    devices.push(fresh)
+    await fresh.open()
+    fresh.send({ version: 1, id: 'good', type: 'device.pair', ts: Date.now(), payload: { code: invite.code, name: 'phone' } })
+    const claimed = await fresh.next((frame) => frame.replyTo === 'device-pair' && frame.ok === true, 'pair after another connection exhausted')
+    assert.ok(claimed.result?.deviceId)
+  } finally {
+    for (const device of devices) device.close()
+    bridge?.stop()
+    relay.close()
+    await rm(remoteDir, { recursive: true, force: true })
+  }
+})
+
 test('a configured but empty relay auth file fails closed', async () => {
   const authFile = join(process.cwd(), `.relay-empty-auth-${Date.now()}.json`)
   await writeFile(authFile, '{"hosts":{}}')
@@ -383,6 +447,31 @@ test('relay enforces host secrets enrolled through the admin endpoint', async ()
     bridge?.stop()
     relay.close()
     await rm(remoteDir, { recursive: true, force: true })
+    await rm(authFile, { force: true })
+  }
+})
+
+test('relay preserves concurrent host registrations', async () => {
+  const authFile = join(process.cwd(), `.relay-auth-concurrent-${Date.now()}.json`)
+  const adminToken = 'admin-token-concurrent'
+  const relay = new CuppetRelay({ authFile, adminToken })
+  await relay.listen(0)
+  try {
+    const hosts = Array.from({ length: 12 }, (_, index) => ({
+      hostId: `host_concurrent_${index}`,
+      secret: `a-sufficiently-long-secret-${index}`,
+    }))
+    const responses = await Promise.all(hosts.map((host) => fetch(`http://127.0.0.1:${relay.port}/hosts`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify(host),
+    })))
+    assert.deepEqual(responses.map((response) => response.status), Array(hosts.length).fill(200))
+
+    const stored = JSON.parse(await readFile(authFile, 'utf8')) as { hosts: Record<string, string> }
+    assert.deepEqual(Object.keys(stored.hosts).sort(), hosts.map((host) => host.hostId).sort())
+  } finally {
+    relay.close()
     await rm(authFile, { force: true })
   }
 })

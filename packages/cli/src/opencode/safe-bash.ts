@@ -1,3 +1,5 @@
+import { realpath } from 'node:fs/promises'
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import type { PermissionRequest } from '../types.js'
 
 /**
@@ -28,6 +30,8 @@ const VERSION_COMMANDS = new Set([
   'rustc --version',
   'go version',
 ])
+const WORKSPACE_ACTIONS = new Set(['read', 'edit', 'write'])
+const UNSAFE_RESOURCE_CHARACTERS = /[\\*?\[\]{}]/
 
 /**
  * Returns true only for simple, non-mutating commands that cannot contain a
@@ -78,4 +82,72 @@ export function isSafeAutoBashCommand(command: string): boolean {
  */
 export function shouldAutoApproveBash(request: PermissionRequest): boolean {
   return request.action === 'bash' && request.resources.length === 1 && isSafeAutoBashCommand(request.resources[0] ?? '')
+}
+
+/**
+ * Auto mode may approve ordinary reads and mutations inside the active
+ * workspace. Sensitive files, path patterns, symlink escapes, and every
+ * external location remain explicit permission requests.
+ */
+export async function shouldAutoApproveWorkspacePermission(
+  request: PermissionRequest,
+  workspaceRoot: string,
+): Promise<boolean> {
+  if (!WORKSPACE_ACTIONS.has(request.action) || request.resources.length === 0) return false
+  return (await Promise.all(request.resources.map((resource) => isSafeWorkspaceResource(resource, workspaceRoot))))
+    .every(Boolean)
+}
+
+async function isSafeWorkspaceResource(resource: string, workspaceRoot: string): Promise<boolean> {
+  if (
+    !resource ||
+    resource.trim() !== resource ||
+    resource.includes('\0') ||
+    resource.startsWith('~') ||
+    resource.startsWith('file:') ||
+    UNSAFE_RESOURCE_CHARACTERS.test(resource)
+  ) return false
+
+  const root = await realpath(workspaceRoot).catch(() => resolve(workspaceRoot))
+  const candidate = isAbsolute(resource) ? resolve(resource) : resolve(root, resource)
+  const workspacePath = relative(root, candidate)
+  if (!workspacePath || !isInside(root, candidate) || isSensitivePath(workspacePath)) return false
+  return nearestExistingAncestorIsInside(candidate, root)
+}
+
+async function nearestExistingAncestorIsInside(candidate: string, root: string): Promise<boolean> {
+  let ancestor = candidate
+  for (;;) {
+    try {
+      return isAtOrInside(root, await realpath(ancestor))
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code !== 'ENOENT' && code !== 'ENOTDIR') return false
+      const parent = dirname(ancestor)
+      if (parent === ancestor) return false
+      ancestor = parent
+    }
+  }
+}
+
+function isInside(root: string, candidate: string): boolean {
+  return relative(root, candidate) !== '' && isAtOrInside(root, candidate)
+}
+
+function isAtOrInside(root: string, candidate: string): boolean {
+  const path = relative(root, candidate)
+  return path !== '..' && !path.startsWith(`..${sep}`) && !isAbsolute(path)
+}
+
+function isSensitivePath(path: string): boolean {
+  const parts = path.split(sep).map((part) => part.toLowerCase())
+  return parts.some((part) =>
+    part === '.claude.json' ||
+    part === '.env' ||
+    part.startsWith('.env.') ||
+    part.includes('credentials') ||
+    part.endsWith('.pem') ||
+    part.endsWith('.key') ||
+    part === 'ltm-trie.json',
+  )
 }

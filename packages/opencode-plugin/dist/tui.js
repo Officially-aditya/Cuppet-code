@@ -226,6 +226,27 @@ var CuppetTuiPlugin = {
         });
       }
     };
+    const toggleAutoMode = async () => {
+      try {
+        const status = await client.call("auto.status");
+        const enabled = !status.enabled;
+        await client.call("auto.set", {
+          enabled,
+          ...sessionID() ? { sessionID: sessionID() } : {}
+        });
+        api.ui.toast({
+          title: "Cuppet auto mode",
+          variant: "success",
+          message: enabled ? "Auto mode ON: workspace reads and edits are approved. Protected files, external paths, and non-safe Bash commands still ask." : "Auto mode OFF: permission requests will ask again."
+        });
+      } catch (error) {
+        api.ui.toast({
+          title: "Cuppet auto mode",
+          variant: "error",
+          message: error instanceof Error ? error.message : String(error)
+        });
+      }
+    };
     const showReport = async (title, method, formatter) => {
       if (!api.ui.dialog || !api.ui.DialogAlert) {
         api.ui.toast({ title, variant: "warning", message: "This report dialog is unavailable." });
@@ -292,6 +313,15 @@ var CuppetTuiPlugin = {
           namespace: "palette",
           slashName: "memory",
           run: () => showReport("Cuppet memory", "status", formatMemory)
+        },
+        {
+          name: "cuppet.auto.toggle",
+          title: "Toggle Cuppet auto mode",
+          desc: "Auto-approve safe in-workspace reads and edits for this session",
+          category: "Cuppet",
+          namespace: "palette",
+          slashName: "auto",
+          run: toggleAutoMode
         },
         {
           name: "cuppet.memory.remember",
@@ -540,6 +570,7 @@ function formatStatus(value) {
   const session = record(status.session);
   const foreground = record(status.foreground);
   const foregroundUsage = record(foreground.usage);
+  const approval = record(status.approval);
   const background = record(status.background);
   const tst = record(status.tst);
   const project = record(tst.project);
@@ -560,6 +591,7 @@ function formatStatus(value) {
     ...sessionTitle ? [row("Session", sessionTitle)] : [],
     row("Primary", modelSummary(status.primary)),
     row("Secondary", modelSummary(status.secondary)),
+    row("Approvals", booleanValue(approval.auto) ? "auto \xB7 guarded workspace mode" : "ask"),
     row("Orchestrator", booleanValue(record(status.orchestrator).enabled) ? "master/worker" : "off"),
     row("State", `${running}${steps === void 0 ? "" : ` \xB7 ${steps} step${steps === 1 ? "" : "s"}`}`),
     row("Usage", usageSummary(foregroundUsage, foregroundCost)),

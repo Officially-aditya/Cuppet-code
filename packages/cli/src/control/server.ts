@@ -153,6 +153,11 @@ export class CuppetControlServer {
         await this.#controller.setBackgroundPaused(params.paused)
         return this.#controller.snapshot.background ?? { paused: params.paused }
       }
+      case 'auto.status': return { enabled: this.#controller.autoApprovalEnabled }
+      case 'auto.set': {
+        if (typeof params.enabled !== 'boolean') throw new Error('auto.set requires enabled')
+        return this.#controller.setAutoApprovalEnabled(params.enabled, optionalStringParam(params, 'sessionID'))
+      }
       case 'orchestrator.status': return { enabled: this.#controller.orchestratorEnabled }
       case 'orchestrator.set': {
         if (typeof params.enabled !== 'boolean') throw new Error('orchestrator.set requires enabled')

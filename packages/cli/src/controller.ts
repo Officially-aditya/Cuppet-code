@@ -8,7 +8,7 @@ import { readOrchestratorState, writeOrchestratorState } from './control/orchest
 import { DEFAULT_STEP_LIMIT } from './constants.js'
 import type { PreferenceStore } from './config/preferences.js'
 import type { OpenCodeGateway } from './opencode/gateway.js'
-import { shouldAutoApproveBash } from './opencode/safe-bash.js'
+import { shouldAutoApproveBash, shouldAutoApproveWorkspacePermission } from './opencode/safe-bash.js'
 import type { RuntimeAssets } from './runtime/assets.js'
 import type { RuntimePaths } from './runtime/paths.js'
 import type { VertexRuntimeStatus } from './opencode/server.js'
@@ -51,6 +51,7 @@ export type ControllerSnapshot = {
   orchestrator?: { enabled: boolean }
   running: boolean
   planMode: boolean
+  autoMode: boolean
   activeTools: number
   degraded: boolean
   stepCount: number
@@ -79,6 +80,7 @@ export class CuppetController extends EventEmitter {
   #usageSessionID: string | undefined
   #running = false
   #planMode = false
+  #autoApprovalSessionID: string | undefined
   #orchestrator = false
   #tools = new Map<string, string>()
   #background: BackgroundWorker | undefined
@@ -195,6 +197,7 @@ export class CuppetController extends EventEmitter {
       ...(this.#background ? { background: this.#background.stats } : {}),
       running: this.#running,
       planMode: this.#planMode,
+      autoMode: this.autoApprovalEnabled,
       orchestrator: { enabled: this.#orchestrator },
       activeTools: this.#tools.size,
       degraded: !this.#tstAvailable,
@@ -333,6 +336,19 @@ export class CuppetController extends EventEmitter {
 
   get planMode(): boolean {
     return this.#planMode
+  }
+
+  /** Whether the active session opted into guarded workspace auto-approval. */
+  get autoApprovalEnabled(): boolean {
+    return Boolean(this.#session && this.#autoApprovalSessionID === this.#session.id)
+  }
+
+  async setAutoApprovalEnabled(enabled: boolean, sessionID?: string): Promise<{ enabled: boolean; sessionID: string }> {
+    if (sessionID && sessionID !== this.#session?.id) await this.adoptSession(sessionID)
+    if (!this.#session) throw new Error('No active session for auto mode')
+    this.#autoApprovalSessionID = enabled ? this.#session.id : undefined
+    this.#changed()
+    return { enabled: this.autoApprovalEnabled, sessionID: this.#session.id }
   }
 
   async submit(prompt: string, delivery: 'queue' | 'steer' = 'queue'): Promise<void> {
@@ -627,6 +643,7 @@ export class CuppetController extends EventEmitter {
       secondary: this.#secondary ? this.#findModel(this.#secondary) ?? this.#secondary : undefined,
       foreground: { usage: this.#usage, cost: this.#cost, running: this.#running, steps: this.#stepCount },
       planMode: this.#planMode,
+      approval: { auto: this.autoApprovalEnabled },
       orchestrator: { enabled: this.#orchestrator },
       agent: this.#session?.agent,
       background: this.#background?.stats,
@@ -865,7 +882,11 @@ export class CuppetController extends EventEmitter {
         await this.#gateway.replyPermission(event.request.sessionID, event.request.id, 'reject').catch(() => undefined)
         return
       }
-      if (shouldAutoApproveBash(event.request)) {
+      const autoApprove = shouldAutoApproveBash(event.request) || (
+        this.#autoApprovalSessionID === event.request.sessionID &&
+        await shouldAutoApproveWorkspacePermission(event.request, this.#paths.projectRealpath)
+      )
+      if (autoApprove) {
         try {
           // Do not save an OpenCode permission pattern: each command must pass
           // the strict classifier again before it receives an automatic reply.

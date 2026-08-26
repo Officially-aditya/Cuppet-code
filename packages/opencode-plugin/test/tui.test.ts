@@ -58,6 +58,7 @@ test('native TUI preserves Cuppet slash commands', async () => {
     'remote-control',
     'remote-stop',
     'memory',
+    'auto',
     'background',
     'orchestrator',
     'platform',
@@ -109,6 +110,7 @@ test('Cuppet status is formatted as a compact human-readable dialog', () => {
     primary: { providerID: 'google-vertex', modelID: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash', variant: 'high' },
     secondary: { providerID: 'google-vertex-anthropic', modelID: 'claude-sonnet', name: 'Claude Sonnet' },
     foreground: { usage: { input: 12_400, output: 820, reasoning: 210 }, cost: 0.42, running: false, steps: 3 },
+    approval: { auto: true },
     background: { paused: false, running: false, queued: 1, completed: 7, cost: 0.03 },
     tst: {
       project: { records: 12 },
@@ -121,6 +123,7 @@ test('Cuppet status is formatted as a compact human-readable dialog', () => {
   assert.match(output, /Platform\s+Vertex AI/)
   assert.match(output, /Gemini 3\.6 Flash · Vertex · high/)
   assert.match(output, /12\.4K in · 820 out · 210 reasoning · \$0\.42/)
+  assert.match(output, /Approvals\s+auto · guarded workspace mode/)
   assert.match(output, /healthy/)
   assert.match(output, /93 files · 2\.4K syms · 20\.5K edges/)
   assert.doesNotMatch(output, /[{}\[\]"]/)

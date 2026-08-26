@@ -6572,6 +6572,7 @@ function stableJson(value) {
   return `{${Object.entries(value).sort(([left], [right]) => left.localeCompare(right)).map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`).join(",")}}`;
 }
 var CUPPET_COMMANDS = [
+  ["auto", "Toggle guarded workspace auto-approval", "Toggle Cuppet auto mode for guarded workspace reads and edits."],
   ["background", "Control Cuppet background memory enrichment", "Use the Cuppet background memory controls."],
   ["memory", "Show and manage Cuppet memory", "Use the Cuppet memory tools to inspect or manage memory."],
   ["doctor", "Diagnose Cuppet runtime and provider health", "Run Cuppet diagnostics and report the result."],

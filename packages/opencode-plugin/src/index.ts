@@ -538,6 +538,7 @@ type CommandDraft = {
 }
 
 const CUPPET_COMMANDS = [
+  ['auto', 'Toggle guarded workspace auto-approval', 'Toggle Cuppet auto mode for guarded workspace reads and edits.'],
   ['background', 'Control Cuppet background memory enrichment', 'Use the Cuppet background memory controls.'],
   ['memory', 'Show and manage Cuppet memory', 'Use the Cuppet memory tools to inspect or manage memory.'],
   ['doctor', 'Diagnose Cuppet runtime and provider health', 'Run Cuppet diagnostics and report the result.'],

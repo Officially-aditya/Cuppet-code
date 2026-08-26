@@ -50,6 +50,7 @@ The source-checkout alias `cupet` launches the same CLI.
 | `/platform` or `/login` | Choose a provider platform and connect it. |
 | `/model` and `/effort` | Select the active model and its effort/variant. |
 | `/plan` | Toggle between native plan mode and build mode. |
+| `/auto` | Toggle guarded auto-approval for this session; protected files, external paths, and risky Bash still ask. |
 | `/memory` | Inspect memory and code-graph health. |
 | `/background` | Pause or resume background memory enrichment. |
 | `/status` and `/doctor` | View runtime state or diagnose local health. |
@@ -166,7 +167,7 @@ Derived OpenCode 1.18.4 TUI + Cuppet wrapper
   ├─ private OpenCode server + native attach TUI + SDK observer
   │  └─ sessions, tools, permissions, models, diffs, auth, undo
   ├─ Cuppet server/TUI plugins + authenticated launch-scoped Unix control socket
-  │  └─ /background, /memory, /doctor, /status, /compact, /undo, /steer integrations
+  │  └─ /auto, /background, /memory, /doctor, /status, /compact, /undo, /steer integrations
   └─ tst-daemon (framed JSON-RPC 2.0 over a private Unix socket)
      └─ session STM, verified project/global LTM, Tree-sitter graph, WAL
 ```

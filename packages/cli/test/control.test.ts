@@ -10,10 +10,16 @@ test('launch-scoped control API authenticates and exposes diagnostics', async (t
   const paths = { runtime } as never
   let selectedPlatform = 'openai'
   let nativeAgent = 'build'
+  let autoMode = false
   const controller = {
     async status() { return { product: 'Cuppet' } },
     async doctor() { return { healthy: true } },
     get snapshot() { return { background: { paused: false }, platform: selectedPlatform, planMode: nativeAgent === 'plan' } },
+    get autoApprovalEnabled() { return autoMode },
+    async setAutoApprovalEnabled(enabled: boolean) {
+      autoMode = enabled
+      return { enabled: autoMode, sessionID: 'session' }
+    },
     syncNativeAgent(agent: string) { nativeAgent = agent; return nativeAgent === 'plan' },
     modelsForPlatform(platform: string) { return platform === 'vertex' ? [{ id: 'gemini' }] : [] },
     integrationsForPlatform(platform: string) {
@@ -52,6 +58,9 @@ test('launch-scoped control API authenticates and exposes diagnostics', async (t
     assert.deepEqual(await client.call('status'), { product: 'Cuppet' })
     assert.deepEqual(await client.call('doctor'), { healthy: true })
     assert.deepEqual(await client.call('background.status'), { paused: false })
+    assert.deepEqual(await client.call('auto.status'), { enabled: false })
+    assert.deepEqual(await client.call('auto.set', { enabled: true }), { enabled: true, sessionID: 'session' })
+    assert.deepEqual(await client.call('auto.status'), { enabled: true })
     const platforms = await client.call<{ selected: string; options: Array<{ value: string; connected: boolean }> }>('platform.list')
     assert.equal(platforms.selected, 'openai')
     assert.equal(platforms.options.find((option) => option.value === 'vertex')?.connected, true)

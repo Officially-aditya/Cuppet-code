@@ -721,6 +721,8 @@ var TST_PROTOCOL_VERSION = "cuppet.tst.v3";
 var DEFAULT_STEP_LIMIT = 128;
 
 // src/opencode/safe-bash.ts
+import { realpath } from "node:fs/promises";
+import { dirname as dirname3, isAbsolute, relative, resolve, sep } from "node:path";
 var BASH_PERMISSION = "ask";
 var MAX_COMMAND_LENGTH = 256;
 var PLAIN_COMMAND = /^[A-Za-z0-9._:=+-]+(?: [A-Za-z0-9._:=+-]+)*$/;
@@ -743,6 +745,8 @@ var VERSION_COMMANDS = /* @__PURE__ */ new Set([
   "rustc --version",
   "go version"
 ]);
+var WORKSPACE_ACTIONS = /* @__PURE__ */ new Set(["read", "edit", "write"]);
+var UNSAFE_RESOURCE_CHARACTERS = /[\\*?\[\]{}]/;
 function isSafeAutoBashCommand(command) {
   if (command.length === 0 || command.length > MAX_COMMAND_LENGTH || command.trim() !== command || !PLAIN_COMMAND.test(command)) return false;
   if (VERSION_COMMANDS.has(command)) return true;
@@ -772,6 +776,45 @@ function isSafeAutoBashCommand(command) {
 }
 function shouldAutoApproveBash(request) {
   return request.action === "bash" && request.resources.length === 1 && isSafeAutoBashCommand(request.resources[0] ?? "");
+}
+async function shouldAutoApproveWorkspacePermission(request, workspaceRoot) {
+  if (!WORKSPACE_ACTIONS.has(request.action) || request.resources.length === 0) return false;
+  return (await Promise.all(request.resources.map((resource) => isSafeWorkspaceResource(resource, workspaceRoot)))).every(Boolean);
+}
+async function isSafeWorkspaceResource(resource, workspaceRoot) {
+  if (!resource || resource.trim() !== resource || resource.includes("\0") || resource.startsWith("~") || resource.startsWith("file:") || UNSAFE_RESOURCE_CHARACTERS.test(resource)) return false;
+  const root = await realpath(workspaceRoot).catch(() => resolve(workspaceRoot));
+  const candidate = isAbsolute(resource) ? resolve(resource) : resolve(root, resource);
+  const workspacePath = relative(root, candidate);
+  if (!workspacePath || !isInside(root, candidate) || isSensitivePath(workspacePath)) return false;
+  return nearestExistingAncestorIsInside(candidate, root);
+}
+async function nearestExistingAncestorIsInside(candidate, root) {
+  let ancestor = candidate;
+  for (; ; ) {
+    try {
+      return isAtOrInside(root, await realpath(ancestor));
+    } catch (error) {
+      const code = error.code;
+      if (code !== "ENOENT" && code !== "ENOTDIR") return false;
+      const parent = dirname3(ancestor);
+      if (parent === ancestor) return false;
+      ancestor = parent;
+    }
+  }
+}
+function isInside(root, candidate) {
+  return relative(root, candidate) !== "" && isAtOrInside(root, candidate);
+}
+function isAtOrInside(root, candidate) {
+  const path = relative(root, candidate);
+  return path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path);
+}
+function isSensitivePath(path) {
+  const parts = path.split(sep).map((part) => part.toLowerCase());
+  return parts.some(
+    (part) => part === ".claude.json" || part === ".env" || part.startsWith(".env.") || part.includes("credentials") || part.endsWith(".pem") || part.endsWith(".key") || part === "ltm-trie.json"
+  );
 }
 
 // src/platforms.ts
@@ -830,6 +873,7 @@ var CuppetController = class extends EventEmitter2 {
   #usageSessionID;
   #running = false;
   #planMode = false;
+  #autoApprovalSessionID;
   #orchestrator = false;
   #tools = /* @__PURE__ */ new Map();
   #background;
@@ -915,6 +959,7 @@ var CuppetController = class extends EventEmitter2 {
       ...this.#background ? { background: this.#background.stats } : {},
       running: this.#running,
       planMode: this.#planMode,
+      autoMode: this.autoApprovalEnabled,
       orchestrator: { enabled: this.#orchestrator },
       activeTools: this.#tools.size,
       degraded: !this.#tstAvailable,
@@ -1026,6 +1071,17 @@ var CuppetController = class extends EventEmitter2 {
   get planMode() {
     return this.#planMode;
   }
+  /** Whether the active session opted into guarded workspace auto-approval. */
+  get autoApprovalEnabled() {
+    return Boolean(this.#session && this.#autoApprovalSessionID === this.#session.id);
+  }
+  async setAutoApprovalEnabled(enabled, sessionID) {
+    if (sessionID && sessionID !== this.#session?.id) await this.adoptSession(sessionID);
+    if (!this.#session) throw new Error("No active session for auto mode");
+    this.#autoApprovalSessionID = enabled ? this.#session.id : void 0;
+    this.#changed();
+    return { enabled: this.autoApprovalEnabled, sessionID: this.#session.id };
+  }
   async submit(prompt, delivery = "queue") {
     if (!this.#primary) throw new Error("Choose a primary model before starting a session");
     this.#background?.foregroundStarted();
@@ -1052,11 +1108,11 @@ var CuppetController = class extends EventEmitter2 {
     }
   }
   async submitAndWait(prompt) {
-    const completion = new Promise((resolve3, reject) => {
+    const completion = new Promise((resolve4, reject) => {
       const listener = (event) => {
         if (event.type === "idle") {
           cleanup();
-          resolve3();
+          resolve4();
         } else if (event.type === "error" && (!event.sessionID || event.sessionID === this.#session?.id)) {
           cleanup();
           reject(new Error(event.message));
@@ -1279,6 +1335,7 @@ var CuppetController = class extends EventEmitter2 {
       secondary: this.#secondary ? this.#findModel(this.#secondary) ?? this.#secondary : void 0,
       foreground: { usage: this.#usage, cost: this.#cost, running: this.#running, steps: this.#stepCount },
       planMode: this.#planMode,
+      approval: { auto: this.autoApprovalEnabled },
       orchestrator: { enabled: this.#orchestrator },
       agent: this.#session?.agent,
       background: this.#background?.stats,
@@ -1389,7 +1446,7 @@ var CuppetController = class extends EventEmitter2 {
         this.#gateway.listIntegrations()
       ]);
       if (this.#models.length > 0 || this.#integrations.length > 0) return;
-      await new Promise((resolve3) => setTimeout(resolve3, 150));
+      await new Promise((resolve4) => setTimeout(resolve4, 150));
     } while (Date.now() < deadline);
   }
   async #requireSession() {
@@ -1490,7 +1547,8 @@ var CuppetController = class extends EventEmitter2 {
         await this.#gateway.replyPermission(event.request.sessionID, event.request.id, "reject").catch(() => void 0);
         return;
       }
-      if (shouldAutoApproveBash(event.request)) {
+      const autoApprove = shouldAutoApproveBash(event.request) || this.#autoApprovalSessionID === event.request.sessionID && await shouldAutoApproveWorkspacePermission(event.request, this.#paths.projectRealpath);
+      if (autoApprove) {
         try {
           await this.#gateway.replyPermission(event.request.sessionID, event.request.id, "once");
           this.#changed();
@@ -2019,11 +2077,11 @@ var CuppetControlServer = class _CuppetControlServer {
     const server = createServer();
     const instance = new _CuppetControlServer(controller, server, address, options.remote);
     server.on("connection", (connection) => instance.#handle(connection));
-    await new Promise((resolve3, reject) => {
+    await new Promise((resolve4, reject) => {
       server.once("error", reject);
       server.listen(socket, () => {
         server.off("error", reject);
-        resolve3();
+        resolve4();
       });
     });
     await chmod4(socket, 384);
@@ -2033,7 +2091,7 @@ var CuppetControlServer = class _CuppetControlServer {
     return { ...this.#address };
   }
   async close() {
-    await new Promise((resolve3) => this.#server.close(() => resolve3()));
+    await new Promise((resolve4) => this.#server.close(() => resolve4()));
     await unlink(this.#address.socket).catch(() => void 0);
   }
   #handle(socket) {
@@ -2100,6 +2158,12 @@ var CuppetControlServer = class _CuppetControlServer {
         if (typeof params.paused !== "boolean") throw new Error("background.set requires paused");
         await this.#controller.setBackgroundPaused(params.paused);
         return this.#controller.snapshot.background ?? { paused: params.paused };
+      }
+      case "auto.status":
+        return { enabled: this.#controller.autoApprovalEnabled };
+      case "auto.set": {
+        if (typeof params.enabled !== "boolean") throw new Error("auto.set requires enabled");
+        return this.#controller.setAutoApprovalEnabled(params.enabled, optionalStringParam(params, "sessionID"));
       }
       case "orchestrator.status":
         return { enabled: this.#controller.orchestratorEnabled };
@@ -3167,7 +3231,7 @@ function message(error) {
   return String(data.message ?? value.message ?? value.name ?? "Unknown OpenCode error");
 }
 function delay(milliseconds) {
-  return new Promise((resolve3) => setTimeout(resolve3, milliseconds));
+  return new Promise((resolve4) => setTimeout(resolve4, milliseconds));
 }
 
 // src/opencode/server.ts
@@ -3175,7 +3239,7 @@ import { randomBytes as randomBytes4 } from "node:crypto";
 import { spawn } from "node:child_process";
 import { constants as fsConstants } from "node:fs";
 import { access as access3, chmod as chmod5, copyFile, mkdir as mkdir7, readFile as readFile6, rename as rename5, rm, writeFile as writeFile6 } from "node:fs/promises";
-import { dirname as dirname4, join as join7 } from "node:path";
+import { dirname as dirname5, join as join7 } from "node:path";
 import { createOpencodeClient } from "@opencode-ai/sdk/v2";
 
 // src/opencode/variant-bridge.ts
@@ -3312,11 +3376,11 @@ function isRecord(value) {
 // src/runtime/derivative.ts
 import { access as access2, readFile as readFile5 } from "node:fs/promises";
 import { constants as constants2 } from "node:fs";
-import { dirname as dirname3, join as join6 } from "node:path";
+import { dirname as dirname4, join as join6 } from "node:path";
 var DERIVATIVE_MARKER_SCHEMA = 1;
 var DERIVATIVE_PRODUCT = "cuppet-opencode-derivative";
 function derivativeMarkerPath(binary) {
-  return join6(dirname3(binary), ".cuppet-derivative.json");
+  return join6(dirname4(binary), ".cuppet-derivative.json");
 }
 async function readDerivativeMarker(binary) {
   const path = derivativeMarkerPath(binary);
@@ -3405,7 +3469,7 @@ async function startOpenCodeServer(options) {
   const losslessPlanDirectory = join7(options.paths.projectStore, "lossless-plans");
   await mkdir7(losslessPlanDirectory, { recursive: true, mode: 448 });
   await chmod5(losslessPlanDirectory, 448);
-  const tuiPlugin = options.tuiPlugin ?? (options.plugin ? join7(dirname4(options.plugin), "tui.js") : void 0);
+  const tuiPlugin = options.tuiPlugin ?? (options.plugin ? join7(dirname5(options.plugin), "tui.js") : void 0);
   if (options.plugin) {
     await installOpenCodePlugin(options.plugin, options.paths.opencode.config, tuiPlugin);
   }
@@ -3543,7 +3607,7 @@ async function startOpenCodeServer(options) {
         try {
           await Promise.race([
             client.global.dispose({ throwOnError: true }),
-            new Promise((resolve3) => setTimeout(resolve3, 1500))
+            new Promise((resolve4) => setTimeout(resolve4, 1500))
           ]);
         } catch {
         }
@@ -3563,7 +3627,7 @@ async function waitForCuppetAgents(client, directory, statusPath) {
     lastIDs = (response.data?.data ?? []).map((agent) => agent.id);
     const ids = new Set(lastIDs);
     if (ids.has("cuppet") && ids.has("cuppet-background")) return;
-    await new Promise((resolve3) => setTimeout(resolve3, 50));
+    await new Promise((resolve4) => setTimeout(resolve4, 50));
   } while (Date.now() < deadline);
   const status = await readFile6(statusPath, "utf8").catch(() => void 0);
   throw new Error(
@@ -3622,7 +3686,7 @@ async function synchronizeVariants(client, directory, path) {
       return !variants || [...variants].every((id) => model.variants.some((variant) => variant.id === id));
     });
     if (ready) return;
-    await new Promise((resolve3) => setTimeout(resolve3, 50));
+    await new Promise((resolve4) => setTimeout(resolve4, 50));
   } while (Date.now() < deadline);
   throw new Error("timed out waiting for the v2 catalog to load advertised model variants");
 }
@@ -3728,14 +3792,14 @@ async function isReadable(path) {
   }
 }
 async function verifyVersion(binary) {
-  const output = await new Promise((resolve3, reject) => {
+  const output = await new Promise((resolve4, reject) => {
     const child = spawn(binary, ["--version"], { stdio: ["ignore", "pipe", "pipe"] });
     let text = "";
     child.stdout.on("data", (chunk) => text += chunk.toString("utf8"));
     child.stderr.on("data", (chunk) => text += chunk.toString("utf8"));
     child.once("error", reject);
     child.once("exit", (code) => {
-      if (code === 0) resolve3(text.trim());
+      if (code === 0) resolve4(text.trim());
       else reject(new Error(`OpenCode --version exited with code ${code}`));
     });
   });
@@ -3744,7 +3808,7 @@ async function verifyVersion(binary) {
   }
 }
 function waitForListening(child) {
-  return new Promise((resolve3, reject) => {
+  return new Promise((resolve4, reject) => {
     if (!child.stdout) return reject(new Error("OpenCode stdout is unavailable"));
     const stdout = child.stdout;
     let output = "";
@@ -3758,7 +3822,7 @@ function waitForListening(child) {
         const match = /^opencode server listening on (https?:\/\/\S+)/.exec(line.trim());
         if (!match?.[1]) continue;
         cleanup();
-        resolve3(match[1]);
+        resolve4(match[1]);
         return;
       }
     };
@@ -3798,9 +3862,9 @@ async function runNativeTui(options) {
   process.once("SIGINT", onInterrupt);
   process.once("SIGTERM", onTerminate);
   try {
-    return await new Promise((resolve3, reject) => {
+    return await new Promise((resolve4, reject) => {
       child.once("error", reject);
-      child.once("exit", (code, signal) => resolve3(code ?? signalExitCode(signal)));
+      child.once("exit", (code, signal) => resolve4(code ?? signalExitCode(signal)));
     });
   } finally {
     process.off("SIGINT", onInterrupt);
@@ -4751,7 +4815,7 @@ async function renderSetupQr(text) {
   }
 }
 function wait(milliseconds) {
-  return new Promise((resolve3) => setTimeout(resolve3, milliseconds));
+  return new Promise((resolve4) => setTimeout(resolve4, milliseconds));
 }
 function addApiBase(setupUrl, apiBase) {
   const url = new URL(setupUrl);
@@ -4868,7 +4932,7 @@ async function renderTerminalQr(text) {
 import { createHash as createHash2, randomBytes as randomBytes7, timingSafeEqual as timingSafeEqual2 } from "node:crypto";
 import { createServer as createServer2 } from "node:http";
 import { mkdir as mkdir9, readFile as readFile8, rename as rename6, writeFile as writeFile8 } from "node:fs/promises";
-import { dirname as dirname5, extname, join as join10, normalize } from "node:path";
+import { dirname as dirname6, extname, join as join10, normalize } from "node:path";
 var MAX_FRAME_BYTES2 = 512 * 1024;
 var REPLAY_LIMIT = 200;
 var RATE_WINDOW_MS = 1e4;
@@ -4951,7 +5015,7 @@ var CuppetRelay = class {
   async #writeAuthorizedHosts(hosts) {
     const authFile = this.#options.authFile;
     if (!authFile) throw new Error("relay auth file is not configured");
-    await mkdir9(dirname5(authFile), { recursive: true, mode: 448 });
+    await mkdir9(dirname6(authFile), { recursive: true, mode: 448 });
     const temporary = `${authFile}.${randomBytes7(12).toString("hex")}.tmp`;
     await writeFile8(temporary, `${JSON.stringify({ hosts }, null, 2)}
 `, { mode: 384 });
@@ -4991,8 +5055,8 @@ var CuppetRelay = class {
       response.writeHead(404, { "content-type": "text/plain" }).end("cuppet relay\n");
       return;
     }
-    const relative = url.pathname === "/app" ? "/index.html" : url.pathname.slice("/app".length);
-    const safe = normalize(relative).replace(/^([.][.][/\\])+/, "");
+    const relative2 = url.pathname === "/app" ? "/index.html" : url.pathname.slice("/app".length);
+    const safe = normalize(relative2).replace(/^([.][.][/\\])+/, "");
     try {
       const body = await readFile8(join10(this.#options.appDirectory, safe));
       const types = {
@@ -5351,7 +5415,7 @@ function generateSecret() {
 
 // src/remote/relay-main.ts
 import { mkdir as mkdir10, readFile as readFile9, writeFile as writeFile9 } from "node:fs/promises";
-import { dirname as dirname6, join as join11, resolve } from "node:path";
+import { dirname as dirname7, join as join11, resolve as resolve2 } from "node:path";
 import { fileURLToPath } from "node:url";
 var DEFAULT_RELAY_PORT = 8787;
 function defaultRelayAuthPath() {
@@ -5359,12 +5423,12 @@ function defaultRelayAuthPath() {
 }
 function resolveRelayServerSecurity(options) {
   return {
-    authFile: resolve(options.authFile ?? defaultRelayAuthPath()),
+    authFile: resolve2(options.authFile ?? defaultRelayAuthPath()),
     bind: resolveRelayBind(options.bind)
   };
 }
 async function defaultAppDir() {
-  const moduleDir = dirname6(fileURLToPath(import.meta.url));
+  const moduleDir = dirname7(fileURLToPath(import.meta.url));
   const candidates = [join11(moduleDir, "app"), join11(moduleDir, "../src/remote/app"), join11(moduleDir, "../relay-app")];
   for (const candidate of candidates) {
     try {
@@ -5379,7 +5443,7 @@ async function runRelayServer(options, write = (line) => process.stdout.write(li
   const { authFile, bind } = resolveRelayServerSecurity(options);
   await ensureRelayAuthFile(authFile, write);
   const token = options.adminToken ?? generateSecret();
-  const appDir = options.appDir ? resolve(options.appDir) : await defaultAppDir();
+  const appDir = options.appDir ? resolve2(options.appDir) : await defaultAppDir();
   const relay = new CuppetRelay({
     port: options.port,
     authFile,
@@ -5416,7 +5480,7 @@ async function runRelayServer(options, write = (line) => process.stdout.write(li
 }
 async function ensureRelayAuthFile(authFile, write = () => void 0) {
   if (await fileExists(authFile)) return;
-  await mkdir10(dirname6(authFile), { recursive: true, mode: 448 });
+  await mkdir10(dirname7(authFile), { recursive: true, mode: 448 });
   await writeFile9(authFile, `${JSON.stringify({ hosts: {} }, null, 2)}
 `, { encoding: "utf8", mode: 384 });
   write(`relay auth: created ${authFile}
@@ -5450,7 +5514,7 @@ import { createHash as createHash3 } from "node:crypto";
 import { constants as constants3, createReadStream } from "node:fs";
 import { access as access4, readFile as readFile10 } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { delimiter, dirname as dirname7, join as join12, resolve as resolve2 } from "node:path";
+import { delimiter, dirname as dirname8, join as join12, resolve as resolve3 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var packageNames = {
   "darwin-arm64": "@cuppet-code/runtime-darwin-arm64",
@@ -5468,10 +5532,10 @@ async function resolveRuntimeAssets() {
     const assets = {
       source: "development",
       diagnostics,
-      ...opencodeOverride ? { opencode: resolve2(opencodeOverride) } : {},
-      ...tstOverride ? { tst: resolve2(tstOverride) } : {},
-      ...pluginOverride ? { plugin: resolve2(pluginOverride) } : {},
-      ...tuiPluginOverride ? { tuiPlugin: resolve2(tuiPluginOverride) } : {}
+      ...opencodeOverride ? { opencode: resolve3(opencodeOverride) } : {},
+      ...tstOverride ? { tst: resolve3(tstOverride) } : {},
+      ...pluginOverride ? { plugin: resolve3(pluginOverride) } : {},
+      ...tuiPluginOverride ? { tuiPlugin: resolve3(tuiPluginOverride) } : {}
     };
     await fillDevelopmentDefaults(assets);
     await checkPresence(assets);
@@ -5485,7 +5549,7 @@ async function resolveRuntimeAssets() {
   try {
     const require2 = createRequire(import.meta.url);
     const manifestPath = require2.resolve(`${packageName}/manifest.json`);
-    const root = dirname7(manifestPath);
+    const root = dirname8(manifestPath);
     const manifest = JSON.parse(await readFile10(manifestPath, "utf8"));
     validateManifest(manifest);
     const assets = {
@@ -5511,19 +5575,19 @@ async function resolveRuntimeAssets() {
   }
 }
 async function fillDevelopmentDefaults(assets) {
-  const moduleDirectory = dirname7(fileURLToPath2(import.meta.url));
+  const moduleDirectory = dirname8(fileURLToPath2(import.meta.url));
   const repositoryRoot = await findRepositoryRoot(moduleDirectory);
   const key = `${process.platform}-${process.arch}`;
   const packageName = packageNames[key];
   const runtimeDirectory = runtimeDirectories[key];
-  const localRuntimeCandidate = repositoryRoot && runtimeDirectory ? resolve2(repositoryRoot, "artifacts", runtimeDirectory) : void 0;
+  const localRuntimeCandidate = repositoryRoot && runtimeDirectory ? resolve3(repositoryRoot, "artifacts", runtimeDirectory) : void 0;
   const localRuntime = localRuntimeCandidate && await verifyLocalRuntime(localRuntimeCandidate, assets.diagnostics) ? localRuntimeCandidate : void 0;
   let globalPackageRoot;
   if (packageName) {
     try {
       const require2 = createRequire(import.meta.url);
       const manifestPath = require2.resolve(`${packageName}/manifest.json`);
-      globalPackageRoot = dirname7(manifestPath);
+      globalPackageRoot = dirname8(manifestPath);
     } catch {
     }
   }
@@ -5531,36 +5595,36 @@ async function fillDevelopmentDefaults(assets) {
   const pathTst = await findInPath("tst-daemon");
   const candidates = {
     opencode: [
-      ...localRuntime ? [resolve2(localRuntime, "bin/opencode")] : [],
-      ...repositoryRoot && runtimeDirectory ? [resolve2(repositoryRoot, "packages", runtimeDirectory, "bin/opencode")] : [],
-      ...globalPackageRoot ? [resolve2(globalPackageRoot, "bin/opencode")] : [],
+      ...localRuntime ? [resolve3(localRuntime, "bin/opencode")] : [],
+      ...repositoryRoot && runtimeDirectory ? [resolve3(repositoryRoot, "packages", runtimeDirectory, "bin/opencode")] : [],
+      ...globalPackageRoot ? [resolve3(globalPackageRoot, "bin/opencode")] : [],
       ...pathOpencode ? [pathOpencode] : []
     ],
     tst: [
-      resolve2(process.cwd(), "target/release/tst-daemon"),
-      resolve2(process.cwd(), "target/debug/tst-daemon"),
-      ...localRuntime ? [resolve2(localRuntime, "bin/tst-daemon")] : [],
+      resolve3(process.cwd(), "target/release/tst-daemon"),
+      resolve3(process.cwd(), "target/debug/tst-daemon"),
+      ...localRuntime ? [resolve3(localRuntime, "bin/tst-daemon")] : [],
       ...repositoryRoot ? [
-        resolve2(repositoryRoot, "target/release/tst-daemon"),
-        resolve2(repositoryRoot, "target/debug/tst-daemon")
+        resolve3(repositoryRoot, "target/release/tst-daemon"),
+        resolve3(repositoryRoot, "target/debug/tst-daemon")
       ] : [],
-      ...repositoryRoot && runtimeDirectory ? [resolve2(repositoryRoot, "packages", runtimeDirectory, "bin/tst-daemon")] : [],
-      ...globalPackageRoot ? [resolve2(globalPackageRoot, "bin/tst-daemon")] : [],
+      ...repositoryRoot && runtimeDirectory ? [resolve3(repositoryRoot, "packages", runtimeDirectory, "bin/tst-daemon")] : [],
+      ...globalPackageRoot ? [resolve3(globalPackageRoot, "bin/tst-daemon")] : [],
       ...pathTst ? [pathTst] : []
     ],
     plugin: [
-      resolve2(process.cwd(), "packages/opencode-plugin/dist/index.js"),
-      ...localRuntime ? [resolve2(localRuntime, "plugin/index.js")] : [],
-      ...repositoryRoot ? [resolve2(repositoryRoot, "packages/opencode-plugin/dist/index.js")] : [],
-      ...repositoryRoot && runtimeDirectory ? [resolve2(repositoryRoot, "packages", runtimeDirectory, "plugin/index.js")] : [],
-      ...globalPackageRoot ? [resolve2(globalPackageRoot, "plugin/index.js")] : []
+      resolve3(process.cwd(), "packages/opencode-plugin/dist/index.js"),
+      ...localRuntime ? [resolve3(localRuntime, "plugin/index.js")] : [],
+      ...repositoryRoot ? [resolve3(repositoryRoot, "packages/opencode-plugin/dist/index.js")] : [],
+      ...repositoryRoot && runtimeDirectory ? [resolve3(repositoryRoot, "packages", runtimeDirectory, "plugin/index.js")] : [],
+      ...globalPackageRoot ? [resolve3(globalPackageRoot, "plugin/index.js")] : []
     ],
     tuiPlugin: [
-      resolve2(process.cwd(), "packages/opencode-plugin/dist/tui.js"),
-      ...localRuntime ? [resolve2(localRuntime, "plugin/tui.js")] : [],
-      ...repositoryRoot ? [resolve2(repositoryRoot, "packages/opencode-plugin/dist/tui.js")] : [],
-      ...repositoryRoot && runtimeDirectory ? [resolve2(repositoryRoot, "packages", runtimeDirectory, "plugin/tui.js")] : [],
-      ...globalPackageRoot ? [resolve2(globalPackageRoot, "plugin/tui.js")] : []
+      resolve3(process.cwd(), "packages/opencode-plugin/dist/tui.js"),
+      ...localRuntime ? [resolve3(localRuntime, "plugin/tui.js")] : [],
+      ...repositoryRoot ? [resolve3(repositoryRoot, "packages/opencode-plugin/dist/tui.js")] : [],
+      ...repositoryRoot && runtimeDirectory ? [resolve3(repositoryRoot, "packages", runtimeDirectory, "plugin/tui.js")] : [],
+      ...globalPackageRoot ? [resolve3(globalPackageRoot, "plugin/tui.js")] : []
     ]
   };
   if (!assets.opencode) assets.opencode = await firstExisting(candidates.opencode);
@@ -5590,7 +5654,7 @@ var runtimeDirectories = {
   "linux-x64": "runtime-linux-x64-gnu"
 };
 async function verifyLocalRuntime(root, diagnostics) {
-  const manifestPath = resolve2(root, "manifest.json");
+  const manifestPath = resolve3(root, "manifest.json");
   try {
     await access4(manifestPath, constants3.R_OK);
   } catch {
@@ -5600,7 +5664,7 @@ async function verifyLocalRuntime(root, diagnostics) {
     const manifest = JSON.parse(await readFile10(manifestPath, "utf8"));
     validateManifest(manifest);
     await verifyChecksums(root, manifest);
-    await readDerivativeMarker(resolve2(root, "bin/opencode"));
+    await readDerivativeMarker(resolve3(root, "bin/opencode"));
     return true;
   } catch (error) {
     diagnostics.push(`Local runtime artifact is invalid: ${error.message}`);
@@ -5611,11 +5675,11 @@ async function findRepositoryRoot(start) {
   let directory = start;
   for (let depth = 0; depth < 8; depth += 1) {
     try {
-      const metadata = JSON.parse(await readFile10(resolve2(directory, "package.json"), "utf8"));
+      const metadata = JSON.parse(await readFile10(resolve3(directory, "package.json"), "utf8"));
       if (metadata.name === "cuppet-monorepo") return directory;
     } catch {
     }
-    const parent = dirname7(directory);
+    const parent = dirname8(directory);
     if (parent === directory) break;
     directory = parent;
   }
@@ -5671,11 +5735,11 @@ async function verifyChecksums(root, manifest) {
     "plugin/server.js",
     "plugin/tui.js"
   ];
-  for (const relative of required) {
-    const expected = manifest.files[relative];
-    if (!expected) throw new Error(`manifest has no checksum for ${relative}`);
-    const actual = await sha2563(join12(root, relative));
-    if (actual !== expected) throw new Error(`checksum mismatch for ${relative}`);
+  for (const relative2 of required) {
+    const expected = manifest.files[relative2];
+    if (!expected) throw new Error(`manifest has no checksum for ${relative2}`);
+    const actual = await sha2563(join12(root, relative2));
+    if (actual !== expected) throw new Error(`checksum mismatch for ${relative2}`);
   }
 }
 async function sha2563(path) {
@@ -5696,11 +5760,11 @@ async function firstExisting(paths) {
 
 // src/runtime/paths.ts
 import { createHash as createHash4, randomBytes as randomBytes8 } from "node:crypto";
-import { chmod as chmod6, mkdir as mkdir11, realpath } from "node:fs/promises";
+import { chmod as chmod6, mkdir as mkdir11, realpath as realpath2 } from "node:fs/promises";
 import { homedir as homedir4 } from "node:os";
 import { join as join13 } from "node:path";
 async function createRuntimePaths(projectDirectory, baseDirectory = join13(homedir4(), ".cuppet", "v2")) {
-  const projectRealpath = await realpath(projectDirectory);
+  const projectRealpath = await realpath2(projectDirectory);
   const base = baseDirectory;
   const projectID = createHash4("sha256").update(projectRealpath).digest("hex");
   const launchID = `${process.pid}-${randomBytes8(8).toString("hex")}`;
@@ -5760,9 +5824,9 @@ var TstClient = class _TstClient extends EventEmitter4 {
     socket.on("close", () => this.#disconnect(new Error("TST socket closed")));
   }
   static async connect(socketPath, token) {
-    const socket = await new Promise((resolve3, reject) => {
+    const socket = await new Promise((resolve4, reject) => {
       const candidate = createConnection(socketPath);
-      candidate.once("connect", () => resolve3(candidate));
+      candidate.once("connect", () => resolve4(candidate));
       candidate.once("error", reject);
     });
     const client = new _TstClient(socket);
@@ -5782,9 +5846,9 @@ var TstClient = class _TstClient extends EventEmitter4 {
     if (payload.length > MAX_FRAME_BYTES3) return Promise.reject(new Error("TST request exceeds frame limit"));
     const header = Buffer.allocUnsafe(4);
     header.writeUInt32BE(payload.length);
-    return new Promise((resolve3, reject) => {
+    return new Promise((resolve4, reject) => {
       this.#pending.set(id, {
-        resolve: (value) => resolve3(value),
+        resolve: (value) => resolve4(value),
         reject
       });
       this.#socket.write(Buffer.concat([header, payload]), (error) => {
@@ -5883,7 +5947,7 @@ async function startTstDaemon(binary, paths, logger) {
         try {
           await Promise.race([
             client.call("shutdown"),
-            new Promise((resolve3) => setTimeout(resolve3, 1500))
+            new Promise((resolve4) => setTimeout(resolve4, 1500))
           ]);
         } finally {
           client.destroy();
@@ -5900,14 +5964,14 @@ async function startTstDaemon(binary, paths, logger) {
 }
 async function waitForExit(child) {
   if (child.exitCode !== null) return;
-  await new Promise((resolve3) => {
+  await new Promise((resolve4) => {
     const timer = setTimeout(() => {
       child.off("exit", onExit);
-      resolve3();
+      resolve4();
     }, 5e3);
     const onExit = () => {
       clearTimeout(timer);
-      resolve3();
+      resolve4();
     };
     child.once("exit", onExit);
   });
@@ -5921,7 +5985,7 @@ async function waitForClient(child, socket, token) {
       return await TstClient.connect(socket, token);
     } catch (error) {
       lastError = error;
-      await new Promise((resolve3) => setTimeout(resolve3, 75));
+      await new Promise((resolve4) => setTimeout(resolve4, 75));
     }
   }
   throw new Error(`Timed out waiting for TST daemon: ${lastError?.message ?? "socket unavailable"}`);

@@ -12,6 +12,7 @@ import {
 } from './pairing.js'
 import { registerHost } from './enroll.js'
 import { verifyRemoteToken } from './token.js'
+import { runRemoteSetup } from './setup.js'
 
 export type RemoteControlOptions = {
   controller: CuppetController
@@ -21,6 +22,8 @@ export type RemoteControlOptions = {
   hostSecret?: string
   apiBase?: string
   authToken?: string
+  /** Start the QR account-link flow when no session token or relay is set. */
+  setup?: boolean
   /** Base64-encoded Ed25519 SPKI key; enrollment supplies and persists it automatically. */
   remoteTokenPublicKey?: string
   /** Fresh pairing invite per session by default; disable for long-lived hosts. */
@@ -56,6 +59,18 @@ export async function startRemoteControl(options: RemoteControlOptions): Promise
       relaySecret: hostSecret,
     })
     relayUrl ??= enrollment.relayUrl
+    if (enrollment.remoteTokenPublicKey) {
+      identity = await setRemoteTokenPublicKey(options.remoteDir, enrollment.remoteTokenPublicKey)
+      remoteTokenPublicKey = identity.remoteTokenPublicKey
+    }
+    if (enrollment.relayRegistered) write('  relay enrollment: registered\n')
+  } else if (options.setup && !relayUrl) {
+    const enrollment = await runRemoteSetup({
+      apiBase: options.apiBase ?? 'https://api.cuppet.in',
+      identity,
+      write,
+    })
+    relayUrl = enrollment.relayUrl
     if (enrollment.remoteTokenPublicKey) {
       identity = await setRemoteTokenPublicKey(options.remoteDir, enrollment.remoteTokenPublicKey)
       remoteTokenPublicKey = identity.remoteTokenPublicKey

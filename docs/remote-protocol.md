@@ -60,6 +60,20 @@ send provider API keys through it.
 Relay close codes: `4001` host offline · `4002` host unauthorized ·
 `4003` invalid device.
 
+## First-time mobile setup
+
+When Cuppet-code has no `CUPPET_TOKEN` and no manually configured
+`CUPPET_RELAY_URL`, `cuppet remote-control` starts a short-lived account-link
+session with Sydney and prints a `cuppet://remote/setup?...` QR. The QR contains
+only the setup id and one-time code. The CLI keeps a separate polling secret in
+memory and never prints it.
+
+The signed-in Cuppet app scans the QR, previews the machine, and asks the user
+to confirm. Sydney then associates the host with that account. The CLI polls
+the setup session, submits its local relay secret over HTTPS, and receives the
+relay URL plus the Ed25519 verification key. Only after that enrollment does
+the host dial the relay. The provider credentials remain on the computer.
+
 ## Attach
 
 ```jsonc

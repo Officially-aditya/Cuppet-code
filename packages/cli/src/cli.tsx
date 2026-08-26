@@ -77,9 +77,9 @@ Enrollment flags:
 
 Remote control flow:
   1. cuppet remote-control
-     (Cuppet generates and enrolls the host relay credential automatically)
-  2. scan the printed QR / open the pairing URL within 2 minutes
-  3. control the session from the phone while the machine stays authoritative
+  2. scan the printed Cuppet setup QR in the signed-in mobile app
+  3. Cuppet enrolls this computer and starts its outbound relay connection
+  4. control the session from the phone while the machine stays authoritative
 
 Managed-token flow:
   Set CUPPET_TOKEN so enrollment can receive Sydney's public verification key;
@@ -196,7 +196,10 @@ async function main(): Promise<void> {
           ...(relayUrl ? { relayUrl } : {}),
           ...(process.env.CUPPET_RELAY_HOST_SECRET ? { hostSecret: process.env.CUPPET_RELAY_HOST_SECRET } : {}),
           ...(process.env.CUPPET_TOKEN ? { authToken: process.env.CUPPET_TOKEN } : {}),
-          ...(process.env.CUPPET_TOKEN ? { apiBase: process.env.CUPPET_API_BASE ?? 'https://api.cuppet.in' } : {}),
+          ...(!relayUrl || process.env.CUPPET_TOKEN
+            ? { apiBase: process.env.CUPPET_API_BASE ?? 'https://api.cuppet.in' }
+            : {}),
+          setup: !process.env.CUPPET_TOKEN && !relayUrl,
           ...(process.env.CUPPET_REMOTE_TOKEN_PUBLIC_KEY
             ? { remoteTokenPublicKey: process.env.CUPPET_REMOTE_TOKEN_PUBLIC_KEY }
             : {}),

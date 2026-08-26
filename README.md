@@ -62,9 +62,12 @@ For phone/browser control, run `/remote` inside the TUI or start
 `cuppet --remote-control` and follow the pairing details shown in the terminal.
 When `CUPPET_TOKEN` is available, enabling remote control automatically creates
 the machine's relay credential, registers the host with Sydney and the relay,
-and uses the relay URL returned by Sydney. `CUPPET_API_BASE` can override the
-default API during local development. Without a token, local pairing still
-works when `CUPPET_RELAY_URL` is already configured.
+and uses the relay URL returned by Sydney. Without a token or a manually set
+`CUPPET_RELAY_URL`, Cuppet creates a short-lived setup QR in the terminal.
+Scan it in the signed-in Cuppet mobile app and confirm the computer; the CLI
+then completes host and relay enrollment automatically. `CUPPET_API_BASE` can
+override the default API during local development. A manually configured
+`CUPPET_RELAY_URL` keeps the local/self-hosted pairing flow available.
 The remote protocol and scope model are documented in
 [`docs/remote-protocol.md`](docs/remote-protocol.md).
 

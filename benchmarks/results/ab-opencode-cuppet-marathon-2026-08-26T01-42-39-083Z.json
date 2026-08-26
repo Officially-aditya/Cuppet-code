@@ -1,0 +1,3774 @@
+{
+  "schema": 1,
+  "createdAt": "2026-08-26T02:35:42.745Z",
+  "model": {
+    "providerID": "openai",
+    "modelID": "gpt-5.6-luna",
+    "variant": "low"
+  },
+  "stages": [
+    "core-store",
+    "query-api",
+    "indexes",
+    "transactions",
+    "cli-repl",
+    "aggregation",
+    "schema-validation",
+    "durability-reload",
+    "pluggable-backends",
+    "atomic-batches"
+  ],
+  "artifacts": "/private/tmp/cuppet-marathon-E4VHKP",
+  "arms": {
+    "opencode": {
+      "results": [
+        {
+          "index": 1,
+          "slug": "core-store",
+          "success": true,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "regressions": [],
+          "agentDurationMs": 79407,
+          "usage": {
+            "input": 47350,
+            "output": 2365,
+            "reasoning": 542,
+            "cacheRead": 116736,
+            "cacheWrite": 0,
+            "totalModel": 50257,
+            "totalWithCache": 166993,
+            "eventCount": 13,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 10472,
+                "output": 108,
+                "reasoning": 18,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 10598,
+                "totalWithCache": 10598
+              },
+              {
+                "gapSeconds": 4,
+                "input": 979,
+                "output": 92,
+                "reasoning": 0,
+                "cacheRead": 9728,
+                "cacheWrite": 0,
+                "totalModel": 1071,
+                "totalWithCache": 10799
+              },
+              {
+                "gapSeconds": 5,
+                "input": 1243,
+                "output": 88,
+                "reasoning": 19,
+                "cacheRead": 9728,
+                "cacheWrite": 0,
+                "totalModel": 1350,
+                "totalWithCache": 11078
+              },
+              {
+                "gapSeconds": 9,
+                "input": 552,
+                "output": 131,
+                "reasoning": 272,
+                "cacheRead": 10752,
+                "cacheWrite": 0,
+                "totalModel": 955,
+                "totalWithCache": 11707
+              },
+              {
+                "gapSeconds": 3,
+                "input": 1064,
+                "output": 38,
+                "reasoning": 0,
+                "cacheRead": 10752,
+                "cacheWrite": 0,
+                "totalModel": 1102,
+                "totalWithCache": 11854
+              },
+              {
+                "gapSeconds": 2,
+                "input": 1119,
+                "output": 39,
+                "reasoning": 0,
+                "cacheRead": 10752,
+                "cacheWrite": 0,
+                "totalModel": 1158,
+                "totalWithCache": 11910
+              },
+              {
+                "gapSeconds": 18,
+                "input": 11924,
+                "output": 918,
+                "reasoning": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 12842,
+                "totalWithCache": 12842
+              },
+              {
+                "gapSeconds": 5,
+                "input": 1088,
+                "output": 120,
+                "reasoning": 48,
+                "cacheRead": 11776,
+                "cacheWrite": 0,
+                "totalModel": 1256,
+                "totalWithCache": 13032
+              },
+              {
+                "gapSeconds": 4,
+                "input": 1365,
+                "output": 129,
+                "reasoning": 0,
+                "cacheRead": 11776,
+                "cacheWrite": 0,
+                "totalModel": 1494,
+                "totalWithCache": 13270
+              },
+              {
+                "gapSeconds": 6,
+                "input": 1429,
+                "output": 163,
+                "reasoning": 44,
+                "cacheRead": 12800,
+                "cacheWrite": 0,
+                "totalModel": 1636,
+                "totalWithCache": 14436
+              },
+              {
+                "gapSeconds": 10,
+                "input": 14537,
+                "output": 371,
+                "reasoning": 81,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 14989,
+                "totalWithCache": 14989
+              },
+              {
+                "gapSeconds": 4,
+                "input": 1179,
+                "output": 76,
+                "reasoning": 60,
+                "cacheRead": 13824,
+                "cacheWrite": 0,
+                "totalModel": 1315,
+                "totalWithCache": 15139
+              },
+              {
+                "gapSeconds": 3,
+                "input": 399,
+                "output": 92,
+                "reasoning": 0,
+                "cacheRead": 14848,
+                "cacheWrite": 0,
+                "totalModel": 491,
+                "totalWithCache": 15339
+              }
+            ]
+          },
+          "toolCalls": 20,
+          "compactions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 1,
+            "totalChecks": 1,
+            "checks": {
+              "behavior:core-store": {
+                "passed": true,
+                "detail": "ok"
+              }
+            },
+            "regressions": []
+          }
+        },
+        {
+          "index": 2,
+          "slug": "query-api",
+          "success": true,
+          "attempts": 2,
+          "firstAttemptSuccess": false,
+          "repaired": true,
+          "regressions": [],
+          "agentDurationMs": 69287,
+          "usage": {
+            "input": 19407,
+            "output": 2120,
+            "reasoning": 338,
+            "cacheRead": 186880,
+            "cacheWrite": 0,
+            "totalModel": 21865,
+            "totalWithCache": 208745,
+            "eventCount": 11,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 3742,
+                "output": 107,
+                "reasoning": 20,
+                "cacheRead": 11776,
+                "cacheWrite": 0,
+                "totalModel": 3869,
+                "totalWithCache": 15645
+              },
+              {
+                "gapSeconds": 3,
+                "input": 898,
+                "output": 44,
+                "reasoning": 0,
+                "cacheRead": 14848,
+                "cacheWrite": 0,
+                "totalModel": 942,
+                "totalWithCache": 15790
+              },
+              {
+                "gapSeconds": 21,
+                "input": 1864,
+                "output": 866,
+                "reasoning": 171,
+                "cacheRead": 14848,
+                "cacheWrite": 0,
+                "totalModel": 2901,
+                "totalWithCache": 17749
+              },
+              {
+                "gapSeconds": 4,
+                "input": 1899,
+                "output": 69,
+                "reasoning": 40,
+                "cacheRead": 15872,
+                "cacheWrite": 0,
+                "totalModel": 2008,
+                "totalWithCache": 17880
+              },
+              {
+                "gapSeconds": 9,
+                "input": 1085,
+                "output": 416,
+                "reasoning": 0,
+                "cacheRead": 16896,
+                "cacheWrite": 0,
+                "totalModel": 1501,
+                "totalWithCache": 18397
+              },
+              {
+                "gapSeconds": 5,
+                "input": 4875,
+                "output": 68,
+                "reasoning": 79,
+                "cacheRead": 14848,
+                "cacheWrite": 0,
+                "totalModel": 5022,
+                "totalWithCache": 19870
+              },
+              {
+                "gapSeconds": 3,
+                "input": 1026,
+                "output": 91,
+                "reasoning": 0,
+                "cacheRead": 18944,
+                "cacheWrite": 0,
+                "totalModel": 1117,
+                "totalWithCache": 20061
+              },
+              {
+                "gapSeconds": 5,
+                "input": 1228,
+                "output": 91,
+                "reasoning": 28,
+                "cacheRead": 18944,
+                "cacheWrite": 0,
+                "totalModel": 1347,
+                "totalWithCache": 20291
+              },
+              {
+                "gapSeconds": 5,
+                "input": 674,
+                "output": 115,
+                "reasoning": 0,
+                "cacheRead": 19968,
+                "cacheWrite": 0,
+                "totalModel": 789,
+                "totalWithCache": 20757
+              },
+              {
+                "gapSeconds": 7,
+                "input": 811,
+                "output": 217,
+                "reasoning": 0,
+                "cacheRead": 19968,
+                "cacheWrite": 0,
+                "totalModel": 1028,
+                "totalWithCache": 20996
+              },
+              {
+                "gapSeconds": 2,
+                "input": 1305,
+                "output": 36,
+                "reasoning": 0,
+                "cacheRead": 19968,
+                "cacheWrite": 0,
+                "totalModel": 1341,
+                "totalWithCache": 21309
+              }
+            ]
+          },
+          "toolCalls": 13,
+          "compactions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 2,
+            "totalChecks": 2,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "behavior:query-api": {
+                "passed": true,
+                "detail": "ok"
+              }
+            },
+            "regressions": []
+          }
+        },
+        {
+          "index": 3,
+          "slug": "indexes",
+          "success": false,
+          "attempts": 3,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "regressions": [],
+          "agentDurationMs": 87195,
+          "usage": {
+            "input": 24174,
+            "output": 2240,
+            "reasoning": 962,
+            "cacheRead": 225280,
+            "cacheWrite": 0,
+            "totalModel": 27376,
+            "totalWithCache": 252656,
+            "eventCount": 10,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 455,
+                "output": 135,
+                "reasoning": 228,
+                "cacheRead": 20992,
+                "cacheWrite": 0,
+                "totalModel": 818,
+                "totalWithCache": 21810
+              },
+              {
+                "gapSeconds": 20,
+                "input": 934,
+                "output": 976,
+                "reasoning": 0,
+                "cacheRead": 20992,
+                "cacheWrite": 0,
+                "totalModel": 1910,
+                "totalWithCache": 22902
+              },
+              {
+                "gapSeconds": 7,
+                "input": 1932,
+                "output": 84,
+                "reasoning": 76,
+                "cacheRead": 20992,
+                "cacheWrite": 0,
+                "totalModel": 2092,
+                "totalWithCache": 23084
+              },
+              {
+                "gapSeconds": 9,
+                "input": 1184,
+                "output": 329,
+                "reasoning": 0,
+                "cacheRead": 22016,
+                "cacheWrite": 0,
+                "totalModel": 1513,
+                "totalWithCache": 23529
+              },
+              {
+                "gapSeconds": 5,
+                "input": 11952,
+                "output": 83,
+                "reasoning": 138,
+                "cacheRead": 13824,
+                "cacheWrite": 0,
+                "totalModel": 12173,
+                "totalWithCache": 25997
+              },
+              {
+                "gapSeconds": 7,
+                "input": 3072,
+                "output": 81,
+                "reasoning": 0,
+                "cacheRead": 23040,
+                "cacheWrite": 0,
+                "totalModel": 3153,
+                "totalWithCache": 26193
+              },
+              {
+                "gapSeconds": 7,
+                "input": 1209,
+                "output": 53,
+                "reasoning": 220,
+                "cacheRead": 25088,
+                "cacheWrite": 0,
+                "totalModel": 1482,
+                "totalWithCache": 26570
+              },
+              {
+                "gapSeconds": 11,
+                "input": 581,
+                "output": 199,
+                "reasoning": 287,
+                "cacheRead": 26112,
+                "cacheWrite": 0,
+                "totalModel": 1067,
+                "totalWithCache": 27179
+              },
+              {
+                "gapSeconds": 8,
+                "input": 1089,
+                "output": 241,
+                "reasoning": 13,
+                "cacheRead": 26112,
+                "cacheWrite": 0,
+                "totalModel": 1343,
+                "totalWithCache": 27455
+              },
+              {
+                "gapSeconds": 4,
+                "input": 1766,
+                "output": 59,
+                "reasoning": 0,
+                "cacheRead": 26112,
+                "cacheWrite": 0,
+                "totalModel": 1825,
+                "totalWithCache": 27937
+              }
+            ]
+          },
+          "toolCalls": 12,
+          "compactions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 2,
+            "totalChecks": 3,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:query-api": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "behavior:indexes": {
+                "passed": false,
+                "detail": "node:internal/modules/run_main:123 triggerUncaughtException( ^ AssertionError [ERR_ASSERTION]: Got unwanted exception: non-unique allows repeats Actual message: \"Duplicate value for unique index: email\" at <anonymous> (/Users/addy/Downloads/cuppet/benchmarks/results/verifier-tmp/indexes-139f290d.mjs:18:8) { generatedMessage: false, code: 'ERR_ASSERTION', actual: Error: Duplicate value for unique i"
+              }
+            },
+            "regressions": []
+          },
+          "error": "acceptance checks failed"
+        },
+        {
+          "index": 4,
+          "slug": "transactions",
+          "success": false,
+          "attempts": 3,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "regressions": [
+            "indexes"
+          ],
+          "agentDurationMs": 139046,
+          "usage": {
+            "input": 50117,
+            "output": 3200,
+            "reasoning": 2025,
+            "cacheRead": 400896,
+            "cacheWrite": 0,
+            "totalModel": 55342,
+            "totalWithCache": 456238,
+            "eventCount": 14,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 28094,
+                "output": 1175,
+                "reasoning": 258,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 29527,
+                "totalWithCache": 29527
+              },
+              {
+                "gapSeconds": 8,
+                "input": 2413,
+                "output": 206,
+                "reasoning": 110,
+                "cacheRead": 27136,
+                "cacheWrite": 0,
+                "totalModel": 2729,
+                "totalWithCache": 29865
+              },
+              {
+                "gapSeconds": 6,
+                "input": 703,
+                "output": 130,
+                "reasoning": 59,
+                "cacheRead": 29184,
+                "cacheWrite": 0,
+                "totalModel": 892,
+                "totalWithCache": 30076
+              },
+              {
+                "gapSeconds": 8,
+                "input": 5010,
+                "output": 317,
+                "reasoning": 13,
+                "cacheRead": 25088,
+                "cacheWrite": 0,
+                "totalModel": 5340,
+                "totalWithCache": 30428
+              },
+              {
+                "gapSeconds": 6,
+                "input": 2224,
+                "output": 83,
+                "reasoning": 133,
+                "cacheRead": 29184,
+                "cacheWrite": 0,
+                "totalModel": 2440,
+                "totalWithCache": 31624
+              },
+              {
+                "gapSeconds": 3,
+                "input": 2555,
+                "output": 100,
+                "reasoning": 14,
+                "cacheRead": 29184,
+                "cacheWrite": 0,
+                "totalModel": 2669,
+                "totalWithCache": 31853
+              },
+              {
+                "gapSeconds": 25,
+                "input": 721,
+                "output": 218,
+                "reasoning": 875,
+                "cacheRead": 31232,
+                "cacheWrite": 0,
+                "totalModel": 1814,
+                "totalWithCache": 33046
+              },
+              {
+                "gapSeconds": 5,
+                "input": 1897,
+                "output": 48,
+                "reasoning": 11,
+                "cacheRead": 31232,
+                "cacheWrite": 0,
+                "totalModel": 1956,
+                "totalWithCache": 33188
+              },
+              {
+                "gapSeconds": 7,
+                "input": 1016,
+                "output": 149,
+                "reasoning": 18,
+                "cacheRead": 32256,
+                "cacheWrite": 0,
+                "totalModel": 1183,
+                "totalWithCache": 33439
+              },
+              {
+                "gapSeconds": 6,
+                "input": 1205,
+                "output": 228,
+                "reasoning": 0,
+                "cacheRead": 32256,
+                "cacheWrite": 0,
+                "totalModel": 1433,
+                "totalWithCache": 33689
+              },
+              {
+                "gapSeconds": 3,
+                "input": 695,
+                "output": 53,
+                "reasoning": 0,
+                "cacheRead": 33280,
+                "cacheWrite": 0,
+                "totalModel": 748,
+                "totalWithCache": 34028
+              },
+              {
+                "gapSeconds": 16,
+                "input": 848,
+                "output": 215,
+                "reasoning": 516,
+                "cacheRead": 33280,
+                "cacheWrite": 0,
+                "totalModel": 1579,
+                "totalWithCache": 34859
+              },
+              {
+                "gapSeconds": 9,
+                "input": 1601,
+                "output": 234,
+                "reasoning": 18,
+                "cacheRead": 33280,
+                "cacheWrite": 0,
+                "totalModel": 1853,
+                "totalWithCache": 35133
+              },
+              {
+                "gapSeconds": 3,
+                "input": 1135,
+                "output": 44,
+                "reasoning": 0,
+                "cacheRead": 34304,
+                "cacheWrite": 0,
+                "totalModel": 1179,
+                "totalWithCache": 35483
+              }
+            ]
+          },
+          "toolCalls": 17,
+          "compactions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 3,
+            "totalChecks": 4,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:query-api": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:indexes": {
+                "passed": false,
+                "detail": "node:internal/modules/run_main:123 triggerUncaughtException( ^ AssertionError [ERR_ASSERTION]: Got unwanted exception: non-unique allows repeats Actual message: \"Duplicate value for unique index: email\" at <anonymous> (/Users/addy/Downloads/cuppet/benchmarks/results/verifier-tmp/indexes-9e328341.mjs:18:8) { generatedMessage: false, code: 'ERR_ASSERTION', actual: Error: Duplicate value for unique i"
+              },
+              "behavior:transactions": {
+                "passed": true,
+                "detail": "ok"
+              }
+            },
+            "regressions": [
+              "indexes"
+            ]
+          },
+          "error": "acceptance checks failed"
+        },
+        {
+          "index": 5,
+          "slug": "cli-repl",
+          "success": false,
+          "attempts": 3,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "regressions": [
+            "indexes"
+          ],
+          "agentDurationMs": 114964,
+          "usage": {
+            "input": 19613,
+            "output": 2451,
+            "reasoning": 939,
+            "cacheRead": 410112,
+            "cacheWrite": 0,
+            "totalModel": 23003,
+            "totalWithCache": 433115,
+            "eventCount": 11,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 416,
+                "output": 935,
+                "reasoning": 92,
+                "cacheRead": 35328,
+                "cacheWrite": 0,
+                "totalModel": 1443,
+                "totalWithCache": 36771
+              },
+              {
+                "gapSeconds": 11,
+                "input": 1466,
+                "output": 428,
+                "reasoning": 40,
+                "cacheRead": 35328,
+                "cacheWrite": 0,
+                "totalModel": 1934,
+                "totalWithCache": 37262
+              },
+              {
+                "gapSeconds": 7,
+                "input": 1946,
+                "output": 215,
+                "reasoning": 60,
+                "cacheRead": 36352,
+                "cacheWrite": 0,
+                "totalModel": 2221,
+                "totalWithCache": 38573
+              },
+              {
+                "gapSeconds": 4,
+                "input": 1211,
+                "output": 72,
+                "reasoning": 7,
+                "cacheRead": 37376,
+                "cacheWrite": 0,
+                "totalModel": 1290,
+                "totalWithCache": 38666
+              },
+              {
+                "gapSeconds": 7,
+                "input": 7534,
+                "output": 48,
+                "reasoning": 178,
+                "cacheRead": 31232,
+                "cacheWrite": 0,
+                "totalModel": 7760,
+                "totalWithCache": 38992
+              },
+              {
+                "gapSeconds": 12,
+                "input": 844,
+                "output": 150,
+                "reasoning": 258,
+                "cacheRead": 38400,
+                "cacheWrite": 0,
+                "totalModel": 1252,
+                "totalWithCache": 39652
+              },
+              {
+                "gapSeconds": 6,
+                "input": 1274,
+                "output": 217,
+                "reasoning": 14,
+                "cacheRead": 38400,
+                "cacheWrite": 0,
+                "totalModel": 1505,
+                "totalWithCache": 39905
+              },
+              {
+                "gapSeconds": 3,
+                "input": 809,
+                "output": 43,
+                "reasoning": 0,
+                "cacheRead": 39424,
+                "cacheWrite": 0,
+                "totalModel": 852,
+                "totalWithCache": 40276
+              },
+              {
+                "gapSeconds": 11,
+                "input": 1976,
+                "output": 76,
+                "reasoning": 280,
+                "cacheRead": 38400,
+                "cacheWrite": 0,
+                "totalModel": 2332,
+                "totalWithCache": 40732
+              },
+              {
+                "gapSeconds": 7,
+                "input": 1330,
+                "output": 217,
+                "reasoning": 10,
+                "cacheRead": 39424,
+                "cacheWrite": 0,
+                "totalModel": 1557,
+                "totalWithCache": 40981
+              },
+              {
+                "gapSeconds": 3,
+                "input": 807,
+                "output": 50,
+                "reasoning": 0,
+                "cacheRead": 40448,
+                "cacheWrite": 0,
+                "totalModel": 857,
+                "totalWithCache": 41305
+              }
+            ]
+          },
+          "toolCalls": 14,
+          "compactions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 4,
+            "totalChecks": 5,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:query-api": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:indexes": {
+                "passed": false,
+                "detail": "node:internal/modules/run_main:123 triggerUncaughtException( ^ AssertionError [ERR_ASSERTION]: Got unwanted exception: non-unique allows repeats Actual message: \"Duplicate value for unique index: email\" at <anonymous> (/Users/addy/Downloads/cuppet/benchmarks/results/verifier-tmp/indexes-e5f26bbb.mjs:18:8) { generatedMessage: false, code: 'ERR_ASSERTION', actual: Error: Duplicate value for unique i"
+              },
+              "regression:transactions": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "behavior:cli-repl": {
+                "passed": true,
+                "detail": "ok"
+              }
+            },
+            "regressions": [
+              "indexes"
+            ]
+          },
+          "error": "acceptance checks failed"
+        },
+        {
+          "index": 6,
+          "slug": "aggregation",
+          "success": false,
+          "attempts": 3,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "regressions": [
+            "indexes"
+          ],
+          "agentDurationMs": 87417,
+          "usage": {
+            "input": 12000,
+            "output": 2212,
+            "reasoning": 1057,
+            "cacheRead": 383488,
+            "cacheWrite": 0,
+            "totalModel": 15269,
+            "totalWithCache": 398757,
+            "eventCount": 9,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 1048,
+                "output": 790,
+                "reasoning": 196,
+                "cacheRead": 40448,
+                "cacheWrite": 0,
+                "totalModel": 2034,
+                "totalWithCache": 42482
+              },
+              {
+                "gapSeconds": 8,
+                "input": 2056,
+                "output": 294,
+                "reasoning": 50,
+                "cacheRead": 40448,
+                "cacheWrite": 0,
+                "totalModel": 2400,
+                "totalWithCache": 42848
+              },
+              {
+                "gapSeconds": 6,
+                "input": 1709,
+                "output": 85,
+                "reasoning": 23,
+                "cacheRead": 41472,
+                "cacheWrite": 0,
+                "totalModel": 1817,
+                "totalWithCache": 43289
+              },
+              {
+                "gapSeconds": 16,
+                "input": 893,
+                "output": 302,
+                "reasoning": 414,
+                "cacheRead": 42496,
+                "cacheWrite": 0,
+                "totalModel": 1609,
+                "totalWithCache": 44105
+              },
+              {
+                "gapSeconds": 5,
+                "input": 1803,
+                "output": 46,
+                "reasoning": 0,
+                "cacheRead": 42496,
+                "cacheWrite": 0,
+                "totalModel": 1849,
+                "totalWithCache": 44345
+              },
+              {
+                "gapSeconds": 14,
+                "input": 925,
+                "output": 303,
+                "reasoning": 293,
+                "cacheRead": 43520,
+                "cacheWrite": 0,
+                "totalModel": 1521,
+                "totalWithCache": 45041
+              },
+              {
+                "gapSeconds": 6,
+                "input": 1543,
+                "output": 106,
+                "reasoning": 21,
+                "cacheRead": 43520,
+                "cacheWrite": 0,
+                "totalModel": 1670,
+                "totalWithCache": 45190
+              },
+              {
+                "gapSeconds": 6,
+                "input": 668,
+                "output": 223,
+                "reasoning": 0,
+                "cacheRead": 44544,
+                "cacheWrite": 0,
+                "totalModel": 891,
+                "totalWithCache": 45435
+              },
+              {
+                "gapSeconds": 5,
+                "input": 1355,
+                "output": 63,
+                "reasoning": 60,
+                "cacheRead": 44544,
+                "cacheWrite": 0,
+                "totalModel": 1478,
+                "totalWithCache": 46022
+              }
+            ]
+          },
+          "toolCalls": 12,
+          "compactions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 5,
+            "totalChecks": 6,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:query-api": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:indexes": {
+                "passed": false,
+                "detail": "node:internal/modules/run_main:123 triggerUncaughtException( ^ AssertionError [ERR_ASSERTION]: Got unwanted exception: non-unique allows repeats Actual message: \"Duplicate value for unique index: email\" at <anonymous> (/Users/addy/Downloads/cuppet/benchmarks/results/verifier-tmp/indexes-52c33a57.mjs:18:8) { generatedMessage: false, code: 'ERR_ASSERTION', actual: Error: Duplicate value for unique i"
+              },
+              "regression:transactions": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:cli-repl": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "behavior:aggregation": {
+                "passed": true,
+                "detail": "ok"
+              }
+            },
+            "regressions": [
+              "indexes"
+            ]
+          },
+          "error": "acceptance checks failed"
+        },
+        {
+          "index": 7,
+          "slug": "schema-validation",
+          "success": false,
+          "attempts": 3,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "regressions": [
+            "indexes"
+          ],
+          "agentDurationMs": 62240,
+          "usage": {
+            "input": 14750,
+            "output": 1420,
+            "reasoning": 1016,
+            "cacheRead": 272384,
+            "cacheWrite": 0,
+            "totalModel": 17186,
+            "totalWithCache": 289570,
+            "eventCount": 6,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 623,
+                "output": 592,
+                "reasoning": 98,
+                "cacheRead": 45568,
+                "cacheWrite": 0,
+                "totalModel": 1313,
+                "totalWithCache": 46881
+              },
+              {
+                "gapSeconds": 9,
+                "input": 1335,
+                "output": 344,
+                "reasoning": 39,
+                "cacheRead": 45568,
+                "cacheWrite": 0,
+                "totalModel": 1718,
+                "totalWithCache": 47286
+              },
+              {
+                "gapSeconds": 6,
+                "input": 1100,
+                "output": 84,
+                "reasoning": 87,
+                "cacheRead": 46592,
+                "cacheWrite": 0,
+                "totalModel": 1271,
+                "totalWithCache": 47863
+              },
+              {
+                "gapSeconds": 16,
+                "input": 8539,
+                "output": 291,
+                "reasoning": 386,
+                "cacheRead": 39424,
+                "cacheWrite": 0,
+                "totalModel": 9216,
+                "totalWithCache": 48640
+              },
+              {
+                "gapSeconds": 3,
+                "input": 2523,
+                "output": 55,
+                "reasoning": 0,
+                "cacheRead": 46592,
+                "cacheWrite": 0,
+                "totalModel": 2578,
+                "totalWithCache": 49170
+              },
+              {
+                "gapSeconds": 12,
+                "input": 630,
+                "output": 54,
+                "reasoning": 406,
+                "cacheRead": 48640,
+                "cacheWrite": 0,
+                "totalModel": 1090,
+                "totalWithCache": 49730
+              }
+            ]
+          },
+          "toolCalls": 7,
+          "compactions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 6,
+            "totalChecks": 7,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:query-api": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:indexes": {
+                "passed": false,
+                "detail": "node:internal/modules/run_main:123 triggerUncaughtException( ^ AssertionError [ERR_ASSERTION]: Got unwanted exception: non-unique allows repeats Actual message: \"Duplicate value for unique index: email\" at <anonymous> (/Users/addy/Downloads/cuppet/benchmarks/results/verifier-tmp/indexes-07e7418d.mjs:18:8) { generatedMessage: false, code: 'ERR_ASSERTION', actual: Error: Duplicate value for unique i"
+              },
+              "regression:transactions": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:cli-repl": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:aggregation": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "behavior:schema-validation": {
+                "passed": true,
+                "detail": "ok"
+              }
+            },
+            "regressions": [
+              "indexes"
+            ]
+          },
+          "error": "acceptance checks failed"
+        },
+        {
+          "index": 8,
+          "slug": "durability-reload",
+          "success": false,
+          "attempts": 3,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "regressions": [
+            "indexes"
+          ],
+          "agentDurationMs": 85535,
+          "usage": {
+            "input": 57648,
+            "output": 2203,
+            "reasoning": 898,
+            "cacheRead": 361984,
+            "cacheWrite": 0,
+            "totalModel": 60749,
+            "totalWithCache": 422733,
+            "eventCount": 8,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 49871,
+                "output": 375,
+                "reasoning": 200,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 50446,
+                "totalWithCache": 50446
+              },
+              {
+                "gapSeconds": 17,
+                "input": 804,
+                "output": 794,
+                "reasoning": 13,
+                "cacheRead": 49664,
+                "cacheWrite": 0,
+                "totalModel": 1611,
+                "totalWithCache": 51275
+              },
+              {
+                "gapSeconds": 12,
+                "input": 1633,
+                "output": 416,
+                "reasoning": 49,
+                "cacheRead": 49664,
+                "cacheWrite": 0,
+                "totalModel": 2098,
+                "totalWithCache": 51762
+              },
+              {
+                "gapSeconds": 5,
+                "input": 2199,
+                "output": 105,
+                "reasoning": 30,
+                "cacheRead": 50688,
+                "cacheWrite": 0,
+                "totalModel": 2334,
+                "totalWithCache": 53022
+              },
+              {
+                "gapSeconds": 6,
+                "input": 308,
+                "output": 106,
+                "reasoning": 37,
+                "cacheRead": 52736,
+                "cacheWrite": 0,
+                "totalModel": 451,
+                "totalWithCache": 53187
+              },
+              {
+                "gapSeconds": 16,
+                "input": 551,
+                "output": 298,
+                "reasoning": 227,
+                "cacheRead": 52736,
+                "cacheWrite": 0,
+                "totalModel": 1076,
+                "totalWithCache": 53812
+              },
+              {
+                "gapSeconds": 3,
+                "input": 1577,
+                "output": 42,
+                "reasoning": 10,
+                "cacheRead": 52736,
+                "cacheWrite": 0,
+                "totalModel": 1629,
+                "totalWithCache": 54365
+              },
+              {
+                "gapSeconds": 12,
+                "input": 705,
+                "output": 67,
+                "reasoning": 332,
+                "cacheRead": 53760,
+                "cacheWrite": 0,
+                "totalModel": 1104,
+                "totalWithCache": 54864
+              }
+            ]
+          },
+          "toolCalls": 9,
+          "compactions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 7,
+            "totalChecks": 8,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:query-api": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:indexes": {
+                "passed": false,
+                "detail": "node:internal/modules/run_main:123 triggerUncaughtException( ^ AssertionError [ERR_ASSERTION]: Got unwanted exception: non-unique allows repeats Actual message: \"Duplicate value for unique index: email\" at <anonymous> (/Users/addy/Downloads/cuppet/benchmarks/results/verifier-tmp/indexes-e98d6844.mjs:18:8) { generatedMessage: false, code: 'ERR_ASSERTION', actual: Error: Duplicate value for unique i"
+              },
+              "regression:transactions": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:cli-repl": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:aggregation": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:schema-validation": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "behavior:durability-reload": {
+                "passed": true,
+                "detail": "ok"
+              }
+            },
+            "regressions": [
+              "indexes"
+            ]
+          },
+          "error": "acceptance checks failed"
+        },
+        {
+          "index": 9,
+          "slug": "pluggable-backends",
+          "success": false,
+          "attempts": 3,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "regressions": [
+            "indexes"
+          ],
+          "agentDurationMs": 162362,
+          "usage": {
+            "input": 68725,
+            "output": 1526,
+            "reasoning": 633,
+            "cacheRead": 273920,
+            "cacheWrite": 0,
+            "totalModel": 70884,
+            "totalWithCache": 344804,
+            "eventCount": 6,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 55028,
+                "output": 599,
+                "reasoning": 155,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 55782,
+                "totalWithCache": 55782
+              },
+              {
+                "gapSeconds": 32,
+                "input": 8188,
+                "output": 359,
+                "reasoning": 70,
+                "cacheRead": 47616,
+                "cacheWrite": 0,
+                "totalModel": 8617,
+                "totalWithCache": 56233
+              },
+              {
+                "gapSeconds": 22,
+                "input": 2678,
+                "output": 109,
+                "reasoning": 32,
+                "cacheRead": 54784,
+                "cacheWrite": 0,
+                "totalModel": 2819,
+                "totalWithCache": 57603
+              },
+              {
+                "gapSeconds": 23,
+                "input": 871,
+                "output": 61,
+                "reasoning": 176,
+                "cacheRead": 56832,
+                "cacheWrite": 0,
+                "totalModel": 1108,
+                "totalWithCache": 57940
+              },
+              {
+                "gapSeconds": 30,
+                "input": 1208,
+                "output": 336,
+                "reasoning": 194,
+                "cacheRead": 56832,
+                "cacheWrite": 0,
+                "totalModel": 1738,
+                "totalWithCache": 58570
+              },
+              {
+                "gapSeconds": 18,
+                "input": 752,
+                "output": 62,
+                "reasoning": 6,
+                "cacheRead": 57856,
+                "cacheWrite": 0,
+                "totalModel": 820,
+                "totalWithCache": 58676
+              }
+            ]
+          },
+          "toolCalls": 8,
+          "compactions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 8,
+            "totalChecks": 9,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:query-api": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:indexes": {
+                "passed": false,
+                "detail": "node:internal/modules/run_main:123 triggerUncaughtException( ^ AssertionError [ERR_ASSERTION]: Got unwanted exception: non-unique allows repeats Actual message: \"Duplicate value for unique index: email\" at <anonymous> (/Users/addy/Downloads/cuppet/benchmarks/results/verifier-tmp/indexes-e7b77a38.mjs:18:8) { generatedMessage: false, code: 'ERR_ASSERTION', actual: Error: Duplicate value for unique i"
+              },
+              "regression:transactions": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:cli-repl": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:aggregation": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:schema-validation": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:durability-reload": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "behavior:pluggable-backends": {
+                "passed": true,
+                "detail": "ok"
+              }
+            },
+            "regressions": [
+              "indexes"
+            ]
+          },
+          "error": "acceptance checks failed"
+        },
+        {
+          "index": 10,
+          "slug": "atomic-batches",
+          "success": false,
+          "attempts": 3,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "regressions": [
+            "indexes"
+          ],
+          "agentDurationMs": 153069,
+          "usage": {
+            "input": 13725,
+            "output": 1343,
+            "reasoning": 1187,
+            "cacheRead": 350208,
+            "cacheWrite": 0,
+            "totalModel": 16255,
+            "totalWithCache": 366463,
+            "eventCount": 6,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 1015,
+                "output": 577,
+                "reasoning": 75,
+                "cacheRead": 57856,
+                "cacheWrite": 0,
+                "totalModel": 1667,
+                "totalWithCache": 59523
+              },
+              {
+                "gapSeconds": 24,
+                "input": 1689,
+                "output": 350,
+                "reasoning": 52,
+                "cacheRead": 57856,
+                "cacheWrite": 0,
+                "totalModel": 2091,
+                "totalWithCache": 59947
+              },
+              {
+                "gapSeconds": 20,
+                "input": 1846,
+                "output": 87,
+                "reasoning": 48,
+                "cacheRead": 58880,
+                "cacheWrite": 0,
+                "totalModel": 1981,
+                "totalWithCache": 60861
+              },
+              {
+                "gapSeconds": 25,
+                "input": 6249,
+                "output": 211,
+                "reasoning": 339,
+                "cacheRead": 54784,
+                "cacheWrite": 0,
+                "totalModel": 6799,
+                "totalWithCache": 61583
+              },
+              {
+                "gapSeconds": 22,
+                "input": 1729,
+                "output": 66,
+                "reasoning": 252,
+                "cacheRead": 59904,
+                "cacheWrite": 0,
+                "totalModel": 2047,
+                "totalWithCache": 61951
+              },
+              {
+                "gapSeconds": 27,
+                "input": 1197,
+                "output": 52,
+                "reasoning": 421,
+                "cacheRead": 60928,
+                "cacheWrite": 0,
+                "totalModel": 1670,
+                "totalWithCache": 62598
+              }
+            ]
+          },
+          "toolCalls": 5,
+          "compactions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 8,
+            "totalChecks": 10,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:query-api": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:indexes": {
+                "passed": false,
+                "detail": "node:internal/modules/run_main:123 triggerUncaughtException( ^ AssertionError [ERR_ASSERTION]: Got unwanted exception: non-unique allows repeats Actual message: \"Duplicate value for unique index: email\" at <anonymous> (/Users/addy/Downloads/cuppet/benchmarks/results/verifier-tmp/indexes-2ac295cc.mjs:18:8) { generatedMessage: false, code: 'ERR_ASSERTION', actual: Error: Duplicate value for unique i"
+              },
+              "regression:transactions": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:cli-repl": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:aggregation": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:schema-validation": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:durability-reload": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:pluggable-backends": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "behavior:atomic-batches": {
+                "passed": false,
+                "detail": "node:internal/modules/run_main:123 triggerUncaughtException( ^ AssertionError [ERR_ASSERTION]: Expected values to be strictly equal: false !== true at <anonymous> (/Users/addy/Downloads/cuppet/benchmarks/results/verifier-tmp/atomic-batches-ce373c25.mjs:23:8) { generatedMessage: true, code: 'ERR_ASSERTION', actual: false, expected: true, operator: 'strictEqual', diff: 'simple' } Node.js v22.21.0"
+              }
+            },
+            "regressions": [
+              "indexes"
+            ]
+          },
+          "error": "acceptance checks failed"
+        }
+      ],
+      "summary": {
+        "stagesCompleted": 10,
+        "successes": 2,
+        "firstAttemptSuccesses": 1,
+        "repairedStages": 1,
+        "regressionStages": 7,
+        "totalAgentDurationMs": 1040522,
+        "uncachedInput": 327509,
+        "cacheRead": 2981888,
+        "totalModelTokens": 358186,
+        "cacheShare": 0.9010366541094949,
+        "adjustedCacheShare": 0.9010366541094949,
+        "toolCalls": 117,
+        "compactions": 0,
+        "passedChecks": 46,
+        "totalChecks": 55,
+        "errors": []
+      }
+    },
+    "cuppet": {
+      "results": [
+        {
+          "index": 1,
+          "slug": "core-store",
+          "success": true,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "regressions": [],
+          "agentDurationMs": 48841,
+          "usage": {
+            "input": 17126,
+            "output": 1459,
+            "reasoning": 398,
+            "cacheRead": 67584,
+            "cacheWrite": 0,
+            "totalModel": 18983,
+            "totalWithCache": 86567,
+            "eventCount": 7,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 10851,
+                "output": 53,
+                "reasoning": 12,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 10916,
+                "totalWithCache": 10916
+              },
+              {
+                "gapSeconds": 4,
+                "input": 220,
+                "output": 61,
+                "reasoning": 0,
+                "cacheRead": 10752,
+                "cacheWrite": 0,
+                "totalModel": 281,
+                "totalWithCache": 11033
+              },
+              {
+                "gapSeconds": 4,
+                "input": 363,
+                "output": 83,
+                "reasoning": 0,
+                "cacheRead": 10752,
+                "cacheWrite": 0,
+                "totalModel": 446,
+                "totalWithCache": 11198
+              },
+              {
+                "gapSeconds": 21,
+                "input": 747,
+                "output": 926,
+                "reasoning": 171,
+                "cacheRead": 10752,
+                "cacheWrite": 0,
+                "totalModel": 1844,
+                "totalWithCache": 12596
+              },
+              {
+                "gapSeconds": 5,
+                "input": 1866,
+                "output": 96,
+                "reasoning": 71,
+                "cacheRead": 10752,
+                "cacheWrite": 0,
+                "totalModel": 2033,
+                "totalWithCache": 12785
+              },
+              {
+                "gapSeconds": 6,
+                "input": 1917,
+                "output": 145,
+                "reasoning": 86,
+                "cacheRead": 11776,
+                "cacheWrite": 0,
+                "totalModel": 2148,
+                "totalWithCache": 13924
+              },
+              {
+                "gapSeconds": 5,
+                "input": 1162,
+                "output": 95,
+                "reasoning": 58,
+                "cacheRead": 12800,
+                "cacheWrite": 0,
+                "totalModel": 1315,
+                "totalWithCache": 14115
+              }
+            ]
+          },
+          "toolCalls": 10,
+          "compactions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 1,
+            "totalChecks": 1,
+            "checks": {
+              "behavior:core-store": {
+                "passed": true,
+                "detail": "ok"
+              }
+            },
+            "regressions": []
+          }
+        },
+        {
+          "index": 2,
+          "slug": "query-api",
+          "success": true,
+          "attempts": 2,
+          "firstAttemptSuccess": false,
+          "repaired": true,
+          "regressions": [],
+          "agentDurationMs": 54254,
+          "usage": {
+            "input": 8516,
+            "output": 1650,
+            "reasoning": 298,
+            "cacheRead": 133120,
+            "cacheWrite": 0,
+            "totalModel": 10464,
+            "totalWithCache": 143584,
+            "eventCount": 8,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 1300,
+                "output": 882,
+                "reasoning": 117,
+                "cacheRead": 13824,
+                "cacheWrite": 0,
+                "totalModel": 2299,
+                "totalWithCache": 16123
+              },
+              {
+                "gapSeconds": 6,
+                "input": 1297,
+                "output": 82,
+                "reasoning": 134,
+                "cacheRead": 14848,
+                "cacheWrite": 0,
+                "totalModel": 1513,
+                "totalWithCache": 16361
+              },
+              {
+                "gapSeconds": 4,
+                "input": 511,
+                "output": 97,
+                "reasoning": 0,
+                "cacheRead": 15872,
+                "cacheWrite": 0,
+                "totalModel": 608,
+                "totalWithCache": 16480
+              },
+              {
+                "gapSeconds": 6,
+                "input": 2280,
+                "output": 186,
+                "reasoning": 24,
+                "cacheRead": 15872,
+                "cacheWrite": 0,
+                "totalModel": 2490,
+                "totalWithCache": 18362
+              },
+              {
+                "gapSeconds": 5,
+                "input": 464,
+                "output": 76,
+                "reasoning": 0,
+                "cacheRead": 17920,
+                "cacheWrite": 0,
+                "totalModel": 540,
+                "totalWithCache": 18460
+              },
+              {
+                "gapSeconds": 6,
+                "input": 921,
+                "output": 185,
+                "reasoning": 23,
+                "cacheRead": 17920,
+                "cacheWrite": 0,
+                "totalModel": 1129,
+                "totalWithCache": 19049
+              },
+              {
+                "gapSeconds": 4,
+                "input": 1151,
+                "output": 102,
+                "reasoning": 0,
+                "cacheRead": 17920,
+                "cacheWrite": 0,
+                "totalModel": 1253,
+                "totalWithCache": 19173
+              },
+              {
+                "gapSeconds": 3,
+                "input": 592,
+                "output": 40,
+                "reasoning": 0,
+                "cacheRead": 18944,
+                "cacheWrite": 0,
+                "totalModel": 632,
+                "totalWithCache": 19576
+              }
+            ]
+          },
+          "toolCalls": 8,
+          "compactions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 2,
+            "totalChecks": 2,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "behavior:query-api": {
+                "passed": true,
+                "detail": "ok"
+              }
+            },
+            "regressions": []
+          }
+        },
+        {
+          "index": 3,
+          "slug": "indexes",
+          "success": false,
+          "attempts": 3,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "regressions": [],
+          "agentDurationMs": 95834,
+          "usage": {
+            "input": 14525,
+            "output": 2091,
+            "reasoning": 1296,
+            "cacheRead": 274432,
+            "cacheWrite": 0,
+            "totalModel": 17912,
+            "totalWithCache": 292344,
+            "eventCount": 12,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 1244,
+                "output": 972,
+                "reasoning": 138,
+                "cacheRead": 18944,
+                "cacheWrite": 0,
+                "totalModel": 2354,
+                "totalWithCache": 21298
+              },
+              {
+                "gapSeconds": 5,
+                "input": 1352,
+                "output": 78,
+                "reasoning": 36,
+                "cacheRead": 19968,
+                "cacheWrite": 0,
+                "totalModel": 1466,
+                "totalWithCache": 21434
+              },
+              {
+                "gapSeconds": 3,
+                "input": 464,
+                "output": 97,
+                "reasoning": 0,
+                "cacheRead": 20992,
+                "cacheWrite": 0,
+                "totalModel": 561,
+                "totalWithCache": 21553
+              },
+              {
+                "gapSeconds": 5,
+                "input": 2519,
+                "output": 80,
+                "reasoning": 78,
+                "cacheRead": 20992,
+                "cacheWrite": 0,
+                "totalModel": 2677,
+                "totalWithCache": 23669
+              },
+              {
+                "gapSeconds": 4,
+                "input": 651,
+                "output": 77,
+                "reasoning": 0,
+                "cacheRead": 23040,
+                "cacheWrite": 0,
+                "totalModel": 728,
+                "totalWithCache": 23768
+              },
+              {
+                "gapSeconds": 13,
+                "input": 1097,
+                "output": 224,
+                "reasoning": 331,
+                "cacheRead": 23040,
+                "cacheWrite": 0,
+                "totalModel": 1652,
+                "totalWithCache": 24692
+              },
+              {
+                "gapSeconds": 8,
+                "input": 1674,
+                "output": 136,
+                "reasoning": 76,
+                "cacheRead": 23040,
+                "cacheWrite": 0,
+                "totalModel": 1886,
+                "totalWithCache": 24926
+              },
+              {
+                "gapSeconds": 5,
+                "input": 884,
+                "output": 99,
+                "reasoning": 19,
+                "cacheRead": 24064,
+                "cacheWrite": 0,
+                "totalModel": 1002,
+                "totalWithCache": 25066
+              },
+              {
+                "gapSeconds": 2,
+                "input": 1384,
+                "output": 52,
+                "reasoning": 0,
+                "cacheRead": 24064,
+                "cacheWrite": 0,
+                "totalModel": 1436,
+                "totalWithCache": 25500
+              },
+              {
+                "gapSeconds": 16,
+                "input": 781,
+                "output": 124,
+                "reasoning": 609,
+                "cacheRead": 25088,
+                "cacheWrite": 0,
+                "totalModel": 1514,
+                "totalWithCache": 26602
+              },
+              {
+                "gapSeconds": 6,
+                "input": 1536,
+                "output": 99,
+                "reasoning": 9,
+                "cacheRead": 25088,
+                "cacheWrite": 0,
+                "totalModel": 1644,
+                "totalWithCache": 26732
+              },
+              {
+                "gapSeconds": 3,
+                "input": 939,
+                "output": 53,
+                "reasoning": 0,
+                "cacheRead": 26112,
+                "cacheWrite": 0,
+                "totalModel": 992,
+                "totalWithCache": 27104
+              }
+            ]
+          },
+          "toolCalls": 12,
+          "compactions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 2,
+            "totalChecks": 3,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:query-api": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "behavior:indexes": {
+                "passed": false,
+                "detail": "node:internal/modules/run_main:123 triggerUncaughtException( ^ AssertionError [ERR_ASSERTION]: Got unwanted exception: non-unique allows repeats Actual message: \"Duplicate value for unique index: email\" at <anonymous> (/Users/addy/Downloads/cuppet/benchmarks/results/verifier-tmp/indexes-b8c9bbc6.mjs:18:8) { generatedMessage: false, code: 'ERR_ASSERTION', actual: Error: Duplicate value for unique i"
+              }
+            },
+            "regressions": []
+          },
+          "error": "acceptance checks failed"
+        },
+        {
+          "index": 4,
+          "slug": "transactions",
+          "success": false,
+          "attempts": 3,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "regressions": [
+            "indexes"
+          ],
+          "agentDurationMs": 119342,
+          "usage": {
+            "input": 79887,
+            "output": 2494,
+            "reasoning": 1690,
+            "cacheRead": 410112,
+            "cacheWrite": 0,
+            "totalModel": 84071,
+            "totalWithCache": 494183,
+            "eventCount": 15,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 27854,
+                "output": 543,
+                "reasoning": 161,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 28558,
+                "totalWithCache": 28558
+              },
+              {
+                "gapSeconds": 12,
+                "input": 1444,
+                "output": 510,
+                "reasoning": 21,
+                "cacheRead": 27136,
+                "cacheWrite": 0,
+                "totalModel": 1975,
+                "totalWithCache": 29111
+              },
+              {
+                "gapSeconds": 7,
+                "input": 973,
+                "output": 99,
+                "reasoning": 134,
+                "cacheRead": 28160,
+                "cacheWrite": 0,
+                "totalModel": 1206,
+                "totalWithCache": 29366
+              },
+              {
+                "gapSeconds": 6,
+                "input": 1228,
+                "output": 131,
+                "reasoning": 97,
+                "cacheRead": 28160,
+                "cacheWrite": 0,
+                "totalModel": 1456,
+                "totalWithCache": 29616
+              },
+              {
+                "gapSeconds": 8,
+                "input": 454,
+                "output": 139,
+                "reasoning": 20,
+                "cacheRead": 29184,
+                "cacheWrite": 0,
+                "totalModel": 613,
+                "totalWithCache": 29797
+              },
+              {
+                "gapSeconds": 5,
+                "input": 2496,
+                "output": 77,
+                "reasoning": 82,
+                "cacheRead": 29184,
+                "cacheWrite": 0,
+                "totalModel": 2655,
+                "totalWithCache": 31839
+              },
+              {
+                "gapSeconds": 18,
+                "input": 1094,
+                "output": 354,
+                "reasoning": 510,
+                "cacheRead": 31232,
+                "cacheWrite": 0,
+                "totalModel": 1958,
+                "totalWithCache": 33190
+              },
+              {
+                "gapSeconds": 6,
+                "input": 1980,
+                "output": 99,
+                "reasoning": 134,
+                "cacheRead": 31232,
+                "cacheWrite": 0,
+                "totalModel": 2213,
+                "totalWithCache": 33445
+              },
+              {
+                "gapSeconds": 5,
+                "input": 2012,
+                "output": 61,
+                "reasoning": 62,
+                "cacheRead": 32256,
+                "cacheWrite": 0,
+                "totalModel": 2135,
+                "totalWithCache": 34391
+              },
+              {
+                "gapSeconds": 13,
+                "input": 1476,
+                "output": 149,
+                "reasoning": 438,
+                "cacheRead": 33280,
+                "cacheWrite": 0,
+                "totalModel": 2063,
+                "totalWithCache": 35343
+              },
+              {
+                "gapSeconds": 3,
+                "input": 1122,
+                "output": 46,
+                "reasoning": 12,
+                "cacheRead": 34304,
+                "cacheWrite": 0,
+                "totalModel": 1180,
+                "totalWithCache": 35484
+              },
+              {
+                "gapSeconds": 3,
+                "input": 35583,
+                "output": 44,
+                "reasoning": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 35627,
+                "totalWithCache": 35627
+              },
+              {
+                "gapSeconds": 6,
+                "input": 514,
+                "output": 103,
+                "reasoning": 8,
+                "cacheRead": 35328,
+                "cacheWrite": 0,
+                "totalModel": 625,
+                "totalWithCache": 35953
+              },
+              {
+                "gapSeconds": 5,
+                "input": 647,
+                "output": 99,
+                "reasoning": 11,
+                "cacheRead": 35328,
+                "cacheWrite": 0,
+                "totalModel": 757,
+                "totalWithCache": 36085
+              },
+              {
+                "gapSeconds": 4,
+                "input": 1010,
+                "output": 40,
+                "reasoning": 0,
+                "cacheRead": 35328,
+                "cacheWrite": 0,
+                "totalModel": 1050,
+                "totalWithCache": 36378
+              }
+            ]
+          },
+          "toolCalls": 16,
+          "compactions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 3,
+            "totalChecks": 4,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:query-api": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:indexes": {
+                "passed": false,
+                "detail": "node:internal/modules/run_main:123 triggerUncaughtException( ^ AssertionError [ERR_ASSERTION]: Got unwanted exception: non-unique allows repeats Actual message: \"Duplicate value for unique index: email\" at <anonymous> (/Users/addy/Downloads/cuppet/benchmarks/results/verifier-tmp/indexes-4ed0bcb3.mjs:18:8) { generatedMessage: false, code: 'ERR_ASSERTION', actual: Error: Duplicate value for unique i"
+              },
+              "behavior:transactions": {
+                "passed": true,
+                "detail": "ok"
+              }
+            },
+            "regressions": [
+              "indexes"
+            ]
+          },
+          "error": "acceptance checks failed"
+        },
+        {
+          "index": 5,
+          "slug": "cli-repl",
+          "success": false,
+          "attempts": 3,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "regressions": [
+            "indexes"
+          ],
+          "agentDurationMs": 70224,
+          "usage": {
+            "input": 49600,
+            "output": 1462,
+            "reasoning": 912,
+            "cacheRead": 263680,
+            "cacheWrite": 0,
+            "totalModel": 51974,
+            "totalWithCache": 315654,
+            "eventCount": 8,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 36893,
+                "output": 932,
+                "reasoning": 41,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalModel": 37866,
+                "totalWithCache": 37866
+              },
+              {
+                "gapSeconds": 4,
+                "input": 1542,
+                "output": 46,
+                "reasoning": 16,
+                "cacheRead": 36352,
+                "cacheWrite": 0,
+                "totalModel": 1604,
+                "totalWithCache": 37956
+              },
+              {
+                "gapSeconds": 11,
+                "input": 783,
+                "output": 97,
+                "reasoning": 50,
+                "cacheRead": 37376,
+                "cacheWrite": 0,
+                "totalModel": 930,
+                "totalWithCache": 38306
+              },
+              {
+                "gapSeconds": 3,
+                "input": 1762,
+                "output": 52,
+                "reasoning": 0,
+                "cacheRead": 37376,
+                "cacheWrite": 0,
+                "totalModel": 1814,
+                "totalWithCache": 39190
+              },
+              {
+                "gapSeconds": 13,
+                "input": 1155,
+                "output": 150,
+                "reasoning": 435,
+                "cacheRead": 38400,
+                "cacheWrite": 0,
+                "totalModel": 1740,
+                "totalWithCache": 40140
+              },
+              {
+                "gapSeconds": 5,
+                "input": 738,
+                "output": 99,
+                "reasoning": 10,
+                "cacheRead": 39424,
+                "cacheWrite": 0,
+                "totalModel": 847,
+                "totalWithCache": 40271
+              },
+              {
+                "gapSeconds": 3,
+                "input": 5211,
+                "output": 36,
+                "reasoning": 0,
+                "cacheRead": 35328,
+                "cacheWrite": 0,
+                "totalModel": 5247,
+                "totalWithCache": 40575
+              },
+              {
+                "gapSeconds": 11,
+                "input": 1516,
+                "output": 50,
+                "reasoning": 360,
+                "cacheRead": 39424,
+                "cacheWrite": 0,
+                "totalModel": 1926,
+                "totalWithCache": 41350
+              }
+            ]
+          },
+          "toolCalls": 7,
+          "compactions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 4,
+            "totalChecks": 5,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:query-api": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:indexes": {
+                "passed": false,
+                "detail": "node:internal/modules/run_main:123 triggerUncaughtException( ^ AssertionError [ERR_ASSERTION]: Got unwanted exception: non-unique allows repeats Actual message: \"Duplicate value for unique index: email\" at <anonymous> (/Users/addy/Downloads/cuppet/benchmarks/results/verifier-tmp/indexes-5f9aa245.mjs:18:8) { generatedMessage: false, code: 'ERR_ASSERTION', actual: Error: Duplicate value for unique i"
+              },
+              "regression:transactions": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "behavior:cli-repl": {
+                "passed": true,
+                "detail": "ok"
+              }
+            },
+            "regressions": [
+              "indexes"
+            ]
+          },
+          "error": "acceptance checks failed"
+        },
+        {
+          "index": 6,
+          "slug": "aggregation",
+          "success": false,
+          "attempts": 3,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "regressions": [
+            "indexes"
+          ],
+          "agentDurationMs": 60698,
+          "usage": {
+            "input": 14725,
+            "output": 1082,
+            "reasoning": 1050,
+            "cacheRead": 253952,
+            "cacheWrite": 0,
+            "totalModel": 16857,
+            "totalWithCache": 270809,
+            "eventCount": 6,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 1995,
+                "output": 754,
+                "reasoning": 189,
+                "cacheRead": 40448,
+                "cacheWrite": 0,
+                "totalModel": 2938,
+                "totalWithCache": 43386
+              },
+              {
+                "gapSeconds": 10,
+                "input": 1936,
+                "output": 99,
+                "reasoning": 98,
+                "cacheRead": 41472,
+                "cacheWrite": 0,
+                "totalModel": 2133,
+                "totalWithCache": 43605
+              },
+              {
+                "gapSeconds": 4,
+                "input": 2400,
+                "output": 72,
+                "reasoning": 0,
+                "cacheRead": 42496,
+                "cacheWrite": 0,
+                "totalModel": 2472,
+                "totalWithCache": 44968
+              },
+              {
+                "gapSeconds": 11,
+                "input": 789,
+                "output": 46,
+                "reasoning": 396,
+                "cacheRead": 44544,
+                "cacheWrite": 0,
+                "totalModel": 1231,
+                "totalWithCache": 45775
+              },
+              {
+                "gapSeconds": 8,
+                "input": 1596,
+                "output": 50,
+                "reasoning": 253,
+                "cacheRead": 44544,
+                "cacheWrite": 0,
+                "totalModel": 1899,
+                "totalWithCache": 46443
+              },
+              {
+                "gapSeconds": 5,
+                "input": 6009,
+                "output": 61,
+                "reasoning": 114,
+                "cacheRead": 40448,
+                "cacheWrite": 0,
+                "totalModel": 6184,
+                "totalWithCache": 46632
+              }
+            ]
+          },
+          "toolCalls": 4,
+          "compactions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 5,
+            "totalChecks": 6,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:query-api": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:indexes": {
+                "passed": false,
+                "detail": "node:internal/modules/run_main:123 triggerUncaughtException( ^ AssertionError [ERR_ASSERTION]: Got unwanted exception: non-unique allows repeats Actual message: \"Duplicate value for unique index: email\" at <anonymous> (/Users/addy/Downloads/cuppet/benchmarks/results/verifier-tmp/indexes-229ef3b9.mjs:18:8) { generatedMessage: false, code: 'ERR_ASSERTION', actual: Error: Duplicate value for unique i"
+              },
+              "regression:transactions": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:cli-repl": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "behavior:aggregation": {
+                "passed": true,
+                "detail": "ok"
+              }
+            },
+            "regressions": [
+              "indexes"
+            ]
+          },
+          "error": "acceptance checks failed"
+        },
+        {
+          "index": 7,
+          "slug": "schema-validation",
+          "success": false,
+          "attempts": 3,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "regressions": [
+            "indexes"
+          ],
+          "agentDurationMs": 59819,
+          "usage": {
+            "input": 14263,
+            "output": 1217,
+            "reasoning": 708,
+            "cacheRead": 385024,
+            "cacheWrite": 0,
+            "totalModel": 16188,
+            "totalWithCache": 401212,
+            "eventCount": 8,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 2128,
+                "output": 609,
+                "reasoning": 54,
+                "cacheRead": 45568,
+                "cacheWrite": 0,
+                "totalModel": 2791,
+                "totalWithCache": 48359
+              },
+              {
+                "gapSeconds": 6,
+                "input": 765,
+                "output": 136,
+                "reasoning": 87,
+                "cacheRead": 47616,
+                "cacheWrite": 0,
+                "totalModel": 988,
+                "totalWithCache": 48604
+              },
+              {
+                "gapSeconds": 6,
+                "input": 1010,
+                "output": 137,
+                "reasoning": 0,
+                "cacheRead": 47616,
+                "cacheWrite": 0,
+                "totalModel": 1147,
+                "totalWithCache": 48763
+              },
+              {
+                "gapSeconds": 5,
+                "input": 2274,
+                "output": 76,
+                "reasoning": 64,
+                "cacheRead": 47616,
+                "cacheWrite": 0,
+                "totalModel": 2414,
+                "totalWithCache": 50030
+              },
+              {
+                "gapSeconds": 10,
+                "input": 4827,
+                "output": 61,
+                "reasoning": 247,
+                "cacheRead": 45568,
+                "cacheWrite": 0,
+                "totalModel": 5135,
+                "totalWithCache": 50703
+              },
+              {
+                "gapSeconds": 9,
+                "input": 1404,
+                "output": 60,
+                "reasoning": 256,
+                "cacheRead": 49664,
+                "cacheWrite": 0,
+                "totalModel": 1720,
+                "totalWithCache": 51384
+              },
+              {
+                "gapSeconds": 4,
+                "input": 718,
+                "output": 97,
+                "reasoning": 0,
+                "cacheRead": 50688,
+                "cacheWrite": 0,
+                "totalModel": 815,
+                "totalWithCache": 51503
+              },
+              {
+                "gapSeconds": 4,
+                "input": 1137,
+                "output": 41,
+                "reasoning": 0,
+                "cacheRead": 50688,
+                "cacheWrite": 0,
+                "totalModel": 1178,
+                "totalWithCache": 51866
+              }
+            ]
+          },
+          "toolCalls": 8,
+          "compactions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 6,
+            "totalChecks": 7,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:query-api": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:indexes": {
+                "passed": false,
+                "detail": "node:internal/modules/run_main:123 triggerUncaughtException( ^ AssertionError [ERR_ASSERTION]: Got unwanted exception: non-unique allows repeats Actual message: \"Duplicate value for unique index: email\" at <anonymous> (/Users/addy/Downloads/cuppet/benchmarks/results/verifier-tmp/indexes-d1c515a3.mjs:18:8) { generatedMessage: false, code: 'ERR_ASSERTION', actual: Error: Duplicate value for unique i"
+              },
+              "regression:transactions": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:cli-repl": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:aggregation": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "behavior:schema-validation": {
+                "passed": true,
+                "detail": "ok"
+              }
+            },
+            "regressions": [
+              "indexes"
+            ]
+          },
+          "error": "acceptance checks failed"
+        },
+        {
+          "index": 8,
+          "slug": "durability-reload",
+          "success": false,
+          "attempts": 3,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "regressions": [
+            "indexes"
+          ],
+          "agentDurationMs": 79557,
+          "usage": {
+            "input": 7309,
+            "output": 1452,
+            "reasoning": 818,
+            "cacheRead": 370176,
+            "cacheWrite": 0,
+            "totalModel": 9579,
+            "totalWithCache": 379755,
+            "eventCount": 7,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 295,
+                "output": 880,
+                "reasoning": 186,
+                "cacheRead": 51712,
+                "cacheWrite": 0,
+                "totalModel": 1361,
+                "totalWithCache": 53073
+              },
+              {
+                "gapSeconds": 6,
+                "input": 1383,
+                "output": 138,
+                "reasoning": 66,
+                "cacheRead": 51712,
+                "cacheWrite": 0,
+                "totalModel": 1587,
+                "totalWithCache": 53299
+              },
+              {
+                "gapSeconds": 5,
+                "input": 585,
+                "output": 122,
+                "reasoning": 21,
+                "cacheRead": 52736,
+                "cacheWrite": 0,
+                "totalModel": 728,
+                "totalWithCache": 53464
+              },
+              {
+                "gapSeconds": 5,
+                "input": 750,
+                "output": 99,
+                "reasoning": 36,
+                "cacheRead": 52736,
+                "cacheWrite": 0,
+                "totalModel": 885,
+                "totalWithCache": 53621
+              },
+              {
+                "gapSeconds": 6,
+                "input": 1913,
+                "output": 95,
+                "reasoning": 22,
+                "cacheRead": 52736,
+                "cacheWrite": 0,
+                "totalModel": 2030,
+                "totalWithCache": 54766
+              },
+              {
+                "gapSeconds": 9,
+                "input": 1371,
+                "output": 57,
+                "reasoning": 243,
+                "cacheRead": 53760,
+                "cacheWrite": 0,
+                "totalModel": 1671,
+                "totalWithCache": 55431
+              },
+              {
+                "gapSeconds": 13,
+                "input": 1012,
+                "output": 61,
+                "reasoning": 244,
+                "cacheRead": 54784,
+                "cacheWrite": 0,
+                "totalModel": 1317,
+                "totalWithCache": 56101
+              }
+            ]
+          },
+          "toolCalls": 5,
+          "compactions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 7,
+            "totalChecks": 8,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:query-api": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:indexes": {
+                "passed": false,
+                "detail": "node:internal/modules/run_main:123 triggerUncaughtException( ^ AssertionError [ERR_ASSERTION]: Got unwanted exception: non-unique allows repeats Actual message: \"Duplicate value for unique index: email\" at <anonymous> (/Users/addy/Downloads/cuppet/benchmarks/results/verifier-tmp/indexes-8bd75d3a.mjs:18:8) { generatedMessage: false, code: 'ERR_ASSERTION', actual: Error: Duplicate value for unique i"
+              },
+              "regression:transactions": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:cli-repl": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:aggregation": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:schema-validation": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "behavior:durability-reload": {
+                "passed": true,
+                "detail": "ok"
+              }
+            },
+            "regressions": [
+              "indexes"
+            ]
+          },
+          "error": "acceptance checks failed"
+        },
+        {
+          "index": 9,
+          "slug": "pluggable-backends",
+          "success": false,
+          "attempts": 3,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "regressions": [
+            "indexes"
+          ],
+          "agentDurationMs": 88793,
+          "usage": {
+            "input": 22843,
+            "output": 1685,
+            "reasoning": 826,
+            "cacheRead": 633344,
+            "cacheWrite": 0,
+            "totalModel": 25354,
+            "totalWithCache": 658698,
+            "eventCount": 11,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 1481,
+                "output": 591,
+                "reasoning": 156,
+                "cacheRead": 54784,
+                "cacheWrite": 0,
+                "totalModel": 2228,
+                "totalWithCache": 57012
+              },
+              {
+                "gapSeconds": 6,
+                "input": 1226,
+                "output": 139,
+                "reasoning": 72,
+                "cacheRead": 55808,
+                "cacheWrite": 0,
+                "totalModel": 1437,
+                "totalWithCache": 57245
+              },
+              {
+                "gapSeconds": 8,
+                "input": 1735,
+                "output": 87,
+                "reasoning": 95,
+                "cacheRead": 56832,
+                "cacheWrite": 0,
+                "totalModel": 1917,
+                "totalWithCache": 58749
+              },
+              {
+                "gapSeconds": 24,
+                "input": 1258,
+                "output": 236,
+                "reasoning": 302,
+                "cacheRead": 57856,
+                "cacheWrite": 0,
+                "totalModel": 1796,
+                "totalWithCache": 59652
+              },
+              {
+                "gapSeconds": 5,
+                "input": 827,
+                "output": 160,
+                "reasoning": 8,
+                "cacheRead": 58880,
+                "cacheWrite": 0,
+                "totalModel": 995,
+                "totalWithCache": 59875
+              },
+              {
+                "gapSeconds": 3,
+                "input": 10233,
+                "output": 46,
+                "reasoning": 11,
+                "cacheRead": 49664,
+                "cacheWrite": 0,
+                "totalModel": 10290,
+                "totalWithCache": 59954
+              },
+              {
+                "gapSeconds": 4,
+                "input": 1728,
+                "output": 110,
+                "reasoning": 0,
+                "cacheRead": 58880,
+                "cacheWrite": 0,
+                "totalModel": 1838,
+                "totalWithCache": 60718
+              },
+              {
+                "gapSeconds": 4,
+                "input": 836,
+                "output": 88,
+                "reasoning": 9,
+                "cacheRead": 59904,
+                "cacheWrite": 0,
+                "totalModel": 933,
+                "totalWithCache": 60837
+              },
+              {
+                "gapSeconds": 4,
+                "input": 955,
+                "output": 97,
+                "reasoning": 0,
+                "cacheRead": 59904,
+                "cacheWrite": 0,
+                "totalModel": 1052,
+                "totalWithCache": 60956
+              },
+              {
+                "gapSeconds": 4,
+                "input": 1565,
+                "output": 65,
+                "reasoning": 28,
+                "cacheRead": 59904,
+                "cacheWrite": 0,
+                "totalModel": 1658,
+                "totalWithCache": 61562
+              },
+              {
+                "gapSeconds": 8,
+                "input": 999,
+                "output": 66,
+                "reasoning": 145,
+                "cacheRead": 60928,
+                "cacheWrite": 0,
+                "totalModel": 1210,
+                "totalWithCache": 62138
+              }
+            ]
+          },
+          "toolCalls": 11,
+          "compactions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 8,
+            "totalChecks": 9,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:query-api": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:indexes": {
+                "passed": false,
+                "detail": "node:internal/modules/run_main:123 triggerUncaughtException( ^ AssertionError [ERR_ASSERTION]: Got unwanted exception: non-unique allows repeats Actual message: \"Duplicate value for unique index: email\" at <anonymous> (/Users/addy/Downloads/cuppet/benchmarks/results/verifier-tmp/indexes-d0bf55fd.mjs:18:8) { generatedMessage: false, code: 'ERR_ASSERTION', actual: Error: Duplicate value for unique i"
+              },
+              "regression:transactions": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:cli-repl": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:aggregation": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:schema-validation": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:durability-reload": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "behavior:pluggable-backends": {
+                "passed": true,
+                "detail": "ok"
+              }
+            },
+            "regressions": [
+              "indexes"
+            ]
+          },
+          "error": "acceptance checks failed"
+        },
+        {
+          "index": 10,
+          "slug": "atomic-batches",
+          "success": false,
+          "attempts": 3,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "regressions": [
+            "indexes"
+          ],
+          "agentDurationMs": 62375,
+          "usage": {
+            "input": 8129,
+            "output": 1010,
+            "reasoning": 1033,
+            "cacheRead": 380928,
+            "cacheWrite": 0,
+            "totalModel": 10172,
+            "totalWithCache": 391100,
+            "eventCount": 6,
+            "cost": 0,
+            "steps": [
+              {
+                "gapSeconds": 0,
+                "input": 1640,
+                "output": 599,
+                "reasoning": 69,
+                "cacheRead": 60928,
+                "cacheWrite": 0,
+                "totalModel": 2308,
+                "totalWithCache": 63236
+              },
+              {
+                "gapSeconds": 10,
+                "input": 1306,
+                "output": 139,
+                "reasoning": 114,
+                "cacheRead": 61952,
+                "cacheWrite": 0,
+                "totalModel": 1559,
+                "totalWithCache": 63511
+              },
+              {
+                "gapSeconds": 6,
+                "input": 1764,
+                "output": 76,
+                "reasoning": 85,
+                "cacheRead": 62976,
+                "cacheWrite": 0,
+                "totalModel": 1925,
+                "totalWithCache": 64901
+              },
+              {
+                "gapSeconds": 12,
+                "input": 1392,
+                "output": 65,
+                "reasoning": 369,
+                "cacheRead": 64000,
+                "cacheWrite": 0,
+                "totalModel": 1826,
+                "totalWithCache": 65826
+              },
+              {
+                "gapSeconds": 9,
+                "input": 1293,
+                "output": 47,
+                "reasoning": 202,
+                "cacheRead": 65024,
+                "cacheWrite": 0,
+                "totalModel": 1542,
+                "totalWithCache": 66566
+              },
+              {
+                "gapSeconds": 8,
+                "input": 734,
+                "output": 84,
+                "reasoning": 194,
+                "cacheRead": 66048,
+                "cacheWrite": 0,
+                "totalModel": 1012,
+                "totalWithCache": 67060
+              }
+            ]
+          },
+          "toolCalls": 5,
+          "compactions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 8,
+            "totalChecks": 10,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:query-api": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:indexes": {
+                "passed": false,
+                "detail": "node:internal/modules/run_main:123 triggerUncaughtException( ^ AssertionError [ERR_ASSERTION]: Got unwanted exception: non-unique allows repeats Actual message: \"Duplicate value for unique index: email\" at <anonymous> (/Users/addy/Downloads/cuppet/benchmarks/results/verifier-tmp/indexes-8719d0e4.mjs:18:8) { generatedMessage: false, code: 'ERR_ASSERTION', actual: Error: Duplicate value for unique i"
+              },
+              "regression:transactions": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:cli-repl": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:aggregation": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:schema-validation": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:durability-reload": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:pluggable-backends": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "behavior:atomic-batches": {
+                "passed": false,
+                "detail": "node:internal/modules/run_main:123 triggerUncaughtException( ^ AssertionError [ERR_ASSERTION]: Expected values to be strictly equal: false !== true at <anonymous> (/Users/addy/Downloads/cuppet/benchmarks/results/verifier-tmp/atomic-batches-b9d3a3be.mjs:23:8) { generatedMessage: true, code: 'ERR_ASSERTION', actual: false, expected: true, operator: 'strictEqual', diff: 'simple' } Node.js v22.21.0"
+              }
+            },
+            "regressions": [
+              "indexes"
+            ]
+          },
+          "error": "acceptance checks failed"
+        }
+      ],
+      "summary": {
+        "stagesCompleted": 10,
+        "successes": 2,
+        "firstAttemptSuccesses": 1,
+        "repairedStages": 1,
+        "regressionStages": 7,
+        "totalAgentDurationMs": 739737,
+        "uncachedInput": 236923,
+        "cacheRead": 3172352,
+        "totalModelTokens": 261554,
+        "cacheShare": 0.9305063393243431,
+        "adjustedCacheShare": 0.9305063393243431,
+        "toolCalls": 86,
+        "compactions": 0,
+        "passedChecks": 46,
+        "totalChecks": 55,
+        "errors": []
+      }
+    },
+    "deepseek-harness": {
+      "results": [
+        {
+          "index": 1,
+          "slug": "core-store",
+          "success": true,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "regressions": [],
+          "agentDurationMs": 217860,
+          "usage": {
+            "input": 16321,
+            "output": 11442,
+            "reasoning": 0,
+            "cacheRead": 17920,
+            "cacheWrite": 0,
+            "totalModel": 27763,
+            "totalWithCache": 45683,
+            "eventCount": 6,
+            "cost": 0
+          },
+          "toolCalls": 6,
+          "compactions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 1,
+            "totalChecks": 1,
+            "checks": {
+              "behavior:core-store": {
+                "passed": true,
+                "detail": "ok"
+              }
+            },
+            "regressions": []
+          }
+        },
+        {
+          "index": 2,
+          "slug": "query-api",
+          "success": true,
+          "attempts": 2,
+          "firstAttemptSuccess": false,
+          "repaired": true,
+          "regressions": [],
+          "agentDurationMs": 192152,
+          "usage": {
+            "input": 39527,
+            "output": 9687,
+            "reasoning": 0,
+            "cacheRead": 151040,
+            "cacheWrite": 0,
+            "totalModel": 49214,
+            "totalWithCache": 200254,
+            "eventCount": 8,
+            "cost": 0
+          },
+          "toolCalls": 6,
+          "compactions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 2,
+            "totalChecks": 2,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "behavior:query-api": {
+                "passed": true,
+                "detail": "ok"
+              }
+            },
+            "regressions": []
+          }
+        },
+        {
+          "index": 3,
+          "slug": "indexes",
+          "success": true,
+          "attempts": 3,
+          "firstAttemptSuccess": false,
+          "repaired": true,
+          "regressions": [],
+          "agentDurationMs": 701439,
+          "usage": {
+            "input": 102949,
+            "output": 36791,
+            "reasoning": 0,
+            "cacheRead": 872448,
+            "cacheWrite": 0,
+            "totalModel": 139740,
+            "totalWithCache": 1012188,
+            "eventCount": 19,
+            "cost": 0
+          },
+          "toolCalls": 16,
+          "compactions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 3,
+            "totalChecks": 3,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:query-api": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "behavior:indexes": {
+                "passed": true,
+                "detail": "ok"
+              }
+            },
+            "regressions": []
+          }
+        },
+        {
+          "index": 4,
+          "slug": "transactions",
+          "success": true,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "regressions": [],
+          "agentDurationMs": 251101,
+          "usage": {
+            "input": 29489,
+            "output": 11797,
+            "reasoning": 0,
+            "cacheRead": 1143808,
+            "cacheWrite": 0,
+            "totalModel": 41286,
+            "totalWithCache": 1185094,
+            "eventCount": 14,
+            "cost": 0
+          },
+          "toolCalls": 15,
+          "compactions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 4,
+            "totalChecks": 4,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:query-api": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:indexes": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "behavior:transactions": {
+                "passed": true,
+                "detail": "ok"
+              }
+            },
+            "regressions": []
+          }
+        },
+        {
+          "index": 5,
+          "slug": "cli-repl",
+          "success": true,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "regressions": [],
+          "agentDurationMs": 120421,
+          "usage": {
+            "input": 13129,
+            "output": 5979,
+            "reasoning": 0,
+            "cacheRead": 385024,
+            "cacheWrite": 0,
+            "totalModel": 19108,
+            "totalWithCache": 404132,
+            "eventCount": 4,
+            "cost": 0
+          },
+          "toolCalls": 5,
+          "compactions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 5,
+            "totalChecks": 5,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:query-api": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:indexes": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:transactions": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "behavior:cli-repl": {
+                "passed": true,
+                "detail": "ok"
+              }
+            },
+            "regressions": []
+          }
+        },
+        {
+          "index": 6,
+          "slug": "aggregation",
+          "success": false,
+          "attempts": 1,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "regressions": [],
+          "agentDurationMs": 54023,
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalModel": 0,
+            "totalWithCache": 0,
+            "eventCount": 0,
+            "cost": 0
+          },
+          "toolCalls": 0,
+          "compactions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 5,
+            "totalChecks": 6,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:query-api": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:indexes": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:transactions": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:cli-repl": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "behavior:aggregation": {
+                "passed": false,
+                "detail": "/Users/addy/Downloads/cuppet/benchmarks/results/verifier-tmp/aggregation-aa9fbc96.mjs:12 const grouped = col.aggregate([ ^ TypeError: col.aggregate is not a function at <anonymous> (/Users/addy/Downloads/cuppet/benchmarks/results/verifier-tmp/aggregation-aa9fbc96.mjs:12:21) Node.js v22.21.0"
+              }
+            },
+            "regressions": []
+          },
+          "error": "WebSocket closed 1006"
+        },
+        {
+          "index": 7,
+          "slug": "schema-validation",
+          "success": true,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "regressions": [],
+          "agentDurationMs": 401644,
+          "usage": {
+            "input": 28861,
+            "output": 13668,
+            "reasoning": 0,
+            "cacheRead": 1450496,
+            "cacheWrite": 0,
+            "totalModel": 42529,
+            "totalWithCache": 1493025,
+            "eventCount": 13,
+            "cost": 0
+          },
+          "toolCalls": 15,
+          "compactions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 7,
+            "totalChecks": 7,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:query-api": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:indexes": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:transactions": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:cli-repl": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:aggregation": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "behavior:schema-validation": {
+                "passed": true,
+                "detail": "ok"
+              }
+            },
+            "regressions": []
+          }
+        },
+        {
+          "index": 8,
+          "slug": "durability-reload",
+          "success": true,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "regressions": [],
+          "agentDurationMs": 392320,
+          "usage": {
+            "input": 26376,
+            "output": 12100,
+            "reasoning": 0,
+            "cacheRead": 1344512,
+            "cacheWrite": 0,
+            "totalModel": 38476,
+            "totalWithCache": 1382988,
+            "eventCount": 10,
+            "cost": 0
+          },
+          "toolCalls": 10,
+          "compactions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 8,
+            "totalChecks": 8,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:query-api": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:indexes": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:transactions": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:cli-repl": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:aggregation": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:schema-validation": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "behavior:durability-reload": {
+                "passed": true,
+                "detail": "ok"
+              }
+            },
+            "regressions": []
+          }
+        },
+        {
+          "index": 9,
+          "slug": "pluggable-backends",
+          "success": true,
+          "attempts": 1,
+          "firstAttemptSuccess": true,
+          "repaired": false,
+          "regressions": [],
+          "agentDurationMs": 189409,
+          "usage": {
+            "input": 9684,
+            "output": 4115,
+            "reasoning": 0,
+            "cacheRead": 738816,
+            "cacheWrite": 0,
+            "totalModel": 13799,
+            "totalWithCache": 752615,
+            "eventCount": 5,
+            "cost": 0
+          },
+          "toolCalls": 5,
+          "compactions": 0,
+          "evaluation": {
+            "success": true,
+            "passedChecks": 9,
+            "totalChecks": 9,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:query-api": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:indexes": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:transactions": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:cli-repl": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:aggregation": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:schema-validation": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:durability-reload": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "behavior:pluggable-backends": {
+                "passed": true,
+                "detail": "ok"
+              }
+            },
+            "regressions": []
+          }
+        },
+        {
+          "index": 10,
+          "slug": "atomic-batches",
+          "success": false,
+          "attempts": 3,
+          "firstAttemptSuccess": false,
+          "repaired": false,
+          "regressions": [],
+          "agentDurationMs": 615813,
+          "usage": {
+            "input": 34827,
+            "output": 21923,
+            "reasoning": 0,
+            "cacheRead": 2289664,
+            "cacheWrite": 0,
+            "totalModel": 56750,
+            "totalWithCache": 2346414,
+            "eventCount": 14,
+            "cost": 0
+          },
+          "toolCalls": 12,
+          "compactions": 0,
+          "evaluation": {
+            "success": false,
+            "passedChecks": 9,
+            "totalChecks": 10,
+            "checks": {
+              "regression:core-store": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:query-api": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:indexes": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:transactions": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:cli-repl": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:aggregation": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:schema-validation": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:durability-reload": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "regression:pluggable-backends": {
+                "passed": true,
+                "detail": "ok"
+              },
+              "behavior:atomic-batches": {
+                "passed": false,
+                "detail": "node:internal/modules/run_main:123 triggerUncaughtException( ^ AssertionError [ERR_ASSERTION]: Expected values to be strictly equal: false !== true at <anonymous> (/Users/addy/Downloads/cuppet/benchmarks/results/verifier-tmp/atomic-batches-0e4a3e6b.mjs:23:8) { generatedMessage: true, code: 'ERR_ASSERTION', actual: false, expected: true, operator: 'strictEqual', diff: 'simple' } Node.js v22.21.0"
+              }
+            },
+            "regressions": []
+          },
+          "error": "acceptance checks failed"
+        }
+      ],
+      "summary": {
+        "stagesCompleted": 10,
+        "successes": 8,
+        "firstAttemptSuccesses": 6,
+        "repairedStages": 2,
+        "regressionStages": 0,
+        "totalAgentDurationMs": 3136182,
+        "uncachedInput": 301163,
+        "cacheRead": 8393728,
+        "totalModelTokens": 428665,
+        "cacheShare": 0.9653632230697314,
+        "adjustedCacheShare": 0,
+        "toolCalls": 90,
+        "compactions": 0,
+        "passedChecks": 53,
+        "totalChecks": 55,
+        "errors": [
+          "WebSocket closed 1006"
+        ]
+      }
+    }
+  },
+  "summary": {
+    "arms": {
+      "opencode": {
+        "stagesCompleted": 10,
+        "successes": 2,
+        "firstAttemptSuccesses": 1,
+        "repairedStages": 1,
+        "regressionStages": 7,
+        "totalAgentDurationMs": 1040522,
+        "uncachedInput": 327509,
+        "cacheRead": 2981888,
+        "totalModelTokens": 358186,
+        "cacheShare": 0.9010366541094949,
+        "adjustedCacheShare": 0.9010366541094949,
+        "toolCalls": 117,
+        "compactions": 0,
+        "passedChecks": 46,
+        "totalChecks": 55,
+        "errors": []
+      },
+      "cuppet": {
+        "stagesCompleted": 10,
+        "successes": 2,
+        "firstAttemptSuccesses": 1,
+        "repairedStages": 1,
+        "regressionStages": 7,
+        "totalAgentDurationMs": 739737,
+        "uncachedInput": 236923,
+        "cacheRead": 3172352,
+        "totalModelTokens": 261554,
+        "cacheShare": 0.9305063393243431,
+        "adjustedCacheShare": 0.9305063393243431,
+        "toolCalls": 86,
+        "compactions": 0,
+        "passedChecks": 46,
+        "totalChecks": 55,
+        "errors": []
+      },
+      "deepseek-harness": {
+        "stagesCompleted": 10,
+        "successes": 8,
+        "firstAttemptSuccesses": 6,
+        "repairedStages": 2,
+        "regressionStages": 0,
+        "totalAgentDurationMs": 3136182,
+        "uncachedInput": 301163,
+        "cacheRead": 8393728,
+        "totalModelTokens": 428665,
+        "cacheShare": 0.9653632230697314,
+        "adjustedCacheShare": 0,
+        "toolCalls": 90,
+        "compactions": 0,
+        "passedChecks": 53,
+        "totalChecks": 55,
+        "errors": [
+          "WebSocket closed 1006"
+        ]
+      }
+    },
+    "opencode": {
+      "stagesCompleted": 10,
+      "successes": 2,
+      "firstAttemptSuccesses": 1,
+      "repairedStages": 1,
+      "regressionStages": 7,
+      "totalAgentDurationMs": 1040522,
+      "uncachedInput": 327509,
+      "cacheRead": 2981888,
+      "totalModelTokens": 358186,
+      "cacheShare": 0.9010366541094949,
+      "adjustedCacheShare": 0.9010366541094949,
+      "toolCalls": 117,
+      "compactions": 0,
+      "passedChecks": 46,
+      "totalChecks": 55,
+      "errors": []
+    },
+    "cuppet": {
+      "stagesCompleted": 10,
+      "successes": 2,
+      "firstAttemptSuccesses": 1,
+      "repairedStages": 1,
+      "regressionStages": 7,
+      "totalAgentDurationMs": 739737,
+      "uncachedInput": 236923,
+      "cacheRead": 3172352,
+      "totalModelTokens": 261554,
+      "cacheShare": 0.9305063393243431,
+      "adjustedCacheShare": 0.9305063393243431,
+      "toolCalls": 86,
+      "compactions": 0,
+      "passedChecks": 46,
+      "totalChecks": 55,
+      "errors": []
+    },
+    "deepseek-harness": {
+      "stagesCompleted": 10,
+      "successes": 8,
+      "firstAttemptSuccesses": 6,
+      "repairedStages": 2,
+      "regressionStages": 0,
+      "totalAgentDurationMs": 3136182,
+      "uncachedInput": 301163,
+      "cacheRead": 8393728,
+      "totalModelTokens": 428665,
+      "cacheShare": 0.9653632230697314,
+      "adjustedCacheShare": 0,
+      "toolCalls": 90,
+      "compactions": 0,
+      "passedChecks": 53,
+      "totalChecks": 55,
+      "errors": [
+        "WebSocket closed 1006"
+      ]
+    },
+    "comparisons": {
+      "cuppet-vs-opencode": {
+        "baseline": "opencode",
+        "candidate": "cuppet",
+        "successDelta": 0,
+        "timeReduction": 0.2890712546202771,
+        "uncachedInputReduction": 0.27659087231190593,
+        "totalTokenReduction": 0.26978162183893284,
+        "toolCallReduction": 0.26495726495726496,
+        "checkDelta": 0
+      },
+      "deepseek-harness-vs-opencode": {
+        "baseline": "opencode",
+        "candidate": "deepseek-harness",
+        "successDelta": 6,
+        "timeReduction": -2.014046795742906,
+        "uncachedInputReduction": 0.08044359086315185,
+        "totalTokenReduction": -0.19676648445221198,
+        "toolCallReduction": 0.23076923076923078,
+        "checkDelta": 7
+      },
+      "cuppet-vs-deepseek-harness": {
+        "baseline": "deepseek-harness",
+        "candidate": "cuppet",
+        "successDelta": -6,
+        "timeReduction": 0.7641281660311806,
+        "uncachedInputReduction": 0.21330641546272283,
+        "totalTokenReduction": 0.3898405514795936,
+        "toolCallReduction": 0.044444444444444446,
+        "checkDelta": -7
+      }
+    },
+    "comparison": {
+      "baseline": "opencode",
+      "candidate": "cuppet",
+      "successDelta": 0,
+      "timeReduction": 0.2890712546202771,
+      "uncachedInputReduction": 0.27659087231190593,
+      "totalTokenReduction": 0.26978162183893284,
+      "toolCallReduction": 0.26495726495726496,
+      "checkDelta": 0
+    }
+  }
+}

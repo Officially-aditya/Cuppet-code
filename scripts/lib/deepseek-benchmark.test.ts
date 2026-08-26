@@ -40,3 +40,17 @@ test('DeepSeek benchmark target can select the OpenAI Codex route and model', ()
   }
 })
 
+test('DeepSeek benchmark target accepts an explicit provider override', () => {
+  const previousProvider = process.env.CUPPET_DSH_PROVIDER
+  delete process.env.CUPPET_DSH_PROVIDER
+  try {
+    assert.deepEqual(resolveDeepSeekBenchmarkTarget('gpt-5.6-luna', 'openai-codex'), {
+      provider: 'openai-codex',
+      model: 'gpt-5.6-luna',
+      usesCuppetOpenAICodex: true,
+    })
+  } finally {
+    if (previousProvider === undefined) delete process.env.CUPPET_DSH_PROVIDER
+    else process.env.CUPPET_DSH_PROVIDER = previousProvider
+  }
+})

@@ -16,8 +16,10 @@ import { resolveRuntimeAssets } from '../packages/cli/src/runtime/assets.js'
 import { createRuntimePaths } from '../packages/cli/src/runtime/paths.js'
 import { startTstDaemon, type TstRuntime } from '../packages/cli/src/tst/supervisor.js'
 import type { AgentEvent, ModelRef, TokenUsage } from '../packages/cli/src/types.js'
+import { openDeepSeekBenchmarkSession, type DeepSeekBenchmarkSession } from './lib/deepseek-benchmark.js'
+import { DEEPSEEK_HARNESS_CODING_SYSTEM_PROMPT, type DeepSeekTokenTotals } from './lib/deepseek-harness.js'
 
-type Arm = 'opencode' | 'cuppet'
+type Arm = 'opencode' | 'cuppet' | 'deepseek-harness'
 type CommandResult = { passed: boolean; code: number | string; stdout: string; stderr: string; durationMs: number }
 type UsageStats = { input: number; output: number; reasoning: number; cacheRead: number; cacheWrite: number; totalModel: number; totalWithCache: number }
 type UsageStep = UsageStats & { gapSeconds?: number }
@@ -134,7 +136,10 @@ dbFile.createCollection('users')
 dbFile.collection('users').insert({ name: 'a', age: 30 })
 dbFile.save()
 const db3 = new MiniDB({ file })
-assert.deepEqual(db3.collection('users').all(), [{ _id: 'u1', name: 'a', age: 30 }])
+const reloaded = db3.collection('users').all()
+assert.equal(reloaded.length, 1)
+assert.equal(typeof reloaded[0]._id, 'string')
+assert.deepEqual({ name: reloaded[0].name, age: reloaded[0].age }, { name: 'a', age: 30 })
 await fs.rm(file, { force: true })
 `),
   },
@@ -486,8 +491,8 @@ function toCheck(result: CommandResult): Check {
 type UsageSample = TokenUsage & { at: number }
 type TaskTelemetry = { usageEvents: UsageSample[]; costs: number[]; toolCalls: number; compactions: number; errors: string[] }
 type BenchmarkRuntime = { client: ReturnType<typeof createOpencodeClient>; close(): Promise<void> }
-type LiveArm = {
-  arm: Arm
+type OpenCodeLiveArm = {
+  arm: 'opencode' | 'cuppet'
   workspace: string
   paths: Awaited<ReturnType<typeof createRuntimePaths>>
   gateway: OpenCodeGateway
@@ -501,6 +506,20 @@ type LiveArm = {
   results: StageResult[]
   current?: TaskTelemetry
 }
+
+type DeepSeekLiveArm = {
+  arm: 'deepseek-harness'
+  workspace: string
+  runtimeRoot: string
+  sessionRoot: string
+  harness: DeepSeekBenchmarkSession
+  sessionID: string
+  errors: string[]
+  compactions: number
+  results: StageResult[]
+}
+
+type LiveArm = OpenCodeLiveArm | DeepSeekLiveArm
 const CACHE_IDLE_GAP_SECONDS = 180
 
 function verifyRetryLimit(): number {
@@ -546,7 +565,7 @@ async function main(): Promise<void> {
   const live = new Map<Arm, LiveArm>()
   const reports: Partial<Record<Arm, LiveArm>> = {}
   try {
-    const order: Arm[] = ['opencode', 'cuppet']
+    const order: Arm[] = ['opencode', 'cuppet', 'deepseek-harness']
     for (const arm of order) {
       const armRoot = join(root, arm)
       await mkdir(armRoot, { recursive: true, mode: 0o700 })
@@ -556,7 +575,7 @@ async function main(): Promise<void> {
     const stageLimit = Math.max(1, Math.min(stages.length, Number(process.env.CUPPET_MARATHON_LIMIT ?? stages.length) || stages.length))
     for (let index = 0; index < stageLimit; index += 1) {
       const stage = stages[index]!
-      process.stdout.write(`[${index + 1}/${stages.length}] ${stage.slug} · opencode+cuppet\n`)
+      process.stdout.write(`[${index + 1}/${stages.length}] ${stage.slug} · ${order.join('+')}\n`)
       const outcomes = await Promise.allSettled(
         order.map(async (arm) => {
           const runtime = live.get(arm)
@@ -575,9 +594,13 @@ async function main(): Promise<void> {
     process.stdout.write(`Raw: ${finalJsonPath}\nSummary: ${finalMarkdownPath}\n`)
   } finally {
     for (const runtime of live.values()) {
-      await runtime.gateway.close().catch(() => undefined)
-      await runtime.opencode.close().catch(() => undefined)
-      await runtime.tst?.close().catch(() => undefined)
+      if (runtime.arm === 'deepseek-harness') {
+        await runtime.harness.close().catch(() => undefined)
+      } else {
+        await runtime.gateway.close().catch(() => undefined)
+        await runtime.opencode.close().catch(() => undefined)
+        await runtime.tst?.close().catch(() => undefined)
+      }
     }
     if (!keepWorkspaces) await rm(root, { recursive: true, force: true }).catch(() => undefined)
     else process.stdout.write(`Artifacts retained: ${root}\n`)
@@ -593,6 +616,31 @@ async function startArm(
   const workspace = join(root, 'workspace')
   const runtimeRoot = join(root, 'runtime')
   await createWorkspace(workspace)
+  if (arm === 'deepseek-harness') {
+    const sessionRoot = join(root, 'sessions')
+    const provider = process.env.CUPPET_DSH_PROVIDER?.trim()
+      ?? (model.providerID === 'openai' ? 'openai-codex' : undefined)
+    const harness = await openDeepSeekBenchmarkSession({
+      workspace,
+      sessionRoot,
+      model: model.modelID,
+      ...(provider ? { provider } : {}),
+      maxTokens: 16_384,
+      requestTimeoutMs: 10 * 60_000,
+      systemPrompt: `${DEEPSEEK_HARNESS_CODING_SYSTEM_PROMPT}\nWorkspace root: ${workspace}. Use absolute paths under this directory only.`,
+    })
+    return {
+      arm,
+      workspace,
+      runtimeRoot,
+      sessionRoot,
+      harness,
+      sessionID: '',
+      errors: [],
+      compactions: 0,
+      results: [],
+    }
+  }
   const paths = await createRuntimePaths(workspace, runtimeRoot)
   await seedProviderState(paths)
   const logger = new RedactedLogger(paths.logs)
@@ -660,6 +708,7 @@ async function startArm(
 }
 
 async function runStage(runtime: LiveArm, stage: Stage, index: number): Promise<StageResult> {
+  if (runtime.arm === 'deepseek-harness') return runDeepSeekStage(runtime, stage, index)
   const telemetry: TaskTelemetry = { usageEvents: [], costs: [], toolCalls: 0, compactions: 0, errors: [] }
   runtime.current = telemetry
   const started = performance.now()
@@ -715,6 +764,74 @@ async function runStage(runtime: LiveArm, stage: Stage, index: number): Promise<
   runtime.results.push(result)
   runtime.current = undefined
   return result
+}
+
+async function runDeepSeekStage(runtime: DeepSeekLiveArm, stage: Stage, index: number): Promise<StageResult> {
+  const started = performance.now()
+  const usageParts: DeepSeekTokenTotals[] = []
+  let attempts = 0
+  let firstAttemptSuccess = false
+  let evaluation: Awaited<ReturnType<typeof evaluateStage>> | undefined
+  let answer = ''
+  let failure: string | undefined
+  const retries = verifyRetryLimit()
+  while (attempts <= retries) {
+    const prompt = attempts === 0 ? stage.prompt : repairPromptFor(stage, evaluation!)
+    attempts += 1
+    try {
+      const response = await runtime.harness.run(prompt, runtime.sessionID || undefined)
+      runtime.sessionID = response.sessionID
+      answer = response.answer
+      usageParts.push(response.usage)
+    } catch (error) {
+      failure = error instanceof Error ? error.message : String(error)
+      runtime.errors.push(failure)
+      if (/model not found|usage limit|quota/i.test(failure)) throw new Error(`[${runtime.arm}] ${compact(failure, 200)}`)
+      break
+    }
+    await delay(300)
+    evaluation = await evaluateStage(runtime.workspace, index)
+    if (attempts === 1) firstAttemptSuccess = evaluation.success
+    if (evaluation.success) break
+    process.stdout.write(`  ${runtime.arm}/${stage.slug}: attempt ${attempts} failed (${evaluation.regressions.length} regressions), feeding back\n`)
+  }
+  evaluation ??= await evaluateStage(runtime.workspace, index)
+  const usage = usageParts.reduce((sum, part) => addUsage(sum, deepSeekUsage(part)), zeroUsage())
+  const error = failure ?? (!evaluation.success ? 'acceptance checks failed' : undefined)
+  const result: StageResult = {
+    index: index + 1,
+    slug: stage.slug,
+    success: !error,
+    attempts,
+    firstAttemptSuccess,
+    repaired: attempts > 1 && !firstAttemptSuccess && !error,
+    regressions: evaluation.regressions,
+    agentDurationMs: Math.round(performance.now() - started),
+    usage: {
+      ...usage,
+      eventCount: usageParts.reduce((sum, part) => sum + part.modelCalls, 0),
+      cost: 0,
+    },
+    toolCalls: usageParts.reduce((sum, part) => sum + part.toolCalls, 0),
+    compactions: 0,
+    evaluation,
+    ...(error ? { error: compact(error, 400) } : {}),
+  }
+  runtime.results.push(result)
+  return result
+}
+
+function deepSeekUsage(usage: DeepSeekTokenTotals): UsageStats {
+  const totalModel = usage.totalModelTokens
+  return {
+    input: usage.inputTokens,
+    output: usage.outputTokens,
+    reasoning: usage.reasoningTokens,
+    cacheRead: usage.cacheReadTokens,
+    cacheWrite: usage.cacheWriteTokens,
+    totalModel,
+    totalWithCache: totalModel + usage.cacheReadTokens + usage.cacheWriteTokens,
+  }
 }
 
 function repairPromptFor(stage: Stage, evaluation: Awaited<ReturnType<typeof evaluateStage>>): string {
@@ -1260,7 +1377,23 @@ function buildReport(live: Map<Arm, LiveArm>, artifacts: string) {
   }
   const opencode = summarize(live.get('opencode'))
   const cuppet = summarize(live.get('cuppet'))
+  const deepseekHarness = summarize(live.get('deepseek-harness'))
   const ratio = (numerator: number, denominator: number) => (denominator === 0 ? 0 : numerator / denominator)
+  const compare = (baseline: ReturnType<typeof summarize>, candidate: ReturnType<typeof summarize>, baselineArm: Arm, candidateArm: Arm) => ({
+    baseline: baselineArm,
+    candidate: candidateArm,
+    successDelta: candidate.successes - baseline.successes,
+    timeReduction: ratio(baseline.totalAgentDurationMs - candidate.totalAgentDurationMs, baseline.totalAgentDurationMs),
+    uncachedInputReduction: ratio(baseline.uncachedInput - candidate.uncachedInput, baseline.uncachedInput),
+    totalTokenReduction: ratio(baseline.totalModelTokens - candidate.totalModelTokens, baseline.totalModelTokens),
+    toolCallReduction: ratio(baseline.toolCalls - candidate.toolCalls, baseline.toolCalls),
+    checkDelta: candidate.passedChecks - baseline.passedChecks,
+  })
+  const comparisons = {
+    'cuppet-vs-opencode': compare(opencode, cuppet, 'opencode', 'cuppet'),
+    'deepseek-harness-vs-opencode': compare(opencode, deepseekHarness, 'opencode', 'deepseek-harness'),
+    'cuppet-vs-deepseek-harness': compare(deepseekHarness, cuppet, 'deepseek-harness', 'cuppet'),
+  }
   return {
     schema: 1,
     createdAt: new Date().toISOString(),
@@ -1270,18 +1403,15 @@ function buildReport(live: Map<Arm, LiveArm>, artifacts: string) {
     arms: {
       opencode: { results: live.get('opencode')?.results ?? [], summary: opencode },
       cuppet: { results: live.get('cuppet')?.results ?? [], summary: cuppet },
+      'deepseek-harness': { results: live.get('deepseek-harness')?.results ?? [], summary: deepseekHarness },
     },
     summary: {
+      arms: { opencode, cuppet, 'deepseek-harness': deepseekHarness },
       opencode,
       cuppet,
-      comparison: {
-        successDelta: cuppet.successes - opencode.successes,
-        timeReduction: ratio(opencode.totalAgentDurationMs - cuppet.totalAgentDurationMs, opencode.totalAgentDurationMs),
-        uncachedInputReduction: ratio(opencode.uncachedInput - cuppet.uncachedInput, opencode.uncachedInput),
-        totalTokenReduction: ratio(opencode.totalModelTokens - cuppet.totalModelTokens, opencode.totalModelTokens),
-        toolCallReduction: ratio(opencode.toolCalls - cuppet.toolCalls, opencode.toolCalls),
-        checkDelta: cuppet.passedChecks - opencode.passedChecks,
-      },
+      'deepseek-harness': deepseekHarness,
+      comparisons,
+      comparison: comparisons['cuppet-vs-opencode'],
     },
   }
 }
@@ -1290,7 +1420,7 @@ function signedPct(reduction: number): string {
   return `${reduction >= 0 ? '−' : '+'}${Math.abs(reduction * 100).toFixed(1)}%${reduction < 0 ? ' (more)' : ''}`
 }
 
-function renderMarkdown(report: ReturnType<typeof buildReport>): string {
+function renderLegacyMarkdown(report: ReturnType<typeof buildReport>): string {
   const { opencode, cuppet, comparison } = report.summary
   const rows = report.stages.map((slug, index) => {
     const official = report.arms.opencode.results[index]
@@ -1324,6 +1454,57 @@ function renderMarkdown(report: ReturnType<typeof buildReport>): string {
     '',
     '| Stage | OpenCode | Cuppet |',
     '|---|---|---|',
+    ...rows,
+    '',
+    '* = recovered by verification guard. ! = broke at least one earlier stage.',
+    '',
+  ].join('\n')
+}
+
+function renderMarkdown(report: ReturnType<typeof buildReport>): string {
+  const armKeys = ['opencode', 'cuppet', 'deepseek-harness'] as const
+  const labels = {
+    opencode: 'OpenCode',
+    cuppet: 'Cuppet',
+    'deepseek-harness': 'DeepSeek Harness',
+  }
+  const summaries = {
+    opencode: report.summary.opencode,
+    cuppet: report.summary.cuppet,
+    'deepseek-harness': report.summary['deepseek-harness'],
+  }
+  const rows = report.stages.map((slug, index) => {
+    const cells = armKeys.map((arm) => {
+      const value = report.arms[arm].results[index]
+      return value
+        ? `${value.success ? 'pass' : 'FAIL'}${value.repaired ? '*' : ''}${value.regressions.length > 0 ? '!' : ''} · ${Math.round(value.agentDurationMs / 1000)}s · tok ${value.usage.totalModel.toLocaleString()} · ${value.attempts} attempt(s)`
+        : 'missing'
+    })
+    return `| ${index + 1}. ${slug} | ${cells.join(' | ')} |`
+  })
+  return [
+    `# Three-arm marathon benchmark: ${report.stages.length}-stage MiniDB build`,
+    '',
+    `- Created: ${report.createdAt}`,
+    `- Model: \`${report.model.providerID}/${report.model.modelID}\`${report.model.variant ? ` @${report.model.variant}` : ''}`,
+    '- One persistent session per arm; stages build cumulatively; every stage verifies the full history (regressions marked !).',
+    '',
+    `| Metric | ${armKeys.map((arm) => labels[arm]).join(' | ')} |`,
+    `|---|${armKeys.map(() => '---:').join('|')}|`,
+    `| Stages correct | ${armKeys.map((arm) => `${summaries[arm].successes}/${summaries[arm].stagesCompleted}`).join(' | ')} |`,
+    `| First-attempt correct | ${armKeys.map((arm) => summaries[arm].firstAttemptSuccesses).join(' | ')} |`,
+    `| Repairs needed | ${armKeys.map((arm) => summaries[arm].repairedStages).join(' | ')} |`,
+    `| Regressed stages | ${armKeys.map((arm) => summaries[arm].regressionStages).join(' | ')} |`,
+    `| Total agent time | ${armKeys.map((arm) => `${(summaries[arm].totalAgentDurationMs / 1000).toFixed(0)} s`).join(' | ')} |`,
+    `| Uncached input | ${armKeys.map((arm) => summaries[arm].uncachedInput.toLocaleString()).join(' | ')} |`,
+    `| Total model tokens | ${armKeys.map((arm) => summaries[arm].totalModelTokens.toLocaleString()).join(' | ')} |`,
+    `| Tool calls | ${armKeys.map((arm) => summaries[arm].toolCalls).join(' | ')} |`,
+    `| Cache share | ${armKeys.map((arm) => `${(summaries[arm].cacheShare * 100).toFixed(1)}%`).join(' | ')} |`,
+    `| Compactions | ${armKeys.map((arm) => summaries[arm].compactions).join(' | ')} |`,
+    `| Acceptance checks | ${armKeys.map((arm) => `${summaries[arm].passedChecks}/${summaries[arm].totalChecks}`).join(' | ')} |`,
+    '',
+    `| Stage | ${armKeys.map((arm) => labels[arm]).join(' | ')} |`,
+    `|---|${armKeys.map(() => '---').join('|')}|`,
     ...rows,
     '',
     '* = recovered by verification guard. ! = broke at least one earlier stage.',

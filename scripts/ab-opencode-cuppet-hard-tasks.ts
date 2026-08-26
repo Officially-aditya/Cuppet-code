@@ -13,8 +13,10 @@ import { resolveRuntimeAssets } from '../packages/cli/src/runtime/assets.js'
 import { createRuntimePaths } from '../packages/cli/src/runtime/paths.js'
 import { startTstDaemon, type TstRuntime } from '../packages/cli/src/tst/supervisor.js'
 import type { AgentEvent, ModelRef, TokenUsage } from '../packages/cli/src/types.js'
+import { openDeepSeekBenchmarkSession, type DeepSeekBenchmarkSession } from './lib/deepseek-benchmark.js'
+import { DEEPSEEK_HARNESS_CODING_SYSTEM_PROMPT, type DeepSeekTokenTotals } from './lib/deepseek-harness.js'
 
-type Arm = 'opencode' | 'cuppet'
+type Arm = 'opencode' | 'cuppet' | 'deepseek-harness'
 type PatternCheck = { name: string; file: string; pattern: RegExp; min?: number }
 type HardTask = {
   slug: string
@@ -830,8 +832,8 @@ function toCheck(result: CommandResult): Check {
 // Runtime (mirrors the 10-task harness: concurrent arms, telemetry, guard).
 // ---------------------------------------------------------------------------
 
-type LiveArm = {
-  arm: Arm
+type OpenCodeLiveArm = {
+  arm: 'opencode' | 'cuppet'
   workspace: string
   runtimeRoot: string
   paths: Awaited<ReturnType<typeof createRuntimePaths>>
@@ -845,6 +847,19 @@ type LiveArm = {
   report: ArmReport
   current?: TaskTelemetry
 }
+
+type DeepSeekLiveArm = {
+  arm: 'deepseek-harness'
+  workspace: string
+  runtimeRoot: string
+  sessionRoot: string
+  harness: DeepSeekBenchmarkSession
+  sessionID: string
+  errors: string[]
+  report: ArmReport
+}
+
+type LiveArm = OpenCodeLiveArm | DeepSeekLiveArm
 
 type UsageSample = TokenUsage & { at: number }
 type TaskTelemetry = {
@@ -1086,7 +1101,7 @@ async function main(): Promise<void> {
   const live = new Map<Arm, LiveArm>()
   const reports: Partial<Record<Arm, ArmReport>> = {}
   try {
-    const order: Arm[] = ['opencode', 'cuppet']
+    const order: Arm[] = ['opencode', 'cuppet', 'deepseek-harness']
     for (const arm of order) {
       const armRoot = join(root, arm)
       await mkdir(armRoot, { recursive: true, mode: 0o700 })
@@ -1095,7 +1110,7 @@ async function main(): Promise<void> {
 
     for (let index = 0; index < hardTasks.length; index += 1) {
       const task = hardTasks[index]!
-      process.stdout.write(`[${index + 1}/${hardTasks.length}] ${task.slug} · opencode+cuppet\n`)
+      process.stdout.write(`[${index + 1}/${hardTasks.length}] ${task.slug} · ${order.join('+')}\n`)
       const outcomes = await Promise.allSettled(
         order.map(async (arm) => {
           const runtime = live.get(arm)
@@ -1115,9 +1130,13 @@ async function main(): Promise<void> {
     process.stdout.write(`Raw: ${finalJsonPath}\nSummary: ${finalMarkdownPath}\n`)
   } finally {
     for (const runtime of live.values()) {
-      await runtime.gateway.close().catch(() => undefined)
-      await runtime.opencode.close().catch(() => undefined)
-      await runtime.tst?.close().catch(() => undefined)
+      if (runtime.arm === 'deepseek-harness') {
+        await runtime.harness.close().catch(() => undefined)
+      } else {
+        await runtime.gateway.close().catch(() => undefined)
+        await runtime.opencode.close().catch(() => undefined)
+        await runtime.tst?.close().catch(() => undefined)
+      }
     }
     if (!keepWorkspaces) await rm(root, { recursive: true, force: true }).catch(() => undefined)
     else process.stdout.write(`Artifacts retained: ${root}\n`)
@@ -1133,6 +1152,38 @@ async function startArm(
   const workspace = join(root, 'workspace')
   const runtimeRoot = join(root, 'runtime')
   await createWorkspace(workspace)
+  if (arm === 'deepseek-harness') {
+    const sessionRoot = join(root, 'sessions')
+    const provider = process.env.CUPPET_DSH_PROVIDER?.trim()
+      ?? (model.providerID === 'openai' ? 'openai-codex' : undefined)
+    const harness = await openDeepSeekBenchmarkSession({
+      workspace,
+      sessionRoot,
+      model: model.modelID,
+      ...(provider ? { provider } : {}),
+      maxTokens: 16_384,
+      requestTimeoutMs: 10 * 60_000,
+      systemPrompt: `${DEEPSEEK_HARNESS_CODING_SYSTEM_PROMPT}\nWorkspace root: ${workspace}. Use absolute paths under this directory only.`,
+    })
+    const report: ArmReport = {
+      arm,
+      workspace,
+      sessionID: '',
+      tasks: [],
+      finalSessionUsage: zeroUsage(),
+      errors: [],
+    }
+    return {
+      arm,
+      workspace,
+      runtimeRoot,
+      sessionRoot,
+      harness,
+      sessionID: '',
+      errors: [],
+      report,
+    }
+  }
   const paths = await createRuntimePaths(workspace, runtimeRoot)
   await seedProviderState(paths)
   const logger = new RedactedLogger(paths.logs)
@@ -1213,6 +1264,7 @@ async function startArm(
 }
 
 async function runTask(runtime: LiveArm, task: HardTask, index: number): Promise<TaskResult> {
+  if (runtime.arm === 'deepseek-harness') return runDeepSeekTask(runtime, task, index)
   const telemetry: TaskTelemetry = { usageEvents: [], costs: [], toolCalls: 0, errors: [] }
   runtime.current = telemetry
   const started = performance.now()
@@ -1270,6 +1322,77 @@ async function runTask(runtime: LiveArm, task: HardTask, index: number): Promise
   runtime.report.finalSessionUsage = zeroUsage()
   runtime.current = undefined
   return result
+}
+
+async function runDeepSeekTask(runtime: DeepSeekLiveArm, task: HardTask, index: number): Promise<TaskResult> {
+  const started = performance.now()
+  const usageParts: DeepSeekTokenTotals[] = []
+  let attempts = 0
+  let firstAttemptSuccess = false
+  let evaluation: TaskEvaluation | undefined
+  let answer = ''
+  let failure: string | undefined
+  const retries = verifyRetryLimit()
+  while (attempts <= retries) {
+    const prompt = attempts === 0 ? task.prompt : repairPromptFor(task, evaluation!)
+    attempts += 1
+    try {
+      const response = await runtime.harness.run(prompt, runtime.sessionID || undefined)
+      runtime.sessionID = response.sessionID
+      runtime.report.sessionID = response.sessionID
+      answer = response.answer
+      usageParts.push(response.usage)
+    } catch (error) {
+      failure = error instanceof Error ? error.message : String(error)
+      runtime.errors.push(failure)
+      if (/model not found|usage limit|quota/i.test(failure)) throw new Error(`[${runtime.arm}] ${compact(failure, 200)}`)
+      break
+    }
+    await delay(200)
+    evaluation = await evaluateHardTask(runtime.workspace, task)
+    if (attempts === 1) firstAttemptSuccess = evaluation.success
+    if (evaluation.success) break
+    process.stdout.write(`  ${runtime.arm}/${task.slug}: attempt ${attempts} failed, feeding ${Object.values(evaluation.checks).filter((check) => !check.passed).length} failures back\n`)
+  }
+  evaluation ??= { success: false, passedChecks: 0, totalChecks: 0, checks: {} }
+  const usage = usageParts.reduce((sum, part) => addUsage(sum, deepSeekUsage(part)), zeroUsage())
+  const error = failure ?? (!evaluation.success ? 'acceptance checks failed' : undefined)
+  const result: TaskResult = {
+    index: index + 1,
+    slug: task.slug,
+    title: task.title,
+    success: !error,
+    attempts,
+    firstAttemptSuccess,
+    repaired: attempts > 1 && !firstAttemptSuccess && !error,
+    agentDurationMs: Math.round(performance.now() - started),
+    endToEndDurationMs: Math.round(performance.now() - started),
+    usage: {
+      ...usage,
+      eventCount: usageParts.reduce((sum, part) => sum + part.modelCalls, 0),
+      cost: 0,
+    },
+    toolCalls: usageParts.reduce((sum, part) => sum + part.toolCalls, 0),
+    evaluation,
+    finalMessage: answer,
+    ...(error ? { error: compact(error, 500) } : {}),
+  }
+  runtime.report.tasks.push(result)
+  runtime.report.finalSessionUsage = usage
+  return result
+}
+
+function deepSeekUsage(usage: DeepSeekTokenTotals): UsageStats {
+  const totalModel = usage.totalModelTokens
+  return {
+    input: usage.inputTokens,
+    output: usage.outputTokens,
+    reasoning: usage.reasoningTokens,
+    cacheRead: usage.cacheReadTokens,
+    cacheWrite: usage.cacheWriteTokens,
+    totalModel,
+    totalWithCache: totalModel + usage.cacheReadTokens + usage.cacheWriteTokens,
+  }
 }
 
 function repairPromptFor(task: HardTask, evaluation: TaskEvaluation): string {
@@ -1438,7 +1561,23 @@ function buildReport(reports: Partial<Record<Arm, ArmReport>>, artifacts: string
   }
   const opencode = summarize(reports.opencode)
   const cuppet = summarize(reports.cuppet)
+  const deepseekHarness = summarize(reports['deepseek-harness'])
   const ratio = (numerator: number, denominator: number) => (denominator === 0 ? 0 : numerator / denominator)
+  const compare = (baseline: ReturnType<typeof summarize>, candidate: ReturnType<typeof summarize>) => ({
+    successDelta: candidate.successes - baseline.successes,
+    timeReduction: ratio(baseline.totalAgentDurationMs - candidate.totalAgentDurationMs, baseline.totalAgentDurationMs),
+    medianTimeReduction: ratio(baseline.medianAgentDurationMs - candidate.medianAgentDurationMs, baseline.medianAgentDurationMs),
+    uncachedInputReduction: ratio(baseline.uncachedInput - candidate.uncachedInput, baseline.uncachedInput),
+    totalTokenReduction: ratio(baseline.totalModelTokens - candidate.totalModelTokens, baseline.totalModelTokens),
+    toolCallReduction: ratio(baseline.toolCalls - candidate.toolCalls, baseline.toolCalls),
+    cacheShareDelta: candidate.cacheShare - baseline.cacheShare,
+    checkDelta: candidate.passedChecks - baseline.passedChecks,
+  })
+  const comparisons = {
+    'cuppet-vs-opencode': compare(opencode, cuppet),
+    'deepseek-harness-vs-opencode': compare(opencode, deepseekHarness),
+    'cuppet-vs-deepseek-harness': compare(deepseekHarness, cuppet),
+  }
   return {
     schema: 1,
     createdAt: new Date().toISOString(),
@@ -1446,20 +1585,18 @@ function buildReport(reports: Partial<Record<Arm, ArmReport>>, artifacts: string
     fixtureFiles: Object.keys(fixture).length,
     fixtureHash: fixtureHashInput.digest('hex'),
     artifacts,
-    arms: { opencode: reports.opencode, cuppet: reports.cuppet },
+    arms: {
+      opencode: reports.opencode,
+      cuppet: reports.cuppet,
+      'deepseek-harness': reports['deepseek-harness'],
+    },
     summary: {
+      arms: { opencode, cuppet, 'deepseek-harness': deepseekHarness },
       opencode,
       cuppet,
-      comparison: {
-        successDelta: cuppet.successes - opencode.successes,
-        timeReduction: ratio(opencode.totalAgentDurationMs - cuppet.totalAgentDurationMs, opencode.totalAgentDurationMs),
-        medianTimeReduction: ratio(opencode.medianAgentDurationMs - cuppet.medianAgentDurationMs, opencode.medianAgentDurationMs),
-        uncachedInputReduction: ratio(opencode.uncachedInput - cuppet.uncachedInput, opencode.uncachedInput),
-        totalTokenReduction: ratio(opencode.totalModelTokens - cuppet.totalModelTokens, opencode.totalModelTokens),
-        toolCallReduction: ratio(opencode.toolCalls - cuppet.toolCalls, opencode.toolCalls),
-        cacheShareDelta: cuppet.cacheShare - opencode.cacheShare,
-        checkDelta: cuppet.passedChecks - opencode.passedChecks,
-      },
+      'deepseek-harness': deepseekHarness,
+      comparisons,
+      comparison: comparisons['cuppet-vs-opencode'],
     },
   }
 }
@@ -1472,41 +1609,44 @@ function signedPct(reduction: number, lowerIsBetter = false): string {
 }
 
 function renderMarkdown(report: Report): string {
-  const { opencode, cuppet, comparison } = report.summary
+  const { opencode, cuppet, 'deepseek-harness': deepseekHarness } = report.summary
+  const arms: Array<[Arm, string, typeof opencode]> = [
+    ['opencode', 'OpenCode', opencode],
+    ['cuppet', 'Cuppet', cuppet],
+    ['deepseek-harness', 'DeepSeek Harness', deepseekHarness],
+  ]
   const rows = hardTasks.map((task) => {
     const find = (arm: ArmReport | undefined) => arm?.tasks.find((item) => item.slug === task.slug)
-    const official = find(report.arms.opencode)
-    const candidate = find(report.arms.cuppet)
     const cell = (value: ReturnType<typeof find>) =>
       value ? `${value.success ? 'pass' : 'FAIL'}${value.repaired ? '*' : ''} (${value.evaluation.passedChecks}/${value.evaluation.totalChecks}) · ${Math.round(value.agentDurationMs / 1000)}s · in ${value.usage.input.toLocaleString()} / tok ${value.usage.totalModel.toLocaleString()}` : 'missing'
-    return `| ${task.title} | ${cell(official)} | ${cell(candidate)} |`
+    return `| ${task.title} | ${arms.map(([arm]) => cell(find(report.arms[arm]))).join(' | ')} |`
   })
   return [
-    `# Hard-fixture A/B: OpenCode vs Cuppet`,
+    `# Hard-fixture benchmark: OpenCode vs Cuppet vs DeepSeek Harness`,
     '',
     `- Created: ${report.createdAt}`,
     `- Model: \`${report.model.providerID}/${report.model.modelID}\`${report.model.variant ? ` @${report.model.variant}` : ''}`,
     `- Fixture: ${report.fixtureFiles} files, hash ${report.fixtureHash.slice(0, 12)}…`,
-    `- Both arms: persistent sessions, concurrent per task, verification guard enabled.`,
+    `- All arms: persistent sessions, concurrent per task, verification guard enabled.`,
     '',
-    '| Metric | OpenCode | Cuppet | Cuppet delta |',
+    `| Metric | ${arms.map(([, label]) => label).join(' | ')} |`,
     '|---|---:|---:|---:|',
-    `| Correct tasks | ${opencode.successes}/${opencode.tasks} | ${cuppet.successes}/${cuppet.tasks} | ${comparison.successDelta >= 0 ? '+' : ''}${comparison.successDelta} |`,
-    `| First-attempt correct | ${opencode.firstAttemptSuccesses} | ${cuppet.firstAttemptSuccesses} | ${''} |`,
-    `| Repairs needed | ${opencode.repairedTasks} | ${cuppet.repairedTasks} | ${''} |`,
-    `| Total agent time | ${(opencode.totalAgentDurationMs / 1000).toFixed(0)} s | ${(cuppet.totalAgentDurationMs / 1000).toFixed(0)} s | ${signedPct(comparison.timeReduction, true)} |`,
-    `| Median task time | ${(opencode.medianAgentDurationMs / 1000).toFixed(0)} s | ${(cuppet.medianAgentDurationMs / 1000).toFixed(0)} s | ${signedPct(comparison.medianTimeReduction, true)} |`,
-    `| Uncached input | ${opencode.uncachedInput.toLocaleString()} | ${cuppet.uncachedInput.toLocaleString()} | ${signedPct(comparison.uncachedInputReduction)} |`,
-    `| Total model tokens | ${opencode.totalModelTokens.toLocaleString()} | ${cuppet.totalModelTokens.toLocaleString()} | ${signedPct(comparison.totalTokenReduction)} |`,
-    `| Tool calls | ${opencode.toolCalls} | ${cuppet.toolCalls} | ${signedPct(comparison.toolCallReduction)} |`,
-    `| Cache share | ${(opencode.cacheShare * 100).toFixed(1)}% | ${(cuppet.cacheShare * 100).toFixed(1)}% | ${(comparison.cacheShareDelta * 100).toFixed(1)} pp |`,
-    `| Acceptance checks | ${opencode.passedChecks}/${opencode.totalChecks} | ${cuppet.passedChecks}/${cuppet.totalChecks} | ${comparison.checkDelta >= 0 ? '+' : ''}${comparison.checkDelta} |`,
+    `| Correct tasks | ${arms.map(([, , summary]) => `${summary.successes}/${summary.tasks}`).join(' | ')} |`,
+    `| First-attempt correct | ${arms.map(([, , summary]) => summary.firstAttemptSuccesses).join(' | ')} |`,
+    `| Repairs needed | ${arms.map(([, , summary]) => summary.repairedTasks).join(' | ')} |`,
+    `| Total agent time | ${arms.map(([, , summary]) => `${(summary.totalAgentDurationMs / 1000).toFixed(0)} s`).join(' | ')} |`,
+    `| Median task time | ${arms.map(([, , summary]) => `${(summary.medianAgentDurationMs / 1000).toFixed(0)} s`).join(' | ')} |`,
+    `| Uncached input | ${arms.map(([, , summary]) => summary.uncachedInput.toLocaleString()).join(' | ')} |`,
+    `| Total model tokens | ${arms.map(([, , summary]) => summary.totalModelTokens.toLocaleString()).join(' | ')} |`,
+    `| Tool calls | ${arms.map(([, , summary]) => summary.toolCalls).join(' | ')} |`,
+    `| Cache share | ${arms.map(([, , summary]) => `${(summary.cacheShare * 100).toFixed(1)}%`).join(' | ')} |`,
+    `| Acceptance checks | ${arms.map(([, , summary]) => `${summary.passedChecks}/${summary.totalChecks}`).join(' | ')} |`,
     '',
-    '| Task | OpenCode | Cuppet |',
-    '|---|---|---|',
+    `| Task | ${arms.map(([, label]) => label).join(' | ')} |`,
+    `|---|${arms.map(() => '---').join('|')}|`,
     ...rows,
     '',
-    '* = recovered by the verification guard. Time/tokens aggregate across all attempts of a task.',
+    '* = recovered by the verification guard. Time/tokens aggregate across all attempts of a task. Pairwise reductions remain in the JSON report under summary.comparisons.',
     '',
   ].join('\n')
 }

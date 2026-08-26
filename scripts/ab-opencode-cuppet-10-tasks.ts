@@ -13,8 +13,10 @@ import { resolveRuntimeAssets } from '../packages/cli/src/runtime/assets.js'
 import { createRuntimePaths } from '../packages/cli/src/runtime/paths.js'
 import { startTstDaemon, type TstRuntime } from '../packages/cli/src/tst/supervisor.js'
 import type { AgentEvent, ModelRef, TokenUsage } from '../packages/cli/src/types.js'
+import { openDeepSeekBenchmarkSession, type DeepSeekBenchmarkSession } from './lib/deepseek-benchmark.js'
+import { DEEPSEEK_HARNESS_CODING_SYSTEM_PROMPT, type DeepSeekTokenTotals } from './lib/deepseek-harness.js'
 
-type Arm = 'opencode' | 'cuppet'
+type Arm = 'opencode' | 'cuppet' | 'deepseek-harness'
 
 type PatternCheck = {
   name: string
@@ -154,8 +156,8 @@ type BenchmarkRuntime = {
   close(): Promise<void>
 }
 
-type LiveArm = {
-  arm: Arm
+type OpenCodeLiveArm = {
+  arm: 'opencode' | 'cuppet'
   workspace: string
   runtimeRoot: string
   paths: Awaited<ReturnType<typeof createRuntimePaths>>
@@ -169,6 +171,19 @@ type LiveArm = {
   errors: string[]
   report: ArmReport
 }
+
+type DeepSeekLiveArm = {
+  arm: 'deepseek-harness'
+  workspace: string
+  runtimeRoot: string
+  sessionRoot: string
+  harness: DeepSeekBenchmarkSession
+  sessionID: string
+  errors: string[]
+  report: ArmReport
+}
+
+type LiveArm = OpenCodeLiveArm | DeepSeekLiveArm
 
 type UsageSample = TokenUsage & { at: number }
 
@@ -505,7 +520,7 @@ async function main(): Promise<void> {
 
   try {
     await persist('fixture-created')
-    const order: Arm[] = ['opencode', 'cuppet']
+    const order: Arm[] = ['opencode', 'cuppet', 'deepseek-harness']
     for (const arm of order) {
       const armRoot = join(root, arm)
       await mkdir(armRoot, { recursive: true, mode: 0o700 })
@@ -517,7 +532,7 @@ async function main(): Promise<void> {
 
     for (let index = 0; index < tasks.length; index += 1) {
       const task = tasks[index]!
-      process.stdout.write(`[${index + 1}/${tasks.length}] ${task.slug} · opencode+cuppet\n`)
+      process.stdout.write(`[${index + 1}/${tasks.length}] ${task.slug} · ${order.join('+')}\n`)
       // Both arms receive the same prompt at the same moment. Concurrent arms
       // keep each session warm while the other works, so neither arm's provider
       // prompt cache is evicted by idle time and latency stays comparable.
@@ -549,9 +564,13 @@ async function main(): Promise<void> {
     throw error
   } finally {
     for (const runtime of live.values()) {
-      await runtime.gateway.close().catch(() => undefined)
-      await runtime.opencode.close().catch(() => undefined)
-      await runtime.tst?.close().catch(() => undefined)
+      if (runtime.arm === 'deepseek-harness') {
+        await runtime.harness.close().catch(() => undefined)
+      } else {
+        await runtime.gateway.close().catch(() => undefined)
+        await runtime.opencode.close().catch(() => undefined)
+        await runtime.tst?.close().catch(() => undefined)
+      }
     }
     if (!keepWorkspaces) await rm(root, { recursive: true, force: true }).catch(() => undefined)
     else process.stdout.write(`Artifacts retained: ${root}\n`)
@@ -568,6 +587,41 @@ async function startArm(
   const workspace = join(root, 'workspace')
   const runtimeRoot = join(root, 'runtime')
   await createWorkspace(workspace)
+  if (arm === 'deepseek-harness') {
+    const sessionRoot = join(root, 'sessions')
+    const provider = process.env.CUPPET_DSH_PROVIDER?.trim()
+      ?? (model.providerID === 'openai' ? 'openai-codex' : undefined)
+    const harness = await openDeepSeekBenchmarkSession({
+      workspace,
+      sessionRoot,
+      model: model.modelID,
+      ...(provider ? { provider } : {}),
+      maxTokens: 16_384,
+      requestTimeoutMs: 10 * 60_000,
+      systemPrompt: `${DEEPSEEK_HARNESS_CODING_SYSTEM_PROMPT}\nWorkspace root: ${workspace}. Use absolute paths under this directory only.`,
+    })
+    const report: ArmReport = {
+      arm,
+      workspace,
+      runtimeRoot,
+      sessionID: '',
+      promptCount: 0,
+      tasks: [],
+      finalSessionUsage: zeroUsage(),
+      totalDurationMs: 0,
+      errors: [],
+    }
+    return {
+      arm,
+      workspace,
+      runtimeRoot,
+      sessionRoot,
+      harness,
+      sessionID: '',
+      errors: [],
+      report,
+    }
+  }
   const paths = await createRuntimePaths(workspace, runtimeRoot)
   await seedProviderState(paths)
   const logger = new RedactedLogger(paths.logs)
@@ -695,6 +749,10 @@ async function runTask(
   checkpoint: Checkpoint,
   persist: (event: string, error?: string) => Promise<void>,
 ): Promise<void> {
+  if (runtime.arm === 'deepseek-harness') {
+    await runDeepSeekTask(runtime, task, index, checkpoint, persist)
+    return
+  }
   const beforeOutsideHash = await hashWorkspaceExcept(runtime.workspace, task.slug)
   const before = await runtime.gateway.getSession(runtime.sessionID)
   const contextTraceBefore = await readTaskContextTrace(runtime.paths.runtime)
@@ -802,6 +860,103 @@ async function runTask(
   runtime.current = undefined
   if (checkpoint.active) delete checkpoint.active[runtime.arm]
   await persist(`${runtime.arm}-${task.slug}-evaluated`, error)
+}
+
+async function runDeepSeekTask(
+  runtime: DeepSeekLiveArm,
+  task: Task,
+  index: number,
+  checkpoint: Checkpoint,
+  persist: (event: string, error?: string) => Promise<void>,
+): Promise<void> {
+  const beforeOutsideHash = await hashWorkspaceExcept(runtime.workspace, task.slug)
+  checkpoint.active = { ...checkpoint.active, [runtime.arm]: { task: task.slug, index, phase: 'prompt-started' } }
+  await persist(`${runtime.arm}-${task.slug}-prompt-started`)
+  const promptStartedAt = new Date().toISOString()
+  const started = performance.now()
+  const usageParts: DeepSeekTokenTotals[] = []
+  let attempts = 0
+  let firstAttemptSuccess = false
+  let evaluation: TaskEvaluation | undefined
+  let answer = ''
+  let failure: string | undefined
+  const retries = verifyRetryLimit()
+  while (attempts <= retries) {
+    const prompt = attempts === 0 ? task.prompt : repairPromptFor(task, evaluation!)
+    attempts += 1
+    checkpoint.active = { ...checkpoint.active, [runtime.arm]: { task: task.slug, index, phase: `attempt-${attempts}` } }
+    if (attempts > 1) await persist(`${runtime.arm}-${task.slug}-repair-started`)
+    try {
+      const response = await runtime.harness.run(prompt, runtime.sessionID || undefined)
+      runtime.sessionID = response.sessionID
+      runtime.report.sessionID = response.sessionID
+      answer = response.answer
+      usageParts.push(response.usage)
+    } catch (error) {
+      failure = error instanceof Error ? error.message : String(error)
+      runtime.errors.push(failure)
+      if (/model not found|usage limit|quota/i.test(failure)) throw new Error(`[${runtime.arm}] ${compact(failure, 200)}`)
+      break
+    }
+    await delay(200)
+    evaluation = await evaluateTask(runtime.workspace, task, beforeOutsideHash)
+    if (attempts === 1) firstAttemptSuccess = evaluation.success
+    if (evaluation.success) break
+    await persist(`${runtime.arm}-${task.slug}-repair-needed`)
+  }
+  if (!evaluation) evaluation = await evaluateTask(runtime.workspace, task, beforeOutsideHash)
+  const completed = new Date().toISOString()
+  const agentDurationMs = Math.round(performance.now() - started)
+  const usage = usageParts.reduce((sum, part) => addUsage(sum, deepSeekUsage(part)), zeroUsage())
+  const error = failure ?? (!evaluation.success ? 'task acceptance checks failed' : undefined)
+  const result: TaskResult = {
+    index: index + 1,
+    slug: task.slug,
+    title: task.title,
+    success: !error,
+    promptStartedAt,
+    promptCompletedAt: completed,
+    agentDurationMs,
+    evaluationDurationMs: 0,
+    endToEndDurationMs: agentDurationMs,
+    attempts,
+    firstAttemptSuccess,
+    repaired: attempts > 1 && !firstAttemptSuccess && !error,
+    usage: {
+      ...usage,
+      eventCount: usageParts.reduce((sum, part) => sum + part.modelCalls, 0),
+      sessionDelta: usage,
+      cost: 0,
+    },
+    cumulativeSessionUsage: usage,
+    compaction: { done: false, count: 0, phases: [] },
+    toolCalls: usageParts.reduce((sum, part) => sum + part.toolCalls, 0),
+    permissionRequests: 0,
+    rejectedPermissions: 0,
+    evaluation,
+    finalMessage: compact(answer, 4_000),
+    ...(error ? { error: compact(error, 1_000) } : {}),
+  }
+  runtime.report.tasks.push(result)
+  runtime.report.promptCount = runtime.report.tasks.length
+  runtime.report.finalSessionUsage = usage
+  runtime.report.totalDurationMs = runtime.report.tasks.reduce((sum, item) => sum + item.endToEndDurationMs, 0)
+  if (error) runtime.report.errors.push(error)
+  if (checkpoint.active) delete checkpoint.active[runtime.arm]
+  await persist(`${runtime.arm}-${task.slug}-evaluated`, error)
+}
+
+function deepSeekUsage(usage: DeepSeekTokenTotals): UsageStats {
+  const totalModel = usage.totalModelTokens
+  return {
+    input: usage.inputTokens,
+    output: usage.outputTokens,
+    reasoning: usage.reasoningTokens,
+    cacheRead: usage.cacheReadTokens,
+    cacheWrite: usage.cacheWriteTokens,
+    totalModel,
+    totalWithCache: totalModel + usage.cacheReadTokens + usage.cacheWriteTokens,
+  }
 }
 
 async function readTaskContextTrace(runtimeDirectory: string): Promise<TaskContextTelemetry[]> {
@@ -1041,8 +1196,15 @@ function buildReport(checkpoint: Checkpoint, status: 'partial' | 'completed'): A
   const arms = checkpoint.arms
   const opencode = arms.opencode
   const cuppet = arms.cuppet
+  const deepseekHarness = arms['deepseek-harness']
   const opencodeSummary = summarizeArm(opencode)
   const cuppetSummary = summarizeArm(cuppet)
+  const deepseekHarnessSummary = summarizeArm(deepseekHarness)
+  const comparisons = {
+    'cuppet-vs-opencode': compareSummaries(opencodeSummary, cuppetSummary, 'opencode', 'cuppet'),
+    'deepseek-harness-vs-opencode': compareSummaries(opencodeSummary, deepseekHarnessSummary, 'opencode', 'deepseek-harness'),
+    'cuppet-vs-deepseek-harness': compareSummaries(deepseekHarnessSummary, cuppetSummary, 'deepseek-harness', 'cuppet'),
+  }
   return {
     schema: 1,
     status,
@@ -1054,7 +1216,7 @@ function buildReport(checkpoint: Checkpoint, status: 'partial' | 'completed'): A
     officialBinary: officialOpenCodeBinary,
     fixture: { hash: checkpoint.fixtureHash, files: Object.keys(fixture) },
     tasks: checkpoint.tasks,
-    design: `Two fresh workspaces and two foreground sessions. Both arms receive the same ${tasks.length} prompt(s) concurrently in one persistent session each, keeping both provider prompt caches warm so idle eviction cannot bias either arm. Official OpenCode uses the unpatched upstream server; Cuppet uses the live plugin and TST path. Every task is evaluated immediately with hidden file, behavior-contract, syntax, network, and scope checks. Per-step token samples include idle gaps; cache share excluding steps after gaps over ${CACHE_IDLE_GAP_SECONDS}s is reported as idle-adjusted.`,
+    design: `Three fresh workspaces and three persistent sessions. All arms receive the same ${tasks.length} prompt(s) concurrently in one persistent session each, keeping each provider prompt cache warm so idle eviction cannot bias an arm. Official OpenCode uses the unpatched upstream server; Cuppet uses the live plugin and TST path; DeepSeek Harness uses its persistent workspace session. Every task is evaluated immediately with hidden file, behavior-contract, syntax, network, and scope checks. Per-step token samples include idle gaps; cache share excluding steps after gaps over ${CACHE_IDLE_GAP_SECONDS}s is reported as idle-adjusted.`,
     checkpoint: {
       lastEvent: checkpoint.lastEvent,
       active: checkpoint.active,
@@ -1063,11 +1225,19 @@ function buildReport(checkpoint: Checkpoint, status: 'partial' | 'completed'): A
     arms: {
       opencode: opencode ? { ...opencode, summary: opencodeSummary } : undefined,
       cuppet: cuppet ? { ...cuppet, summary: cuppetSummary } : undefined,
+      'deepseek-harness': deepseekHarness ? { ...deepseekHarness, summary: deepseekHarnessSummary } : undefined,
     },
     summary: {
+      arms: {
+        opencode: opencodeSummary,
+        cuppet: cuppetSummary,
+        'deepseek-harness': deepseekHarnessSummary,
+      },
       opencode: opencodeSummary,
       cuppet: cuppetSummary,
-      comparison: compareSummaries(opencodeSummary, cuppetSummary),
+      'deepseek-harness': deepseekHarnessSummary,
+      comparisons,
+      comparison: comparisons['cuppet-vs-opencode'],
     },
   }
 }
@@ -1149,10 +1319,10 @@ function summarizeArm(report: ArmReport | undefined): ArmSummary {
   }
 }
 
-function compareSummaries(baseline: ArmSummary, candidate: ArmSummary): AnyRecord {
+function compareSummaries(baseline: ArmSummary, candidate: ArmSummary, baselineArm: Arm, candidateArm: Arm): AnyRecord {
   return {
-    baseline: 'opencode',
-    candidate: 'cuppet',
+    baseline: baselineArm,
+    candidate: candidateArm,
     successDelta: candidate.successRate - baseline.successRate,
     agentTimeReduction: ratio(baseline.totalAgentDurationMs - candidate.totalAgentDurationMs, baseline.totalAgentDurationMs),
     endToEndTimeReduction: ratio(baseline.totalEndToEndDurationMs - candidate.totalEndToEndDurationMs, baseline.totalEndToEndDurationMs),
@@ -1170,7 +1340,7 @@ function compareSummaries(baseline: ArmSummary, candidate: ArmSummary): AnyRecor
   }
 }
 
-function renderMarkdown(report: AnyRecord): string {
+function renderLegacyMarkdown(report: AnyRecord): string {
   const summary = asRecord(report.summary)
   const opencode = asRecord(summary.opencode)
   const cuppet = asRecord(summary.cuppet)
@@ -1229,6 +1399,73 @@ function renderMarkdown(report: AnyRecord): string {
     '',
     'Cache-read tokens are reported separately from uncached input. Reported cost is only meaningful if the provider returns a nonzero cost; token counts alone are not a price calculation.',
     `* = recovered by the verification guard: after a failed attempt, the deterministic evaluator fed exact failed checks back to the same session (up to ${verifyRetryLimit()} repairs per task, both arms identically).`,
+    '',
+  ].join('\n')
+}
+
+function renderMarkdown(report: AnyRecord): string {
+  const summary = asRecord(report.summary)
+  const summaries = asRecord(summary.arms)
+  const runs = asRecord(report.arms)
+  const armKeys: Arm[] = ['opencode', 'cuppet', 'deepseek-harness']
+  const labels: Record<Arm, string> = {
+    opencode: 'OpenCode',
+    cuppet: 'Cuppet',
+    'deepseek-harness': 'DeepSeek Harness',
+  }
+  const summaryFor = (arm: Arm) => asRecord(summaries[arm])
+  const usageFor = (arm: Arm) => asRecord(summaryFor(arm).totalUsage)
+  const taskMapFor = (arm: Arm) => {
+    const run = asRecord(runs[arm])
+    const values = Array.isArray(run.tasks) ? run.tasks : []
+    return new Map(values.map((item) => {
+      const value = asRecord(item)
+      return [stringValue(value.slug), value]
+    }))
+  }
+  const taskMaps = new Map(armKeys.map((arm) => [arm, taskMapFor(arm)]))
+  const rows = tasks.map((task) => {
+    const cells = armKeys.map((arm) => {
+      const value = asRecord(taskMaps.get(arm)?.get(task.slug))
+      const evaluation = asRecord(value.evaluation)
+      const usage = asRecord(value.usage)
+      return `${value.success ? 'pass' : 'fail'}${value.repaired ? '*' : ''} (${evaluation.passedChecks ?? 0}/${evaluation.totalChecks ?? 0}) · ${value.agentDurationMs ?? 0} ms · tok ${usage.totalModel ?? 0}`
+    })
+    return `| ${task.slug} | ${cells.join(' | ')} |`
+  })
+  const value = (arm: Arm, field: string) => String(summaryFor(arm)[field] ?? 0)
+  const usage = (arm: Arm, field: string) => String(usageFor(arm)[field] ?? 0)
+  return [
+    `# Three-arm sequential web benchmark: ${tasks.length} project${tasks.length === 1 ? '' : 's'}`,
+    '',
+    `- Status: ${String(report.status)}`,
+    `- Created: ${String(report.createdAt)}`,
+    `- Model: \`${model.providerID}/${model.modelID}\`${model.variant ? `, variant: \`${model.variant}\`` : ''}`,
+    `- Cuppet context mode: \`${cuppetContextMode}\``,
+    ...(taskSelectionSeed ? [`- Random task selection seed: \`${taskSelectionSeed}\` (${tasks.map((task) => task.slug).join(', ')})`] : []),
+    `- Each arm used one persistent session and received the same ${tasks.length} prompt${tasks.length === 1 ? '' : 's'} in the same order. Arms ran concurrently for each task so provider prompt caches remain comparable.`,
+    '',
+    `| Aggregate metric | ${armKeys.map((arm) => labels[arm]).join(' | ')} |`,
+    `|---|${armKeys.map(() => '---:').join('|')}|`,
+    `| Correct tasks | ${armKeys.map((arm) => `${value(arm, 'successes')}/${value(arm, 'completedPrompts')}`).join(' | ')} |`,
+    `| Agent time | ${armKeys.map((arm) => `${value(arm, 'totalAgentDurationMs')} ms`).join(' | ')} |`,
+    `| End-to-end time | ${armKeys.map((arm) => `${value(arm, 'totalEndToEndDurationMs')} ms`).join(' | ')} |`,
+    `| Uncached input tokens | ${armKeys.map((arm) => usage(arm, 'input')).join(' | ')} |`,
+    `| Cache-read tokens | ${armKeys.map((arm) => usage(arm, 'cacheRead')).join(' | ')} |`,
+    `| Cache share | ${armKeys.map((arm) => `${(numberValue(summaryFor(arm).cacheShare) * 100).toFixed(1)}%`).join(' | ')} |`,
+    `| Cache share (idle-adjusted, ≤${CACHE_IDLE_GAP_SECONDS}s gaps) | ${armKeys.map((arm) => `${(numberValue(summaryFor(arm).adjustedCacheShare) * 100).toFixed(1)}%`).join(' | ')} |`,
+    `| Correct on first attempt | ${armKeys.map((arm) => value(arm, 'firstAttemptSuccesses')).join(' | ')} |`,
+    `| Repair-recovered tasks | ${armKeys.map((arm) => value(arm, 'repairedTasks')).join(' | ')} |`,
+    `| Total model tokens | ${armKeys.map((arm) => usage(arm, 'totalModel')).join(' | ')} |`,
+    `| Compactions | ${armKeys.map((arm) => value(arm, 'compactions')).join(' | ')} |`,
+    `| Evaluation checks | ${armKeys.map((arm) => `${value(arm, 'passedEvaluationChecks')}/${value(arm, 'totalEvaluationChecks')}`).join(' | ')} |`,
+    '',
+    `| Task | ${armKeys.map((arm) => labels[arm]).join(' | ')} |`,
+    `|---|${armKeys.map(() => '---').join('|')}|`,
+    ...rows,
+    '',
+    'Cache-read tokens are reported separately from uncached input. Reported cost is meaningful only when the provider returns a nonzero cost.',
+    `* = recovered by the verification guard; pairwise reductions are in summary.comparisons.`,
     '',
   ].join('\n')
 }

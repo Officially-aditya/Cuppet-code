@@ -24,6 +24,11 @@ export type DshCredentialDocument = {
   }
 }
 
+export type StagedCuppetOpenAICodexCredentials = {
+  dshHome: string
+  cleanup(): Promise<void>
+}
+
 const DEFAULT_CUPPET_AUTH_FILE = join(
   homedir(),
   '.cuppet',
@@ -61,18 +66,33 @@ export function buildDshOpenAICodexCredentialDocument(auth: unknown): DshCredent
   }
 }
 
-export async function withCuppetOpenAICodexCredentials<T>(
-  run: (dshHome: string) => Promise<T>,
+export async function stageCuppetOpenAICodexCredentials(
   authFile = process.env.CUPPET_OPENAI_AUTH_FILE ?? DEFAULT_CUPPET_AUTH_FILE,
-): Promise<T> {
+): Promise<StagedCuppetOpenAICodexCredentials> {
   const source = JSON.parse(await readFile(authFile, 'utf8')) as CuppetAuthFile
   const document = buildDshOpenAICodexCredentialDocument(source.openai)
   const dshHome = await mkdtemp(join('/private/tmp', 'cuppet-dsh-openai-'))
   try {
     await writeFile(join(dshHome, '.credentials.yaml'), `${JSON.stringify(document, null, 2)}\n`, { mode: 0o600 })
-    return await run(dshHome)
-  } finally {
+  } catch (error) {
     await rm(dshHome, { recursive: true, force: true })
+    throw error
+  }
+  return {
+    dshHome,
+    cleanup: () => rm(dshHome, { recursive: true, force: true }),
+  }
+}
+
+export async function withCuppetOpenAICodexCredentials<T>(
+  run: (dshHome: string) => Promise<T>,
+  authFile = process.env.CUPPET_OPENAI_AUTH_FILE ?? DEFAULT_CUPPET_AUTH_FILE,
+): Promise<T> {
+  const staged = await stageCuppetOpenAICodexCredentials(authFile)
+  try {
+    return await run(staged.dshHome)
+  } finally {
+    await staged.cleanup()
   }
 }
 

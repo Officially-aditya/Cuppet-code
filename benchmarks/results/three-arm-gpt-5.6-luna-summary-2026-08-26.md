@@ -11,7 +11,7 @@ Model request: `gpt-5.6-luna`, variant `low`
 | Uncached-input reduction | Cuppet | 37.6% lower than OpenCode on hard tasks; 76.3% lower on the 10-project suite; 27.7% lower on the marathon |
 | Total model-token reduction | Cuppet | 36.3%, 70.8%, and 27.0% lower than OpenCode across the three suites |
 | Short-suite correctness | Tie | Hard: all arms 4/5; 10-project suite: all arms 10/10 |
-| Stateful marathon correctness | DeepSeek Harness | 8/10 stages and 53/55 checks, versus 2/10 and 46/55 for both OpenCode and Cuppet |
+| Stateful marathon correctness | Harness in this run, but confounded | Harness reached 8/10 stages and 53/55 checks; OpenCode and Cuppet reached 2/10 and 46/55 after sharing the same concrete `indexes` defect |
 | Wall-clock speed | Mixed, with Harness slowest | Cuppet was 7.5% slower on hard tasks and 25.2% slower on the 10-project suite, but 28.9% faster on the marathon; Harness was roughly 2.9–3.0x slower than OpenCode in every suite |
 
 ## Fresh three-arm results
@@ -57,6 +57,12 @@ The marathon is stateful: an early failed implementation can cause later regress
 | pluggable-backends | FAIL — regression | FAIL — regression | PASS |
 | atomic-batches | FAIL — regression | FAIL — regression | FAIL — behavior |
 
+## Aborted rerun diagnosis
+
+The requested repeat was stopped after stage 7 once it reproduced the same `indexes` signature. The verifier intentionally keeps the unique `email` index active and then inserts two documents containing only `{ tag: 'x' }`; missing indexed fields are expected to be ignored. The OpenCode and Cuppet implementations generated in this run serialize the missing `email` value as one shared index key, so the second tag-only insert raises `Duplicate value for unique index: email`. Harness skips absent indexed values and passes the same check.
+
+This explains the apparent 2/10 result: the marathon’s regression guard correctly propagates the broken `indexes` state into later stages, but those seven red rows are cascade failures rather than seven independent task failures. The marathon correctness comparison should remain provisional until OpenCode and Cuppet are rerun with this contract satisfied.
+
 ## Context-only combined totals
 
 These totals are descriptive, not a single normalized score: the suites have different task shapes and the marathon contains cascading state.
@@ -71,7 +77,7 @@ These totals are descriptive, not a single normalized score: the suites have dif
 
 1. Cuppet is the clear token-efficiency winner in this GPT-5.6 Luna matrix. Its strongest result is the 10-project suite: 76.3% less uncached input and 70.8% fewer reported model tokens than OpenCode, at a 25.2% wall-clock penalty.
 2. Harness is not the efficiency winner here. It is dramatically slower and uses more reported model tokens than OpenCode, although it uses slightly less uncached input and makes fewer tool calls in the 10-project suite.
-3. Harness does show a meaningful correctness advantage in the stateful marathon. That result is more informative than the short-suite tie for workflows where an agent must preserve and repair a shared codebase over many turns.
+3. Harness did show a meaningful correctness advantage in this stateful run, but the advantage is confounded by the concrete missing-field/unique-index defect reproduced in both OpenCode and Cuppet. It should not be generalized to Harness without a corrected rerun.
 4. The result is runtime/provider-path specific, not a pure model-quality comparison. All arms requested the same model identifier, but Harness used the persistent `openai-codex` route while OpenCode and Cuppet used their native runtime paths. A provider-neutral DeepSeek V4 Flash comparison still requires running the same matrix with all three arms pointed at the same OpenRouter endpoint.
 5. No cost ranking is included: the benchmark reports did not return usable dollar costs. Harness also lacks event-level step samples in these runs, so its adjusted cache-share field is not comparable; the raw token counters above are used instead.
 

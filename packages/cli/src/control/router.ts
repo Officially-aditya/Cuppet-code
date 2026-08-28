@@ -74,6 +74,7 @@ function requireString(params: Record<string, unknown>, key: string): string {
  * host-internal controls stay local by design.
  */
 const ROUTE_TABLE: Record<string, { scope?: ControlScope; localOnly?: boolean; run: Handler }> = {
+  'local.debug': { localOnly: true, run: () => Promise.resolve({ ok: true }) },
   'session.list': { scope: 'session.read', run: (c) => c.listSessions() },
   // The remote contract needs the live controller snapshot shape (including
   // activeSession/running/models), not the richer local diagnostic payload.

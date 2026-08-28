@@ -86,10 +86,32 @@ function modelSelectionSequence(row2) {
   return row2.efforts.length > 0 ? ["model", "effort"] : ["model"];
 }
 var CuppetTuiPlugin = {
-  id: "cuppet-tui",
   async tui(api) {
     if (!process.env.CUPPET_CONTROL_SOCKET || !process.env.CUPPET_CONTROL_TOKEN) return;
     const client = new CuppetControlClient();
+    let lastNavigatedSessionID;
+    const syncActiveRoute = async () => {
+      try {
+        const status = await client.call("status");
+        const foreground = status.foreground;
+        const session = status.session;
+        const currentSessionID = session?.id;
+        const isRunning = foreground?.running === true;
+        if (currentSessionID) {
+          const currentRoute = api.route?.current;
+          if (isRunning && currentRoute?.name === "home") {
+            lastNavigatedSessionID = currentSessionID;
+            api.route?.navigate?.("session", { sessionID: currentSessionID });
+          } else if (currentRoute?.name === "home" && currentSessionID !== lastNavigatedSessionID) {
+            lastNavigatedSessionID = currentSessionID;
+            api.route?.navigate?.("session", { sessionID: currentSessionID });
+          }
+        }
+      } catch {
+      }
+    };
+    const timer = setInterval(syncActiveRoute, 350);
+    if (typeof timer.unref === "function") timer.unref();
     const action = async (title, method, params, message) => {
       try {
         const result = await client.call(method, params);

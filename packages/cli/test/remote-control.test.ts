@@ -38,6 +38,7 @@ function stubController(overrides: Record<string, unknown> = {}): Record<string,
     async listSessions() { return [{ id: 'ses_1' }] },
     async newSession() { newSessions += 1; return { id: `ses_${newSessions}` } },
     async abort() { return undefined },
+    async doctor() { return { ok: true } },
     async status() { return { sessions: 1 } },
     async listPendingPermissions() { return [] },
     async listPendingQuestions() { return [] },
@@ -62,7 +63,7 @@ test('control router authorizes remote actors per scope and keeps local-only met
     /missing scope 'session.write'/,
   )
   await assert.rejects(
-    () => router.execute(remoteActor(['session.read', 'session.write']), 'doctor'),
+    () => router.execute(remoteActor(['session.read', 'session.write']), 'local.debug'),
     /not permitted for remote actors/,
   )
   await assert.rejects(() => router.execute(LOCAL, 'nonexistent.method'), /unknown control method/)

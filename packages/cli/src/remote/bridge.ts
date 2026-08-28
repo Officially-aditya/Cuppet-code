@@ -80,11 +80,6 @@ export class RemoteBridge {
     try {
       this.#write?.(line)
     } catch {}
-    try {
-      if (this.#write !== process.stdout.write) {
-        process.stdout.write(line)
-      }
-    } catch {}
   }
 
   start(): void {

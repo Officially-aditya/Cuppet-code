@@ -208,7 +208,9 @@ async function main(): Promise<void> {
       write,
     })
     const startRemoteSession = async (
-      write: (line: string) => void = (line) => process.stdout.write(line),
+      write: (line: string) => void = arguments_.mode === 'headless-remote'
+        ? (line) => process.stdout.write(line)
+        : () => undefined,
     ): Promise<RemoteControlStatus> => {
       if (!controller) throw new Error('Cuppet controller is unavailable')
       if (!remote) remote = await startRemoteControl(remoteOptions(write))

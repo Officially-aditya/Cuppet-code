@@ -81,11 +81,80 @@ export class RemoteBridge {
     this.#started = true
     // Transports that dial lazily (WebSocketTransport) must be told to start.
     this.#transport.start?.()
+    let isReplying = false
+    let isThinking = false
+
     this.#unsubscribers.push(
       this.#controller.onAgentEvent((event) => {
         const publicEvent = publicEventFor(event as unknown as Record<string, unknown>)
         if (!publicEvent) return
         this.#publish(publicEvent.type, publicEvent.payload, sessionIdOf(event))
+
+        if (this.#write) {
+          switch (event.type) {
+            case 'reasoning-delta': {
+              if (!isThinking) {
+                isThinking = true
+                this.#write(`  [thinking] 🤔 Model is reasoning…\n`)
+              }
+              break
+            }
+            case 'text-delta': {
+              if (!isReplying) {
+                isReplying = true
+                this.#write(`  [reply] 💬 Model is generating response…\n`)
+              }
+              break
+            }
+            case 'tool-start': {
+              isReplying = false
+              isThinking = false
+              const toolName = event.name ?? 'tool'
+              const inputSummary = formatToolInput(event.name, event.input)
+              this.#write(`  [tool] ⚡ Running ${toolName}${inputSummary ? `: ${inputSummary}` : ''}\n`)
+              break
+            }
+            case 'tool-progress': {
+              if (event.message) {
+                this.#write(`  [tool]   ↳ ${event.message}\n`)
+              }
+              break
+            }
+            case 'tool-end': {
+              const symbol = event.success ? '✓' : '✗'
+              const toolName = event.name ?? 'tool'
+              this.#write(`  [tool] ${symbol} ${toolName} ${event.success ? 'completed' : 'failed'}\n`)
+              break
+            }
+            case 'diff': {
+              this.#write(`  [diff] 📝 File modifications applied\n`)
+              break
+            }
+            case 'permission': {
+              const action = (event.request as Record<string, unknown>)?.action ?? (event.request as Record<string, unknown>)?.permission ?? 'workspace action'
+              this.#write(`  [perm] 🛡️ Permission requested: ${action}\n`)
+              break
+            }
+            case 'permission-resolved': {
+              this.#write(`  [perm] ✓ Permission decision: ${event.reply ?? 'resolved'}\n`)
+              break
+            }
+            case 'question': {
+              this.#write(`  [ask]  ❓ Question asked to user on mobile\n`)
+              break
+            }
+            case 'error': {
+              this.#write(`  [error] ❌ ${event.message}\n`)
+              break
+            }
+            case 'idle': {
+              isReplying = false
+              isThinking = false
+              this.#write(`  [agent] ✨ Turn complete. Ready.\n`)
+              break
+            }
+          }
+        }
       }),
       this.#controller.onChange((snapshot) => {
         this.#publish('host.snapshot', snapshot)
@@ -381,4 +450,19 @@ export class RemoteBridge {
 function sessionIdOf(event: unknown): string | undefined {
   const id = (event as { sessionID?: unknown }).sessionID
   return typeof id === 'string' ? id : undefined
+}
+
+function formatToolInput(name?: string, input?: unknown): string {
+  if (!input || typeof input !== 'object') return ''
+  const record = input as Record<string, unknown>
+  if (typeof record.command === 'string') return `"${record.command}"`
+  if (typeof record.path === 'string') return record.path
+  if (typeof record.pattern === 'string') return `"${record.pattern}"`
+  if (typeof record.query === 'string') return `"${record.query}"`
+  if (typeof record.file === 'string') return record.file
+  if (typeof record.url === 'string') return record.url
+  if (typeof record.prompt === 'string') return `"${record.prompt.slice(0, 60)}"`
+  const firstVal = Object.values(record).find((v) => typeof v === 'string')
+  if (typeof firstVal === 'string' && firstVal.length < 80) return `"${firstVal}"`
+  return ''
 }

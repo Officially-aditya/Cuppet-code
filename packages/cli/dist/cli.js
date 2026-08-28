@@ -4154,11 +4154,89 @@ var RemoteBridge = class {
     if (this.#started) return;
     this.#started = true;
     this.#transport.start?.();
+    let isReplying = false;
+    let isThinking = false;
     this.#unsubscribers.push(
       this.#controller.onAgentEvent((event) => {
         const publicEvent = publicEventFor(event);
         if (!publicEvent) return;
         this.#publish(publicEvent.type, publicEvent.payload, sessionIdOf(event));
+        if (this.#write) {
+          switch (event.type) {
+            case "reasoning-delta": {
+              if (!isThinking) {
+                isThinking = true;
+                this.#write(`  [thinking] \u{1F914} Model is reasoning\u2026
+`);
+              }
+              break;
+            }
+            case "text-delta": {
+              if (!isReplying) {
+                isReplying = true;
+                this.#write(`  [reply] \u{1F4AC} Model is generating response\u2026
+`);
+              }
+              break;
+            }
+            case "tool-start": {
+              isReplying = false;
+              isThinking = false;
+              const toolName = event.name ?? "tool";
+              const inputSummary = formatToolInput(event.name, event.input);
+              this.#write(`  [tool] \u26A1 Running ${toolName}${inputSummary ? `: ${inputSummary}` : ""}
+`);
+              break;
+            }
+            case "tool-progress": {
+              if (event.message) {
+                this.#write(`  [tool]   \u21B3 ${event.message}
+`);
+              }
+              break;
+            }
+            case "tool-end": {
+              const symbol = event.success ? "\u2713" : "\u2717";
+              const toolName = event.name ?? "tool";
+              this.#write(`  [tool] ${symbol} ${toolName} ${event.success ? "completed" : "failed"}
+`);
+              break;
+            }
+            case "diff": {
+              this.#write(`  [diff] \u{1F4DD} File modifications applied
+`);
+              break;
+            }
+            case "permission": {
+              const action = event.request?.action ?? event.request?.permission ?? "workspace action";
+              this.#write(`  [perm] \u{1F6E1}\uFE0F Permission requested: ${action}
+`);
+              break;
+            }
+            case "permission-resolved": {
+              this.#write(`  [perm] \u2713 Permission decision: ${event.reply ?? "resolved"}
+`);
+              break;
+            }
+            case "question": {
+              this.#write(`  [ask]  \u2753 Question asked to user on mobile
+`);
+              break;
+            }
+            case "error": {
+              this.#write(`  [error] \u274C ${event.message}
+`);
+              break;
+            }
+            case "idle": {
+              isReplying = false;
+              isThinking = false;
+              this.#write(`  [agent] \u2728 Turn complete. Ready.
+`);
+              break;
+            }
+          }
+        }
       }),
       this.#controller.onChange((snapshot) => {
         this.#publish("host.snapshot", snapshot);
@@ -4424,6 +4502,20 @@ var RemoteBridge = class {
 function sessionIdOf(event) {
   const id = event.sessionID;
   return typeof id === "string" ? id : void 0;
+}
+function formatToolInput(name, input) {
+  if (!input || typeof input !== "object") return "";
+  const record2 = input;
+  if (typeof record2.command === "string") return `"${record2.command}"`;
+  if (typeof record2.path === "string") return record2.path;
+  if (typeof record2.pattern === "string") return `"${record2.pattern}"`;
+  if (typeof record2.query === "string") return `"${record2.query}"`;
+  if (typeof record2.file === "string") return record2.file;
+  if (typeof record2.url === "string") return record2.url;
+  if (typeof record2.prompt === "string") return `"${record2.prompt.slice(0, 60)}"`;
+  const firstVal = Object.values(record2).find((v) => typeof v === "string");
+  if (typeof firstVal === "string" && firstVal.length < 80) return `"${firstVal}"`;
+  return "";
 }
 
 // src/remote/connection.ts

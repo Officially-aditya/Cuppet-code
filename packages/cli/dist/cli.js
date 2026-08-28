@@ -2011,14 +2011,43 @@ var ROUTE_TABLE = {
       return { agent, enabled };
     }
   },
-  // Host-internal controls: deliberately unreachable from remote transports.
-  "status": { localOnly: true, run: (c) => c.status() },
-  "doctor": { localOnly: true, run: (c) => c.doctor() },
-  "platform.list": {
-    localOnly: true,
-    run: async () => ({ note: "use the desktop TUI for platform and provider management" })
+  "status": { scope: "session.read", run: (c) => Promise.resolve(c.status()) },
+  "doctor": { scope: "session.read", run: (c) => Promise.resolve(c.doctor()) },
+  "platform.list": { scope: "session.read", run: (c) => Promise.resolve(platformState(c)) },
+  "platform.select": {
+    scope: "model.write",
+    run: async (c, params) => {
+      await c.selectPlatform(requireString(params, "platform"));
+      return platformState(c);
+    }
+  },
+  "plan.toggle": {
+    scope: "session.write",
+    run: async (c, params) => {
+      const agent = c.snapshot.planMode ? "build" : "plan";
+      const enabled = c.syncNativeAgent(agent, optionalSession(params));
+      return { enabled, agent };
+    }
+  },
+  "auto.status": { scope: "session.read", run: (c) => Promise.resolve({ enabled: c.autoApprovalEnabled }) },
+  "auto.set": {
+    scope: "session.write",
+    run: async (c, params) => {
+      if (typeof params.enabled !== "boolean") throw new Error("auto.set requires enabled");
+      return c.setAutoApprovalEnabled(params.enabled, optionalSession(params));
+    }
   }
 };
+function platformState(controller) {
+  return {
+    selected: controller.snapshot.platform,
+    options: PLATFORM_OPTIONS.map((option) => ({
+      ...option,
+      models: controller.modelsForPlatform(option.value, "primary").length,
+      connected: controller.integrationsForPlatform(option.value).some((integration) => integration.connections.length > 0)
+    }))
+  };
+}
 function stringParam(params, key) {
   return String(params[key]);
 }
@@ -2146,11 +2175,11 @@ var CuppetControlServer = class _CuppetControlServer {
       case "doctor":
         return this.#controller.doctor();
       case "platform.list":
-        return platformState(this.#controller);
+        return platformState2(this.#controller);
       case "platform.select": {
         const platform = platformParam(params.platform);
         await this.#controller.selectPlatform(platform);
-        return platformState(this.#controller);
+        return platformState2(this.#controller);
       }
       case "background.status":
         return this.#controller.snapshot.background ?? { paused: true };
@@ -2209,7 +2238,7 @@ var CuppetControlServer = class _CuppetControlServer {
 `);
   }
 };
-function platformState(controller) {
+function platformState2(controller) {
   return {
     selected: controller.snapshot.platform,
     options: PLATFORM_OPTIONS.map((option) => ({

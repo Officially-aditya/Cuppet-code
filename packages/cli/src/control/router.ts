@@ -3,6 +3,8 @@ import { join } from 'node:path'
 import type { CuppetController } from '../controller.js'
 import { CUPPET_VERSION } from '../constants.js'
 import { loadHostIdentityOrNull } from '../remote/identity.js'
+import { PLATFORM_OPTIONS } from '../platforms.js'
+import type { Platform } from '../types.js'
 
 /**
  * Who is asking. The Unix control socket always acts locally with full
@@ -220,14 +222,43 @@ const ROUTE_TABLE: Record<string, { scope?: ControlScope; localOnly?: boolean; r
       return { agent, enabled }
     },
   },
-
-  // Host-internal controls: deliberately unreachable from remote transports.
-  'status': { localOnly: true, run: (c) => c.status() },
-  'doctor': { localOnly: true, run: (c) => c.doctor() },
-  'platform.list': {
-    localOnly: true,
-    run: async () => ({ note: 'use the desktop TUI for platform and provider management' }),
+  'status': { scope: 'session.read', run: (c) => Promise.resolve(c.status()) },
+  'doctor': { scope: 'session.read', run: (c) => Promise.resolve(c.doctor()) },
+  'platform.list': { scope: 'session.read', run: (c) => Promise.resolve(platformState(c)) },
+  'platform.select': {
+    scope: 'model.write',
+    run: async (c, params) => {
+      await c.selectPlatform(requireString(params, 'platform') as Platform)
+      return platformState(c)
+    },
   },
+  'plan.toggle': {
+    scope: 'session.write',
+    run: async (c, params) => {
+      const agent = c.snapshot.planMode ? 'build' : 'plan'
+      const enabled = c.syncNativeAgent(agent, optionalSession(params))
+      return { enabled, agent }
+    },
+  },
+  'auto.status': { scope: 'session.read', run: (c) => Promise.resolve({ enabled: c.autoApprovalEnabled }) },
+  'auto.set': {
+    scope: 'session.write',
+    run: async (c, params) => {
+      if (typeof params.enabled !== 'boolean') throw new Error('auto.set requires enabled')
+      return c.setAutoApprovalEnabled(params.enabled, optionalSession(params))
+    },
+  },
+}
+
+function platformState(controller: CuppetController): Record<string, unknown> {
+  return {
+    selected: controller.snapshot.platform,
+    options: PLATFORM_OPTIONS.map((option) => ({
+      ...option,
+      models: controller.modelsForPlatform(option.value, 'primary').length,
+      connected: controller.integrationsForPlatform(option.value).some((integration) => integration.connections.length > 0),
+    })),
+  }
 }
 
 function stringParam(params: Record<string, unknown>, key: string): string {

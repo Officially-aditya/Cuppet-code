@@ -608,14 +608,22 @@ export class OpenCodeEventNormalizer {
   normalize(raw: unknown): AgentEvent[] {
     const wrapper = record(raw)
     const event = record(wrapper.payload ?? raw)
-    const type = String(event.type ?? '')
-    const data = record(event.data ?? event.properties)
+    const type = String(event.type ?? wrapper.type ?? '')
+    const data = record(event.data ?? event.properties ?? wrapper.data ?? wrapper.properties)
     const err = record(data.error)
     const sessionID = typeof data.sessionID === 'string'
       ? data.sessionID
-      : typeof err.sessionID === 'string'
-        ? err.sessionID
-        : undefined
+      : typeof data.sessionId === 'string'
+        ? data.sessionId
+        : typeof data.session_id === 'string'
+          ? data.session_id
+          : typeof event.sessionID === 'string'
+            ? event.sessionID
+            : typeof wrapper.sessionID === 'string'
+              ? wrapper.sessionID
+              : typeof err.sessionID === 'string'
+                ? err.sessionID
+                : undefined
 
     switch (type) {
       case 'message.updated':
@@ -823,6 +831,7 @@ export class OpenCodeEventNormalizer {
       messageID: data.messageID,
       text: '',
       emitted: 0,
+      kind: 'text',
     }
     part.text += data.delta
     this.#parts.set(data.partID, part)
@@ -857,8 +866,8 @@ export class OpenCodeEventNormalizer {
   }
 
   #flushPart(part: StreamPart): AgentEvent[] {
-    const role = this.#messageRoles.get(part.messageID)
-    if (!role || !part.kind) return []
+    const role = this.#messageRoles.get(part.messageID) ?? 'assistant'
+    const kind = part.kind ?? 'text'
     if (role !== 'assistant') {
       part.emitted = part.text.length
       return []
@@ -867,7 +876,7 @@ export class OpenCodeEventNormalizer {
     part.emitted = part.text.length
     if (!delta) return []
     return [{
-      type: part.kind === 'text' ? 'text-delta' : 'reasoning-delta',
+      type: kind === 'text' ? 'text-delta' : 'reasoning-delta',
       sessionID: part.sessionID,
       text: delta,
     }]

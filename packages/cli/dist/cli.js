@@ -2793,10 +2793,10 @@ var OpenCodeEventNormalizer = class {
   normalize(raw) {
     const wrapper = record(raw);
     const event = record(wrapper.payload ?? raw);
-    const type = String(event.type ?? "");
-    const data = record(event.data ?? event.properties);
+    const type = String(event.type ?? wrapper.type ?? "");
+    const data = record(event.data ?? event.properties ?? wrapper.data ?? wrapper.properties);
     const err = record(data.error);
-    const sessionID = typeof data.sessionID === "string" ? data.sessionID : typeof err.sessionID === "string" ? err.sessionID : void 0;
+    const sessionID = typeof data.sessionID === "string" ? data.sessionID : typeof data.sessionId === "string" ? data.sessionId : typeof data.session_id === "string" ? data.session_id : typeof event.sessionID === "string" ? event.sessionID : typeof wrapper.sessionID === "string" ? wrapper.sessionID : typeof err.sessionID === "string" ? err.sessionID : void 0;
     switch (type) {
       case "message.updated":
         return this.#messageUpdated(data);
@@ -2972,7 +2972,8 @@ var OpenCodeEventNormalizer = class {
       sessionID: data.sessionID,
       messageID: data.messageID,
       text: "",
-      emitted: 0
+      emitted: 0,
+      kind: "text"
     };
     part.text += data.delta;
     this.#parts.set(data.partID, part);
@@ -3005,8 +3006,8 @@ var OpenCodeEventNormalizer = class {
     return [];
   }
   #flushPart(part) {
-    const role = this.#messageRoles.get(part.messageID);
-    if (!role || !part.kind) return [];
+    const role = this.#messageRoles.get(part.messageID) ?? "assistant";
+    const kind = part.kind ?? "text";
     if (role !== "assistant") {
       part.emitted = part.text.length;
       return [];
@@ -3015,7 +3016,7 @@ var OpenCodeEventNormalizer = class {
     part.emitted = part.text.length;
     if (!delta) return [];
     return [{
-      type: part.kind === "text" ? "text-delta" : "reasoning-delta",
+      type: kind === "text" ? "text-delta" : "reasoning-delta",
       sessionID: part.sessionID,
       text: delta
     }];
@@ -4172,6 +4173,18 @@ var RemoteBridge = class {
     this.#buildAttachSnapshot = options.buildAttachSnapshot;
     this.#write = options.write;
   }
+  #output(line) {
+    try {
+      this.#write?.(line);
+    } catch {
+    }
+    try {
+      if (this.#write !== process.stdout.write) {
+        process.stdout.write(line);
+      }
+    } catch {
+    }
+  }
   start() {
     if (this.#started) return;
     this.#started = true;
@@ -4182,98 +4195,96 @@ var RemoteBridge = class {
         const publicEvent = publicEventFor(event);
         if (!publicEvent) return;
         this.#publish(publicEvent.type, publicEvent.payload, sessionIdOf(event));
-        if (this.#write) {
-          switch (event.type) {
-            case "reasoning-delta": {
-              if (mode !== "thinking") {
-                if (mode === "replying") this.#write("\n");
-                mode = "thinking";
-                this.#write("\x1B[2;35mThinking: \x1B[0m\x1B[2m");
-              }
-              if (event.text) {
-                this.#write(event.text);
-              }
-              break;
+        switch (event.type) {
+          case "reasoning-delta": {
+            if (mode !== "thinking") {
+              if (mode === "replying") this.#output("\n");
+              mode = "thinking";
+              this.#output("\x1B[2;35mThinking: \x1B[0m\x1B[2m");
             }
-            case "text-delta": {
-              if (mode !== "replying") {
-                if (mode === "thinking") this.#write("\x1B[0m\n");
-                mode = "replying";
-                this.#write("\x1B[1;32mResponse:\x1B[0m\n");
-              }
-              if (event.text) {
-                this.#write(event.text);
-              }
-              break;
+            if (event.text) {
+              this.#output(event.text);
             }
-            case "tool-start": {
-              if (mode === "thinking") this.#write("\x1B[0m\n");
-              if (mode === "replying") this.#write("\n");
-              mode = "tool";
-              const toolName = event.name ?? "tool";
-              const inputSummary = formatToolInput(event.name, event.input);
-              this.#write(`\x1B[1;34mTool:\x1B[0m \x1B[36m${toolName}\x1B[0m${inputSummary ? ` \x1B[2m(${inputSummary})\x1B[0m` : ""}
+            break;
+          }
+          case "text-delta": {
+            if (mode !== "replying") {
+              if (mode === "thinking") this.#output("\x1B[0m\n");
+              mode = "replying";
+              this.#output("\x1B[1;32mResponse:\x1B[0m\n");
+            }
+            if (event.text) {
+              this.#output(event.text);
+            }
+            break;
+          }
+          case "tool-start": {
+            if (mode === "thinking") this.#output("\x1B[0m\n");
+            if (mode === "replying") this.#output("\n");
+            mode = "tool";
+            const toolName = event.name ?? "tool";
+            const inputSummary = formatToolInput(event.name, event.input);
+            this.#output(`\x1B[1;34mTool:\x1B[0m \x1B[36m${toolName}\x1B[0m${inputSummary ? ` \x1B[2m(${inputSummary})\x1B[0m` : ""}
 `);
-              break;
-            }
-            case "tool-progress": {
-              if (event.message) {
-                this.#write(`  \x1B[2m\u21B3 ${event.message}\x1B[0m
+            break;
+          }
+          case "tool-progress": {
+            if (event.message) {
+              this.#output(`  \x1B[2m\u21B3 ${event.message}\x1B[0m
 `);
-              }
-              break;
             }
-            case "tool-end": {
-              const statusTag = event.success ? "\x1B[32m[done]\x1B[0m" : "\x1B[31m[failed]\x1B[0m";
-              const toolName = event.name ?? "tool";
-              this.#write(`  ${statusTag} \x1B[2m${toolName} ${event.success ? "completed" : "failed"}\x1B[0m
+            break;
+          }
+          case "tool-end": {
+            const statusTag = event.success ? "\x1B[32m[done]\x1B[0m" : "\x1B[31m[failed]\x1B[0m";
+            const toolName = event.name ?? "tool";
+            this.#output(`  ${statusTag} \x1B[2m${toolName} ${event.success ? "completed" : "failed"}\x1B[0m
 `);
-              break;
-            }
-            case "diff": {
-              this.#write(`  \x1B[33mFile modifications applied\x1B[0m
+            break;
+          }
+          case "diff": {
+            this.#output(`  \x1B[33mFile modifications applied\x1B[0m
 `);
-              break;
-            }
-            case "permission": {
-              if (mode === "thinking") this.#write("\x1B[0m\n");
-              if (mode === "replying") this.#write("\n");
-              mode = "idle";
-              const action = event.request?.action ?? event.request?.permission ?? "action";
-              this.#write(`\x1B[1;33mPermission requested:\x1B[0m ${action} (waiting for mobile approval\u2026)
+            break;
+          }
+          case "permission": {
+            if (mode === "thinking") this.#output("\x1B[0m\n");
+            if (mode === "replying") this.#output("\n");
+            mode = "idle";
+            const action = event.request?.action ?? event.request?.permission ?? "action";
+            this.#output(`\x1B[1;33mPermission requested:\x1B[0m ${action} (waiting for mobile approval\u2026)
 `);
-              break;
-            }
-            case "permission-resolved": {
-              this.#write(`  \x1B[32mPermission resolved:\x1B[0m ${event.reply ?? "resolved"}
+            break;
+          }
+          case "permission-resolved": {
+            this.#output(`  \x1B[32mPermission resolved:\x1B[0m ${event.reply ?? "resolved"}
 `);
-              break;
-            }
-            case "question": {
-              if (mode === "thinking") this.#write("\x1B[0m\n");
-              if (mode === "replying") this.#write("\n");
-              mode = "idle";
-              this.#write(`\x1B[1;35mQuestion sent to user on mobile\x1B[0m
+            break;
+          }
+          case "question": {
+            if (mode === "thinking") this.#output("\x1B[0m\n");
+            if (mode === "replying") this.#output("\n");
+            mode = "idle";
+            this.#output(`\x1B[1;35mQuestion sent to user on mobile\x1B[0m
 `);
-              break;
-            }
-            case "error": {
-              if (mode === "thinking") this.#write("\x1B[0m\n");
-              if (mode === "replying") this.#write("\n");
-              mode = "idle";
-              this.#write(`\x1B[1;31mError:\x1B[0m ${event.message}
+            break;
+          }
+          case "error": {
+            if (mode === "thinking") this.#output("\x1B[0m\n");
+            if (mode === "replying") this.#output("\n");
+            mode = "idle";
+            this.#output(`\x1B[1;31mError:\x1B[0m ${event.message}
 `);
-              break;
-            }
-            case "idle": {
-              if (mode === "thinking") this.#write("\x1B[0m\n");
-              if (mode === "replying") this.#write("\n");
-              mode = "idle";
-              this.#write(`\x1B[1;32mTurn complete. Ready.\x1B[0m
+            break;
+          }
+          case "idle": {
+            if (mode === "thinking") this.#output("\x1B[0m\n");
+            if (mode === "replying") this.#output("\n");
+            mode = "idle";
+            this.#output(`\x1B[1;32mTurn complete. Ready.\x1B[0m
 
 `);
-              break;
-            }
+            break;
           }
         }
       }),
@@ -4410,7 +4421,7 @@ var RemoteBridge = class {
     };
     if (envelope.type === "session.submit") {
       const prompt = String(envelope.payload?.prompt ?? "");
-      this.#write?.(`
+      this.#output(`
 \x1B[1;36m\u256D\u2500 [Prompt from ${device.name ?? "Mobile"}] \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\x1B[0m
 \x1B[1m\u2502 ${prompt.split("\n").join("\n\u2502 ")}\x1B[0m
 \x1B[1;36m\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\x1B[0m
@@ -4418,14 +4429,14 @@ var RemoteBridge = class {
 `);
     } else if (envelope.type === "session.steer") {
       const instr = String(envelope.payload?.instruction ?? "");
-      this.#write?.(`
+      this.#output(`
 \x1B[1;33m\u256D\u2500 [Steer from ${device.name ?? "Mobile"}] \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\x1B[0m
 \x1B[1m\u2502 ${instr.split("\n").join("\n\u2502 ")}\x1B[0m
 \x1B[1;33m\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\x1B[0m
 
 `);
     } else if (envelope.type !== "host.get" && envelope.type !== "session.snapshot" && envelope.type !== "session.list" && envelope.type !== "model.list" && envelope.type !== "platform.list") {
-      this.#write?.(`\x1B[2m  [remote] ${device.name ?? "device"} > ${envelope.type}\x1B[0m
+      this.#output(`\x1B[2m  [remote] ${device.name ?? "device"} > ${envelope.type}\x1B[0m
 `);
     }
     try {
@@ -4438,7 +4449,7 @@ var RemoteBridge = class {
         ...requestDeviceId ? { deviceId: requestDeviceId } : {}
       }));
     } catch (error) {
-      this.#write?.(`  [remote] ${device.name ?? "device"} error: ${error.message}
+      this.#output(`  [remote] ${device.name ?? "device"} error: ${error.message}
 `);
       this.#resultError(envelope.id, error instanceof Error ? error.message : String(error), requestDeviceId);
     }
@@ -4494,7 +4505,7 @@ var RemoteBridge = class {
       ...device.expiresAt !== void 0 ? { expiresAt: device.expiresAt } : {}
     });
     this.#scheduleDeviceExpiry(deviceId, device.expiresAt);
-    this.#write?.(`  [remote] device connected: ${device.name ?? "device"} [${deviceId}]
+    this.#output(`  [remote] device connected: ${device.name ?? "device"} [${deviceId}]
 `);
     this.#sendRaw(encodeFrame({ version: PROTOCOL_VERSION2, seq: 0, hostId: this.#hostId, ts: Date.now(), type: "client.accept", payload: {}, deviceId }));
     this.#sendRaw(encodeFrame({

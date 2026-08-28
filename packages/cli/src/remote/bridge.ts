@@ -76,6 +76,17 @@ export class RemoteBridge {
     this.#write = options.write
   }
 
+  #output(line: string): void {
+    try {
+      this.#write?.(line)
+    } catch {}
+    try {
+      if (this.#write !== process.stdout.write) {
+        process.stdout.write(line)
+      }
+    } catch {}
+  }
+
   start(): void {
     if (this.#started) return
     this.#started = true
@@ -89,88 +100,86 @@ export class RemoteBridge {
         if (!publicEvent) return
         this.#publish(publicEvent.type, publicEvent.payload, sessionIdOf(event))
 
-        if (this.#write) {
-          switch (event.type) {
-            case 'reasoning-delta': {
-              if (mode !== 'thinking') {
-                if (mode === 'replying') this.#write('\n')
-                mode = 'thinking'
-                this.#write('\x1b[2;35mThinking: \x1b[0m\x1b[2m')
-              }
-              if (event.text) {
-                this.#write(event.text)
-              }
-              break
+        switch (event.type) {
+          case 'reasoning-delta': {
+            if (mode !== 'thinking') {
+              if (mode === 'replying') this.#output('\n')
+              mode = 'thinking'
+              this.#output('\x1b[2;35mThinking: \x1b[0m\x1b[2m')
             }
-            case 'text-delta': {
-              if (mode !== 'replying') {
-                if (mode === 'thinking') this.#write('\x1b[0m\n')
-                mode = 'replying'
-                this.#write('\x1b[1;32mResponse:\x1b[0m\n')
-              }
-              if (event.text) {
-                this.#write(event.text)
-              }
-              break
+            if (event.text) {
+              this.#output(event.text)
             }
-            case 'tool-start': {
-              if (mode === 'thinking') this.#write('\x1b[0m\n')
-              if (mode === 'replying') this.#write('\n')
-              mode = 'tool'
-              const toolName = event.name ?? 'tool'
-              const inputSummary = formatToolInput(event.name, event.input)
-              this.#write(`\x1b[1;34mTool:\x1b[0m \x1b[36m${toolName}\x1b[0m${inputSummary ? ` \x1b[2m(${inputSummary})\x1b[0m` : ''}\n`)
-              break
+            break
+          }
+          case 'text-delta': {
+            if (mode !== 'replying') {
+              if (mode === 'thinking') this.#output('\x1b[0m\n')
+              mode = 'replying'
+              this.#output('\x1b[1;32mResponse:\x1b[0m\n')
             }
-            case 'tool-progress': {
-              if (event.message) {
-                this.#write(`  \x1b[2m↳ ${event.message}\x1b[0m\n`)
-              }
-              break
+            if (event.text) {
+              this.#output(event.text)
             }
-            case 'tool-end': {
-              const statusTag = event.success ? '\x1b[32m[done]\x1b[0m' : '\x1b[31m[failed]\x1b[0m'
-              const toolName = event.name ?? 'tool'
-              this.#write(`  ${statusTag} \x1b[2m${toolName} ${event.success ? 'completed' : 'failed'}\x1b[0m\n`)
-              break
+            break
+          }
+          case 'tool-start': {
+            if (mode === 'thinking') this.#output('\x1b[0m\n')
+            if (mode === 'replying') this.#output('\n')
+            mode = 'tool'
+            const toolName = event.name ?? 'tool'
+            const inputSummary = formatToolInput(event.name, event.input)
+            this.#output(`\x1b[1;34mTool:\x1b[0m \x1b[36m${toolName}\x1b[0m${inputSummary ? ` \x1b[2m(${inputSummary})\x1b[0m` : ''}\n`)
+            break
+          }
+          case 'tool-progress': {
+            if (event.message) {
+              this.#output(`  \x1b[2m↳ ${event.message}\x1b[0m\n`)
             }
-            case 'diff': {
-              this.#write(`  \x1b[33mFile modifications applied\x1b[0m\n`)
-              break
-            }
-            case 'permission': {
-              if (mode === 'thinking') this.#write('\x1b[0m\n')
-              if (mode === 'replying') this.#write('\n')
-              mode = 'idle'
-              const action = (event.request as Record<string, unknown>)?.action ?? (event.request as Record<string, unknown>)?.permission ?? 'action'
-              this.#write(`\x1b[1;33mPermission requested:\x1b[0m ${action} (waiting for mobile approval…)\n`)
-              break
-            }
-            case 'permission-resolved': {
-              this.#write(`  \x1b[32mPermission resolved:\x1b[0m ${event.reply ?? 'resolved'}\n`)
-              break
-            }
-            case 'question': {
-              if (mode === 'thinking') this.#write('\x1b[0m\n')
-              if (mode === 'replying') this.#write('\n')
-              mode = 'idle'
-              this.#write(`\x1b[1;35mQuestion sent to user on mobile\x1b[0m\n`)
-              break
-            }
-            case 'error': {
-              if (mode === 'thinking') this.#write('\x1b[0m\n')
-              if (mode === 'replying') this.#write('\n')
-              mode = 'idle'
-              this.#write(`\x1b[1;31mError:\x1b[0m ${event.message}\n`)
-              break
-            }
-            case 'idle': {
-              if (mode === 'thinking') this.#write('\x1b[0m\n')
-              if (mode === 'replying') this.#write('\n')
-              mode = 'idle'
-              this.#write(`\x1b[1;32mTurn complete. Ready.\x1b[0m\n\n`)
-              break
-            }
+            break
+          }
+          case 'tool-end': {
+            const statusTag = event.success ? '\x1b[32m[done]\x1b[0m' : '\x1b[31m[failed]\x1b[0m'
+            const toolName = event.name ?? 'tool'
+            this.#output(`  ${statusTag} \x1b[2m${toolName} ${event.success ? 'completed' : 'failed'}\x1b[0m\n`)
+            break
+          }
+          case 'diff': {
+            this.#output(`  \x1b[33mFile modifications applied\x1b[0m\n`)
+            break
+          }
+          case 'permission': {
+            if (mode === 'thinking') this.#output('\x1b[0m\n')
+            if (mode === 'replying') this.#output('\n')
+            mode = 'idle'
+            const action = (event.request as Record<string, unknown>)?.action ?? (event.request as Record<string, unknown>)?.permission ?? 'action'
+            this.#output(`\x1b[1;33mPermission requested:\x1b[0m ${action} (waiting for mobile approval…)\n`)
+            break
+          }
+          case 'permission-resolved': {
+            this.#output(`  \x1b[32mPermission resolved:\x1b[0m ${event.reply ?? 'resolved'}\n`)
+            break
+          }
+          case 'question': {
+            if (mode === 'thinking') this.#output('\x1b[0m\n')
+            if (mode === 'replying') this.#output('\n')
+            mode = 'idle'
+            this.#output(`\x1b[1;35mQuestion sent to user on mobile\x1b[0m\n`)
+            break
+          }
+          case 'error': {
+            if (mode === 'thinking') this.#output('\x1b[0m\n')
+            if (mode === 'replying') this.#output('\n')
+            mode = 'idle'
+            this.#output(`\x1b[1;31mError:\x1b[0m ${event.message}\n`)
+            break
+          }
+          case 'idle': {
+            if (mode === 'thinking') this.#output('\x1b[0m\n')
+            if (mode === 'replying') this.#output('\n')
+            mode = 'idle'
+            this.#output(`\x1b[1;32mTurn complete. Ready.\x1b[0m\n\n`)
+            break
           }
         }
       }),
@@ -324,12 +333,12 @@ export class RemoteBridge {
     }
     if (envelope.type === 'session.submit') {
       const prompt = String((envelope.payload as Record<string, unknown> | undefined)?.prompt ?? '')
-      this.#write?.(`\n\x1b[1;36m╭─ [Prompt from ${device.name ?? 'Mobile'}] ────────────────────\x1b[0m\n\x1b[1m│ ${prompt.split('\n').join('\n│ ')}\x1b[0m\n\x1b[1;36m╰───────────────────────────────────────────────\x1b[0m\n\n`)
+      this.#output(`\n\x1b[1;36m╭─ [Prompt from ${device.name ?? 'Mobile'}] ────────────────────\x1b[0m\n\x1b[1m│ ${prompt.split('\n').join('\n│ ')}\x1b[0m\n\x1b[1;36m╰───────────────────────────────────────────────\x1b[0m\n\n`)
     } else if (envelope.type === 'session.steer') {
       const instr = String((envelope.payload as Record<string, unknown> | undefined)?.instruction ?? '')
-      this.#write?.(`\n\x1b[1;33m╭─ [Steer from ${device.name ?? 'Mobile'}] ─────────────────────\x1b[0m\n\x1b[1m│ ${instr.split('\n').join('\n│ ')}\x1b[0m\n\x1b[1;33m╰───────────────────────────────────────────────\x1b[0m\n\n`)
+      this.#output(`\n\x1b[1;33m╭─ [Steer from ${device.name ?? 'Mobile'}] ─────────────────────\x1b[0m\n\x1b[1m│ ${instr.split('\n').join('\n│ ')}\x1b[0m\n\x1b[1;33m╰───────────────────────────────────────────────\x1b[0m\n\n`)
     } else if (envelope.type !== 'host.get' && envelope.type !== 'session.snapshot' && envelope.type !== 'session.list' && envelope.type !== 'model.list' && envelope.type !== 'platform.list') {
-      this.#write?.(`\x1b[2m  [remote] ${device.name ?? 'device'} > ${envelope.type}\x1b[0m\n`)
+      this.#output(`\x1b[2m  [remote] ${device.name ?? 'device'} > ${envelope.type}\x1b[0m\n`)
     }
     try {
       const result = await this.#router.execute(actor, envelope.type, (envelope.payload as Record<string, unknown>) ?? {})
@@ -341,7 +350,7 @@ export class RemoteBridge {
         ...(requestDeviceId ? { deviceId: requestDeviceId } : {}),
       } satisfies ResultFrame))
     } catch (error) {
-      this.#write?.(`  [remote] ${device.name ?? 'device'} error: ${(error as Error).message}\n`)
+      this.#output(`  [remote] ${device.name ?? 'device'} error: ${(error as Error).message}\n`)
       this.#resultError(envelope.id, error instanceof Error ? error.message : String(error), requestDeviceId)
     }
   }
@@ -399,7 +408,7 @@ export class RemoteBridge {
       ...(device.expiresAt !== undefined ? { expiresAt: device.expiresAt } : {}),
     })
     this.#scheduleDeviceExpiry(deviceId, device.expiresAt)
-    this.#write?.(`  [remote] device connected: ${device.name ?? 'device'} [${deviceId}]\n`)
+    this.#output(`  [remote] device connected: ${device.name ?? 'device'} [${deviceId}]\n`)
     // Tell the relay to start delivering live traffic to this device, then
     // confirm the credential check to the device itself.
     this.#sendRaw(encodeFrame({ version: PROTOCOL_VERSION, seq: 0, hostId: this.#hostId, ts: Date.now(), type: 'client.accept', payload: {}, deviceId }))

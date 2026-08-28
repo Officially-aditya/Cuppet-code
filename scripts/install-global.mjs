@@ -4,6 +4,7 @@ import { access, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawn } from 'node:child_process'
+import { refreshRuntimePlugins } from './lib/runtime-plugin-sync.mjs'
 
 const runtimeDirectories = {
   'darwin-arm64': 'runtime-darwin-arm64',
@@ -21,6 +22,8 @@ if (!npm) throw new Error('Run this installer with npm run install:global')
 
 const runtime = resolve('artifacts', runtimeDirectory)
 await access(resolve(runtime, 'manifest.json'))
+await validateRuntime(runtime)
+await refreshRuntimePlugins(runtime)
 await validateRuntime(runtime)
 
 const staging = await mkdtemp(join(tmpdir(), 'cuppet-install-'))

@@ -54,7 +54,7 @@
     "install:global": "node scripts/install-global.mjs",
     "lint": "cargo clippy --workspace --all-targets --locked -- -D warnings",
     "test": "npm run test --workspaces --if-present && cargo test --workspace --locked",
-    "test:ts": "npm run test --workspaces --if-present",
+    "test:ts": "npm run test --workspaces --if-present && node --test scripts/lib/runtime-plugin-sync.test.mjs",
     "test:rust": "cargo test --workspace --locked",
     "fmt:check": "cargo fmt --all -- --check",
     "clean": "npm run clean --workspaces --if-present && cargo clean"

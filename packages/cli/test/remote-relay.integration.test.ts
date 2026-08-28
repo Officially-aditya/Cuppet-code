@@ -381,6 +381,36 @@ test('pairing failures are limited per device connection', async () => {
   }
 })
 
+test('relay delivers device rejection before closing the socket', async () => {
+  const relay = new CuppetRelay()
+  await relay.listen(0)
+  const remoteDir = await mkdtemp(join(process.cwd(), '.relay-reject-'))
+  let bridge: RemoteBridge | undefined
+  let device: DeviceClient | undefined
+  try {
+    const started = startBridge(relay.port, 'host_reject', remoteDir)
+    bridge = started.bridge
+    await waitHostOnline(started.transport)
+
+    device = new DeviceClient(
+      deviceUrl(relay.port, 'host_reject', 'unknown-device'),
+      'invalid-secret',
+    )
+    await device.open()
+
+    const rejected = await device.next(
+      (frame) => frame.type === 'client.reject',
+      'device rejection',
+    )
+    assert.equal(rejected.deviceId, 'unknown-device')
+  } finally {
+    device?.close()
+    bridge?.stop()
+    relay.close()
+    await rm(remoteDir, { recursive: true, force: true })
+  }
+})
+
 test('a configured but empty relay auth file fails closed', async () => {
   const authFile = join(process.cwd(), `.relay-empty-auth-${Date.now()}.json`)
   await writeFile(authFile, '{"hosts":{}}')

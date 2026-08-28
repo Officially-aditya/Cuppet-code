@@ -41,6 +41,7 @@ export const DEFAULT_RELAY_BIND = '127.0.0.1'
 type SocketLike = {
   readyState: number
   send(data: string): void
+  close(code: number, reason: string): void
   destroy(): void
 }
 
@@ -462,7 +463,7 @@ export class CuppetRelay {
       if (type === 'client.reject') {
         device.authenticated = false
         device.socket.send(JSON.stringify(message))
-        device.socket.destroy()
+        device.socket.close(4004, 'device rejected')
         room.devices.delete(target)
         return
       }
@@ -521,6 +522,9 @@ export class CuppetRelay {
       send(data: string) {
         writeFrame(socket, 0x1, Buffer.from(data, 'utf8'))
       },
+      close(code: number, reason: string) {
+        closeSocket(socket, code, reason)
+      },
       destroy() {
         socket.destroy()
       },
@@ -560,10 +564,11 @@ function closeSocket(socket: import('node:net').Socket, code: number, reason: st
   reasonBytes.copy(payload, 2)
   try {
     writeFrame(socket, 0x8, payload)
+    socket.end()
   } catch {
     // socket already gone
+    socket.destroy()
   }
-  socket.destroy()
 }
 
 function decodeFrame(buffer: Buffer): { opcode: number; payload: Buffer; consumed: number } | undefined {

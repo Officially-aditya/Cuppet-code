@@ -5329,7 +5329,7 @@ Sec-WebSocket-Accept: ${acceptKey}\r
       if (type === "client.reject") {
         device.authenticated = false;
         device.socket.send(JSON.stringify(message2));
-        device.socket.destroy();
+        device.socket.close(4004, "device rejected");
         room.devices.delete(target);
         return;
       }
@@ -5381,6 +5381,9 @@ Sec-WebSocket-Accept: ${acceptKey}\r
       send(data) {
         writeFrame(socket, 1, Buffer.from(data, "utf8"));
       },
+      close(code, reason) {
+        closeSocket(socket, code, reason);
+      },
       destroy() {
         socket.destroy();
       }
@@ -5416,9 +5419,10 @@ function closeSocket(socket, code, reason) {
   reasonBytes.copy(payload, 2);
   try {
     writeFrame(socket, 8, payload);
+    socket.end();
   } catch {
+    socket.destroy();
   }
-  socket.destroy();
 }
 function decodeFrame(buffer) {
   if (buffer.length < 2) return void 0;

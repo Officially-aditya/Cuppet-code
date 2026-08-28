@@ -167,23 +167,24 @@ const ROUTE_TABLE: Record<string, { scope?: ControlScope; localOnly?: boolean; r
       const modelID = requireString(params, 'modelID')
       let providerID = typeof params.providerID === 'string' && params.providerID.length > 0 ? params.providerID : undefined
       if (!providerID) {
-        const found = c.snapshot.models.find((m) => m.id === modelID || m.name === modelID)
+        const found = c.snapshot.models.find((m) => m.modelID === modelID || m.name === modelID)
         providerID = found?.providerID
       }
       if (!providerID) {
         const platformModels = c.modelsForPlatform(undefined, 'primary')
-        const found = platformModels.find((m) => m.id === modelID || m.name === modelID)
+        const found = platformModels.find((m) => m.modelID === modelID || m.name === modelID)
         providerID = found?.providerID
       }
-      if (!providerID) {
-        providerID = modelID.includes('/') ? modelID.split('/')[0] : (c.snapshot.platform ?? 'opencode')
-      }
+      const separator = modelID.indexOf('/')
+      const resolvedProviderID = providerID ?? (separator > 0 ? modelID.slice(0, separator) : (c.snapshot.platform ?? 'opencode'))
+      const resolvedModelID = separator > 0 ? modelID.slice(separator + 1) : modelID
+      if (!resolvedModelID) throw new Error('modelID must include a model name')
       await c.selectModel(params.role === 'secondary' ? 'secondary' : 'primary', {
-        providerID,
-        modelID: modelID.includes('/') ? modelID.split('/')[1] : modelID,
+        providerID: resolvedProviderID,
+        modelID: resolvedModelID,
         ...(typeof params.variant === 'string' ? { variant: params.variant } : {}),
       })
-      return { selected: true, providerID, modelID }
+      return { selected: true, providerID: resolvedProviderID, modelID: resolvedModelID }
     },
   },
 

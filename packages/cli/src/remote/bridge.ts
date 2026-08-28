@@ -54,7 +54,7 @@ export class RemoteBridge {
   readonly #authenticateDevice: BridgeOptions['authenticateDevice']
   readonly #claimPairingInvite: BridgeOptions['claimPairingInvite']
   readonly #buildAttachSnapshot: BridgeOptions['buildAttachSnapshot']
-  readonly #write?: (line: string) => void
+  readonly #write: ((line: string) => void) | undefined
   #seq = 0
   /** Changes when a new host process takes authority for this host id. */
   readonly #connectionId = randomUUID()

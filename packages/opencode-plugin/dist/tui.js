@@ -86,6 +86,7 @@ function modelSelectionSequence(row2) {
   return row2.efforts.length > 0 ? ["model", "effort"] : ["model"];
 }
 var CuppetTuiPlugin = {
+  id: "cuppet-tui",
   async tui(api) {
     if (!process.env.CUPPET_CONTROL_SOCKET || !process.env.CUPPET_CONTROL_TOKEN) return;
     const client = new CuppetControlClient();

@@ -103,6 +103,7 @@ type TuiPluginModule = {
 }
 
 const CuppetTuiPlugin: TuiPluginModule = {
+  id: 'cuppet-tui',
   async tui(api) {
     if (!process.env.CUPPET_CONTROL_SOCKET || !process.env.CUPPET_CONTROL_TOKEN) return
     const client = new CuppetControlClient()

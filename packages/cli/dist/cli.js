@@ -978,9 +978,9 @@ var CuppetController = class extends EventEmitter2 {
   async selectPlatform(platform) {
     this.#platform = platform;
     const primaryCandidates = this.modelsForPlatform(platform, "primary");
-    const primary = primaryCandidates[0] ? { providerID: primaryCandidates[0].providerID, modelID: primaryCandidates[0].id } : void 0;
+    const primary = primaryCandidates[0] ? { providerID: primaryCandidates[0].providerID, modelID: primaryCandidates[0].modelID } : void 0;
     const secondaryCandidates = this.modelsForPlatform(platform, "secondary");
-    const secondary = secondaryCandidates[0] ? { providerID: secondaryCandidates[0].providerID, modelID: secondaryCandidates[0].id } : void 0;
+    const secondary = secondaryCandidates[0] ? { providerID: secondaryCandidates[0].providerID, modelID: secondaryCandidates[0].modelID } : void 0;
     this.#primary = primary;
     this.#secondary = secondary;
     this.#background?.pause();
@@ -1896,6 +1896,7 @@ function requireString(params, key) {
   return value;
 }
 var ROUTE_TABLE = {
+  "local.debug": { localOnly: true, run: () => Promise.resolve({ ok: true }) },
   "session.list": { scope: "session.read", run: (c) => c.listSessions() },
   // The remote contract needs the live controller snapshot shape (including
   // activeSession/running/models), not the richer local diagnostic payload.
@@ -1988,23 +1989,24 @@ var ROUTE_TABLE = {
       const modelID = requireString(params, "modelID");
       let providerID = typeof params.providerID === "string" && params.providerID.length > 0 ? params.providerID : void 0;
       if (!providerID) {
-        const found = c.snapshot.models.find((m) => m.id === modelID || m.name === modelID);
+        const found = c.snapshot.models.find((m) => m.modelID === modelID || m.name === modelID);
         providerID = found?.providerID;
       }
       if (!providerID) {
         const platformModels = c.modelsForPlatform(void 0, "primary");
-        const found = platformModels.find((m) => m.id === modelID || m.name === modelID);
+        const found = platformModels.find((m) => m.modelID === modelID || m.name === modelID);
         providerID = found?.providerID;
       }
-      if (!providerID) {
-        providerID = modelID.includes("/") ? modelID.split("/")[0] : c.snapshot.platform ?? "opencode";
-      }
+      const separator = modelID.indexOf("/");
+      const resolvedProviderID = providerID ?? (separator > 0 ? modelID.slice(0, separator) : c.snapshot.platform ?? "opencode");
+      const resolvedModelID = separator > 0 ? modelID.slice(separator + 1) : modelID;
+      if (!resolvedModelID) throw new Error("modelID must include a model name");
       await c.selectModel(params.role === "secondary" ? "secondary" : "primary", {
-        providerID,
-        modelID: modelID.includes("/") ? modelID.split("/")[1] : modelID,
+        providerID: resolvedProviderID,
+        modelID: resolvedModelID,
         ...typeof params.variant === "string" ? { variant: params.variant } : {}
       });
-      return { selected: true, providerID, modelID };
+      return { selected: true, providerID: resolvedProviderID, modelID: resolvedModelID };
     }
   },
   /**
@@ -4176,12 +4178,6 @@ var RemoteBridge = class {
   #output(line) {
     try {
       this.#write?.(line);
-    } catch {
-    }
-    try {
-      if (this.#write !== process.stdout.write) {
-        process.stdout.write(line);
-      }
     } catch {
     }
   }
@@ -6422,7 +6418,7 @@ async function main() {
       ...process.env.CUPPET_REMOTE_TOKEN_PUBLIC_KEY ? { remoteTokenPublicKey: process.env.CUPPET_REMOTE_TOKEN_PUBLIC_KEY } : {},
       write
     });
-    const startRemoteSession = async (write = (line) => process.stdout.write(line)) => {
+    const startRemoteSession = async (write = arguments_.mode === "headless-remote" ? (line) => process.stdout.write(line) : () => void 0) => {
       if (!controller) throw new Error("Cuppet controller is unavailable");
       if (!remote) remote = await startRemoteControl(remoteOptions(write));
       return remoteControlStatus(remote);

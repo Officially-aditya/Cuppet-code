@@ -220,11 +220,11 @@ export class CuppetController extends EventEmitter {
     this.#platform = platform
     const primaryCandidates = this.modelsForPlatform(platform, 'primary')
     const primary = primaryCandidates[0]
-      ? { providerID: primaryCandidates[0].providerID, modelID: primaryCandidates[0].id }
+      ? { providerID: primaryCandidates[0].providerID, modelID: primaryCandidates[0].modelID }
       : undefined
     const secondaryCandidates = this.modelsForPlatform(platform, 'secondary')
     const secondary = secondaryCandidates[0]
-      ? { providerID: secondaryCandidates[0].providerID, modelID: secondaryCandidates[0].id }
+      ? { providerID: secondaryCandidates[0].providerID, modelID: secondaryCandidates[0].modelID }
       : undefined
     this.#primary = primary
     this.#secondary = secondary

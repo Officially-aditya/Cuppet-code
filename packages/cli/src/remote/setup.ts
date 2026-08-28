@@ -1,4 +1,5 @@
 import type { HostIdentity } from './identity.js'
+import { renderTerminalQr } from './qr.js'
 
 export type RemoteSetupOptions = {
   apiBase: string
@@ -53,7 +54,7 @@ export async function runRemoteSetup(
   const write = options.write ?? ((line: string) => process.stdout.write(line))
   write('  Cuppet setup — scan this QR in the signed-in Cuppet app\n')
   write(`  ${session.setupUrl}\n`)
-  const qr = await renderSetupQr(session.setupUrl)
+  const qr = await renderTerminalQr(session.setupUrl)
   options.onSetup?.({
     code: session.setupCode,
     url: session.setupUrl,
@@ -168,15 +169,6 @@ function errorMessage(payload: Record<string, unknown>): string {
     return (error as { message: string }).message
   }
   return 'unexpected server response'
-}
-
-async function renderSetupQr(text: string): Promise<string> {
-  try {
-    const qrcode = await import('qrcode')
-    return await qrcode.toString(text, { type: 'terminal', small: true })
-  } catch {
-    return ''
-  }
 }
 
 function wait(milliseconds: number, signal?: AbortSignal): Promise<void> {

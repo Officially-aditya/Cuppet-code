@@ -4711,6 +4711,16 @@ function verifyRemoteToken(token, publicKey, expectedHostId, expectedDeviceId) {
   }
 }
 
+// src/remote/qr.ts
+async function renderTerminalQr(text) {
+  try {
+    const qrcode = await import("qrcode");
+    return await qrcode.toString(text, { type: "utf8" });
+  } catch {
+    return "";
+  }
+}
+
 // src/remote/setup.ts
 async function runRemoteSetup(options) {
   if (!/^https?:\/\//.test(options.apiBase)) {
@@ -4723,7 +4733,7 @@ async function runRemoteSetup(options) {
   write("  Cuppet setup \u2014 scan this QR in the signed-in Cuppet app\n");
   write(`  ${session.setupUrl}
 `);
-  const qr = await renderSetupQr(session.setupUrl);
+  const qr = await renderTerminalQr(session.setupUrl);
   options.onSetup?.({
     code: session.setupCode,
     url: session.setupUrl,
@@ -4816,14 +4826,6 @@ function errorMessage2(payload) {
     return error.message;
   }
   return "unexpected server response";
-}
-async function renderSetupQr(text) {
-  try {
-    const qrcode = await import("qrcode");
-    return await qrcode.toString(text, { type: "terminal", small: true });
-  } catch {
-    return "";
-  }
 }
 function wait(milliseconds, signal) {
   if (signal?.aborted) return Promise.reject(signal.reason ?? new Error("Remote setup cancelled."));
@@ -4944,14 +4946,6 @@ async function startRemoteControl(options) {
       bridge?.stop();
     }
   };
-}
-async function renderTerminalQr(text) {
-  try {
-    const qrcode = await import("qrcode");
-    return await qrcode.toString(text, { type: "terminal", small: true });
-  } catch {
-    return "";
-  }
 }
 
 // src/remote/relay.ts

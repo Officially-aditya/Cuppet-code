@@ -13,6 +13,7 @@ import {
 import { registerHost } from './enroll.js'
 import { verifyRemoteToken } from './token.js'
 import { runRemoteSetup, type RemoteSetupPrompt } from './setup.js'
+import { renderTerminalQr } from './qr.js'
 import { DEFAULT_CUPPET_API_BASE } from '../constants.js'
 
 export type RemoteControlOptions = {
@@ -140,15 +141,5 @@ export async function startRemoteControl(options: RemoteControlOptions): Promise
     stop(): void {
       bridge?.stop()
     },
-  }
-}
-
-/** Best-effort terminal QR; empty string when the renderer is unavailable. */
-export async function renderTerminalQr(text: string): Promise<string> {
-  try {
-    const qrcode = await import('qrcode')
-    return await qrcode.toString(text, { type: 'terminal', small: true })
-  } catch {
-    return ''
   }
 }

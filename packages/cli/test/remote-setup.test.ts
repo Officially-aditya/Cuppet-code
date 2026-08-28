@@ -43,7 +43,7 @@ test('remote setup prints only the QR payload and claims after mobile approval',
     }
 
     const output: string[] = []
-    let setupPrompt: { code: string; url: string; expiresAt: string } | undefined
+    let setupPrompt: { code: string; url: string; expiresAt: string; qr?: string } | undefined
     const enrollment = await runRemoteSetup({
       apiBase: 'https://api.example.test',
       identity,
@@ -60,6 +60,8 @@ test('remote setup prints only the QR payload and claims after mobile approval',
     assert.equal(output.some((line) => line.includes(relaySecret)), false)
     assert.equal(setupPrompt?.code, 'ABC-123-xyz')
     assert.match(setupPrompt?.url ?? '', /^cuppet:\/\/remote\/setup\?.*api=https/)
+    assert.match(setupPrompt?.qr ?? '', /█/)
+    assert.doesNotMatch(setupPrompt?.qr ?? '', /\u001b/)
     assert.equal(calls.length, 4)
   } finally {
     await rm(dir, { recursive: true, force: true })

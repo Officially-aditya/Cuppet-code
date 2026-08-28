@@ -18,6 +18,7 @@ export type ControlAddress = {
 export type RemoteControlStatus = {
   running: boolean
   starting?: boolean
+  error?: string
   hostId?: string
   deviceName?: string
   invite?: {

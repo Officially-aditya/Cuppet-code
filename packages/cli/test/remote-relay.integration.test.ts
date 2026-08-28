@@ -141,6 +141,20 @@ async function waitHostOnline(transport: WebSocketTransport): Promise<void> {
   await waitFor(() => transport.connected ? true : undefined, 5000, 'host transport connect')
 }
 
+test('host transport waits until the relay connection is ready', async () => {
+  const relay = new CuppetRelay()
+  await relay.listen(0)
+  const transport = new WebSocketTransport(hostUrl(relay.port, 'host_ready'))
+  try {
+    transport.start()
+    await transport.waitUntilConnected(1000)
+    assert.equal(transport.connected, true)
+  } finally {
+    transport.close()
+    relay.close()
+  }
+})
+
 test('relay validates room identifiers and counts every decoded frame', () => {
   assert.equal(isValidRelayHostId('host.valid-1'), true)
   assert.equal(isValidRelayHostId(''), false)

@@ -30,7 +30,9 @@ export class WebSocketTransport implements RemoteTransport {
   #heartbeat: ReturnType<typeof setInterval> | undefined
   #reconnectTimer: ReturnType<typeof setTimeout> | undefined
   #closed = false
+  #started = false
   #connected = false
+  #lastClose: { code: number; reason: string } | undefined
   readonly #url: string
   readonly #messageListeners = new Set<(data: string) => void>()
   readonly #statusListeners = new Set<(connected: boolean) => void>()
@@ -53,7 +55,26 @@ export class WebSocketTransport implements RemoteTransport {
   }
 
   start(): void {
+    if (this.#started || this.#closed) return
+    this.#started = true
     this.#dial()
+  }
+
+  async waitUntilConnected(timeoutMs = 12_000): Promise<void> {
+    if (this.#connected) return
+    this.start()
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        const detail = this.#lastClose?.reason ||
+          (this.#lastClose?.code ? `relay closed with code ${this.#lastClose.code}` : 'relay did not answer')
+        reject(new Error(`Remote relay connection failed: ${detail}.`))
+      }, timeoutMs)
+      this.onStatusChange((connected) => {
+        if (!connected) return
+        clearTimeout(timeout)
+        resolve()
+      })
+    })
   }
 
   send(data: string): void {
@@ -111,8 +132,9 @@ export class WebSocketTransport implements RemoteTransport {
       const data = typeof event.data === 'string' ? event.data : ''
       for (const listener of this.#messageListeners) listener(data)
     })
-    socket.addEventListener('close', () => {
+    socket.addEventListener('close', (event) => {
       if (this.#heartbeat) clearInterval(this.#heartbeat)
+      this.#lastClose = { code: event.code, reason: event.reason }
       this.#setStatus(false)
       this.#scheduleReconnect(attempt + 1)
     })

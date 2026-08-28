@@ -120,6 +120,16 @@ test('remote setup formatting exposes approval details immediately', () => {
   assert.match(output, /waiting for approval/)
 })
 
+test('remote control formatting exposes relay startup failures', () => {
+  assert.equal(
+    formatRemoteControl({
+      running: false,
+      error: 'Remote relay connection failed: host unauthorized.',
+    }),
+    'Remote relay connection failed: host unauthorized.',
+  )
+})
+
 test('Cuppet status is formatted as a compact human-readable dialog', () => {
   const output = formatStatus({
     platform: 'vertex',

@@ -116,6 +116,13 @@ export async function startRemoteControl(options: RemoteControlOptions): Promise
     })
     bridge.start()
     write(`  relay: dialing ${relayUrl}\n`)
+    try {
+      await transport.waitUntilConnected()
+      write('  relay: connected\n')
+    } catch (error) {
+      bridge.stop()
+      throw error
+    }
   } else {
     write('  set CUPPET_RELAY_URL or pass --relay-url <wss://…> to connect the bridge\n')
   }

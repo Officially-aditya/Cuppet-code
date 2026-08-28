@@ -217,7 +217,8 @@ async function main(): Promise<void> {
     const remoteManager: RemoteControlManager = {
       start: () => {
         if (remote) return Promise.resolve(remoteControlStatus(remote))
-        if (pendingRemoteStatus) return Promise.resolve(pendingRemoteStatus)
+        if (pendingRemoteStatus?.starting) return Promise.resolve(pendingRemoteStatus)
+        pendingRemoteStatus = undefined
         if (remoteStartResponse) return remoteStartResponse
 
         const abort = new AbortController()
@@ -255,7 +256,14 @@ async function main(): Promise<void> {
             pendingRemoteStatus = undefined
             finishInitial(remoteControlStatus(session))
           }).catch((error) => {
-            if (remoteStartController === abort) pendingRemoteStatus = undefined
+            if (remoteStartController === abort) {
+              pendingRemoteStatus = returned
+                ? {
+                    running: false,
+                    error: error instanceof Error ? error.message : String(error),
+                  }
+                : undefined
+            }
             if (!returned) reject(error)
           }).finally(() => {
             if (remoteStartController === abort) {

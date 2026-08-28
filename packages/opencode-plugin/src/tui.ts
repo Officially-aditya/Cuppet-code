@@ -675,7 +675,9 @@ export function formatRemoteControl(value: unknown): string {
       row('Status', 'waiting for approval'),
     ].join('\n')
   }
-  if (!booleanValue(status.running)) return 'Remote control is stopped.'
+  if (!booleanValue(status.running)) {
+    return stringValue(status.error) ?? 'Remote control is stopped.'
+  }
   const invite = record(status.invite)
   const expiresAt = numberValue(invite.expiresAt)
   return [

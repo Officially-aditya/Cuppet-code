@@ -977,10 +977,14 @@ var CuppetController = class extends EventEmitter2 {
   }
   async selectPlatform(platform) {
     this.#platform = platform;
-    this.#primary = void 0;
-    this.#secondary = void 0;
+    const primaryCandidates = this.modelsForPlatform(platform, "primary");
+    const primary = primaryCandidates[0] ? { providerID: primaryCandidates[0].providerID, modelID: primaryCandidates[0].id } : void 0;
+    const secondaryCandidates = this.modelsForPlatform(platform, "secondary");
+    const secondary = secondaryCandidates[0] ? { providerID: secondaryCandidates[0].providerID, modelID: secondaryCandidates[0].id } : void 0;
+    this.#primary = primary;
+    this.#secondary = secondary;
     this.#background?.pause();
-    await this.#preferences.update({ platform, primary: void 0, secondary: void 0 });
+    await this.#preferences.update({ platform, primary, secondary });
     this.#changed();
   }
   modelsForPlatform(platform = this.#platform, role = "primary") {
@@ -1308,13 +1312,14 @@ var CuppetController = class extends EventEmitter2 {
       name: integration.name,
       connected: integration.connections.length > 0
     })) : [];
-    const configured = providers.some((provider) => provider.connected);
+    const compatibleModels = platform ? this.modelsForPlatform(platform, "primary") : [];
+    const configured = platform === "opencode" ? true : providers.some((provider) => provider.connected) || compatibleModels.length > 0 || this.#models.length > 0;
     const selectedModel = snapshot.primary?.providerID && snapshot.primary?.modelID ? `${snapshot.primary.providerID}/${snapshot.primary.modelID}` : null;
     return {
-      configured,
+      configured: configured || Boolean(snapshot.primary),
       // Coding uses the foreground/primary model. The optional secondary
       // model is a Cuppet background-agent concern and must not block BYOK.
-      ready: Boolean(configured && snapshot.primary),
+      ready: Boolean((configured || this.#models.length > 0) && (snapshot.primary || compatibleModels.length > 0)),
       providers,
       selectedProvider: platform ?? null,
       selectedModel
@@ -1948,16 +1953,36 @@ var ROUTE_TABLE = {
       return { rejected: true };
     }
   },
-  "model.list": { scope: "session.read", run: (c) => Promise.resolve(c.snapshot.models) },
+  "model.list": {
+    scope: "session.read",
+    run: (c) => {
+      const platformModels = c.modelsForPlatform(void 0, "primary");
+      return Promise.resolve(platformModels.length > 0 ? platformModels : c.snapshot.models);
+    }
+  },
   "model.select": {
     scope: "model.write",
     run: async (c, params) => {
+      const modelID = requireString(params, "modelID");
+      let providerID = typeof params.providerID === "string" && params.providerID.length > 0 ? params.providerID : void 0;
+      if (!providerID) {
+        const found = c.snapshot.models.find((m) => m.id === modelID || m.name === modelID);
+        providerID = found?.providerID;
+      }
+      if (!providerID) {
+        const platformModels = c.modelsForPlatform(void 0, "primary");
+        const found = platformModels.find((m) => m.id === modelID || m.name === modelID);
+        providerID = found?.providerID;
+      }
+      if (!providerID) {
+        providerID = modelID.includes("/") ? modelID.split("/")[0] : c.snapshot.platform ?? "opencode";
+      }
       await c.selectModel(params.role === "secondary" ? "secondary" : "primary", {
-        providerID: requireString(params, "providerID"),
-        modelID: requireString(params, "modelID"),
+        providerID,
+        modelID: modelID.includes("/") ? modelID.split("/")[1] : modelID,
         ...typeof params.variant === "string" ? { variant: params.variant } : {}
       });
-      return { selected: true };
+      return { selected: true, providerID, modelID };
     }
   },
   /**

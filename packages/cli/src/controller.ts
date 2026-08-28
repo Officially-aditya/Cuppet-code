@@ -218,10 +218,18 @@ export class CuppetController extends EventEmitter {
 
   async selectPlatform(platform: Platform): Promise<void> {
     this.#platform = platform
-    this.#primary = undefined
-    this.#secondary = undefined
+    const primaryCandidates = this.modelsForPlatform(platform, 'primary')
+    const primary = primaryCandidates[0]
+      ? { providerID: primaryCandidates[0].providerID, modelID: primaryCandidates[0].id }
+      : undefined
+    const secondaryCandidates = this.modelsForPlatform(platform, 'secondary')
+    const secondary = secondaryCandidates[0]
+      ? { providerID: secondaryCandidates[0].providerID, modelID: secondaryCandidates[0].id }
+      : undefined
+    this.#primary = primary
+    this.#secondary = secondary
     this.#background?.pause()
-    await this.#preferences.update({ platform, primary: undefined, secondary: undefined })
+    await this.#preferences.update({ platform, primary, secondary })
     this.#changed()
   }
 
@@ -608,16 +616,20 @@ export class CuppetController extends EventEmitter {
             connected: integration.connections.length > 0,
           }))
       : []
-    const configured = providers.some((provider) => provider.connected)
+    const compatibleModels = platform ? this.modelsForPlatform(platform, 'primary') : []
+    const configured =
+      platform === 'opencode'
+        ? true
+        : providers.some((provider) => provider.connected) || compatibleModels.length > 0 || this.#models.length > 0
     const selectedModel =
       snapshot.primary?.providerID && snapshot.primary?.modelID
         ? `${snapshot.primary.providerID}/${snapshot.primary.modelID}`
         : null
     return {
-      configured,
+      configured: configured || Boolean(snapshot.primary),
       // Coding uses the foreground/primary model. The optional secondary
       // model is a Cuppet background-agent concern and must not block BYOK.
-      ready: Boolean(configured && snapshot.primary),
+      ready: Boolean((configured || this.#models.length > 0) && (snapshot.primary || compatibleModels.length > 0)),
       providers,
       selectedProvider: platform ?? null,
       selectedModel,

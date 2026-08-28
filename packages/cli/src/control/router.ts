@@ -153,16 +153,36 @@ const ROUTE_TABLE: Record<string, { scope?: ControlScope; localOnly?: boolean; r
       return { rejected: true }
     },
   },
-  'model.list': { scope: 'session.read', run: (c) => Promise.resolve(c.snapshot.models) },
+  'model.list': {
+    scope: 'session.read',
+    run: (c) => {
+      const platformModels = c.modelsForPlatform(undefined, 'primary')
+      return Promise.resolve(platformModels.length > 0 ? platformModels : c.snapshot.models)
+    },
+  },
   'model.select': {
     scope: 'model.write',
     run: async (c, params) => {
+      const modelID = requireString(params, 'modelID')
+      let providerID = typeof params.providerID === 'string' && params.providerID.length > 0 ? params.providerID : undefined
+      if (!providerID) {
+        const found = c.snapshot.models.find((m) => m.id === modelID || m.name === modelID)
+        providerID = found?.providerID
+      }
+      if (!providerID) {
+        const platformModels = c.modelsForPlatform(undefined, 'primary')
+        const found = platformModels.find((m) => m.id === modelID || m.name === modelID)
+        providerID = found?.providerID
+      }
+      if (!providerID) {
+        providerID = modelID.includes('/') ? modelID.split('/')[0] : (c.snapshot.platform ?? 'opencode')
+      }
       await c.selectModel(params.role === 'secondary' ? 'secondary' : 'primary', {
-        providerID: requireString(params, 'providerID'),
-        modelID: requireString(params, 'modelID'),
+        providerID,
+        modelID: modelID.includes('/') ? modelID.split('/')[1] : modelID,
         ...(typeof params.variant === 'string' ? { variant: params.variant } : {}),
       })
-      return { selected: true }
+      return { selected: true, providerID, modelID }
     },
   },
 

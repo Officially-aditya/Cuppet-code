@@ -17,8 +17,11 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "npm run build --workspaces --if-present && cargo build --workspace --locked",
+    "build": "npm run build:ts",
+    "build:all": "npm run build:ts && cargo build --workspace --locked",
     "build:ts": "npm run build --workspaces --if-present",
+    "start": "node packages/cli/dist/cli.js",
+    "start:relay": "node packages/cli/dist/cli.js relay --bind 0.0.0.0",
     "package:cli": "node scripts/package-cli.mjs",
     "build:opencode": "node scripts/build-opencode.mjs",
     "package:platform": "node scripts/package-platform.mjs",

@@ -101,6 +101,7 @@ export async function startRemoteControl(options: RemoteControlOptions): Promise
       controller: options.controller,
       hostId: identity.hostId,
       transport,
+      write,
       authenticateDevice: async (deviceId, secret) => {
         const local = await authenticateDevice(options.remoteDir, deviceId, secret)
         if (local) return local

@@ -32,6 +32,7 @@ export type BridgeOptions = {
   } | undefined>
   /** Extra frames published right after (re)connect — attach snapshot etc. */
   buildAttachSnapshot?: () => Promise<Record<string, unknown>>
+  write?: (line: string) => void
 }
 
 const DEDUPE_CAPACITY = 512
@@ -53,6 +54,7 @@ export class RemoteBridge {
   readonly #authenticateDevice: BridgeOptions['authenticateDevice']
   readonly #claimPairingInvite: BridgeOptions['claimPairingInvite']
   readonly #buildAttachSnapshot: BridgeOptions['buildAttachSnapshot']
+  readonly #write?: (line: string) => void
   #seq = 0
   /** Changes when a new host process takes authority for this host id. */
   readonly #connectionId = randomUUID()
@@ -71,6 +73,7 @@ export class RemoteBridge {
     this.#authenticateDevice = options.authenticateDevice
     this.#claimPairingInvite = options.claimPairingInvite
     this.#buildAttachSnapshot = options.buildAttachSnapshot
+    this.#write = options.write
   }
 
   start(): void {
@@ -232,6 +235,10 @@ export class RemoteBridge {
       ...(device.name ? { deviceName: device.name } : {}),
       scopes: device.scopes,
     }
+    const promptPreview = envelope.type === 'session.submit'
+      ? ` > "${String((envelope.payload as Record<string, unknown> | undefined)?.prompt ?? '')}"`
+      : ` > command ${envelope.type}`
+    this.#write?.(`  [remote] ${device.name ?? 'device'}${promptPreview}\n`)
     try {
       const result = await this.#router.execute(actor, envelope.type, (envelope.payload as Record<string, unknown>) ?? {})
       this.#sendRaw(encodeFrame({
@@ -242,6 +249,7 @@ export class RemoteBridge {
         ...(requestDeviceId ? { deviceId: requestDeviceId } : {}),
       } satisfies ResultFrame))
     } catch (error) {
+      this.#write?.(`  [remote] ${device.name ?? 'device'} error: ${(error as Error).message}\n`)
       this.#resultError(envelope.id, error instanceof Error ? error.message : String(error), requestDeviceId)
     }
   }
@@ -299,6 +307,7 @@ export class RemoteBridge {
       ...(device.expiresAt !== undefined ? { expiresAt: device.expiresAt } : {}),
     })
     this.#scheduleDeviceExpiry(deviceId, device.expiresAt)
+    this.#write?.(`  [remote] device connected: ${device.name ?? 'device'} [${deviceId}]\n`)
     // Tell the relay to start delivering live traffic to this device, then
     // confirm the credential check to the device itself.
     this.#sendRaw(encodeFrame({ version: PROTOCOL_VERSION, seq: 0, hostId: this.#hostId, ts: Date.now(), type: 'client.accept', payload: {}, deviceId }))

@@ -4076,6 +4076,7 @@ var RemoteBridge = class {
   #authenticateDevice;
   #claimPairingInvite;
   #buildAttachSnapshot;
+  #write;
   #seq = 0;
   /** Changes when a new host process takes authority for this host id. */
   #connectionId = randomUUID2();
@@ -4093,6 +4094,7 @@ var RemoteBridge = class {
     this.#authenticateDevice = options.authenticateDevice;
     this.#claimPairingInvite = options.claimPairingInvite;
     this.#buildAttachSnapshot = options.buildAttachSnapshot;
+    this.#write = options.write;
   }
   start() {
     if (this.#started) return;
@@ -4235,6 +4237,9 @@ var RemoteBridge = class {
       ...device.name ? { deviceName: device.name } : {},
       scopes: device.scopes
     };
+    const promptPreview = envelope.type === "session.submit" ? ` > "${String(envelope.payload?.prompt ?? "")}"` : ` > command ${envelope.type}`;
+    this.#write?.(`  [remote] ${device.name ?? "device"}${promptPreview}
+`);
     try {
       const result = await this.#router.execute(actor, envelope.type, envelope.payload ?? {});
       this.#sendRaw(encodeFrame({
@@ -4245,6 +4250,8 @@ var RemoteBridge = class {
         ...requestDeviceId ? { deviceId: requestDeviceId } : {}
       }));
     } catch (error) {
+      this.#write?.(`  [remote] ${device.name ?? "device"} error: ${error.message}
+`);
       this.#resultError(envelope.id, error instanceof Error ? error.message : String(error), requestDeviceId);
     }
   }
@@ -4299,6 +4306,8 @@ var RemoteBridge = class {
       ...device.expiresAt !== void 0 ? { expiresAt: device.expiresAt } : {}
     });
     this.#scheduleDeviceExpiry(deviceId, device.expiresAt);
+    this.#write?.(`  [remote] device connected: ${device.name ?? "device"} [${deviceId}]
+`);
     this.#sendRaw(encodeFrame({ version: PROTOCOL_VERSION2, seq: 0, hostId: this.#hostId, ts: Date.now(), type: "client.accept", payload: {}, deviceId }));
     this.#sendRaw(encodeFrame({
       version: PROTOCOL_VERSION2,
@@ -4923,6 +4932,7 @@ async function startRemoteControl(options) {
       controller: options.controller,
       hostId: identity.hostId,
       transport,
+      write,
       authenticateDevice: async (deviceId, secret) => {
         const local = await authenticateDevice(options.remoteDir, deviceId, secret);
         if (local) return local;

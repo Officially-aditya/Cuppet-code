@@ -1281,9 +1281,25 @@ var CuppetController = class extends EventEmitter2 {
   }
   async replyQuestion(requestID, answers) {
     await this.#gateway.replyQuestion(requestID, answers);
+    if (this.#session) {
+      this.emit("agent-event", {
+        type: "question-resolved",
+        sessionID: this.#session.id,
+        requestID,
+        accepted: true
+      });
+    }
   }
   async rejectQuestion(requestID) {
     await this.#gateway.rejectQuestion(requestID);
+    if (this.#session) {
+      this.emit("agent-event", {
+        type: "question-resolved",
+        sessionID: this.#session.id,
+        requestID,
+        accepted: false
+      });
+    }
   }
   async sessionMessages(sessionID) {
     return this.#gateway.messages(sessionID);
@@ -1327,6 +1343,12 @@ var CuppetController = class extends EventEmitter2 {
   }
   async replyPermission(request, reply, message2) {
     await this.#gateway.replyPermission(request.sessionID, request.id, reply, message2);
+    this.emit("agent-event", {
+      type: "permission-resolved",
+      sessionID: request.sessionID,
+      requestID: request.id,
+      reply
+    });
   }
   async denyPendingPermissions() {
     return this.#session ? this.#gateway.denyPendingPermissions(this.#session.id) : 0;

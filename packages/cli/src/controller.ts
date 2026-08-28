@@ -575,10 +575,26 @@ export class CuppetController extends EventEmitter {
 
   async replyQuestion(requestID: string, answers: string[][]): Promise<void> {
     await this.#gateway.replyQuestion(requestID, answers)
+    if (this.#session) {
+      this.emit('agent-event', {
+        type: 'question-resolved',
+        sessionID: this.#session.id,
+        requestID,
+        accepted: true,
+      } satisfies AgentEvent)
+    }
   }
 
   async rejectQuestion(requestID: string): Promise<void> {
     await this.#gateway.rejectQuestion(requestID)
+    if (this.#session) {
+      this.emit('agent-event', {
+        type: 'question-resolved',
+        sessionID: this.#session.id,
+        requestID,
+        accepted: false,
+      } satisfies AgentEvent)
+    }
   }
 
   async sessionMessages(sessionID: string): Promise<unknown[]> {
@@ -638,6 +654,12 @@ export class CuppetController extends EventEmitter {
 
   async replyPermission(request: PermissionRequest, reply: 'once' | 'always' | 'reject', message?: string): Promise<void> {
     await this.#gateway.replyPermission(request.sessionID, request.id, reply, message)
+    this.emit('agent-event', {
+      type: 'permission-resolved',
+      sessionID: request.sessionID,
+      requestID: request.id,
+      reply,
+    } satisfies AgentEvent)
   }
 
   async denyPendingPermissions(): Promise<number> {

@@ -12,7 +12,7 @@ import {
 } from './pairing.js'
 import { registerHost } from './enroll.js'
 import { verifyRemoteToken } from './token.js'
-import { runRemoteSetup } from './setup.js'
+import { runRemoteSetup, type RemoteSetupPrompt } from './setup.js'
 import { DEFAULT_CUPPET_API_BASE } from '../constants.js'
 
 export type RemoteControlOptions = {
@@ -30,6 +30,8 @@ export type RemoteControlOptions = {
   /** Fresh pairing invite per session by default; disable for long-lived hosts. */
   createInvite?: boolean
   write?: (line: string) => void
+  signal?: AbortSignal
+  onSetup?: (setup: RemoteSetupPrompt) => void
 }
 
 export type RemoteControlSession = {
@@ -70,6 +72,8 @@ export async function startRemoteControl(options: RemoteControlOptions): Promise
       apiBase: options.apiBase ?? DEFAULT_CUPPET_API_BASE,
       identity,
       write,
+      ...(options.signal ? { signal: options.signal } : {}),
+      ...(options.onSetup ? { onSetup: options.onSetup } : {}),
     })
     relayUrl = enrollment.relayUrl
     if (enrollment.remoteTokenPublicKey) {

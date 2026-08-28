@@ -193,10 +193,11 @@ var CuppetTuiPlugin = {
         const status = await client.call("remote.start");
         if (!api.ui.dialog || !api.ui.DialogAlert) {
           const invite = record(status.invite);
+          const setup = record(status.setup);
           api.ui.toast({
             title: "Cuppet remote control",
             variant: "success",
-            message: stringValue(invite.code) ? `Pairing code: ${invite.code}` : "Remote control is running."
+            message: stringValue(setup.url) ? `Open ${setup.url}` : stringValue(invite.code) ? `Pairing code: ${invite.code}` : "Remote control is running."
           });
           return;
         }
@@ -603,6 +604,21 @@ function formatStatus(value) {
 }
 function formatRemoteControl(value) {
   const status = record(value);
+  const setup = record(status.setup);
+  const setupUrl = stringValue(setup.url);
+  if (booleanValue(status.starting) && setupUrl) {
+    const expiresAt2 = numberValue(setup.expiresAt);
+    return [
+      "Scan or open this link in the signed-in Cuppet app:",
+      "",
+      ...stringValue(setup.qr) ? [stringValue(setup.qr), ""] : [],
+      setupUrl,
+      "",
+      row("Setup code", stringValue(setup.code) ?? "not available"),
+      ...expiresAt2 ? [row("Expires", new Date(expiresAt2).toISOString())] : [],
+      row("Status", "waiting for approval")
+    ].join("\n");
+  }
   if (!booleanValue(status.running)) return "Remote control is stopped.";
   const invite = record(status.invite);
   const expiresAt = numberValue(invite.expiresAt);

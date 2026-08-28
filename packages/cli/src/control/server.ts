@@ -17,12 +17,19 @@ export type ControlAddress = {
 
 export type RemoteControlStatus = {
   running: boolean
+  starting?: boolean
   hostId?: string
   deviceName?: string
   invite?: {
     code: string
     expiresAt: number
     url?: string
+  }
+  setup?: {
+    code: string
+    url: string
+    expiresAt: number
+    qr?: string
   }
 }
 

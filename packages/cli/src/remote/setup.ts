@@ -8,6 +8,15 @@ export type RemoteSetupOptions = {
   fetcher?: typeof fetch
   timeoutMs?: number
   pollIntervalMs?: number
+  signal?: AbortSignal
+  onSetup?: (setup: RemoteSetupPrompt) => void
+}
+
+export type RemoteSetupPrompt = {
+  code: string
+  url: string
+  expiresAt: string
+  qr?: string
 }
 
 export type RemoteSetupEnrollment = {
@@ -45,6 +54,12 @@ export async function runRemoteSetup(
   write('  Cuppet setup — scan this QR in the signed-in Cuppet app\n')
   write(`  ${session.setupUrl}\n`)
   const qr = await renderSetupQr(session.setupUrl)
+  options.onSetup?.({
+    code: session.setupCode,
+    url: session.setupUrl,
+    expiresAt: session.expiresAt,
+    ...(qr ? { qr } : {}),
+  })
   if (qr) write(`${qr}\n`)
   write(`  waiting for approval (${new Date(session.expiresAt).toISOString()})…\n`)
 
@@ -58,7 +73,7 @@ export async function runRemoteSetup(
     if (status.status === 'approved') {
       return await claimSetup(options, session, fetcher)
     }
-    await wait(pollIntervalMs)
+    await wait(pollIntervalMs, options.signal)
   }
   throw new Error('Timed out waiting for Cuppet approval. Run remote control again to create a new QR.')
 }
@@ -75,6 +90,7 @@ async function createSetupSession(
       displayName: options.displayName?.trim() || options.identity.deviceName,
       platform: process.platform,
     }),
+    ...(options.signal ? { signal: options.signal } : {}),
   })
   const payload = await readPayload(response)
   if (!response.ok) throw new Error(`Remote setup failed (${response.status}): ${errorMessage(payload)}`)
@@ -96,7 +112,10 @@ async function requestSetupStatus(
 ): Promise<{ status: 'pending' | 'approved' | 'claimed' | 'expired' }> {
   const response = await fetcher(
     `${options.apiBase.replace(/\/$/, '')}/remote/setup/sessions/${encodeURIComponent(session.setupId)}/status`,
-    { headers: { authorization: `Bearer ${session.pollSecret}` } },
+    {
+      headers: { authorization: `Bearer ${session.pollSecret}` },
+      ...(options.signal ? { signal: options.signal } : {}),
+    },
   )
   const payload = await readPayload(response)
   if (!response.ok) throw new Error(`Remote setup status failed (${response.status}): ${errorMessage(payload)}`)
@@ -121,6 +140,7 @@ async function claimSetup(
         'content-type': 'application/json',
       },
       body: JSON.stringify({ relaySecret: options.identity.relaySecret }),
+      ...(options.signal ? { signal: options.signal } : {}),
     },
   )
   const payload = await readPayload(response)
@@ -159,8 +179,21 @@ async function renderSetupQr(text: string): Promise<string> {
   }
 }
 
-function wait(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds))
+function wait(milliseconds: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(signal.reason ?? new Error('Remote setup cancelled.'))
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(done, milliseconds)
+    const onAbort = () => {
+      clearTimeout(timeout)
+      signal?.removeEventListener('abort', onAbort)
+      reject(signal?.reason ?? new Error('Remote setup cancelled.'))
+    }
+    function done() {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
 }
 
 function addApiBase(setupUrl: string, apiBase: string): string {

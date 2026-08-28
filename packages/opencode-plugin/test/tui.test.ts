@@ -103,6 +103,23 @@ test('remote control formatting keeps pairing details readable', () => {
   assert.match(output, /Expires\s+2026-08-25T12:00:00\.000Z/)
 })
 
+test('remote setup formatting exposes approval details immediately', () => {
+  const output = formatRemoteControl({
+    running: false,
+    starting: true,
+    setup: {
+      code: 'ABC-123-xyz',
+      url: 'cuppet://remote/setup?session=setup_123&code=ABC-123-xyz',
+      expiresAt: Date.parse('2026-08-25T12:00:00.000Z'),
+      qr: 'QR-CONTENT',
+    },
+  })
+  assert.match(output, /Scan or open this link/)
+  assert.match(output, /cuppet:\/\/remote\/setup/)
+  assert.match(output, /QR-CONTENT/)
+  assert.match(output, /waiting for approval/)
+})
+
 test('Cuppet status is formatted as a compact human-readable dialog', () => {
   const output = formatStatus({
     platform: 'vertex',

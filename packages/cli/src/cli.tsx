@@ -12,7 +12,7 @@ import { OpenCodeGateway } from './opencode/gateway.js'
 import { startOpenCodeServer, type OpenCodeRuntime } from './opencode/server.js'
 import { runNativeTui } from './opencode/tui.js'
 import { CUPPET_VERSION, DEFAULT_CUPPET_API_BASE } from './constants.js'
-import { startRemoteControl, type RemoteControlSession } from './remote/bootstrap.js'
+import { startRemoteControl, type RemoteControlOptions, type RemoteControlSession } from './remote/bootstrap.js'
 import { runEnroll } from './remote/enroll.js'
 import { DEFAULT_RELAY_PORT, runRelayServer, shutdownSignal } from './remote/relay-main.js'
 import { resolveRuntimeAssets } from './runtime/assets.js'
@@ -138,6 +138,10 @@ async function main(): Promise<void> {
   let controller: CuppetController | undefined
   let control: CuppetControlServer | undefined
   let remote: RemoteControlSession | undefined
+  let remoteStart: Promise<void> | undefined
+  let remoteStartResponse: Promise<RemoteControlStatus> | undefined
+  let remoteStartController: AbortController | undefined
+  let pendingRemoteStatus: RemoteControlStatus | undefined
   let tuiExitCode = 0
   const controlAddress = createControlAddress(paths)
   try {
@@ -188,37 +192,92 @@ async function main(): Promise<void> {
     }
 
     const relayUrl = arguments_.relayUrl ?? process.env.CUPPET_RELAY_URL
+    const remoteOptions = (write: (line: string) => void): RemoteControlOptions => ({
+      controller: controller!,
+      remoteDir: join(paths.base, 'remote'),
+      ...(relayUrl ? { relayUrl } : {}),
+      ...(process.env.CUPPET_RELAY_HOST_SECRET ? { hostSecret: process.env.CUPPET_RELAY_HOST_SECRET } : {}),
+      ...(process.env.CUPPET_TOKEN ? { authToken: process.env.CUPPET_TOKEN } : {}),
+      ...(!relayUrl || process.env.CUPPET_TOKEN
+        ? { apiBase: process.env.CUPPET_API_BASE ?? DEFAULT_CUPPET_API_BASE }
+        : {}),
+      setup: !process.env.CUPPET_TOKEN && !relayUrl,
+      ...(process.env.CUPPET_REMOTE_TOKEN_PUBLIC_KEY
+        ? { remoteTokenPublicKey: process.env.CUPPET_REMOTE_TOKEN_PUBLIC_KEY }
+        : {}),
+      write,
+    })
     const startRemoteSession = async (
       write: (line: string) => void = (line) => process.stdout.write(line),
     ): Promise<RemoteControlStatus> => {
       if (!controller) throw new Error('Cuppet controller is unavailable')
-      if (!remote) {
-        remote = await startRemoteControl({
-          controller,
-          remoteDir: join(paths.base, 'remote'),
-          ...(relayUrl ? { relayUrl } : {}),
-          ...(process.env.CUPPET_RELAY_HOST_SECRET ? { hostSecret: process.env.CUPPET_RELAY_HOST_SECRET } : {}),
-          ...(process.env.CUPPET_TOKEN ? { authToken: process.env.CUPPET_TOKEN } : {}),
-          ...(!relayUrl || process.env.CUPPET_TOKEN
-            ? { apiBase: process.env.CUPPET_API_BASE ?? DEFAULT_CUPPET_API_BASE }
-            : {}),
-          setup: !process.env.CUPPET_TOKEN && !relayUrl,
-          ...(process.env.CUPPET_REMOTE_TOKEN_PUBLIC_KEY
-            ? { remoteTokenPublicKey: process.env.CUPPET_REMOTE_TOKEN_PUBLIC_KEY }
-            : {}),
-          write,
-        })
-      }
+      if (!remote) remote = await startRemoteControl(remoteOptions(write))
       return remoteControlStatus(remote)
     }
     const remoteManager: RemoteControlManager = {
-      start: () => startRemoteSession(() => undefined),
+      start: () => {
+        if (remote) return Promise.resolve(remoteControlStatus(remote))
+        if (pendingRemoteStatus) return Promise.resolve(pendingRemoteStatus)
+        if (remoteStartResponse) return remoteStartResponse
+
+        const abort = new AbortController()
+        remoteStartController = abort
+        remoteStartResponse = new Promise<RemoteControlStatus>((resolve, reject) => {
+          let returned = false
+          const finishInitial = (status: RemoteControlStatus) => {
+            if (returned) return
+            returned = true
+            resolve(status)
+          }
+          const starting = startRemoteControl({
+            ...remoteOptions(() => undefined),
+            signal: abort.signal,
+            onSetup: (setup) => {
+              pendingRemoteStatus = {
+                running: false,
+                starting: true,
+                setup: {
+                  code: setup.code,
+                  url: setup.url,
+                  expiresAt: Date.parse(setup.expiresAt),
+                  ...(setup.qr ? { qr: setup.qr } : {}),
+                },
+              }
+              finishInitial(pendingRemoteStatus)
+            },
+          })
+          remoteStart = starting.then((session) => {
+            if (abort.signal.aborted || remoteStartController !== abort) {
+              session.stop()
+              return
+            }
+            remote = session
+            pendingRemoteStatus = undefined
+            finishInitial(remoteControlStatus(session))
+          }).catch((error) => {
+            if (remoteStartController === abort) pendingRemoteStatus = undefined
+            if (!returned) reject(error)
+          }).finally(() => {
+            if (remoteStartController === abort) {
+              remoteStart = undefined
+              remoteStartResponse = undefined
+              remoteStartController = undefined
+            }
+          })
+        })
+        return remoteStartResponse
+      },
       stop: () => {
+        remoteStartController?.abort(new Error('Remote setup cancelled.'))
+        remoteStartController = undefined
+        remoteStart = undefined
+        remoteStartResponse = undefined
+        pendingRemoteStatus = undefined
         remote?.stop()
         remote = undefined
         return { running: false }
       },
-      status: () => remote ? remoteControlStatus(remote) : { running: false },
+      status: () => remote ? remoteControlStatus(remote) : pendingRemoteStatus ?? { running: false },
     }
     control = await CuppetControlServer.start(controller, paths, controlAddress, { remote: remoteManager })
 
@@ -245,6 +304,8 @@ async function main(): Promise<void> {
       },
     })
   } finally {
+    remoteStartController?.abort(new Error('Cuppet is shutting down.'))
+    await remoteStart?.catch(() => undefined)
     remote?.stop()
     await control?.close().catch(() => undefined)
     await controller?.close().catch(() => undefined)

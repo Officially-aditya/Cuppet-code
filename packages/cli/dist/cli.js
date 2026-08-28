@@ -4724,6 +4724,12 @@ async function runRemoteSetup(options) {
   write(`  ${session.setupUrl}
 `);
   const qr = await renderSetupQr(session.setupUrl);
+  options.onSetup?.({
+    code: session.setupCode,
+    url: session.setupUrl,
+    expiresAt: session.expiresAt,
+    ...qr ? { qr } : {}
+  });
   if (qr) write(`${qr}
 `);
   write(`  waiting for approval (${new Date(session.expiresAt).toISOString()})\u2026
@@ -4738,7 +4744,7 @@ async function runRemoteSetup(options) {
     if (status.status === "approved") {
       return await claimSetup(options, session, fetcher);
     }
-    await wait(pollIntervalMs);
+    await wait(pollIntervalMs, options.signal);
   }
   throw new Error("Timed out waiting for Cuppet approval. Run remote control again to create a new QR.");
 }
@@ -4750,7 +4756,8 @@ async function createSetupSession(options, fetcher) {
       hostId: options.identity.hostId,
       displayName: options.displayName?.trim() || options.identity.deviceName,
       platform: process.platform
-    })
+    }),
+    ...options.signal ? { signal: options.signal } : {}
   });
   const payload = await readPayload(response);
   if (!response.ok) throw new Error(`Remote setup failed (${response.status}): ${errorMessage2(payload)}`);
@@ -4762,7 +4769,10 @@ async function createSetupSession(options, fetcher) {
 async function requestSetupStatus(options, session, fetcher) {
   const response = await fetcher(
     `${options.apiBase.replace(/\/$/, "")}/remote/setup/sessions/${encodeURIComponent(session.setupId)}/status`,
-    { headers: { authorization: `Bearer ${session.pollSecret}` } }
+    {
+      headers: { authorization: `Bearer ${session.pollSecret}` },
+      ...options.signal ? { signal: options.signal } : {}
+    }
   );
   const payload = await readPayload(response);
   if (!response.ok) throw new Error(`Remote setup status failed (${response.status}): ${errorMessage2(payload)}`);
@@ -4781,7 +4791,8 @@ async function claimSetup(options, session, fetcher) {
         authorization: `Bearer ${session.pollSecret}`,
         "content-type": "application/json"
       },
-      body: JSON.stringify({ relaySecret: options.identity.relaySecret })
+      body: JSON.stringify({ relaySecret: options.identity.relaySecret }),
+      ...options.signal ? { signal: options.signal } : {}
     }
   );
   const payload = await readPayload(response);
@@ -4814,8 +4825,21 @@ async function renderSetupQr(text) {
     return "";
   }
 }
-function wait(milliseconds) {
-  return new Promise((resolve4) => setTimeout(resolve4, milliseconds));
+function wait(milliseconds, signal) {
+  if (signal?.aborted) return Promise.reject(signal.reason ?? new Error("Remote setup cancelled."));
+  return new Promise((resolve4, reject) => {
+    const timeout = setTimeout(done, milliseconds);
+    const onAbort = () => {
+      clearTimeout(timeout);
+      signal?.removeEventListener("abort", onAbort);
+      reject(signal?.reason ?? new Error("Remote setup cancelled."));
+    };
+    function done() {
+      signal?.removeEventListener("abort", onAbort);
+      resolve4();
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 function addApiBase(setupUrl, apiBase) {
   const url = new URL(setupUrl);
@@ -4847,7 +4871,9 @@ async function startRemoteControl(options) {
     const enrollment = await runRemoteSetup({
       apiBase: options.apiBase ?? DEFAULT_CUPPET_API_BASE,
       identity,
-      write
+      write,
+      ...options.signal ? { signal: options.signal } : {},
+      ...options.onSetup ? { onSetup: options.onSetup } : {}
     });
     relayUrl = enrollment.relayUrl;
     if (enrollment.remoteTokenPublicKey) {
@@ -6083,6 +6109,10 @@ async function main() {
   let controller;
   let control;
   let remote;
+  let remoteStart;
+  let remoteStartResponse;
+  let remoteStartController;
+  let pendingRemoteStatus;
   let tuiExitCode = 0;
   const controlAddress = createControlAddress(paths);
   try {
@@ -6133,31 +6163,85 @@ async function main() {
       return;
     }
     const relayUrl = arguments_.relayUrl ?? process.env.CUPPET_RELAY_URL;
+    const remoteOptions = (write) => ({
+      controller,
+      remoteDir: join14(paths.base, "remote"),
+      ...relayUrl ? { relayUrl } : {},
+      ...process.env.CUPPET_RELAY_HOST_SECRET ? { hostSecret: process.env.CUPPET_RELAY_HOST_SECRET } : {},
+      ...process.env.CUPPET_TOKEN ? { authToken: process.env.CUPPET_TOKEN } : {},
+      ...!relayUrl || process.env.CUPPET_TOKEN ? { apiBase: process.env.CUPPET_API_BASE ?? DEFAULT_CUPPET_API_BASE } : {},
+      setup: !process.env.CUPPET_TOKEN && !relayUrl,
+      ...process.env.CUPPET_REMOTE_TOKEN_PUBLIC_KEY ? { remoteTokenPublicKey: process.env.CUPPET_REMOTE_TOKEN_PUBLIC_KEY } : {},
+      write
+    });
     const startRemoteSession = async (write = (line) => process.stdout.write(line)) => {
       if (!controller) throw new Error("Cuppet controller is unavailable");
-      if (!remote) {
-        remote = await startRemoteControl({
-          controller,
-          remoteDir: join14(paths.base, "remote"),
-          ...relayUrl ? { relayUrl } : {},
-          ...process.env.CUPPET_RELAY_HOST_SECRET ? { hostSecret: process.env.CUPPET_RELAY_HOST_SECRET } : {},
-          ...process.env.CUPPET_TOKEN ? { authToken: process.env.CUPPET_TOKEN } : {},
-          ...!relayUrl || process.env.CUPPET_TOKEN ? { apiBase: process.env.CUPPET_API_BASE ?? DEFAULT_CUPPET_API_BASE } : {},
-          setup: !process.env.CUPPET_TOKEN && !relayUrl,
-          ...process.env.CUPPET_REMOTE_TOKEN_PUBLIC_KEY ? { remoteTokenPublicKey: process.env.CUPPET_REMOTE_TOKEN_PUBLIC_KEY } : {},
-          write
-        });
-      }
+      if (!remote) remote = await startRemoteControl(remoteOptions(write));
       return remoteControlStatus(remote);
     };
     const remoteManager = {
-      start: () => startRemoteSession(() => void 0),
+      start: () => {
+        if (remote) return Promise.resolve(remoteControlStatus(remote));
+        if (pendingRemoteStatus) return Promise.resolve(pendingRemoteStatus);
+        if (remoteStartResponse) return remoteStartResponse;
+        const abort = new AbortController();
+        remoteStartController = abort;
+        remoteStartResponse = new Promise((resolve4, reject) => {
+          let returned = false;
+          const finishInitial = (status) => {
+            if (returned) return;
+            returned = true;
+            resolve4(status);
+          };
+          const starting = startRemoteControl({
+            ...remoteOptions(() => void 0),
+            signal: abort.signal,
+            onSetup: (setup) => {
+              pendingRemoteStatus = {
+                running: false,
+                starting: true,
+                setup: {
+                  code: setup.code,
+                  url: setup.url,
+                  expiresAt: Date.parse(setup.expiresAt),
+                  ...setup.qr ? { qr: setup.qr } : {}
+                }
+              };
+              finishInitial(pendingRemoteStatus);
+            }
+          });
+          remoteStart = starting.then((session) => {
+            if (abort.signal.aborted || remoteStartController !== abort) {
+              session.stop();
+              return;
+            }
+            remote = session;
+            pendingRemoteStatus = void 0;
+            finishInitial(remoteControlStatus(session));
+          }).catch((error) => {
+            if (remoteStartController === abort) pendingRemoteStatus = void 0;
+            if (!returned) reject(error);
+          }).finally(() => {
+            if (remoteStartController === abort) {
+              remoteStart = void 0;
+              remoteStartResponse = void 0;
+              remoteStartController = void 0;
+            }
+          });
+        });
+        return remoteStartResponse;
+      },
       stop: () => {
+        remoteStartController?.abort(new Error("Remote setup cancelled."));
+        remoteStartController = void 0;
+        remoteStart = void 0;
+        remoteStartResponse = void 0;
+        pendingRemoteStatus = void 0;
         remote?.stop();
         remote = void 0;
         return { running: false };
       },
-      status: () => remote ? remoteControlStatus(remote) : { running: false }
+      status: () => remote ? remoteControlStatus(remote) : pendingRemoteStatus ?? { running: false }
     };
     control = await CuppetControlServer.start(controller, paths, controlAddress, { remote: remoteManager });
     if (arguments_.mode === "headless-remote" || arguments_.remoteControl || relayUrl) {
@@ -6182,6 +6266,8 @@ async function main() {
       }
     });
   } finally {
+    remoteStartController?.abort(new Error("Cuppet is shutting down."));
+    await remoteStart?.catch(() => void 0);
     remote?.stop();
     await control?.close().catch(() => void 0);
     await controller?.close().catch(() => void 0);

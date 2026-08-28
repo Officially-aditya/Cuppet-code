@@ -4374,7 +4374,9 @@ var WebSocketTransport = class {
   #heartbeat;
   #reconnectTimer;
   #closed = false;
+  #started = false;
   #connected = false;
+  #lastClose;
   #url;
   #messageListeners = /* @__PURE__ */ new Set();
   #statusListeners = /* @__PURE__ */ new Set();
@@ -4392,7 +4394,24 @@ var WebSocketTransport = class {
     this.#statusListeners.add(listener);
   }
   start() {
+    if (this.#started || this.#closed) return;
+    this.#started = true;
     this.#dial();
+  }
+  async waitUntilConnected(timeoutMs = 12e3) {
+    if (this.#connected) return;
+    this.start();
+    await new Promise((resolve4, reject) => {
+      const timeout = setTimeout(() => {
+        const detail = this.#lastClose?.reason || (this.#lastClose?.code ? `relay closed with code ${this.#lastClose.code}` : "relay did not answer");
+        reject(new Error(`Remote relay connection failed: ${detail}.`));
+      }, timeoutMs);
+      this.onStatusChange((connected) => {
+        if (!connected) return;
+        clearTimeout(timeout);
+        resolve4();
+      });
+    });
   }
   send(data) {
     if (this.#socket && this.#connected && this.#socket.readyState === WebSocket.OPEN) {
@@ -4446,8 +4465,9 @@ var WebSocketTransport = class {
       const data = typeof event.data === "string" ? event.data : "";
       for (const listener of this.#messageListeners) listener(data);
     });
-    socket.addEventListener("close", () => {
+    socket.addEventListener("close", (event) => {
       if (this.#heartbeat) clearInterval(this.#heartbeat);
+      this.#lastClose = { code: event.code, reason: event.reason };
       this.#setStatus(false);
       this.#scheduleReconnect(attempt + 1);
     });
@@ -4919,6 +4939,13 @@ async function startRemoteControl(options) {
     bridge.start();
     write(`  relay: dialing ${relayUrl}
 `);
+    try {
+      await transport.waitUntilConnected();
+      write("  relay: connected\n");
+    } catch (error) {
+      bridge.stop();
+      throw error;
+    }
   } else {
     write("  set CUPPET_RELAY_URL or pass --relay-url <wss://\u2026> to connect the bridge\n");
   }
@@ -6176,7 +6203,8 @@ async function main() {
     const remoteManager = {
       start: () => {
         if (remote) return Promise.resolve(remoteControlStatus(remote));
-        if (pendingRemoteStatus) return Promise.resolve(pendingRemoteStatus);
+        if (pendingRemoteStatus?.starting) return Promise.resolve(pendingRemoteStatus);
+        pendingRemoteStatus = void 0;
         if (remoteStartResponse) return remoteStartResponse;
         const abort = new AbortController();
         remoteStartController = abort;
@@ -6213,7 +6241,12 @@ async function main() {
             pendingRemoteStatus = void 0;
             finishInitial(remoteControlStatus(session));
           }).catch((error) => {
-            if (remoteStartController === abort) pendingRemoteStatus = void 0;
+            if (remoteStartController === abort) {
+              pendingRemoteStatus = returned ? {
+                running: false,
+                error: error instanceof Error ? error.message : String(error)
+              } : void 0;
+            }
             if (!returned) reject(error);
           }).finally(() => {
             if (remoteStartController === abort) {

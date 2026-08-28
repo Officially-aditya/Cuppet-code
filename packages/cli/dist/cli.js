@@ -4176,8 +4176,7 @@ var RemoteBridge = class {
     if (this.#started) return;
     this.#started = true;
     this.#transport.start?.();
-    let isReplying = false;
-    let isThinking = false;
+    let mode = "idle";
     this.#unsubscribers.push(
       this.#controller.onAgentEvent((event) => {
         const publicEvent = publicEventFor(event);
@@ -4186,74 +4185,92 @@ var RemoteBridge = class {
         if (this.#write) {
           switch (event.type) {
             case "reasoning-delta": {
-              if (!isThinking) {
-                isThinking = true;
-                this.#write(`  [thinking] \u{1F914} Model is reasoning\u2026
-`);
+              if (mode !== "thinking") {
+                if (mode === "replying") this.#write("\n");
+                mode = "thinking";
+                this.#write("\x1B[2;35m\u{1F914} Thinking: \x1B[0m\x1B[2m");
+              }
+              if (event.text) {
+                this.#write(event.text);
               }
               break;
             }
             case "text-delta": {
-              if (!isReplying) {
-                isReplying = true;
-                this.#write(`  [reply] \u{1F4AC} Model is generating response\u2026
-`);
+              if (mode !== "replying") {
+                if (mode === "thinking") this.#write("\x1B[0m\n");
+                mode = "replying";
+                this.#write("\x1B[1;32m\u{1F4AC} Response:\x1B[0m\n");
+              }
+              if (event.text) {
+                this.#write(event.text);
               }
               break;
             }
             case "tool-start": {
-              isReplying = false;
-              isThinking = false;
+              if (mode === "thinking") this.#write("\x1B[0m\n");
+              if (mode === "replying") this.#write("\n");
+              mode = "tool";
               const toolName = event.name ?? "tool";
               const inputSummary = formatToolInput(event.name, event.input);
-              this.#write(`  [tool] \u26A1 Running ${toolName}${inputSummary ? `: ${inputSummary}` : ""}
+              this.#write(`\x1B[1;34m\u26A1 Tool:\x1B[0m \x1B[36m${toolName}\x1B[0m${inputSummary ? ` \x1B[2m(${inputSummary})\x1B[0m` : ""}
 `);
               break;
             }
             case "tool-progress": {
               if (event.message) {
-                this.#write(`  [tool]   \u21B3 ${event.message}
+                this.#write(`  \x1B[2m\u21B3 ${event.message}\x1B[0m
 `);
               }
               break;
             }
             case "tool-end": {
-              const symbol = event.success ? "\u2713" : "\u2717";
+              const symbol = event.success ? "\x1B[32m\u2713\x1B[0m" : "\x1B[31m\u2717\x1B[0m";
               const toolName = event.name ?? "tool";
-              this.#write(`  [tool] ${symbol} ${toolName} ${event.success ? "completed" : "failed"}
+              this.#write(`  ${symbol} \x1B[2m${toolName} ${event.success ? "completed" : "failed"}\x1B[0m
 `);
               break;
             }
             case "diff": {
-              this.#write(`  [diff] \u{1F4DD} File modifications applied
+              this.#write(`  \x1B[33m\u{1F4DD} File modifications applied\x1B[0m
 `);
               break;
             }
             case "permission": {
-              const action = event.request?.action ?? event.request?.permission ?? "workspace action";
-              this.#write(`  [perm] \u{1F6E1}\uFE0F Permission requested: ${action}
+              if (mode === "thinking") this.#write("\x1B[0m\n");
+              if (mode === "replying") this.#write("\n");
+              mode = "idle";
+              const action = event.request?.action ?? event.request?.permission ?? "action";
+              this.#write(`\x1B[1;33m\u{1F6E1}\uFE0F Permission requested:\x1B[0m ${action} (waiting for mobile approval\u2026)
 `);
               break;
             }
             case "permission-resolved": {
-              this.#write(`  [perm] \u2713 Permission decision: ${event.reply ?? "resolved"}
+              this.#write(`  \x1B[32m\u2713 Permission resolved:\x1B[0m ${event.reply ?? "resolved"}
 `);
               break;
             }
             case "question": {
-              this.#write(`  [ask]  \u2753 Question asked to user on mobile
+              if (mode === "thinking") this.#write("\x1B[0m\n");
+              if (mode === "replying") this.#write("\n");
+              mode = "idle";
+              this.#write(`\x1B[1;35m\u2753 Question sent to user on mobile\x1B[0m
 `);
               break;
             }
             case "error": {
-              this.#write(`  [error] \u274C ${event.message}
+              if (mode === "thinking") this.#write("\x1B[0m\n");
+              if (mode === "replying") this.#write("\n");
+              mode = "idle";
+              this.#write(`\x1B[1;31m\u274C Error:\x1B[0m ${event.message}
 `);
               break;
             }
             case "idle": {
-              isReplying = false;
-              isThinking = false;
-              this.#write(`  [agent] \u2728 Turn complete. Ready.
+              if (mode === "thinking") this.#write("\x1B[0m\n");
+              if (mode === "replying") this.#write("\n");
+              mode = "idle";
+              this.#write(`\x1B[1;32m\u2728 Turn complete. Ready.\x1B[0m
+
 `);
               break;
             }
@@ -4391,9 +4408,26 @@ var RemoteBridge = class {
       ...device.name ? { deviceName: device.name } : {},
       scopes: device.scopes
     };
-    const promptPreview = envelope.type === "session.submit" ? ` > "${String(envelope.payload?.prompt ?? "")}"` : ` > command ${envelope.type}`;
-    this.#write?.(`  [remote] ${device.name ?? "device"}${promptPreview}
+    if (envelope.type === "session.submit") {
+      const prompt = String(envelope.payload?.prompt ?? "");
+      this.#write?.(`
+\x1B[1;36m\u256D\u2500 [Prompt from ${device.name ?? "Mobile"}] \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\x1B[0m
+\x1B[1m\u2502 ${prompt.split("\n").join("\n\u2502 ")}\x1B[0m
+\x1B[1;36m\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\x1B[0m
+
 `);
+    } else if (envelope.type === "session.steer") {
+      const instr = String(envelope.payload?.instruction ?? "");
+      this.#write?.(`
+\x1B[1;33m\u256D\u2500 [Steer from ${device.name ?? "Mobile"}] \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\x1B[0m
+\x1B[1m\u2502 ${instr.split("\n").join("\n\u2502 ")}\x1B[0m
+\x1B[1;33m\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\x1B[0m
+
+`);
+    } else if (envelope.type !== "host.get" && envelope.type !== "session.snapshot" && envelope.type !== "session.list" && envelope.type !== "model.list" && envelope.type !== "platform.list") {
+      this.#write?.(`\x1B[2m  [remote] ${device.name ?? "device"} > ${envelope.type}\x1B[0m
+`);
+    }
     try {
       const result = await this.#router.execute(actor, envelope.type, envelope.payload ?? {});
       this.#sendRaw(encodeFrame({

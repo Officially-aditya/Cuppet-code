@@ -4188,7 +4188,7 @@ var RemoteBridge = class {
               if (mode !== "thinking") {
                 if (mode === "replying") this.#write("\n");
                 mode = "thinking";
-                this.#write("\x1B[2;35m\u{1F914} Thinking: \x1B[0m\x1B[2m");
+                this.#write("\x1B[2;35mThinking: \x1B[0m\x1B[2m");
               }
               if (event.text) {
                 this.#write(event.text);
@@ -4199,7 +4199,7 @@ var RemoteBridge = class {
               if (mode !== "replying") {
                 if (mode === "thinking") this.#write("\x1B[0m\n");
                 mode = "replying";
-                this.#write("\x1B[1;32m\u{1F4AC} Response:\x1B[0m\n");
+                this.#write("\x1B[1;32mResponse:\x1B[0m\n");
               }
               if (event.text) {
                 this.#write(event.text);
@@ -4212,7 +4212,7 @@ var RemoteBridge = class {
               mode = "tool";
               const toolName = event.name ?? "tool";
               const inputSummary = formatToolInput(event.name, event.input);
-              this.#write(`\x1B[1;34m\u26A1 Tool:\x1B[0m \x1B[36m${toolName}\x1B[0m${inputSummary ? ` \x1B[2m(${inputSummary})\x1B[0m` : ""}
+              this.#write(`\x1B[1;34mTool:\x1B[0m \x1B[36m${toolName}\x1B[0m${inputSummary ? ` \x1B[2m(${inputSummary})\x1B[0m` : ""}
 `);
               break;
             }
@@ -4224,14 +4224,14 @@ var RemoteBridge = class {
               break;
             }
             case "tool-end": {
-              const symbol = event.success ? "\x1B[32m\u2713\x1B[0m" : "\x1B[31m\u2717\x1B[0m";
+              const statusTag = event.success ? "\x1B[32m[done]\x1B[0m" : "\x1B[31m[failed]\x1B[0m";
               const toolName = event.name ?? "tool";
-              this.#write(`  ${symbol} \x1B[2m${toolName} ${event.success ? "completed" : "failed"}\x1B[0m
+              this.#write(`  ${statusTag} \x1B[2m${toolName} ${event.success ? "completed" : "failed"}\x1B[0m
 `);
               break;
             }
             case "diff": {
-              this.#write(`  \x1B[33m\u{1F4DD} File modifications applied\x1B[0m
+              this.#write(`  \x1B[33mFile modifications applied\x1B[0m
 `);
               break;
             }
@@ -4240,12 +4240,12 @@ var RemoteBridge = class {
               if (mode === "replying") this.#write("\n");
               mode = "idle";
               const action = event.request?.action ?? event.request?.permission ?? "action";
-              this.#write(`\x1B[1;33m\u{1F6E1}\uFE0F Permission requested:\x1B[0m ${action} (waiting for mobile approval\u2026)
+              this.#write(`\x1B[1;33mPermission requested:\x1B[0m ${action} (waiting for mobile approval\u2026)
 `);
               break;
             }
             case "permission-resolved": {
-              this.#write(`  \x1B[32m\u2713 Permission resolved:\x1B[0m ${event.reply ?? "resolved"}
+              this.#write(`  \x1B[32mPermission resolved:\x1B[0m ${event.reply ?? "resolved"}
 `);
               break;
             }
@@ -4253,7 +4253,7 @@ var RemoteBridge = class {
               if (mode === "thinking") this.#write("\x1B[0m\n");
               if (mode === "replying") this.#write("\n");
               mode = "idle";
-              this.#write(`\x1B[1;35m\u2753 Question sent to user on mobile\x1B[0m
+              this.#write(`\x1B[1;35mQuestion sent to user on mobile\x1B[0m
 `);
               break;
             }
@@ -4261,7 +4261,7 @@ var RemoteBridge = class {
               if (mode === "thinking") this.#write("\x1B[0m\n");
               if (mode === "replying") this.#write("\n");
               mode = "idle";
-              this.#write(`\x1B[1;31m\u274C Error:\x1B[0m ${event.message}
+              this.#write(`\x1B[1;31mError:\x1B[0m ${event.message}
 `);
               break;
             }
@@ -4269,7 +4269,7 @@ var RemoteBridge = class {
               if (mode === "thinking") this.#write("\x1B[0m\n");
               if (mode === "replying") this.#write("\n");
               mode = "idle";
-              this.#write(`\x1B[1;32m\u2728 Turn complete. Ready.\x1B[0m
+              this.#write(`\x1B[1;32mTurn complete. Ready.\x1B[0m
 
 `);
               break;

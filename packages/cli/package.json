@@ -1,6 +1,6 @@
 {
   "name": "cuppet",
-  "version": "0.2.0-alpha.1",
+  "version": "0.2.0-alpha.2",
   "description": "Cuppet-branded OpenCode derivative with native tiered memory",
   "license": "Apache-2.0",
   "type": "module",
@@ -34,10 +34,10 @@
     "zod": "3.25.76"
   },
   "optionalDependencies": {
-    "@cuppet-code/runtime-darwin-arm64": "0.2.0-alpha.1",
-    "@cuppet-code/runtime-darwin-x64": "0.2.0-alpha.1",
-    "@cuppet-code/runtime-linux-arm64-gnu": "0.2.0-alpha.1",
-    "@cuppet-code/runtime-linux-x64-gnu": "0.2.0-alpha.1"
+    "@cuppet-code/runtime-darwin-arm64": "0.2.0-alpha.2",
+    "@cuppet-code/runtime-darwin-x64": "0.2.0-alpha.2",
+    "@cuppet-code/runtime-linux-arm64-gnu": "0.2.0-alpha.2",
+    "@cuppet-code/runtime-linux-x64-gnu": "0.2.0-alpha.2"
   },
   "devDependencies": {
     "@types/qrcode": "1.5.6",

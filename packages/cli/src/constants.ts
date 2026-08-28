@@ -1,4 +1,4 @@
-export const CUPPET_VERSION = '0.2.0-alpha.1'
+export const CUPPET_VERSION = '0.2.0-alpha.2'
 export const DEFAULT_CUPPET_API_BASE = 'https://connect.cuppet.in'
 export const OPENCODE_VERSION = '1.18.4'
 export const OPENCODE_REVISION = '49c69c5ed3ccf706b61b3febb43c8aaff7f8325e'

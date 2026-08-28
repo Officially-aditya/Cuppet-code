@@ -713,7 +713,7 @@ async function writeOrchestratorState(paths, enabled) {
 }
 
 // src/constants.ts
-var CUPPET_VERSION = "0.2.0-alpha.1";
+var CUPPET_VERSION = "0.2.0-alpha.2";
 var DEFAULT_CUPPET_API_BASE = "https://connect.cuppet.in";
 var OPENCODE_VERSION = "1.18.4";
 var OPENCODE_REVISION = "49c69c5ed3ccf706b61b3febb43c8aaff7f8325e";

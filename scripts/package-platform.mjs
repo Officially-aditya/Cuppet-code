@@ -17,6 +17,7 @@ const configuration = targets[target]
 if (!configuration) throw new Error(`unsupported release target ${target}`)
 const [packageDirectory, platform, arch, libc] = configuration
 const expectedTstProtocol = 'cuppet.tst.v3'
+const releaseVersion = JSON.parse(await readFile(resolve('package.json'), 'utf8')).version
 const opencodeSource = process.env.CUPPET_OPENCODE_BIN
 if (!opencodeSource) throw new Error('CUPPET_OPENCODE_BIN must point to OpenCode v1.18.4 at revision 49c69c5ed3ccf706b61b3febb43c8aaff7f8325e')
 const derivativeMarker = join(dirname(resolve(opencodeSource)), '.cuppet-derivative.json')
@@ -99,7 +100,7 @@ const cargoMetadata = JSON.parse(await capture('cargo', [
   target,
 ]))
 const softwarePackages = [
-  spdxPackage('Cuppet', '0.2.0-alpha.1', 'Apache-2.0', 'SPDXRef-Cuppet'),
+  spdxPackage('Cuppet', releaseVersion, 'Apache-2.0', 'SPDXRef-Cuppet'),
   spdxPackage('OpenCode', '1.18.4', 'MIT', 'SPDXRef-OpenCode'),
   spdxPackage('Cuppet OpenCode derivative patch set', manifest.patchSetDigest, 'Apache-2.0', 'SPDXRef-Cuppet-Patches'),
   spdxPackage('zod', '3.25.76', 'MIT', 'SPDXRef-Zod'),
@@ -117,10 +118,10 @@ await writeFile(
     dataLicense: 'CC0-1.0',
     SPDXID: 'SPDXRef-DOCUMENT',
     name: `cuppet-${target}`,
-    documentNamespace: `https://cuppet.dev/sbom/${target}/0.2.0-alpha.1`,
+    documentNamespace: `https://cuppet.dev/sbom/${target}/${releaseVersion}`,
     creationInfo: {
       created: new Date().toISOString(),
-      creators: ['Tool: Cuppet release packager-0.2.0-alpha.1'],
+      creators: [`Tool: Cuppet release packager-${releaseVersion}`],
     },
     packages: softwarePackages,
     relationships: softwarePackages.map((item) => ({

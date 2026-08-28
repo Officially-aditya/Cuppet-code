@@ -757,7 +757,7 @@ dependencies = [
 
 [[package]]
 name = "tst-core"
-version = "0.2.0-alpha.1"
+version = "0.2.0-alpha.2"
 dependencies = [
  "anyhow",
  "crc32fast",
@@ -781,7 +781,7 @@ dependencies = [
 
 [[package]]
 name = "tst-daemon"
-version = "0.2.0-alpha.1"
+version = "0.2.0-alpha.2"
 dependencies = [
  "anyhow",
  "notify",

@@ -87,7 +87,7 @@ The published package includes the Cuppet CLI, relay app, and the
 platform-specific runtime. npm selects the matching runtime for your machine:
 
 ```sh
-npm install --global cuppet@0.2.0-alpha.1
+npm install --global cuppet@0.2.0-alpha.2
 cuppet --version
 ```
 

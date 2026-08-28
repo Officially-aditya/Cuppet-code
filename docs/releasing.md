@@ -16,7 +16,7 @@ repository.
 
 [`release.yml`](../.github/workflows/release.yml) starts automatically when a
 `v*` tag is pushed. It can also be started manually with an existing tag such as
-`v0.2.0-alpha.1`. The tag must equal `v` plus the root `package.json` version.
+`v0.2.0-alpha.2`. The tag must equal `v` plus the root `package.json` version.
 
 Each platform job uses Node 22, Bun 1.3.14, and Rust 1.88 to:
 
@@ -86,7 +86,7 @@ still requires authentication when installing packages, even when they are
 public. For that reason, public end-user installation remains:
 
 ```sh
-npm install --global cuppet@0.2.0-alpha.1
+npm install --global cuppet@0.2.0-alpha.2
 ```
 
 If the `cuppet-code` namespace is not a GitHub organization that can accept the
@@ -102,8 +102,8 @@ automatically when present.
 4. Create and push the matching tag:
 
    ```sh
-   git tag v0.2.0-alpha.1
-   git push origin v0.2.0-alpha.1
+   git tag v0.2.0-alpha.2
+   git push origin v0.2.0-alpha.2
    ```
 
 5. Pushing the tag starts the `release` workflow automatically. If you use
@@ -113,7 +113,7 @@ automatically when present.
 7. Install the published package on a clean Node 22 machine:
 
    ```sh
-   npm install --global cuppet@0.2.0-alpha.1
+   npm install --global cuppet@0.2.0-alpha.2
    cuppet --version
    cuppet --doctor
    ```

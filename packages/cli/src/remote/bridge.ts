@@ -332,7 +332,7 @@ export class RemoteBridge {
     } else if (envelope.type === 'session.steer') {
       const instr = String((envelope.payload as Record<string, unknown> | undefined)?.instruction ?? '')
       this.#output(`\n\x1b[1;33m╭─ [Steer from ${device.name ?? 'Mobile'}] ─────────────────────\x1b[0m\n\x1b[1m│ ${instr.split('\n').join('\n│ ')}\x1b[0m\n\x1b[1;33m╰───────────────────────────────────────────────\x1b[0m\n\n`)
-    } else if (envelope.type !== 'host.get' && envelope.type !== 'session.snapshot' && envelope.type !== 'session.list' && envelope.type !== 'model.list' && envelope.type !== 'platform.list') {
+    } else if (envelope.type !== 'host.get' && envelope.type !== 'session.snapshot' && envelope.type !== 'session.list' && envelope.type !== 'model.list' && envelope.type !== 'provider.list' && envelope.type !== 'platform.list') {
       this.#output(`\x1b[2m  [remote] ${device.name ?? 'device'} > ${envelope.type}\x1b[0m\n`)
     }
     try {

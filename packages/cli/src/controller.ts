@@ -6,20 +6,28 @@ import { basename } from 'node:path'
 import { BackgroundWorker, type BackgroundStats } from './background/worker.js'
 import { readOrchestratorState, writeOrchestratorState } from './control/orchestrator-state.js'
 import { DEFAULT_STEP_LIMIT } from './constants.js'
-import type { PreferenceStore } from './config/preferences.js'
+import { migrateLegacyPlatform, type PreferenceStore } from './config/preferences.js'
 import type { OpenCodeGateway } from './opencode/gateway.js'
 import { shouldAutoApproveBash, shouldAutoApproveWorkspacePermission } from './opencode/safe-bash.js'
 import type { RuntimeAssets } from './runtime/assets.js'
 import type { RuntimePaths } from './runtime/paths.js'
 import type { VertexRuntimeStatus } from './opencode/server.js'
-import { integrationMatchesPlatform, modelMatchesPlatform } from './platforms.js'
+import {
+  buildProviderCatalog,
+  integrationMatchesProvider,
+  modelMatchesProvider,
+  modelSupportsCodingAgent,
+  providerDescriptorFor,
+  validateProviderCapabilities,
+} from './platforms.js'
 import type {
   AgentEvent,
   IntegrationInfo,
   ModelInfo,
   ModelRef,
-  Platform,
   PermissionRequest,
+  ProviderDescriptor,
+  ProviderID,
   SessionInfo,
   TokenUsage,
 } from './types.js'
@@ -41,7 +49,10 @@ type SessionEvidence = {
 export type ControllerSnapshot = {
   models: ModelInfo[]
   integrations: IntegrationInfo[]
-  platform?: Platform
+  providers: ProviderDescriptor[]
+  provider?: ProviderID
+  /** @deprecated Use provider. Kept for existing control/plugin clients. */
+  platform?: ProviderID
   primary?: ModelRef
   secondary?: ModelRef
   activeSession?: SessionInfo
@@ -69,7 +80,8 @@ export class CuppetController extends EventEmitter {
   #tstAvailable: boolean
   #models: ModelInfo[] = []
   #integrations: IntegrationInfo[] = []
-  #platform: Platform | undefined
+  #providers: ProviderDescriptor[] = []
+  #provider: ProviderID | undefined
   #primary: ModelRef | undefined
   #secondary: ModelRef | undefined
   #session: SessionInfo | undefined
@@ -136,22 +148,30 @@ export class CuppetController extends EventEmitter {
     })
     await this.#loadCatalog()
     const preferences = this.#preferences.value
-    this.#platform = preferences.platform
+    const storedProvider = preferences.provider ?? (preferences.platform ? migrateLegacyPlatform(preferences.platform) : undefined)
+    this.#provider = storedProvider ? this.#providerFor(storedProvider)?.id ?? storedProvider : undefined
+    if (this.#provider && preferences.provider !== this.#provider) {
+      // PreferenceStore performs this migration itself; the optional call also
+      // keeps controller integrations that provide legacy preference objects
+      // in sync without making test/degraded stores implement persistence.
+      await this.#preferences.update?.({ provider: this.#provider })
+    }
+    const provider = this.#provider ? this.#providerFor(this.#provider) : undefined
     const normalizedPrimary = normalizeLegacyVertexReference(preferences.primary)
     const normalizedSecondary = normalizeLegacyVertexReference(preferences.secondary)
     this.#primary =
-      this.#platform &&
+      provider &&
         normalizedPrimary &&
         this.#findModel(normalizedPrimary) &&
-        modelMatchesPlatform(normalizedPrimary, this.#platform) &&
+        modelMatchesProvider(normalizedPrimary, provider) &&
         this.#modelCompatible(normalizedPrimary, 'primary')
         ? normalizedPrimary
         : undefined
     this.#secondary =
-      this.#platform &&
+      provider &&
         normalizedSecondary &&
         this.#findModel(normalizedSecondary) &&
-        modelMatchesPlatform(normalizedSecondary, this.#platform) &&
+        modelMatchesProvider(normalizedSecondary, provider) &&
         this.#modelCompatible(normalizedSecondary, 'secondary')
         ? normalizedSecondary
         : undefined
@@ -188,7 +208,8 @@ export class CuppetController extends EventEmitter {
     return {
       models: [...this.#models],
       integrations: [...this.#integrations],
-      ...(this.#platform ? { platform: this.#platform } : {}),
+      providers: this.providerCatalog(),
+      ...(this.#provider ? { provider: this.#provider, platform: this.#provider } : {}),
       ...(this.#primary ? { primary: { ...this.#primary } } : {}),
       ...(this.#secondary ? { secondary: { ...this.#secondary } } : {}),
       ...(this.#session ? { activeSession: { ...this.#session } } : {}),
@@ -216,44 +237,70 @@ export class CuppetController extends EventEmitter {
     return () => this.off('agent-event', listener)
   }
 
-  async selectPlatform(platform: Platform): Promise<void> {
-    this.#platform = platform
-    const primaryCandidates = this.modelsForPlatform(platform, 'primary')
+  async selectProvider(providerID: ProviderID): Promise<void> {
+    const descriptor = this.#providerFor(providerID)
+    if (!descriptor) throw new Error(`Provider ${providerID} is not available in OpenCode`)
+    validateProviderCapabilities(descriptor)
+    const provider = descriptor.id
+    this.#provider = provider
+    const primaryCandidates = this.modelsForProvider(provider, 'primary')
     const primary = primaryCandidates[0]
       ? { providerID: primaryCandidates[0].providerID, modelID: primaryCandidates[0].modelID }
       : undefined
-    const secondaryCandidates = this.modelsForPlatform(platform, 'secondary')
+    const secondaryCandidates = this.modelsForProvider(provider, 'secondary')
     const secondary = secondaryCandidates[0]
       ? { providerID: secondaryCandidates[0].providerID, modelID: secondaryCandidates[0].modelID }
       : undefined
     this.#primary = primary
     this.#secondary = secondary
     this.#background?.pause()
-    await this.#preferences.update({ platform, primary, secondary })
+    await this.#preferences.update({ provider, primary, secondary })
     this.#changed()
   }
 
-  modelsForPlatform(
-    platform = this.#platform,
+  /** @deprecated Use selectProvider. */
+  async selectPlatform(providerID: ProviderID): Promise<void> {
+    return this.selectProvider(providerID)
+  }
+
+  providerCatalog(): ProviderDescriptor[] {
+    return this.#providers.map((provider) => structuredClone(provider))
+  }
+
+  modelsForProvider(
+    providerID = this.#provider,
     role: 'primary' | 'secondary' = 'primary',
   ): ModelInfo[] {
-    if (!platform) return []
+    const provider = providerID ? this.#providerFor(providerID) : undefined
+    if (!provider) return []
     return this.#models
-      .filter((model) => modelMatchesPlatform(model, platform) && isModelCompatible(model, role))
+      .filter((model) => modelMatchesProvider(model, provider) && isModelCompatible(model, role))
       .map((model) => structuredClone(model))
   }
 
-  integrationsForPlatform(platform = this.#platform): IntegrationInfo[] {
-    if (!platform) return []
+  /** @deprecated Use modelsForProvider. */
+  modelsForPlatform(providerID = this.#provider, role: 'primary' | 'secondary' = 'primary'): ModelInfo[] {
+    return this.modelsForProvider(providerID, role)
+  }
+
+  integrationsForProvider(providerID = this.#provider): IntegrationInfo[] {
+    const provider = providerID ? this.#providerFor(providerID) : undefined
+    if (!provider) return []
     return this.#integrations
-      .filter((integration) => integrationMatchesPlatform(integration, platform))
+      .filter((integration) => integrationMatchesProvider(integration, provider))
       .map((integration) => structuredClone(integration))
   }
 
+  /** @deprecated Use integrationsForProvider. */
+  integrationsForPlatform(providerID = this.#provider): IntegrationInfo[] {
+    return this.integrationsForProvider(providerID)
+  }
+
   async selectModel(role: 'primary' | 'secondary', model: ModelRef): Promise<void> {
-    if (!this.#platform) throw new Error('Choose a platform before selecting a model')
-    if (!modelMatchesPlatform(model, this.#platform)) {
-      throw new Error(`The selected model does not belong to the ${this.#platform} platform`)
+    const provider = this.#provider ? this.#providerFor(this.#provider) : undefined
+    if (!provider) throw new Error('Choose a provider before selecting a model')
+    if (!modelMatchesProvider(model, provider)) {
+      throw new Error(`The selected model does not belong to the ${provider.label} provider`)
     }
     if (!this.#findModel(model)) throw new Error('The selected model is no longer available')
     if (!this.#modelCompatible(model, role)) {
@@ -320,7 +367,7 @@ export class CuppetController extends EventEmitter {
 
   recommendedSecondary(): ModelRef | undefined {
     if (!this.#primary) return undefined
-    return recommendSecondary(this.modelsForPlatform(this.#platform, 'secondary'), this.#primary)
+    return recommendSecondary(this.modelsForProvider(this.#provider, 'secondary'), this.#primary)
   }
 
   togglePlanMode(enable?: boolean): boolean {
@@ -496,11 +543,11 @@ export class CuppetController extends EventEmitter {
     this.#startUsageWindow(session)
     if (session.model) {
       const model = this.#findModel(session.model)
-      const platform = this.#platformForModel(session.model)
-      if (platform) this.#platform = platform
+      const provider = this.#providerForModel(session.model)
+      if (provider) this.#provider = provider
       if (model && this.#modelCompatible(session.model, 'primary')) {
         this.#primary = { ...session.model }
-        await this.#preferences.update({ platform: this.#platform, primary: this.#primary })
+        await this.#preferences.update({ provider: this.#provider, primary: this.#primary })
         if (!this.#secondary || !this.#modelCompatible(this.#secondary, 'secondary')) {
           const recommendation = this.recommendedSecondary()
           if (recommendation) {
@@ -622,21 +669,20 @@ export class CuppetController extends EventEmitter {
   /** Whether a coding provider is configured and usable (BYOK check). */
   providerStatus(): Record<string, unknown> {
     const snapshot = this.snapshot
-    const platform = snapshot.platform
-    const providers = platform
+    const provider = snapshot.provider
+    const descriptor = provider ? this.#providerFor(provider) : undefined
+    const providers = descriptor
       ? this.#integrations
-          .filter((integration) => integrationMatchesPlatform(integration, platform))
+          .filter((integration) => integrationMatchesProvider(integration, descriptor))
           .map((integration) => ({
             id: integration.id,
             name: integration.name,
             connected: integration.connections.length > 0,
           }))
       : []
-    const compatibleModels = platform ? this.modelsForPlatform(platform, 'primary') : []
+    const compatibleModels = provider ? this.modelsForProvider(provider, 'primary') : []
     const configured =
-      platform === 'opencode'
-        ? true
-        : providers.some((provider) => provider.connected) || compatibleModels.length > 0 || this.#models.length > 0
+      providers.some((item) => item.connected) || compatibleModels.length > 0 || this.#models.length > 0
     const selectedModel =
       snapshot.primary?.providerID && snapshot.primary?.modelID
         ? `${snapshot.primary.providerID}/${snapshot.primary.modelID}`
@@ -647,7 +693,7 @@ export class CuppetController extends EventEmitter {
       // model is a Cuppet background-agent concern and must not block BYOK.
       ready: Boolean((configured || this.#models.length > 0) && (snapshot.primary || compatibleModels.length > 0)),
       providers,
-      selectedProvider: platform ?? null,
+      selectedProvider: provider ?? null,
       selectedModel,
     }
   }
@@ -670,8 +716,11 @@ export class CuppetController extends EventEmitter {
     const tst = this.#tstAvailable && this.#tst
       ? await this.#tst.call<Record<string, unknown>>('status').catch((error) => ({ error: (error as Error).message }))
       : { mode: 'degraded', reason: 'TST daemon unavailable' }
+    const providerDescriptor = this.#provider ? this.#providerFor(this.#provider) : undefined
     return {
-      platform: this.#platform,
+      provider: this.#provider,
+      platform: this.#provider,
+      providerLabel: providerDescriptor?.label,
       session: this.#session,
       primary: this.#primary ? this.#findModel(this.#primary) ?? this.#primary : undefined,
       secondary: this.#secondary ? this.#findModel(this.#secondary) ?? this.#secondary : undefined,
@@ -696,18 +745,7 @@ export class CuppetController extends EventEmitter {
       connected: integration.connections.length > 0,
       methods: integration.methods.map((method) => method.type),
     }))
-    const keyProviderIDs = new Set([
-      'openai',
-      'anthropic',
-      'google',
-      'google-vertex',
-      'google-vertex-anthropic',
-      'azure',
-      'opencode',
-    ])
-    const providerSummary = providers.filter(
-      (provider) => provider.connected || keyProviderIDs.has(provider.id),
-    )
+    const providerSummary = providers
     const storagePermissions = Object.fromEntries(
       await Promise.all(
         [
@@ -721,14 +759,15 @@ export class CuppetController extends EventEmitter {
     )
     return {
       platform: `${process.platform}-${process.arch}`,
-      selectedPlatform: this.#platform,
+      selectedProvider: this.#provider,
+      selectedPlatform: this.#provider,
       node: process.version,
       runtimeSource: this.#assets.source,
       runtimeDiagnostics: this.#assets.diagnostics,
       opencode: {
         available: Boolean(this.#assets.opencode),
         models: this.#models.length,
-        providerCatalogSize: providers.length,
+        providerCatalogSize: this.#providers.length,
         providers: providerSummary,
       },
       vertex: this.#vertexDiagnostics(),
@@ -750,15 +789,13 @@ export class CuppetController extends EventEmitter {
   }
 
   #vertexDiagnostics(): Record<string, unknown> {
-    const integrations = this.#integrations.filter((integration) =>
-      integrationMatchesPlatform(integration, 'vertex'),
-    )
+    const integrations = this.integrationsForProvider('vertex')
     return {
       ...structuredClone(this.#vertex),
       providerIDs: integrations.map((integration) => integration.id),
       connected: integrations.some((integration) => integration.connections.length > 0),
-      primaryCompatibleModels: this.modelsForPlatform('vertex', 'primary').length,
-      secondaryCompatibleModels: this.modelsForPlatform('vertex', 'secondary').length,
+      primaryCompatibleModels: this.modelsForProvider('vertex', 'primary').length,
+      secondaryCompatibleModels: this.modelsForProvider('vertex', 'secondary').length,
     }
   }
 
@@ -793,6 +830,7 @@ export class CuppetController extends EventEmitter {
         this.#gateway.listModels(),
         this.#gateway.listIntegrations(),
       ])
+      this.#providers = buildProviderCatalog(this.#models, this.#integrations)
       if (this.#models.length > 0 || this.#integrations.length > 0) return
       await new Promise((resolve) => setTimeout(resolve, 150))
     } while (Date.now() < deadline)
@@ -810,6 +848,14 @@ export class CuppetController extends EventEmitter {
         model.modelID === reference.modelID &&
         model.variant === reference.variant,
     )
+  }
+
+  #providerFor(providerID: ProviderID): ProviderDescriptor | undefined {
+    return providerDescriptorFor(providerID, this.#providers)
+  }
+
+  #providerForModel(model: ModelRef): ProviderID | undefined {
+    return this.#providers.find((provider) => modelMatchesProvider(model, provider))?.id
   }
 
   #modelCompatible(reference: ModelRef, role: 'primary' | 'secondary'): boolean {
@@ -1004,11 +1050,6 @@ export class CuppetController extends EventEmitter {
     this.#lastUserPrompt = evidence?.lastUserPrompt ?? ''
   }
 
-  #platformForModel(model: ModelRef): Platform | undefined {
-    const candidates: Platform[] = ['anthropic', 'openai', 'google', 'opencode', 'vertex']
-    return candidates.find((platform) => modelMatchesPlatform(model, platform))
-  }
-
   #syncUsage(session: SessionInfo): void {
     if (session.id !== this.#usageSessionID) return
     const usage = usageSince(session.tokens, this.#usageBaseline)
@@ -1139,11 +1180,9 @@ async function inspectPath(path: string, accessMode: number): Promise<Record<str
 }
 
 function isModelCompatible(model: ModelInfo, _role: 'primary' | 'secondary'): boolean {
-  const textInput = model.capabilities.input.includes('text')
-  const textOutput = model.capabilities.output.includes('text')
   // Secondary models power native Task subagents as well as background
-  // canonicalization, so both roles must support tool calls.
-  return textInput && textOutput && model.capabilities.tools
+  // canonicalization, so both roles must support tool calls and streaming.
+  return modelSupportsCodingAgent(model)
 }
 
 function normalizeLegacyVertexReference(reference: ModelRef | undefined): ModelRef | undefined {

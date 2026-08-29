@@ -183,8 +183,8 @@ async function main(): Promise<void> {
     }
     if (arguments_.prompt) {
       const state = controller.snapshot
-      if (!state.platform || !state.primary || !state.secondary) {
-        throw new Error('First launch requires interactive platform, primary model, and secondary model selection')
+      if (!state.provider || !state.primary || !state.secondary) {
+        throw new Error('First launch requires interactive provider, primary model, and secondary model selection')
       }
       const output = await controller.submitAndWait(arguments_.prompt)
       process.stdout.write(`${output}\n`)

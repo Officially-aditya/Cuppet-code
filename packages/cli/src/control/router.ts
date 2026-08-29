@@ -3,8 +3,8 @@ import { join } from 'node:path'
 import type { CuppetController } from '../controller.js'
 import { CUPPET_VERSION } from '../constants.js'
 import { loadHostIdentityOrNull } from '../remote/identity.js'
-import { PLATFORM_OPTIONS } from '../platforms.js'
-import type { Platform } from '../types.js'
+import { PROVIDER_OVERRIDES } from '../platforms.js'
+import type { ModelInfo, ProviderDescriptor } from '../types.js'
 
 /**
  * Who is asking. The Unix control socket always acts locally with full
@@ -157,8 +157,8 @@ const ROUTE_TABLE: Record<string, { scope?: ControlScope; localOnly?: boolean; r
   'model.list': {
     scope: 'session.read',
     run: (c) => {
-      const platformModels = c.modelsForPlatform(undefined, 'primary')
-      return Promise.resolve(platformModels.length > 0 ? platformModels : c.snapshot.models)
+      const providerModels = modelsForSelectedProvider(c)
+      return Promise.resolve(providerModels.length > 0 ? providerModels : c.snapshot.models)
     },
   },
   'model.select': {
@@ -171,12 +171,12 @@ const ROUTE_TABLE: Record<string, { scope?: ControlScope; localOnly?: boolean; r
         providerID = found?.providerID
       }
       if (!providerID) {
-        const platformModels = c.modelsForPlatform(undefined, 'primary')
-        const found = platformModels.find((m) => m.modelID === modelID || m.name === modelID)
+        const providerModels = modelsForSelectedProvider(c)
+        const found = providerModels.find((m) => m.modelID === modelID || m.name === modelID)
         providerID = found?.providerID
       }
       const separator = modelID.indexOf('/')
-      const resolvedProviderID = providerID ?? (separator > 0 ? modelID.slice(0, separator) : (c.snapshot.platform ?? 'opencode'))
+      const resolvedProviderID = providerID ?? (separator > 0 ? modelID.slice(0, separator) : (c.snapshot.provider ?? c.snapshot.platform ?? 'opencode'))
       const resolvedModelID = separator > 0 ? modelID.slice(separator + 1) : modelID
       if (!resolvedModelID) throw new Error('modelID must include a model name')
       await c.selectModel(params.role === 'secondary' ? 'secondary' : 'primary', {
@@ -246,12 +246,24 @@ const ROUTE_TABLE: Record<string, { scope?: ControlScope; localOnly?: boolean; r
   },
   'status': { scope: 'session.read', run: (c) => Promise.resolve(c.status()) },
   'doctor': { scope: 'session.read', run: (c) => Promise.resolve(c.doctor()) },
-  'platform.list': { scope: 'session.read', run: (c) => Promise.resolve(platformState(c)) },
+  'provider.list': { scope: 'session.read', run: (c) => Promise.resolve(providerState(c)) },
+  'provider.select': {
+    scope: 'model.write',
+    run: async (c, params) => {
+      const provider = requireString(params, 'provider')
+      await selectProvider(c, provider)
+      return providerState(c)
+    },
+  },
+  // Keep the v1 control protocol names while routing them through provider
+  // selection. Provider IDs are intentionally not enum-validated.
+  'platform.list': { scope: 'session.read', run: (c) => Promise.resolve(providerState(c)) },
   'platform.select': {
     scope: 'model.write',
     run: async (c, params) => {
-      await c.selectPlatform(requireString(params, 'platform') as Platform)
-      return platformState(c)
+      const provider = requireString(params, 'provider' in params ? 'provider' : 'platform')
+      await selectProvider(c, provider)
+      return providerState(c)
     },
   },
   'plan.toggle': {
@@ -272,15 +284,68 @@ const ROUTE_TABLE: Record<string, { scope?: ControlScope; localOnly?: boolean; r
   },
 }
 
-function platformState(controller: CuppetController): Record<string, unknown> {
-  return {
-    selected: controller.snapshot.platform,
-    options: PLATFORM_OPTIONS.map((option) => ({
-      ...option,
-      models: controller.modelsForPlatform(option.value, 'primary').length,
-      connected: controller.integrationsForPlatform(option.value).some((integration) => integration.connections.length > 0),
-    })),
+export function providerState(controller: CuppetController): Record<string, unknown> {
+  const snapshot = controller.snapshot
+  const dynamic = controller as CuppetController & {
+    providerCatalog?: () => ProviderDescriptor[]
+    modelsForProvider?: (provider?: string, role?: 'primary' | 'secondary') => ModelInfo[]
+    integrationsForProvider?: (provider?: string) => Array<{ connections?: unknown[] }>
+    selectProvider?: (provider: string) => Promise<void>
   }
+  const catalog = dynamic.providerCatalog?.() ?? legacyProviderCatalog(dynamic)
+  const selected = snapshot.provider ?? snapshot.platform
+  const options = catalog.map((provider) => {
+    const models = dynamic.modelsForProvider?.(provider.id, 'primary') ?? dynamic.modelsForPlatform(provider.id, 'primary')
+    const integrations = dynamic.integrationsForProvider?.(provider.id) ?? dynamic.integrationsForPlatform(provider.id)
+    return {
+      ...provider,
+      value: provider.id,
+      models: models.length,
+      connected: integrations.some((integration) => Array.isArray(integration.connections) && integration.connections.length > 0),
+      supported: provider.capabilities.codingAgent || provider.modelCount === 0,
+    }
+  })
+  return {
+    selected,
+    provider: selected,
+    options,
+    providers: options,
+  }
+}
+
+function modelsForSelectedProvider(controller: CuppetController): ModelInfo[] {
+  const dynamic = controller as CuppetController & {
+    modelsForProvider?: (provider?: string, role?: 'primary' | 'secondary') => ModelInfo[]
+  }
+  return dynamic.modelsForProvider?.(undefined, 'primary') ?? controller.modelsForPlatform(undefined, 'primary')
+}
+
+async function selectProvider(controller: CuppetController, provider: string): Promise<void> {
+  const dynamic = controller as CuppetController & {
+    selectProvider?: (provider: string) => Promise<void>
+  }
+  if (dynamic.selectProvider) {
+    await dynamic.selectProvider(provider)
+    return
+  }
+  await controller.selectPlatform(provider)
+}
+
+/** Compatibility response for older test doubles/clients without a catalog. */
+function legacyProviderCatalog(controller: CuppetController): ProviderDescriptor[] {
+  return Object.entries(PROVIDER_OVERRIDES).map(([id, override]) => ({
+    id,
+    label: override.label ?? id,
+    description: override.description ?? '',
+    integrationIds: [id, ...(override.integrationIds ?? [])],
+    capabilities: { chat: false, streaming: false, tools: false, codingAgent: false },
+    modelCount: 0,
+    integrationCount: 0,
+    ...(override.specialization ? { specialization: override.specialization } : {}),
+  })).filter((provider) => {
+    const integrations = controller.integrationsForPlatform(provider.id)
+    return provider.id === 'vertex' || integrations.length > 0 || controller.modelsForPlatform(provider.id, 'primary').length > 0
+  })
 }
 
 function stringParam(params: Record<string, unknown>, key: string): string {

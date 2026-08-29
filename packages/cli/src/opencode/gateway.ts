@@ -47,7 +47,7 @@ export type OpenCodeGatewayAgents = {
  * OpenCode 1.18.4 exposes the complete live catalog through v2, but its new
  * native runner only implements a subset of the provider adapters. The stable
  * session API on the same server is the compatibility execution path used by
- * OpenCode itself and supports Google, Vertex, Azure, Anthropic, and OpenAI.
+ * OpenCode itself and delegates configured provider execution to OpenCode.
  */
 export class OpenCodeGateway extends EventEmitter {
   readonly #client: Client
@@ -119,6 +119,7 @@ export class OpenCodeGateway extends EventEmitter {
           outputCost: cost?.output ?? 0,
           capabilities: {
             tools: model.capabilities.tools,
+            streaming: true,
             input: [...model.capabilities.input],
             output: [...model.capabilities.output],
           },
@@ -149,6 +150,7 @@ export class OpenCodeGateway extends EventEmitter {
             outputCost: model.cost.output,
             capabilities: {
               tools: model.capabilities.toolcall,
+              streaming: true,
               input: enabledModalities(model.capabilities.input),
               output: enabledModalities(model.capabilities.output),
             },

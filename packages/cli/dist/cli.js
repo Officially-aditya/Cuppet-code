@@ -16,7 +16,9 @@ var modelRef = z.object({
 });
 var preferencesSchema = z.object({
   schema: z.literal(1),
-  platform: z.enum(["anthropic", "openai", "google", "opencode", "vertex"]).optional(),
+  provider: z.string().trim().min(1).optional(),
+  // Accepted only to migrate preferences written by older Cuppet versions.
+  platform: z.string().trim().min(1).optional(),
   primary: modelRef.optional(),
   secondary: modelRef.optional(),
   vertexProject: z.string().min(1).optional(),
@@ -24,6 +26,9 @@ var preferencesSchema = z.object({
   orchestratorEnabled: z.boolean().optional(),
   lastSessionByProject: z.record(z.string(), z.string()).default({})
 });
+function migrateLegacyPlatform(platform) {
+  return platform === "vertex" ? "vertex" : platform;
+}
 var PreferenceStore = class {
   #path;
   #value = {
@@ -36,8 +41,9 @@ var PreferenceStore = class {
   }
   async load() {
     try {
-      const parsed = JSON.parse(await readFile(this.#path, "utf8"));
-      this.#value = preferencesSchema.parse(parsed);
+      const raw = JSON.parse(await readFile(this.#path, "utf8"));
+      this.#value = canonicalPreferences(raw);
+      if (hasLegacyPlatform(raw)) await this.#persist();
     } catch (error) {
       if (error.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
     }
@@ -47,7 +53,7 @@ var PreferenceStore = class {
     return structuredClone(this.#value);
   }
   async update(change) {
-    this.#value = preferencesSchema.parse({ ...this.#value, ...change, schema: 1 });
+    this.#value = canonicalPreferences({ ...this.#value, ...change, schema: 1 });
     await this.#persist();
     return this.value;
   }
@@ -65,6 +71,26 @@ var PreferenceStore = class {
     await rename(temporary, this.#path);
   }
 };
+function canonicalPreferences(value) {
+  const parsed = preferencesSchema.parse(value);
+  const { platform: legacyPlatform, ...canonical } = parsed;
+  const provider = parsed.provider ?? (legacyPlatform ? migrateLegacyPlatform(legacyPlatform) : void 0);
+  const primary = normalizeLegacyVertexReference(parsed.primary);
+  const secondary = normalizeLegacyVertexReference(parsed.secondary);
+  return {
+    ...canonical,
+    ...provider ? { provider } : {},
+    ...primary ? { primary } : {},
+    ...secondary ? { secondary } : {}
+  };
+}
+function hasLegacyPlatform(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value) && "platform" in value);
+}
+function normalizeLegacyVertexReference(reference) {
+  if (!reference || reference.providerID !== "vertex") return reference;
+  return { ...reference, providerID: "google-vertex" };
+}
 
 // src/controller.ts
 import { EventEmitter as EventEmitter2 } from "node:events";
@@ -818,30 +844,177 @@ function isSensitivePath(path) {
 }
 
 // src/platforms.ts
-var PLATFORM_OPTIONS = [
-  { value: "anthropic", label: "Anthropic", description: "Claude models" },
-  { value: "openai", label: "OpenAI", description: "OpenAI and Azure OpenAI models" },
-  { value: "google", label: "Google", description: "Gemini API models" },
-  { value: "opencode", label: "OpenCode", description: "OpenCode-provided models" },
-  { value: "vertex", label: "Vertex AI", description: "Google Cloud ADC models" }
-];
-var modelProviderIDs = {
-  anthropic: /* @__PURE__ */ new Set(["anthropic"]),
-  openai: /* @__PURE__ */ new Set(["openai", "azure", "azure-openai"]),
-  google: /* @__PURE__ */ new Set(["google"]),
-  opencode: /* @__PURE__ */ new Set(["opencode"]),
-  vertex: /* @__PURE__ */ new Set(["google-vertex", "google-vertex-anthropic"])
+var PROVIDER_OVERRIDES = {
+  anthropic: {
+    label: "Anthropic",
+    description: "Claude models"
+  },
+  openai: {
+    label: "OpenAI",
+    description: "OpenAI and Azure OpenAI models",
+    integrationIds: ["openai", "azure", "azure-openai"]
+  },
+  google: {
+    label: "Google",
+    description: "Gemini API models"
+  },
+  opencode: {
+    label: "OpenCode",
+    description: "OpenCode-provided models"
+  },
+  vertex: {
+    label: "Vertex AI",
+    description: "Google Cloud ADC models",
+    integrationIds: ["google-vertex", "google-vertex-anthropic", "vertex"],
+    specialization: "vertex"
+  }
 };
-function modelMatchesPlatform(model, platform) {
-  return modelProviderIDs[platform]?.has(model.providerID.toLowerCase()) ?? false;
+var DISPLAY_ACRONYMS = /* @__PURE__ */ new Map([
+  ["ai", "AI"],
+  ["api", "API"],
+  ["adc", "ADC"],
+  ["azure", "Azure"],
+  ["gpt", "GPT"],
+  ["llm", "LLM"],
+  ["nim", "NIM"],
+  ["nvidia", "NVIDIA"],
+  ["openai", "OpenAI"],
+  ["opencode", "OpenCode"]
+]);
+function buildProviderCatalog(models, integrations) {
+  const observedIDs = /* @__PURE__ */ new Set();
+  for (const model of models) addObservedID(observedIDs, model.providerID);
+  for (const integration of integrations) addObservedID(observedIDs, integration.id);
+  const groups = /* @__PURE__ */ new Map();
+  for (const sourceID of observedIDs) {
+    const group = providerGroupFor(sourceID);
+    const current = groups.get(group.id) ?? { sourceIDs: /* @__PURE__ */ new Set(), override: group.override };
+    current.sourceIDs.add(sourceID);
+    groups.set(group.id, current);
+  }
+  return [...groups.entries()].map(([id, group]) => {
+    const override = group.override;
+    const integrationIds = uniqueIDs([
+      id,
+      ...override?.integrationIds ?? [],
+      ...group.sourceIDs
+    ]);
+    const groupModels = models.filter((model) => matchesAnyID(model.providerID, integrationIds));
+    const groupIntegrations = integrations.filter((integration) => matchesAnyID(integration.id, integrationIds));
+    const capabilities = capabilitiesFor(groupModels);
+    const label = override?.label ?? humanizeProviderId(id);
+    return {
+      id,
+      label,
+      description: override?.description ?? `${label} models`,
+      integrationIds,
+      capabilities,
+      modelCount: groupModels.length,
+      integrationCount: groupIntegrations.length,
+      ...override?.specialization ? { specialization: override.specialization } : {}
+    };
+  }).sort((left, right) => left.label.localeCompare(right.label) || left.id.localeCompare(right.id));
 }
-function integrationMatchesPlatform(integration, platform) {
-  const id = integration.id.toLowerCase();
-  if (platform === "anthropic") return id === "anthropic";
-  if (platform === "openai") return id === "openai" || id === "azure" || id === "azure-openai";
-  if (platform === "google") return id === "google";
-  if (platform === "vertex") return id === "google-vertex" || id === "google-vertex-anthropic";
-  return id === "opencode";
+function humanizeProviderId(providerID) {
+  const words = normalizeProviderID(providerID).split(/[-_.\s]+/).filter(Boolean);
+  if (words.length === 0) return providerID;
+  return words.map((word) => DISPLAY_ACRONYMS.get(word) ?? `${word[0].toUpperCase()}${word.slice(1)}`).join(" ");
+}
+function providerDescriptorFor(providerID, catalog) {
+  const normalized = normalizeProviderID(providerID);
+  return catalog.find(
+    (provider) => normalizeProviderID(provider.id) === normalized || provider.integrationIds.some((id) => normalizeProviderID(id) === normalized)
+  );
+}
+function modelMatchesProvider(model, provider) {
+  const descriptor = typeof provider === "string" ? descriptorForID(provider) : provider;
+  return descriptor.integrationIds.some((id) => sameProviderID(model.providerID, id));
+}
+function integrationMatchesProvider(integration, provider) {
+  const descriptor = typeof provider === "string" ? descriptorForID(provider) : provider;
+  return descriptor.integrationIds.some((id) => sameProviderID(integration.id, id));
+}
+function modelSupportsCodingAgent(model) {
+  return isChatModel(model) && isStreamingModel(model) && model.capabilities.tools;
+}
+function missingCodingAgentCapabilities(provider) {
+  const missing = [];
+  if (!provider.capabilities.chat) missing.push("chat");
+  if (!provider.capabilities.streaming) missing.push("streaming");
+  if (!provider.capabilities.tools) missing.push("tool calling");
+  if (missing.length === 0 && !provider.capabilities.codingAgent) {
+    missing.push("a model with both streaming and tool calling");
+  }
+  return missing;
+}
+function validateProviderCapabilities(provider) {
+  if (provider.modelCount === 0) return;
+  const missing = missingCodingAgentCapabilities(provider);
+  if (missing.length > 0) {
+    throw new Error(`${provider.label} does not support Cuppet coding requirements: ${missing.join(", ")}`);
+  }
+}
+function capabilitiesFor(models) {
+  const chatModels = models.filter(isChatModel);
+  const streamingModels = chatModels.filter(isStreamingModel);
+  const toolModels = chatModels.filter((model) => model.capabilities.tools);
+  return {
+    chat: chatModels.length > 0,
+    streaming: streamingModels.length > 0,
+    tools: toolModels.length > 0,
+    codingAgent: toolModels.some(isStreamingModel)
+  };
+}
+function isChatModel(model) {
+  return model.capabilities.input.includes("text") && model.capabilities.output.includes("text");
+}
+function isStreamingModel(model) {
+  return model.capabilities.streaming !== false;
+}
+function descriptorForID(providerID) {
+  const group = providerGroupFor(providerID);
+  const override = group.override;
+  const integrationIds = uniqueIDs([group.id, ...override?.integrationIds ?? []]);
+  return {
+    id: group.id,
+    label: override?.label ?? humanizeProviderId(group.id),
+    description: override?.description ?? `${override?.label ?? humanizeProviderId(group.id)} models`,
+    integrationIds,
+    capabilities: {
+      chat: false,
+      streaming: false,
+      tools: false,
+      codingAgent: false
+    },
+    modelCount: 0,
+    integrationCount: 0,
+    ...override?.specialization ? { specialization: override.specialization } : {}
+  };
+}
+function providerGroupFor(providerID) {
+  const normalized = normalizeProviderID(providerID);
+  for (const [id, override] of Object.entries(PROVIDER_OVERRIDES)) {
+    if (normalized === id || override.integrationIds?.some((candidate) => normalizeProviderID(candidate) === normalized)) {
+      return { id, override };
+    }
+  }
+  return { id: normalized };
+}
+function addObservedID(target, value) {
+  const normalized = normalizeProviderID(value);
+  if (normalized) target.add(normalized);
+}
+function uniqueIDs(values) {
+  return [...new Set(values.map(normalizeProviderID).filter(Boolean))];
+}
+function matchesAnyID(value, ids) {
+  return ids.some((id) => sameProviderID(value, id));
+}
+function sameProviderID(left, right) {
+  return normalizeProviderID(left) === normalizeProviderID(right);
+}
+function normalizeProviderID(value) {
+  return value.trim().toLowerCase();
 }
 
 // src/usage.ts
@@ -862,7 +1035,8 @@ var CuppetController = class extends EventEmitter2 {
   #tstAvailable;
   #models = [];
   #integrations = [];
-  #platform;
+  #providers = [];
+  #provider;
   #primary;
   #secondary;
   #session;
@@ -917,11 +1091,16 @@ var CuppetController = class extends EventEmitter2 {
     });
     await this.#loadCatalog();
     const preferences = this.#preferences.value;
-    this.#platform = preferences.platform;
-    const normalizedPrimary = normalizeLegacyVertexReference(preferences.primary);
-    const normalizedSecondary = normalizeLegacyVertexReference(preferences.secondary);
-    this.#primary = this.#platform && normalizedPrimary && this.#findModel(normalizedPrimary) && modelMatchesPlatform(normalizedPrimary, this.#platform) && this.#modelCompatible(normalizedPrimary, "primary") ? normalizedPrimary : void 0;
-    this.#secondary = this.#platform && normalizedSecondary && this.#findModel(normalizedSecondary) && modelMatchesPlatform(normalizedSecondary, this.#platform) && this.#modelCompatible(normalizedSecondary, "secondary") ? normalizedSecondary : void 0;
+    const storedProvider = preferences.provider ?? (preferences.platform ? migrateLegacyPlatform(preferences.platform) : void 0);
+    this.#provider = storedProvider ? this.#providerFor(storedProvider)?.id ?? storedProvider : void 0;
+    if (this.#provider && preferences.provider !== this.#provider) {
+      await this.#preferences.update?.({ provider: this.#provider });
+    }
+    const provider = this.#provider ? this.#providerFor(this.#provider) : void 0;
+    const normalizedPrimary = normalizeLegacyVertexReference2(preferences.primary);
+    const normalizedSecondary = normalizeLegacyVertexReference2(preferences.secondary);
+    this.#primary = provider && normalizedPrimary && this.#findModel(normalizedPrimary) && modelMatchesProvider(normalizedPrimary, provider) && this.#modelCompatible(normalizedPrimary, "primary") ? normalizedPrimary : void 0;
+    this.#secondary = provider && normalizedSecondary && this.#findModel(normalizedSecondary) && modelMatchesProvider(normalizedSecondary, provider) && this.#modelCompatible(normalizedSecondary, "secondary") ? normalizedSecondary : void 0;
     if (!sameReference(preferences.primary, this.#primary) || !sameReference(preferences.secondary, this.#secondary)) {
       await this.#preferences.update({ primary: this.#primary, secondary: this.#secondary });
     }
@@ -950,7 +1129,8 @@ var CuppetController = class extends EventEmitter2 {
     return {
       models: [...this.#models],
       integrations: [...this.#integrations],
-      ...this.#platform ? { platform: this.#platform } : {},
+      providers: this.providerCatalog(),
+      ...this.#provider ? { provider: this.#provider, platform: this.#provider } : {},
       ...this.#primary ? { primary: { ...this.#primary } } : {},
       ...this.#secondary ? { secondary: { ...this.#secondary } } : {},
       ...this.#session ? { activeSession: { ...this.#session } } : {},
@@ -975,30 +1155,52 @@ var CuppetController = class extends EventEmitter2 {
     this.on("agent-event", listener);
     return () => this.off("agent-event", listener);
   }
-  async selectPlatform(platform) {
-    this.#platform = platform;
-    const primaryCandidates = this.modelsForPlatform(platform, "primary");
+  async selectProvider(providerID) {
+    const descriptor = this.#providerFor(providerID);
+    if (!descriptor) throw new Error(`Provider ${providerID} is not available in OpenCode`);
+    validateProviderCapabilities(descriptor);
+    const provider = descriptor.id;
+    this.#provider = provider;
+    const primaryCandidates = this.modelsForProvider(provider, "primary");
     const primary = primaryCandidates[0] ? { providerID: primaryCandidates[0].providerID, modelID: primaryCandidates[0].modelID } : void 0;
-    const secondaryCandidates = this.modelsForPlatform(platform, "secondary");
+    const secondaryCandidates = this.modelsForProvider(provider, "secondary");
     const secondary = secondaryCandidates[0] ? { providerID: secondaryCandidates[0].providerID, modelID: secondaryCandidates[0].modelID } : void 0;
     this.#primary = primary;
     this.#secondary = secondary;
     this.#background?.pause();
-    await this.#preferences.update({ platform, primary, secondary });
+    await this.#preferences.update({ provider, primary, secondary });
     this.#changed();
   }
-  modelsForPlatform(platform = this.#platform, role = "primary") {
-    if (!platform) return [];
-    return this.#models.filter((model) => modelMatchesPlatform(model, platform) && isModelCompatible(model, role)).map((model) => structuredClone(model));
+  /** @deprecated Use selectProvider. */
+  async selectPlatform(providerID) {
+    return this.selectProvider(providerID);
   }
-  integrationsForPlatform(platform = this.#platform) {
-    if (!platform) return [];
-    return this.#integrations.filter((integration) => integrationMatchesPlatform(integration, platform)).map((integration) => structuredClone(integration));
+  providerCatalog() {
+    return this.#providers.map((provider) => structuredClone(provider));
+  }
+  modelsForProvider(providerID = this.#provider, role = "primary") {
+    const provider = providerID ? this.#providerFor(providerID) : void 0;
+    if (!provider) return [];
+    return this.#models.filter((model) => modelMatchesProvider(model, provider) && isModelCompatible(model, role)).map((model) => structuredClone(model));
+  }
+  /** @deprecated Use modelsForProvider. */
+  modelsForPlatform(providerID = this.#provider, role = "primary") {
+    return this.modelsForProvider(providerID, role);
+  }
+  integrationsForProvider(providerID = this.#provider) {
+    const provider = providerID ? this.#providerFor(providerID) : void 0;
+    if (!provider) return [];
+    return this.#integrations.filter((integration) => integrationMatchesProvider(integration, provider)).map((integration) => structuredClone(integration));
+  }
+  /** @deprecated Use integrationsForProvider. */
+  integrationsForPlatform(providerID = this.#provider) {
+    return this.integrationsForProvider(providerID);
   }
   async selectModel(role, model) {
-    if (!this.#platform) throw new Error("Choose a platform before selecting a model");
-    if (!modelMatchesPlatform(model, this.#platform)) {
-      throw new Error(`The selected model does not belong to the ${this.#platform} platform`);
+    const provider = this.#provider ? this.#providerFor(this.#provider) : void 0;
+    if (!provider) throw new Error("Choose a provider before selecting a model");
+    if (!modelMatchesProvider(model, provider)) {
+      throw new Error(`The selected model does not belong to the ${provider.label} provider`);
     }
     if (!this.#findModel(model)) throw new Error("The selected model is no longer available");
     if (!this.#modelCompatible(model, role)) {
@@ -1053,7 +1255,7 @@ var CuppetController = class extends EventEmitter2 {
   }
   recommendedSecondary() {
     if (!this.#primary) return void 0;
-    return recommendSecondary(this.modelsForPlatform(this.#platform, "secondary"), this.#primary);
+    return recommendSecondary(this.modelsForProvider(this.#provider, "secondary"), this.#primary);
   }
   togglePlanMode(enable) {
     this.#planMode = enable ?? !this.#planMode;
@@ -1211,11 +1413,11 @@ var CuppetController = class extends EventEmitter2 {
     this.#startUsageWindow(session);
     if (session.model) {
       const model = this.#findModel(session.model);
-      const platform = this.#platformForModel(session.model);
-      if (platform) this.#platform = platform;
+      const provider = this.#providerForModel(session.model);
+      if (provider) this.#provider = provider;
       if (model && this.#modelCompatible(session.model, "primary")) {
         this.#primary = { ...session.model };
-        await this.#preferences.update({ platform: this.#platform, primary: this.#primary });
+        await this.#preferences.update({ provider: this.#provider, primary: this.#primary });
         if (!this.#secondary || !this.#modelCompatible(this.#secondary, "secondary")) {
           const recommendation = this.recommendedSecondary();
           if (recommendation) {
@@ -1322,14 +1524,15 @@ var CuppetController = class extends EventEmitter2 {
   /** Whether a coding provider is configured and usable (BYOK check). */
   providerStatus() {
     const snapshot = this.snapshot;
-    const platform = snapshot.platform;
-    const providers = platform ? this.#integrations.filter((integration) => integrationMatchesPlatform(integration, platform)).map((integration) => ({
+    const provider = snapshot.provider;
+    const descriptor = provider ? this.#providerFor(provider) : void 0;
+    const providers = descriptor ? this.#integrations.filter((integration) => integrationMatchesProvider(integration, descriptor)).map((integration) => ({
       id: integration.id,
       name: integration.name,
       connected: integration.connections.length > 0
     })) : [];
-    const compatibleModels = platform ? this.modelsForPlatform(platform, "primary") : [];
-    const configured = platform === "opencode" ? true : providers.some((provider) => provider.connected) || compatibleModels.length > 0 || this.#models.length > 0;
+    const compatibleModels = provider ? this.modelsForProvider(provider, "primary") : [];
+    const configured = providers.some((item) => item.connected) || compatibleModels.length > 0 || this.#models.length > 0;
     const selectedModel = snapshot.primary?.providerID && snapshot.primary?.modelID ? `${snapshot.primary.providerID}/${snapshot.primary.modelID}` : null;
     return {
       configured: configured || Boolean(snapshot.primary),
@@ -1337,7 +1540,7 @@ var CuppetController = class extends EventEmitter2 {
       // model is a Cuppet background-agent concern and must not block BYOK.
       ready: Boolean((configured || this.#models.length > 0) && (snapshot.primary || compatibleModels.length > 0)),
       providers,
-      selectedProvider: platform ?? null,
+      selectedProvider: provider ?? null,
       selectedModel
     };
   }
@@ -1355,8 +1558,11 @@ var CuppetController = class extends EventEmitter2 {
   }
   async status() {
     const tst = this.#tstAvailable && this.#tst ? await this.#tst.call("status").catch((error) => ({ error: error.message })) : { mode: "degraded", reason: "TST daemon unavailable" };
+    const providerDescriptor = this.#provider ? this.#providerFor(this.#provider) : void 0;
     return {
-      platform: this.#platform,
+      provider: this.#provider,
+      platform: this.#provider,
+      providerLabel: providerDescriptor?.label,
       session: this.#session,
       primary: this.#primary ? this.#findModel(this.#primary) ?? this.#primary : void 0,
       secondary: this.#secondary ? this.#findModel(this.#secondary) ?? this.#secondary : void 0,
@@ -1380,18 +1586,7 @@ var CuppetController = class extends EventEmitter2 {
       connected: integration.connections.length > 0,
       methods: integration.methods.map((method) => method.type)
     }));
-    const keyProviderIDs = /* @__PURE__ */ new Set([
-      "openai",
-      "anthropic",
-      "google",
-      "google-vertex",
-      "google-vertex-anthropic",
-      "azure",
-      "opencode"
-    ]);
-    const providerSummary = providers.filter(
-      (provider) => provider.connected || keyProviderIDs.has(provider.id)
-    );
+    const providerSummary = providers;
     const storagePermissions = Object.fromEntries(
       await Promise.all(
         [
@@ -1405,14 +1600,15 @@ var CuppetController = class extends EventEmitter2 {
     );
     return {
       platform: `${process.platform}-${process.arch}`,
-      selectedPlatform: this.#platform,
+      selectedProvider: this.#provider,
+      selectedPlatform: this.#provider,
       node: process.version,
       runtimeSource: this.#assets.source,
       runtimeDiagnostics: this.#assets.diagnostics,
       opencode: {
         available: Boolean(this.#assets.opencode),
         models: this.#models.length,
-        providerCatalogSize: providers.length,
+        providerCatalogSize: this.#providers.length,
         providers: providerSummary
       },
       vertex: this.#vertexDiagnostics(),
@@ -1432,15 +1628,13 @@ var CuppetController = class extends EventEmitter2 {
     return this.#gateway;
   }
   #vertexDiagnostics() {
-    const integrations = this.#integrations.filter(
-      (integration) => integrationMatchesPlatform(integration, "vertex")
-    );
+    const integrations = this.integrationsForProvider("vertex");
     return {
       ...structuredClone(this.#vertex),
       providerIDs: integrations.map((integration) => integration.id),
       connected: integrations.some((integration) => integration.connections.length > 0),
-      primaryCompatibleModels: this.modelsForPlatform("vertex", "primary").length,
-      secondaryCompatibleModels: this.modelsForPlatform("vertex", "secondary").length
+      primaryCompatibleModels: this.modelsForProvider("vertex", "primary").length,
+      secondaryCompatibleModels: this.modelsForProvider("vertex", "secondary").length
     };
   }
   #createBackground(paused) {
@@ -1472,6 +1666,7 @@ var CuppetController = class extends EventEmitter2 {
         this.#gateway.listModels(),
         this.#gateway.listIntegrations()
       ]);
+      this.#providers = buildProviderCatalog(this.#models, this.#integrations);
       if (this.#models.length > 0 || this.#integrations.length > 0) return;
       await new Promise((resolve4) => setTimeout(resolve4, 150));
     } while (Date.now() < deadline);
@@ -1484,6 +1679,12 @@ var CuppetController = class extends EventEmitter2 {
     return this.#models.find(
       (model) => model.providerID === reference.providerID && model.modelID === reference.modelID && model.variant === reference.variant
     );
+  }
+  #providerFor(providerID) {
+    return providerDescriptorFor(providerID, this.#providers);
+  }
+  #providerForModel(model) {
+    return this.#providers.find((provider) => modelMatchesProvider(model, provider))?.id;
   }
   #modelCompatible(reference, role) {
     const model = this.#findModel(reference);
@@ -1645,10 +1846,6 @@ var CuppetController = class extends EventEmitter2 {
     this.#assistantBuffer = evidence?.assistantBuffer ?? "";
     this.#lastUserPrompt = evidence?.lastUserPrompt ?? "";
   }
-  #platformForModel(model) {
-    const candidates = ["anthropic", "openai", "google", "opencode", "vertex"];
-    return candidates.find((platform) => modelMatchesPlatform(model, platform));
-  }
   #syncUsage(session) {
     if (session.id !== this.#usageSessionID) return;
     const usage = usageSince(session.tokens, this.#usageBaseline);
@@ -1756,11 +1953,9 @@ async function inspectPath(path, accessMode) {
   }
 }
 function isModelCompatible(model, _role) {
-  const textInput = model.capabilities.input.includes("text");
-  const textOutput = model.capabilities.output.includes("text");
-  return textInput && textOutput && model.capabilities.tools;
+  return modelSupportsCodingAgent(model);
 }
-function normalizeLegacyVertexReference(reference) {
+function normalizeLegacyVertexReference2(reference) {
   if (!reference || reference.providerID !== "vertex") return reference;
   return { ...reference, providerID: "google-vertex" };
 }
@@ -1979,8 +2174,8 @@ var ROUTE_TABLE = {
   "model.list": {
     scope: "session.read",
     run: (c) => {
-      const platformModels = c.modelsForPlatform(void 0, "primary");
-      return Promise.resolve(platformModels.length > 0 ? platformModels : c.snapshot.models);
+      const providerModels = modelsForSelectedProvider(c);
+      return Promise.resolve(providerModels.length > 0 ? providerModels : c.snapshot.models);
     }
   },
   "model.select": {
@@ -1993,12 +2188,12 @@ var ROUTE_TABLE = {
         providerID = found?.providerID;
       }
       if (!providerID) {
-        const platformModels = c.modelsForPlatform(void 0, "primary");
-        const found = platformModels.find((m) => m.modelID === modelID || m.name === modelID);
+        const providerModels = modelsForSelectedProvider(c);
+        const found = providerModels.find((m) => m.modelID === modelID || m.name === modelID);
         providerID = found?.providerID;
       }
       const separator = modelID.indexOf("/");
-      const resolvedProviderID = providerID ?? (separator > 0 ? modelID.slice(0, separator) : c.snapshot.platform ?? "opencode");
+      const resolvedProviderID = providerID ?? (separator > 0 ? modelID.slice(0, separator) : c.snapshot.provider ?? c.snapshot.platform ?? "opencode");
       const resolvedModelID = separator > 0 ? modelID.slice(separator + 1) : modelID;
       if (!resolvedModelID) throw new Error("modelID must include a model name");
       await c.selectModel(params.role === "secondary" ? "secondary" : "primary", {
@@ -2062,12 +2257,24 @@ var ROUTE_TABLE = {
   },
   "status": { scope: "session.read", run: (c) => Promise.resolve(c.status()) },
   "doctor": { scope: "session.read", run: (c) => Promise.resolve(c.doctor()) },
-  "platform.list": { scope: "session.read", run: (c) => Promise.resolve(platformState(c)) },
+  "provider.list": { scope: "session.read", run: (c) => Promise.resolve(providerState(c)) },
+  "provider.select": {
+    scope: "model.write",
+    run: async (c, params) => {
+      const provider = requireString(params, "provider");
+      await selectProvider(c, provider);
+      return providerState(c);
+    }
+  },
+  // Keep the v1 control protocol names while routing them through provider
+  // selection. Provider IDs are intentionally not enum-validated.
+  "platform.list": { scope: "session.read", run: (c) => Promise.resolve(providerState(c)) },
   "platform.select": {
     scope: "model.write",
     run: async (c, params) => {
-      await c.selectPlatform(requireString(params, "platform"));
-      return platformState(c);
+      const provider = requireString(params, "provider" in params ? "provider" : "platform");
+      await selectProvider(c, provider);
+      return providerState(c);
     }
   },
   "plan.toggle": {
@@ -2087,15 +2294,55 @@ var ROUTE_TABLE = {
     }
   }
 };
-function platformState(controller) {
+function providerState(controller) {
+  const snapshot = controller.snapshot;
+  const dynamic = controller;
+  const catalog = dynamic.providerCatalog?.() ?? legacyProviderCatalog(dynamic);
+  const selected = snapshot.provider ?? snapshot.platform;
+  const options = catalog.map((provider) => {
+    const models = dynamic.modelsForProvider?.(provider.id, "primary") ?? dynamic.modelsForPlatform(provider.id, "primary");
+    const integrations = dynamic.integrationsForProvider?.(provider.id) ?? dynamic.integrationsForPlatform(provider.id);
+    return {
+      ...provider,
+      value: provider.id,
+      models: models.length,
+      connected: integrations.some((integration) => Array.isArray(integration.connections) && integration.connections.length > 0),
+      supported: provider.capabilities.codingAgent || provider.modelCount === 0
+    };
+  });
   return {
-    selected: controller.snapshot.platform,
-    options: PLATFORM_OPTIONS.map((option) => ({
-      ...option,
-      models: controller.modelsForPlatform(option.value, "primary").length,
-      connected: controller.integrationsForPlatform(option.value).some((integration) => integration.connections.length > 0)
-    }))
+    selected,
+    provider: selected,
+    options,
+    providers: options
   };
+}
+function modelsForSelectedProvider(controller) {
+  const dynamic = controller;
+  return dynamic.modelsForProvider?.(void 0, "primary") ?? controller.modelsForPlatform(void 0, "primary");
+}
+async function selectProvider(controller, provider) {
+  const dynamic = controller;
+  if (dynamic.selectProvider) {
+    await dynamic.selectProvider(provider);
+    return;
+  }
+  await controller.selectPlatform(provider);
+}
+function legacyProviderCatalog(controller) {
+  return Object.entries(PROVIDER_OVERRIDES).map(([id, override]) => ({
+    id,
+    label: override.label ?? id,
+    description: override.description ?? "",
+    integrationIds: [id, ...override.integrationIds ?? []],
+    capabilities: { chat: false, streaming: false, tools: false, codingAgent: false },
+    modelCount: 0,
+    integrationCount: 0,
+    ...override.specialization ? { specialization: override.specialization } : {}
+  })).filter((provider) => {
+    const integrations = controller.integrationsForPlatform(provider.id);
+    return provider.id === "vertex" || integrations.length > 0 || controller.modelsForPlatform(provider.id, "primary").length > 0;
+  });
 }
 function stringParam(params, key) {
   return String(params[key]);
@@ -2224,11 +2471,11 @@ var CuppetControlServer = class _CuppetControlServer {
       case "doctor":
         return this.#controller.doctor();
       case "platform.list":
-        return platformState2(this.#controller);
+        return providerState(this.#controller);
       case "platform.select": {
-        const platform = platformParam(params.platform);
-        await this.#controller.selectPlatform(platform);
-        return platformState2(this.#controller);
+        const provider = providerParam(params.provider ?? params.platform);
+        await this.#controller.selectProvider(provider);
+        return providerState(this.#controller);
       }
       case "background.status":
         return this.#controller.snapshot.background ?? { paused: true };
@@ -2287,16 +2534,6 @@ var CuppetControlServer = class _CuppetControlServer {
 `);
   }
 };
-function platformState2(controller) {
-  return {
-    selected: controller.snapshot.platform,
-    options: PLATFORM_OPTIONS.map((option) => ({
-      ...option,
-      models: controller.modelsForPlatform(option.value, "primary").length,
-      connected: controller.integrationsForPlatform(option.value).some((integration) => integration.connections.length > 0)
-    }))
-  };
-}
 function createControlAddress(paths) {
   return { socket: `${paths.runtime}/control.sock`, token: randomBytes3(32).toString("base64url") };
 }
@@ -2319,11 +2556,9 @@ function memoryScopeParam(value) {
   if (value === "project" || value === "global") return value;
   throw new Error("memory remember scope must be project or global");
 }
-function platformParam(value) {
-  if (value === "anthropic" || value === "openai" || value === "google" || value === "opencode" || value === "vertex") {
-    return value;
-  }
-  throw new Error("platform must be anthropic, openai, google, opencode, or vertex");
+function providerParam(value) {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  throw new Error("provider is required");
 }
 
 // src/opencode/gateway.ts
@@ -2390,6 +2625,7 @@ var OpenCodeGateway = class extends EventEmitter3 {
           outputCost: cost?.output ?? 0,
           capabilities: {
             tools: model.capabilities.tools,
+            streaming: true,
             input: [...model.capabilities.input],
             output: [...model.capabilities.output]
           }
@@ -2416,6 +2652,7 @@ var OpenCodeGateway = class extends EventEmitter3 {
             outputCost: model.cost.output,
             capabilities: {
               tools: model.capabilities.toolcall,
+              streaming: true,
               input: enabledModalities(model.capabilities.input),
               output: enabledModalities(model.capabilities.output)
             }
@@ -4026,6 +4263,7 @@ var COMMAND_SCOPES = {
   "permission.list": "session.read",
   "question.list": "session.read",
   "model.list": "session.read",
+  "provider.list": "session.read",
   "agent.mode.get": "session.read",
   "workspace.attach": "session.write",
   "session.new": "session.write",
@@ -4040,7 +4278,8 @@ var COMMAND_SCOPES = {
   "permission.reply": "permission.write",
   "question.reply": "question.write",
   "question.reject": "question.write",
-  "model.select": "model.write"
+  "model.select": "model.write",
+  "provider.select": "model.write"
 };
 function scopeForCommand(type) {
   return COMMAND_SCOPES[type] ?? null;
@@ -4431,7 +4670,7 @@ var RemoteBridge = class {
 \x1B[1;33m\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\x1B[0m
 
 `);
-    } else if (envelope.type !== "host.get" && envelope.type !== "session.snapshot" && envelope.type !== "session.list" && envelope.type !== "model.list" && envelope.type !== "platform.list") {
+    } else if (envelope.type !== "host.get" && envelope.type !== "session.snapshot" && envelope.type !== "session.list" && envelope.type !== "model.list" && envelope.type !== "provider.list" && envelope.type !== "platform.list") {
       this.#output(`\x1B[2m  [remote] ${device.name ?? "device"} > ${envelope.type}\x1B[0m
 `);
     }
@@ -6398,8 +6637,8 @@ async function main() {
     }
     if (arguments_.prompt) {
       const state = controller.snapshot;
-      if (!state.platform || !state.primary || !state.secondary) {
-        throw new Error("First launch requires interactive platform, primary model, and secondary model selection");
+      if (!state.provider || !state.primary || !state.secondary) {
+        throw new Error("First launch requires interactive provider, primary model, and secondary model selection");
       }
       const output = await controller.submitAndWait(arguments_.prompt);
       process.stdout.write(`${output}

@@ -149,34 +149,34 @@ var CuppetTuiPlugin = {
         onCancel: () => api.ui.dialog?.clear()
       }));
     };
-    const choosePlatform = async () => {
+    const chooseProvider = async () => {
       if (!api.ui.dialog || !api.ui.DialogSelect) {
-        api.ui.toast({ title: "Cuppet platform", variant: "warning", message: "The platform dialog is unavailable." });
+        api.ui.toast({ title: "Cuppet provider", variant: "warning", message: "The provider dialog is unavailable." });
         return;
       }
       try {
-        const state = await client.call("platform.list");
+        const state = await client.call("provider.list");
         api.ui.dialog.replace(() => api.ui.DialogSelect({
-          title: "Choose Cuppet platform",
-          placeholder: "Search platforms",
+          title: "Choose Cuppet provider",
+          placeholder: "Search providers",
           current: state.selected,
           options: state.options.map((option) => ({
             title: option.label,
             value: option.value,
             description: option.description,
-            footer: `${option.models} models${option.connected ? " \xB7 connected" : ""}`
+            footer: `${option.models} models${option.supported === false ? " \xB7 not coding-capable" : ""}${option.connected ? " \xB7 connected" : ""}`
           })),
           onSelect: (option) => {
             api.ui.dialog?.clear();
-            void client.call("platform.select", { platform: option.value }).then(() => {
+            void client.call("provider.select", { provider: option.value }).then(() => {
               api.ui.toast({
-                title: "Cuppet platform",
+                title: "Cuppet provider",
                 variant: "success",
                 message: `${option.title} selected. Choose the foreground model.`
               });
               api.keymap.dispatchCommand("model.list");
             }).catch((error) => api.ui.toast({
-              title: "Cuppet platform",
+              title: "Cuppet provider",
               variant: "error",
               message: error instanceof Error ? error.message : String(error)
             }));
@@ -184,7 +184,7 @@ var CuppetTuiPlugin = {
         }));
       } catch (error) {
         api.ui.toast({
-          title: "Cuppet platform",
+          title: "Cuppet provider",
           variant: "error",
           message: error instanceof Error ? error.message : String(error)
         });
@@ -454,12 +454,12 @@ var CuppetTuiPlugin = {
         {
           name: "cuppet.platform",
           title: "Choose Cuppet platform",
-          desc: "Choose Anthropic, OpenAI, Google, OpenCode, or Vertex AI",
+          desc: "Choose a provider from OpenCode's live catalog",
           category: "Cuppet",
           namespace: "palette",
           slashName: "platform",
           slashAliases: ["login"],
-          run: choosePlatform
+          run: chooseProvider
         },
         {
           name: "cuppet.model",
@@ -601,7 +601,7 @@ function formatStatus(value) {
   const global = record(tst.global);
   const graph = record(tst.graph);
   const progress = record(graph.progress);
-  const platform = platformName(stringValue(status.platform) ?? "not selected");
+  const platform = stringValue(status.providerLabel) ?? platformName(stringValue(status.provider) ?? stringValue(status.platform) ?? "not selected");
   const sessionTitle = stringValue(session.title);
   const running = booleanValue(foreground.running) ? "running" : "idle";
   const steps = numberValue(foreground.steps);
@@ -729,7 +729,9 @@ function shorten(value, width) {
   return value.length <= width ? value : `${value.slice(0, width - 1)}\u2026`;
 }
 function platformName(value) {
-  return { vertex: "Vertex AI", openai: "OpenAI", anthropic: "Anthropic", google: "Google", opencode: "OpenCode" }[value] ?? value;
+  const known = { vertex: "Vertex AI", openai: "OpenAI", anthropic: "Anthropic", google: "Google", opencode: "OpenCode" }[value];
+  if (known) return known;
+  return value.split(/[-_.\s]+/).filter(Boolean).map((word) => ({ ai: "AI", api: "API" })[word.toLowerCase()] ?? `${word[0].toUpperCase()}${word.slice(1)}`).join(" ");
 }
 function providerName(value) {
   return {
@@ -739,7 +741,7 @@ function providerName(value) {
     anthropic: "Anthropic",
     google: "Google",
     opencode: "OpenCode"
-  }[value] ?? value;
+  }[value] ?? platformName(value);
 }
 function modelSummary(value) {
   const model = record(value);

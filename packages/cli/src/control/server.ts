@@ -3,10 +3,8 @@ import { chmod, mkdir, unlink } from 'node:fs/promises'
 import { createServer, type Server, type Socket } from 'node:net'
 
 import type { CuppetController } from '../controller.js'
-import { ControlRouter } from './router.js'
-import { PLATFORM_OPTIONS } from '../platforms.js'
+import { ControlRouter, providerState } from './router.js'
 import type { RuntimePaths } from '../runtime/paths.js'
-import type { Platform } from '../types.js'
 
 const MAX_LINE_BYTES = 256 * 1024
 
@@ -149,11 +147,11 @@ export class CuppetControlServer {
     switch (method) {
       case 'status': return this.#controller.status()
       case 'doctor': return this.#controller.doctor()
-      case 'platform.list': return platformState(this.#controller)
+      case 'platform.list': return providerState(this.#controller)
       case 'platform.select': {
-        const platform = platformParam(params.platform)
-        await this.#controller.selectPlatform(platform)
-        return platformState(this.#controller)
+        const provider = providerParam(params.provider ?? params.platform)
+        await this.#controller.selectProvider(provider)
+        return providerState(this.#controller)
       }
       case 'background.status': return this.#controller.snapshot.background ?? { paused: true }
       case 'background.set': {
@@ -204,17 +202,6 @@ export class CuppetControlServer {
   }
 }
 
-function platformState(controller: CuppetController): Record<string, unknown> {
-  return {
-    selected: controller.snapshot.platform,
-    options: PLATFORM_OPTIONS.map((option) => ({
-      ...option,
-      models: controller.modelsForPlatform(option.value, 'primary').length,
-      connected: controller.integrationsForPlatform(option.value).some((integration) => integration.connections.length > 0),
-    })),
-  }
-}
-
 export function createControlAddress(paths: RuntimePaths): ControlAddress {
   return { socket: `${paths.runtime}/control.sock`, token: randomBytes(32).toString('base64url') }
 }
@@ -242,9 +229,7 @@ function memoryScopeParam(value: unknown): 'project' | 'global' {
   throw new Error('memory remember scope must be project or global')
 }
 
-function platformParam(value: unknown): Platform {
-  if (value === 'anthropic' || value === 'openai' || value === 'google' || value === 'opencode' || value === 'vertex') {
-    return value
-  }
-  throw new Error('platform must be anthropic, openai, google, opencode, or vertex')
+function providerParam(value: unknown): string {
+  if (typeof value === 'string' && value.trim()) return value.trim()
+  throw new Error('provider is required')
 }

@@ -64,6 +64,7 @@ test('legacy Vertex selections migrate to the live OpenCode provider and use the
 
   assert.deepEqual(controller.snapshot.primary, { providerID: 'google-vertex', modelID: 'gemini-test' })
   assert.deepEqual(controller.snapshot.secondary, { providerID: 'google-vertex', modelID: 'gemini-test' })
+  assert.equal(preferencesValue.provider, 'vertex')
   assert.deepEqual(preferencesValue.primary, controller.snapshot.primary)
   assert.deepEqual(
     controller.modelsForPlatform('vertex', 'primary').map((item) => item.modelID),
@@ -84,12 +85,96 @@ test('legacy Vertex selections migrate to the live OpenCode provider and use the
   await controller.close()
 })
 
+test('live providers, including NVIDIA and unknown future IDs, switch and persist without provider plumbing', async () => {
+  let preferencesValue: Preferences = {
+    schema: 1,
+    provider: 'future-provider',
+    backgroundPaused: true,
+    lastSessionByProject: {},
+  }
+  const gateway = {
+    async listModels() {
+      return [
+        model('future-provider', 'future-coder', true, ['text'], ['text']),
+        model('nvidia', 'nim-coder', true, ['text'], ['text']),
+        model('nvidia', 'nim-image', true, ['image'], ['image']),
+        model('nvidia', 'nim-no-tools', false, ['text'], ['text']),
+        model('google-vertex', 'vertex-coder', true, ['text'], ['text']),
+        model('google-vertex-anthropic', 'vertex-anthropic-coder', true, ['text'], ['text']),
+        model('azure', 'azure-coder', true, ['text'], ['text']),
+        model('openai', 'openai-coder', true, ['text'], ['text']),
+      ]
+    },
+    async listIntegrations(): Promise<IntegrationInfo[]> {
+      return [
+        integration('future-provider', 'Future Provider'),
+        integration('nvidia', 'NVIDIA'),
+        integration('google-vertex', 'Vertex'),
+        integration('google-vertex-anthropic', 'Vertex Anthropic'),
+        integration('azure', 'Azure'),
+        integration('openai', 'OpenAI'),
+      ]
+    },
+    onEvent() { return () => undefined },
+    startEvents() {},
+    async close() {},
+  } as unknown as OpenCodeGateway
+  const preferences = {
+    get value() { return structuredClone(preferencesValue) },
+    async update(change: Partial<Omit<Preferences, 'schema'>>) {
+      preferencesValue = { ...preferencesValue, ...change }
+      return structuredClone(preferencesValue)
+    },
+    async setLastSession() {},
+  } as unknown as PreferenceStore
+  const controller = new CuppetController({
+    gateway,
+    preferences,
+    paths: { projectID: 'project', projectRealpath: process.cwd() } as RuntimePaths,
+    assets: {} as RuntimeAssets,
+    interactive: true,
+  })
+
+  await controller.initialize()
+  const catalog = controller.providerCatalog()
+  assert.ok(catalog.some((provider) => provider.id === 'future-provider'))
+  assert.ok(catalog.some((provider) => provider.id === 'nvidia'))
+  assert.equal(catalog.find((provider) => provider.id === 'vertex')?.specialization, 'vertex')
+  assert.deepEqual(
+    controller.modelsForProvider('nvidia', 'primary').map((item) => item.modelID),
+    ['nim-coder'],
+  )
+  assert.deepEqual(
+    controller.modelsForProvider('vertex', 'primary').map((item) => `${item.providerID}/${item.modelID}`),
+    ['google-vertex/vertex-coder', 'google-vertex-anthropic/vertex-anthropic-coder'],
+  )
+  assert.deepEqual(
+    controller.modelsForProvider('openai', 'primary').map((item) => `${item.providerID}/${item.modelID}`),
+    ['azure/azure-coder', 'openai/openai-coder'],
+  )
+
+  await controller.selectProvider('nvidia')
+  assert.equal(controller.snapshot.provider, 'nvidia')
+  assert.equal(preferencesValue.provider, 'nvidia')
+  assert.deepEqual(controller.snapshot.primary, { providerID: 'nvidia', modelID: 'nim-coder' })
+  await assert.rejects(
+    controller.selectModel('primary', { providerID: 'nvidia', modelID: 'nim-image' }),
+    /does not support text coding tools/,
+  )
+
+  await controller.selectProvider('future-provider')
+  assert.equal(controller.snapshot.provider, 'future-provider')
+  assert.equal(preferencesValue.provider, 'future-provider')
+  await controller.close()
+})
+
 function model(
   providerID: string,
   modelID: string,
   tools: boolean,
   input: string[],
   output: string[],
+  streaming = true,
 ): ModelInfo {
   return {
     providerID,
@@ -101,8 +186,12 @@ function model(
     status: 'active',
     inputCost: 1,
     outputCost: 1,
-    capabilities: { tools, input, output },
+    capabilities: { tools, streaming, input, output },
   }
+}
+
+function integration(id: string, name: string): IntegrationInfo {
+  return { id, name, methods: [], connections: [] }
 }
 
 function session(selected: ModelRef): SessionInfo {

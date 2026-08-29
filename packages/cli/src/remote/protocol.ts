@@ -87,6 +87,7 @@ export const COMMAND_SCOPES: Record<string, RemoteScope | null> = {
   'permission.list': 'session.read',
   'question.list': 'session.read',
   'model.list': 'session.read',
+  'provider.list': 'session.read',
   'agent.mode.get': 'session.read',
   'workspace.attach': 'session.write',
   'session.new': 'session.write',
@@ -102,6 +103,7 @@ export const COMMAND_SCOPES: Record<string, RemoteScope | null> = {
   'question.reply': 'question.write',
   'question.reject': 'question.write',
   'model.select': 'model.write',
+  'provider.select': 'model.write',
 }
 
 export function scopeForCommand(type: string): RemoteScope | null {

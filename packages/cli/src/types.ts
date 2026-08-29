@@ -4,7 +4,32 @@ export type ModelRef = {
   variant?: string | undefined
 }
 
-export type Platform = 'anthropic' | 'openai' | 'google' | 'opencode' | 'vertex'
+/** OpenCode provider identifiers are runtime data, not a closed Cuppet enum. */
+export type ProviderID = string
+export type ProviderId = ProviderID
+
+/** @deprecated Use ProviderID. Kept as a source-compatible type alias. */
+export type Platform = ProviderID
+
+export type ProviderSpecialization = 'vertex'
+
+export type ProviderCapabilities = {
+  chat: boolean
+  streaming: boolean
+  tools: boolean
+  codingAgent: boolean
+}
+
+export type ProviderDescriptor = {
+  id: ProviderID
+  label: string
+  description: string
+  integrationIds: readonly string[]
+  capabilities: ProviderCapabilities
+  modelCount: number
+  integrationCount: number
+  specialization?: ProviderSpecialization
+}
 
 export type ModelInfo = ModelRef & {
   name: string
@@ -16,6 +41,8 @@ export type ModelInfo = ModelRef & {
   outputCost: number
   capabilities: {
     tools: boolean
+    /** OpenCode's session API streams responses; false is an explicit opt-out. */
+    streaming?: boolean
     input: string[]
     output: string[]
   }

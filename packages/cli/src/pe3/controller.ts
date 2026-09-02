@@ -7,7 +7,11 @@ import {
   Pe3TaskRegistry,
   restorePersistedTaskAgents,
 } from './persistence.js'
-import { nativeRoutingPrompt, type NativeRoutingAttachment } from './native-envelope.js'
+import {
+  nativeRoutingPrompt,
+  nativeSemanticAttachmentText,
+  type NativeRoutingAttachment,
+} from './native-envelope.js'
 import {
   TaskSessionRouter,
   type PreparedTaskSession,
@@ -199,7 +203,10 @@ export class Pe3Controller extends CuppetController {
 
     let prepared: PreparedTaskSession
     try {
-      prepared = await this.#prepareTaskSession(nativeRoutingPrompt(prompt, attachments))
+      prepared = await this.#prepareTaskSession(
+        nativeRoutingPrompt(prompt, attachments),
+        nativeSemanticAttachmentText(attachments),
+      )
     } catch (error) {
       this.#taskSessions.restoreCheckpoint(before)
       await super.resume(source.id).catch(() => undefined)
@@ -317,7 +324,7 @@ export class Pe3Controller extends CuppetController {
     }
   }
 
-  async #prepareTaskSession(prompt: string): Promise<PreparedTaskSession> {
+  async #prepareTaskSession(prompt: string, semanticContext = ''): Promise<PreparedTaskSession> {
     const prepared = await this.#taskSessions.prepare(prompt, {
       current: () => {
         const session = this.snapshot.activeSession
@@ -333,7 +340,7 @@ export class Pe3Controller extends CuppetController {
       },
       evidence: () => this.#taskEvidence(),
       localize: (sessionID, value) => this.#taskLocalizer.locate(sessionID, value),
-    })
+    }, { semanticContext })
     return this.#withRestoredRefreshGuard(prepared)
   }
 

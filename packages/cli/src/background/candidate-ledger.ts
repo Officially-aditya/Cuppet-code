@@ -130,25 +130,26 @@ export class CandidateLedger {
     entry.claim = claim
     entry.last_seen = Math.max(entry.last_seen, Math.max(0, Math.floor(observation.timestampMs)))
 
-    if (observation.relation === 'contradiction') {
-      entry.contradiction_count = saturatingIncrement(entry.contradiction_count)
-    } else {
-      entry.support_count = saturatingIncrement(entry.support_count)
-      if (observation.relation === 'correction') {
-        entry.correction_count = saturatingIncrement(entry.correction_count)
-        // An explicit correction resolves one previously-recorded conflict
-        // instead of making a claim permanently impossible to recover.
-        entry.contradiction_count = Math.max(0, entry.contradiction_count - 1)
-      }
-      if (observation.explicitUser) {
-        entry.explicit_user_count = saturatingIncrement(entry.explicit_user_count)
-      }
-      if (observation.downstreamVerified) {
-        entry.downstream_verification_count = saturatingIncrement(entry.downstream_verification_count)
-      }
-    }
-
+    // Canonicalization alone is never evidence. Only user-authored or
+    // verifier-backed sources are allowed to change admission counters.
     if (observation.trustedSupport) {
+      if (observation.relation === 'contradiction') {
+        entry.contradiction_count = saturatingIncrement(entry.contradiction_count)
+      } else {
+        entry.support_count = saturatingIncrement(entry.support_count)
+        if (observation.relation === 'correction') {
+          entry.correction_count = saturatingIncrement(entry.correction_count)
+          // A correction can resolve one earlier conflict instead of leaving a
+          // claim permanently blocked after the user clarifies it.
+          entry.contradiction_count = Math.max(0, entry.contradiction_count - 1)
+        }
+        if (observation.explicitUser) {
+          entry.explicit_user_count = saturatingIncrement(entry.explicit_user_count)
+        }
+        if (observation.downstreamVerified) {
+          entry.downstream_verification_count = saturatingIncrement(entry.downstream_verification_count)
+        }
+      }
       pushUniqueBounded(entry.session_refs, identityRef(observation.sessionID), MAX_IDENTITY_REFS)
       pushUniqueBounded(entry.project_refs, identityRef(observation.projectID), MAX_IDENTITY_REFS)
     }

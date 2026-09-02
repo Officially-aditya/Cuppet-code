@@ -67,7 +67,7 @@ function semanticRouter(): TaskSessionRouter {
   return new TaskSessionRouter(undefined, { semantic: new SemanticTaskRouter(provider) })
 }
 
-function adapterHarness(): TaskSessionAdapter & { currentID?: string } {
+function adapterHarness(): TaskSessionAdapter & { readonly currentID: string | undefined } {
   let currentID: string | undefined
   let created = 0
   return {

@@ -32,11 +32,17 @@ export type Pe3BenchmarkTurnResult = {
   taskID: string
   prompt: string
   sessionID: string
+  canonicalSessionID: string
   action: 'continue' | 'create' | 'reactivate'
   expectedSwitch: boolean
   actualSwitch: boolean
   falseSplit: boolean
   missedSwitch: boolean
+  taskSeenBefore: boolean
+  taskIdentityCorrect: boolean
+  duplicateTaskAgent: boolean
+  missedReactivation: boolean
+  wrongReactivation: boolean
   semanticEscalated: boolean
   semantic?: Pe3SemanticTrace
   outcome: Required<Pe3TurnOutcome>
@@ -46,6 +52,7 @@ export type Pe3BenchmarkResult = {
   arm: Pe3BenchmarkArm
   turns: Pe3BenchmarkTurnResult[]
   metrics: {
+    turnSuccessRate: number
     taskSuccessRate: number
     firstPassSuccessRate: number
     retries: number
@@ -58,6 +65,11 @@ export type Pe3BenchmarkResult = {
     unnecessaryAgentSwitches: number
     missedTaskSwitches: number
     agentSwitches: number
+    taskIdentityAccuracy: number
+    taskIdentityErrors: number
+    duplicateTaskAgents: number
+    missedReactivations: number
+    wrongReactivations: number
     cacheReuseRatio: number
     semanticEscalations: number
     semanticEmbeddingLatencyMs: number
@@ -97,6 +109,9 @@ export async function runPe3BenchmarkArm(
   const detected = arm === 'detected' ? options.detectedRouter ?? new TaskSessionRouter() : undefined
   const detectedHarness = detected ? adapterHarness() : undefined
   const oracleSessions = new Map<string, string>()
+  const canonicalSessions = new Map<string, string>()
+  const sessionOwners = new Map<string, string>()
+  const seenSessions = new Set<string>()
   let oracleCreated = 0
   const fixedSession = 'session-1'
   const results: Pe3BenchmarkTurnResult[] = []
@@ -149,20 +164,43 @@ export async function runPe3BenchmarkArm(
     const actualSwitch = previousSession !== undefined && sessionID !== previousSession
     const falseSplit = previousTask !== undefined && turn.taskID === previousTask && actualSwitch
     const missedSwitch = expectedSwitch && !actualSwitch
+    const knownCanonical = canonicalSessions.get(turn.taskID)
+    const taskSeenBefore = knownCanonical !== undefined
+    const priorOwner = sessionOwners.get(sessionID)
+    const canonicalSessionID = knownCanonical ?? sessionID
+    const taskIdentityCorrect = taskSeenBefore
+      ? sessionID === canonicalSessionID
+      : priorOwner === undefined || priorOwner === turn.taskID
+    const duplicateTaskAgent = taskSeenBefore
+      && sessionID !== canonicalSessionID
+      && !seenSessions.has(sessionID)
+    const missedReactivation = taskSeenBefore && expectedSwitch && sessionID !== canonicalSessionID
+    const wrongReactivation = taskSeenBefore && action === 'reactivate' && sessionID !== canonicalSessionID
+
+    if (!taskSeenBefore) canonicalSessions.set(turn.taskID, sessionID)
+    if (!priorOwner) sessionOwners.set(sessionID, turn.taskID)
+
     results.push({
       index,
       taskID: turn.taskID,
       prompt: turn.prompt,
       sessionID,
+      canonicalSessionID,
       action,
       expectedSwitch,
       actualSwitch,
       falseSplit,
       missedSwitch,
+      taskSeenBefore,
+      taskIdentityCorrect,
+      duplicateTaskAgent,
+      missedReactivation,
+      wrongReactivation,
       semanticEscalated,
       ...(semantic ? { semantic } : {}),
       outcome: normalizeOutcome(turn.outcome),
     })
+    seenSessions.add(sessionID)
     previousTask = turn.taskID
     previousSession = sessionID
   }
@@ -214,8 +252,14 @@ function summarize(turns: Pe3BenchmarkTurnResult[]): Pe3BenchmarkResult['metrics
   const cachedInput = sum(outcomes, 'cachedInput')
   const uncachedInput = sum(outcomes, 'uncachedInput')
   const totalInput = cachedInput + uncachedInput
+  const finalOutcomeByTask = new Map<string, Required<Pe3TurnOutcome>>()
+  for (const turn of turns) finalOutcomeByTask.set(turn.taskID, turn.outcome)
+  const taskOutcomes = [...finalOutcomeByTask.values()]
+  const successfulTasks = taskOutcomes.filter((outcome) => outcome.success).length
+  const identityErrors = turns.filter((turn) => !turn.taskIdentityCorrect).length
   return {
-    taskSuccessRate: turns.length > 0 ? successes / turns.length : 0,
+    turnSuccessRate: turns.length > 0 ? successes / turns.length : 0,
+    taskSuccessRate: taskOutcomes.length > 0 ? successfulTasks / taskOutcomes.length : 0,
     firstPassSuccessRate: turns.length > 0 ? firstPasses / turns.length : 0,
     retries: sum(outcomes, 'retries'),
     staleContextIncidents: outcomes.filter((outcome) => outcome.staleContextIncident).length,
@@ -227,6 +271,11 @@ function summarize(turns: Pe3BenchmarkTurnResult[]): Pe3BenchmarkResult['metrics
     unnecessaryAgentSwitches: turns.filter((turn) => turn.falseSplit).length,
     missedTaskSwitches: turns.filter((turn) => turn.missedSwitch).length,
     agentSwitches: turns.filter((turn) => turn.actualSwitch).length,
+    taskIdentityAccuracy: turns.length > 0 ? (turns.length - identityErrors) / turns.length : 0,
+    taskIdentityErrors: identityErrors,
+    duplicateTaskAgents: turns.filter((turn) => turn.duplicateTaskAgent).length,
+    missedReactivations: turns.filter((turn) => turn.missedReactivation).length,
+    wrongReactivations: turns.filter((turn) => turn.wrongReactivation).length,
     cacheReuseRatio: totalInput > 0 ? cachedInput / totalInput : 0,
     semanticEscalations: turns.filter((turn) => turn.semanticEscalated).length,
     semanticEmbeddingLatencyMs: turns.reduce((total, turn) => total + (turn.semantic?.embeddingLatencyMs ?? 0), 0),

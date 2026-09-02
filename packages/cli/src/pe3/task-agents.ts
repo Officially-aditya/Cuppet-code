@@ -172,6 +172,17 @@ export class TaskAgentRouter {
     return cloneAgent(state) as TaskAgentState
   }
 
+  recordSessionEvidence(sessionID: string, evidence: TaskAgentEvidence): TaskAgentState | undefined {
+    const state = this.#agents.get(agentID(sessionID))
+    if (!state) return undefined
+    this.#mergeObservedEvidence(state, evidence)
+    return cloneAgent(state) as TaskAgentState
+  }
+
+  acknowledgeSessionRefresh(sessionID: string, paths: Iterable<string>): void {
+    this.acknowledgeRefresh(agentID(sessionID), paths)
+  }
+
   route(prompt: string, evidence: TaskAgentEvidence = {}): TaskRoute {
     const active = this.#activeID ? this.#agents.get(this.#activeID) : undefined
     if (!active) {
@@ -182,10 +193,6 @@ export class TaskAgentRouter {
       }
     }
 
-    // Only observed active/tool evidence is allowed to strengthen the current
-    // task before the routing decision. Prompt-localized graph hits describe
-    // the *incoming request* and are therefore query evidence, not active-task
-    // evidence until the turn is actually committed to an agent.
     this.#mergeObservedEvidence(active, evidence)
     const currentAffinity = affinityFor(active, prompt, evidence)
     const normalizedPrompt = normalizeText(prompt)
@@ -202,9 +209,6 @@ export class TaskAgentRouter {
       }
     }
 
-    // An explicit return to a known dormant task is stronger task identity
-    // evidence than incidental path overlap on the currently active task. A
-    // task may touch another task's file without taking ownership of it.
     if (explicitReturn && dormant) {
       return {
         action: 'reactivate',
@@ -215,9 +219,6 @@ export class TaskAgentRouter {
       }
     }
 
-    // Explicit task-boundary language must be evaluated before weak lexical
-    // overlap. Generic words such as "src" or "export" are not enough to
-    // keep an explicitly separate task on a contaminated session.
     if (!explicitSwitch && isStrongMatch(currentAffinity)) {
       return {
         action: 'continue',
@@ -338,7 +339,6 @@ export class TaskAgentRouter {
   }
 }
 
-/** Compact semantic identity for a task. It intentionally excludes transcript text. */
 export function taskFingerprintText(agent: TaskAgentState): string {
   const paths = strongest(agent.fingerprint.paths, 10)
   const symbols = strongest(agent.fingerprint.symbols, 10)
@@ -384,10 +384,6 @@ function affinityFor(agent: TaskAgentState, prompt: string, evidence: TaskAgentE
 
 function isStrongMatch(affinity: TaskAffinity): boolean {
   if (affinity.pathOverlap > 0 || affinity.symbolOverlap > 0) return true
-  // Raw term counts are deliberately insufficient: two generic words from a
-  // single prompt (for example "service" and "retry") must not suppress the
-  // semantic ambiguity band. Repeated/reinforced lexical identity can still
-  // stay on the zero-model hot path once its fingerprint weight is strong.
   return affinity.weightedOverlap >= STRONG_LEXICAL_WEIGHT
     && (affinity.termOverlap >= 3 || affinity.lexicalRatio >= 0.6)
 }
@@ -406,29 +402,17 @@ function isStrongMismatch(
   ], MAX_PATHS)
   const agentPaths = strongValues(agent.fingerprint.paths, 0.35)
 
-  // Concrete overlap is stronger evidence than wording alone. Preserve the
-  // active cache when the new request still names/localizes to the same file
-  // or symbol.
   if (affinity.pathOverlap > 0 || affinity.symbolOverlap > 0) return false
 
-  // Graph-localized paths are allowed to establish a natural boundary without
-  // magic wording, but only when both sides have concrete task identity.
   const disjointConcretePaths = promptPaths.length > 0 && agentPaths.length > 0
   if (disjointConcretePaths && promptTerms.length >= 2) return true
 
   if (explicitSwitch) {
-    // With no concrete path evidence, explicit boundary language can still
-    // split a task, but only when lexical affinity is weak. A single generic
-    // shared term should not neutralize "separately"; a genuinely similar
-    // prompt should remain on the current task.
     return promptTerms.length >= 2
       && affinity.termOverlap <= 1
       && affinity.lexicalRatio < 0.34
   }
 
-  // No explicit switch and no disjoint concrete working set means ambiguity.
-  // The session router may escalate this narrow band to local embeddings; if
-  // that layer is unavailable or low-confidence, staying active remains safe.
   return false
 }
 
@@ -483,10 +467,6 @@ function commitPromptFingerprint(agent: TaskAgentState, prompt: string, evidence
   agent.fingerprint.revision += 1
 }
 
-function hasLocalization(evidence: TaskAgentEvidence): boolean {
-  return Boolean([...evidence.localizedPaths ?? []].length || [...evidence.localizedSymbols ?? []].length)
-}
-
 function emptyFingerprint(): TaskFingerprint {
   return { revision: 0, paths: [], symbols: [], terms: [] }
 }
@@ -513,8 +493,6 @@ function mergeFingerprintSignals(
     if (!value) continue
     const existing = target.find((signal) => signal.value === value)
     if (existing) {
-      // Repeated evidence asymptotically reinforces the signal without letting
-      // weak prompt mentions instantly outrank verified/touched activity.
       existing.weight = Math.min(1, Math.max(existing.weight, weight) + Math.min(existing.weight, weight) * 0.12)
       if (weight >= existing.weight || source === 'touched') existing.source = source
       existing.updatedAt = now

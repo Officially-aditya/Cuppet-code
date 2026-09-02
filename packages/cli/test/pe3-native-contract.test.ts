@@ -19,3 +19,26 @@ test('PE3 derivative applies persisted stale-path refresh guard before same-sess
   assert.match(patch, /current workspace truth/)
   assert.match(patch, /\.\.\.input\.parts/)
 })
+
+test('PE3 derivative routes supported attachments without copying payloads through control RPC', async () => {
+  const patch = await readFile('patches/opencode/0018-cuppet-pe3-attachment-routing.patch', 'utf8')
+
+  assert.match(patch, /attachments: envelope\.attachments/)
+  assert.match(patch, /value\.type === \"file\"/)
+  assert.match(patch, /MAX_ATTACHMENT_METADATA_BYTES/)
+  assert.doesNotMatch(patch, /attachments\.push\([^\n]*url/)
+
+  // A normal reroute reuses the exact source parts array for the target. A
+  // stale-task refresh may prepend one synthetic text part while retaining all
+  // original parts unchanged after it.
+  assert.match(patch, /const originalParts = input\.parts/)
+  assert.match(patch, /: originalParts/)
+  assert.match(patch, /\.\.\.originalParts/)
+  assert.match(patch, /sessionID: nativeRoute\.targetSessionID/)
+  assert.match(patch, /delete targetInput\.messageID/)
+
+  // The target prompt is marked by object identity so its immediate recursive
+  // invocation cannot ask PE3 to route the same request a second time.
+  assert.match(patch, /markCuppetNativeForward\(targetParts\)/)
+  assert.match(patch, /forwardedParts\.delete\(input\.parts\)/)
+})

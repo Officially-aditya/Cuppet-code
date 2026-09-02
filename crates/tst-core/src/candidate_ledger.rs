@@ -8,7 +8,7 @@ use std::fs;
 use std::path::Path;
 
 const LEDGER_SCHEMA_VERSION: u32 = 1;
-const DEFAULT_MAX_ENTRIES: usize = 512;
+pub const DEFAULT_MAX_ENTRIES: usize = 512;
 const MAX_SOURCE_REFS: usize = 8;
 const MAX_IDENTITY_REFS: usize = 16;
 const MAX_CLAIM_BYTES: usize = 600;
@@ -81,12 +81,6 @@ impl CandidateLedgerEntry {
 
     /// Deterministic admission score intended to feed, not replace,
     /// `MemoryRecord::is_promotable()`.
-    ///
-    /// A single model candidate remains at the normal 0.5 candidate score.
-    /// Explicit user evidence is strong enough for preferences, while repeated
-    /// independent support can lift other candidate kinds to the existing 0.8
-    /// threshold. Any unresolved contradiction caps the ledger contribution
-    /// below that threshold.
     pub fn admission_score(&self, now_ms: u64) -> f32 {
         let mut score = 0.5_f32;
         if self.explicit_user_count > 0 {
@@ -114,8 +108,6 @@ impl CandidateLedgerEntry {
             score -= (self.contradiction_count.saturating_sub(1) as f32 * 0.1).min(0.29);
         }
 
-        // Old, weak ledger candidates fade without changing their auditable
-        // counters. Strong evidence remains available until normal compaction.
         let age_days = now_ms.saturating_sub(self.last_seen) as f32 / 86_400_000.0;
         if age_days > 30.0
             && self.explicit_user_count == 0
@@ -194,68 +186,68 @@ impl CandidateLedger {
         self.entries.get(&ledger_key(claim, kind))
     }
 
-    pub fn observe(&mut self, observation: CandidateObservation) -> &CandidateLedgerEntry {
+    pub fn observe(&mut self, observation: CandidateObservation) -> CandidateLedgerEntry {
         let claim = bounded_text(&observation.claim, MAX_CLAIM_BYTES);
         let key = ledger_key(&claim, &observation.kind);
         let session_ref = identity_hash(&observation.session_id);
         let project_ref = observation.project_id.as_deref().map(identity_hash);
         let source_ref = bounded_text(&observation.source_ref, MAX_SOURCE_REF_BYTES);
 
-        let entry = self.entries.entry(key.clone()).or_insert_with(|| CandidateLedgerEntry {
-            claim: claim.clone(),
-            kind: observation.kind.clone(),
-            support_count: 0,
-            explicit_user_count: 0,
-            correction_count: 0,
-            session_count: 0,
-            project_count: 0,
-            contradiction_count: 0,
-            downstream_verification_count: 0,
-            last_seen: observation.timestamp_ms,
-            source_refs: Vec::new(),
-            session_refs: Vec::new(),
-            project_refs: Vec::new(),
-        });
+        let observed = {
+            let entry = self.entries.entry(key.clone()).or_insert_with(|| CandidateLedgerEntry {
+                claim: claim.clone(),
+                kind: observation.kind.clone(),
+                support_count: 0,
+                explicit_user_count: 0,
+                correction_count: 0,
+                session_count: 0,
+                project_count: 0,
+                contradiction_count: 0,
+                downstream_verification_count: 0,
+                last_seen: observation.timestamp_ms,
+                source_refs: Vec::new(),
+                session_refs: Vec::new(),
+                project_refs: Vec::new(),
+            });
 
-        entry.claim = claim;
-        entry.last_seen = entry.last_seen.max(observation.timestamp_ms);
-        match observation.signal {
-            CandidateSignal::Support => {
-                entry.support_count = entry.support_count.saturating_add(1);
+            entry.claim = claim;
+            entry.last_seen = entry.last_seen.max(observation.timestamp_ms);
+            match observation.signal {
+                CandidateSignal::Support => {
+                    entry.support_count = entry.support_count.saturating_add(1);
+                }
+                CandidateSignal::Correction => {
+                    entry.support_count = entry.support_count.saturating_add(1);
+                    entry.correction_count = entry.correction_count.saturating_add(1);
+                }
+                CandidateSignal::Contradiction => {
+                    entry.contradiction_count = entry.contradiction_count.saturating_add(1);
+                }
+                CandidateSignal::DownstreamVerification => {
+                    entry.support_count = entry.support_count.saturating_add(1);
+                    entry.downstream_verification_count =
+                        entry.downstream_verification_count.saturating_add(1);
+                }
             }
-            CandidateSignal::Correction => {
-                entry.support_count = entry.support_count.saturating_add(1);
-                entry.correction_count = entry.correction_count.saturating_add(1);
+            if observation.provenance == Provenance::ExplicitUser
+                && observation.signal != CandidateSignal::Contradiction
+            {
+                entry.explicit_user_count = entry.explicit_user_count.saturating_add(1);
             }
-            CandidateSignal::Contradiction => {
-                entry.contradiction_count = entry.contradiction_count.saturating_add(1);
+            push_unique_bounded(&mut entry.session_refs, session_ref, MAX_IDENTITY_REFS);
+            entry.session_count = entry.session_refs.len() as u32;
+            if let Some(project_ref) = project_ref {
+                push_unique_bounded(&mut entry.project_refs, project_ref, MAX_IDENTITY_REFS);
+                entry.project_count = entry.project_refs.len() as u32;
             }
-            CandidateSignal::DownstreamVerification => {
-                entry.support_count = entry.support_count.saturating_add(1);
-                entry.downstream_verification_count =
-                    entry.downstream_verification_count.saturating_add(1);
+            if !source_ref.is_empty() {
+                push_unique_bounded(&mut entry.source_refs, source_ref, MAX_SOURCE_REFS);
             }
-        }
-        if observation.provenance == Provenance::ExplicitUser
-            && observation.signal != CandidateSignal::Contradiction
-        {
-            entry.explicit_user_count = entry.explicit_user_count.saturating_add(1);
-        }
-        push_unique_bounded(&mut entry.session_refs, session_ref, MAX_IDENTITY_REFS);
-        entry.session_count = entry.session_refs.len() as u32;
-        if let Some(project_ref) = project_ref {
-            push_unique_bounded(&mut entry.project_refs, project_ref, MAX_IDENTITY_REFS);
-            entry.project_count = entry.project_refs.len() as u32;
-        }
-        if !source_ref.is_empty() {
-            push_unique_bounded(&mut entry.source_refs, source_ref, MAX_SOURCE_REFS);
-        }
+            entry.clone()
+        };
 
         self.enforce_bound();
-        // The just-observed entry can only be evicted when max_entries is zero,
-        // which `new` prevents. Stronger/older entries may win ties, so recover
-        // it defensively if a future ranking policy changes.
-        self.entries.get(&key).expect("observed ledger entry retained")
+        self.entries.get(&key).cloned().unwrap_or(observed)
     }
 
     /// Drops stale weak noise while retaining explicit, corrected, verified,

@@ -2,6 +2,7 @@ import {
   TaskAgentRouter,
   type TaskAffinity,
   type TaskAgentEvidence,
+  type TaskAgentRouterCheckpoint,
   type TaskAgentState,
   type TaskRoute,
 } from './task-agents.js'
@@ -61,18 +62,17 @@ export type TaskSessionRoutingStats = {
   lastReason?: string
 }
 
+export type TaskSessionRouterCheckpoint = {
+  router: TaskAgentRouterCheckpoint
+  stats: TaskSessionRoutingStats
+}
+
 export type TaskSessionRouterOptions = { semantic?: SemanticTaskRouter | false }
 
 export class TaskSessionRouter {
   readonly #router: TaskAgentRouter
   readonly #semantic: SemanticTaskRouter | undefined
-  readonly #stats: TaskSessionRoutingStats = {
-    sequence: 0, continuations: 0, created: 0, reactivated: 0, switches: 0,
-    localizationQueries: 0, localizationHits: 0, localizationDecisive: 0, localizationWeak: 0,
-    semanticEscalations: 0, semanticContinuations: 0, semanticCreated: 0, semanticReactivated: 0,
-    semanticFallbacks: 0, semanticFailures: 0, semanticPromptEmbeddings: 0, semanticAgentEmbeddings: 0,
-    semanticEmbeddingLatencyMs: 0, semanticEmbeddingLatencyMaxMs: 0,
-  }
+  #stats: TaskSessionRoutingStats = emptyRoutingStats()
 
   constructor(router = new TaskAgentRouter(), options: TaskSessionRouterOptions = {}) {
     this.#router = router
@@ -82,6 +82,18 @@ export class TaskSessionRouter {
   get active(): TaskAgentState | undefined { return this.#router.active }
   agents(): TaskAgentState[] { return this.#router.list() }
   stats(): TaskSessionRoutingStats { return { ...this.#stats } }
+
+  checkpoint(): TaskSessionRouterCheckpoint {
+    return {
+      router: this.#router.checkpoint(),
+      stats: this.stats(),
+    }
+  }
+
+  restoreCheckpoint(checkpoint: TaskSessionRouterCheckpoint): void {
+    this.#router.restoreCheckpoint(checkpoint.router)
+    this.#stats = { ...checkpoint.stats }
+  }
 
   bindSession(sessionID: string, evidence: TaskAgentEvidence = {}, descriptor = ''): TaskAgentState {
     const activated = this.#router.activate(taskAgentID(sessionID))
@@ -226,6 +238,15 @@ export class TaskSessionRouter {
   }
 }
 
+function emptyRoutingStats(): TaskSessionRoutingStats {
+  return {
+    sequence: 0, continuations: 0, created: 0, reactivated: 0, switches: 0,
+    localizationQueries: 0, localizationHits: 0, localizationDecisive: 0, localizationWeak: 0,
+    semanticEscalations: 0, semanticContinuations: 0, semanticCreated: 0, semanticReactivated: 0,
+    semanticFallbacks: 0, semanticFailures: 0, semanticPromptEmbeddings: 0, semanticAgentEmbeddings: 0,
+    semanticEmbeddingLatencyMs: 0, semanticEmbeddingLatencyMaxMs: 0,
+  }
+}
 function taskAgentID(sessionID: string): string { return `task:${sessionID}` }
 function withRefreshHint(prompt: string, paths: string[]): string {
   if (paths.length === 0) return prompt

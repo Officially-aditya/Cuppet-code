@@ -71,6 +71,12 @@ export type TaskRoute =
   | { action: 'reactivate'; agent: TaskAgentState; reason: string; affinity: TaskAffinity; refreshPaths: string[] }
   | { action: 'create'; reason: string; affinity: TaskAffinity }
 
+export type TaskAgentRouterCheckpoint = {
+  agents: TaskAgentState[]
+  activeID?: string
+  workspaceEpoch: number
+}
+
 export class TaskAgentRouter {
   readonly #agents = new Map<string, TaskAgentState>()
   readonly #now: () => number
@@ -89,6 +95,27 @@ export class TaskAgentRouter {
     return [...this.#agents.values()]
       .sort((left, right) => right.lastActiveAt - left.lastActiveAt)
       .map((agent) => cloneAgent(agent) as TaskAgentState)
+  }
+
+  checkpoint(): TaskAgentRouterCheckpoint {
+    return {
+      agents: [...this.#agents.values()].map((agent) => cloneAgent(agent) as TaskAgentState),
+      ...(this.#activeID ? { activeID: this.#activeID } : {}),
+      workspaceEpoch: this.#workspaceEpoch,
+    }
+  }
+
+  restoreCheckpoint(checkpoint: TaskAgentRouterCheckpoint): void {
+    this.#agents.clear()
+    for (const agent of checkpoint.agents) {
+      const restored = cloneAgent(agent) as TaskAgentState
+      restored.id = agentID(restored.sessionID)
+      this.#agents.set(restored.id, restored)
+    }
+    this.#workspaceEpoch = checkpoint.workspaceEpoch
+    this.#activeID = checkpoint.activeID && this.#agents.has(checkpoint.activeID)
+      ? checkpoint.activeID
+      : undefined
   }
 
   register(sessionID: string, prompt = '', evidence: TaskAgentEvidence = {}): TaskAgentState {

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { TaskAgentRouter } from '../src/pe3/task-agents.js'
 import { TaskSessionRouter, type TaskSessionAdapter } from '../src/pe3/session-router.js'
 
 test('failed NEW handoff can restore the source with no target fingerprint or switch telemetry', async () => {
@@ -80,6 +81,59 @@ test('committing a prepared checkpoint applies one routing transition without do
   assert.deepEqual(twice, once)
   assert.equal(once.switches, before.stats.switches + 1)
   assert.equal(router.active?.sessionID, provisional.sessionID)
+})
+
+test('committed target remains authoritative beyond the former 30 second handoff window', async () => {
+  let now = 1_000
+  const taskRouter = new TaskAgentRouter({ now: () => now })
+  const router = new TaskSessionRouter(taskRouter, { semantic: false })
+  const harness = adapterHarness()
+
+  const source = await router.prepare('fix auth parser in src/auth/parser.ts', harness.adapter)
+  const before = router.checkpoint()
+  const target = await router.prepare('implement weather parser in src/weather/parser.ts', harness.adapter)
+  const acceptedAndCommitted = router.checkpoint()
+  assert.equal(target.action, 'create')
+
+  router.restoreCheckpoint(before)
+  harness.select(source.sessionID)
+  router.restoreCheckpoint(acceptedAndCommitted)
+  harness.select(target.sessionID)
+
+  now += 31_000
+  router.noteSessionObservedPaths(target.sessionID, ['src/weather/forecast.ts'])
+  router.noteSessionWorkspaceMutation(target.sessionID, ['src/weather/parser.ts'])
+
+  const active = router.active
+  assert.equal(active?.sessionID, target.sessionID)
+  assert.ok(active?.activePaths.includes('src/weather/forecast.ts'))
+  assert.ok(active?.touchedPaths.includes('src/weather/parser.ts'))
+  assert.equal(router.stats().switches, before.stats.switches + 1)
+})
+
+test('runtime evidence after commit survives a later target turn failure without rolling back task identity', async () => {
+  const router = new TaskSessionRouter(undefined, { semantic: false })
+  const harness = adapterHarness()
+
+  const source = await router.prepare('fix auth parser in src/auth/parser.ts', harness.adapter)
+  const before = router.checkpoint()
+  const target = await router.prepare('implement report export in src/report/export.ts', harness.adapter)
+  const committed = router.checkpoint()
+  assert.equal(target.action, 'create')
+
+  router.restoreCheckpoint(before)
+  harness.select(source.sessionID)
+  router.restoreCheckpoint(committed)
+  harness.select(target.sessionID)
+
+  router.noteSessionObservedPaths(target.sessionID, ['src/report/schema.ts'])
+  router.noteSessionWorkspaceMutation(target.sessionID, ['src/report/export.ts'])
+
+  const afterFailure = router.agents().find((agent) => agent.sessionID === target.sessionID)
+  assert.equal(router.active?.sessionID, target.sessionID)
+  assert.ok(afterFailure?.activePaths.includes('src/report/schema.ts'))
+  assert.ok(afterFailure?.touchedPaths.includes('src/report/export.ts'))
+  assert.equal(router.agents().find((agent) => agent.sessionID === source.sessionID)?.sessionID, source.sessionID)
 })
 
 function adapterHarness(): {

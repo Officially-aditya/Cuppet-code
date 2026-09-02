@@ -11,6 +11,7 @@ test('launch-scoped control API authenticates and exposes diagnostics', async (t
   let selectedPlatform = 'openai'
   let nativeAgent = 'build'
   let autoMode = false
+  const nativeRoutes: Array<{ sessionID: string; prompt: string }> = []
   const controller = {
     async status() { return { product: 'Cuppet' } },
     async doctor() { return { healthy: true } },
@@ -26,6 +27,18 @@ test('launch-scoped control API authenticates and exposes diagnostics', async (t
       return platform === 'vertex' ? [{ id: 'google-vertex', connections: [{ type: 'provider' }] }] : []
     },
     async selectPlatform(platform: string) { selectedPlatform = platform },
+    async routeNativePrompt(sessionID: string, prompt: string) {
+      nativeRoutes.push({ sessionID, prompt })
+      return {
+        rerouted: true,
+        action: 'create',
+        sourceSessionID: sessionID,
+        targetSessionID: 'task-b',
+        reason: 'strong task mismatch',
+        sequence: 2,
+        refreshPaths: [],
+      }
+    },
   } as never
   const address = createControlAddress(paths)
   let remoteRunning = false
@@ -71,6 +84,19 @@ test('launch-scoped control API authenticates and exposes diagnostics', async (t
     assert.deepEqual(await client.call('remote.start'), { running: true, hostId: 'host_test', deviceName: 'test-host' })
     assert.deepEqual(await client.call('remote.status'), { running: true, hostId: 'host_test', deviceName: 'test-host' })
     assert.deepEqual(await client.call('remote.stop'), { running: false })
+    assert.deepEqual(
+      await client.call('pe3.route-native', { sessionID: 'task-a', prompt: '  new task: billing retry  ' }),
+      {
+        rerouted: true,
+        action: 'create',
+        sourceSessionID: 'task-a',
+        targetSessionID: 'task-b',
+        reason: 'strong task mismatch',
+        sequence: 2,
+        refreshPaths: [],
+      },
+    )
+    assert.deepEqual(nativeRoutes, [{ sessionID: 'task-a', prompt: '  new task: billing retry  ' }])
     assert.equal((await stat(address.socket)).mode & 0o777, 0o600)
     await assert.rejects(() => new CuppetControlClient(address.socket, 'wrong').call('status'), /unauthorized/)
   } finally {

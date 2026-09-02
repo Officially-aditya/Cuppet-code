@@ -15,3 +15,66 @@ test('weak task terms decay and fingerprint collections stay bounded', () => {
   assert.ok(active.fingerprint.symbols.length <= 16)
   assert.equal(active.fingerprint.terms.some((signal) => signal.value === 'alpha'), false)
 })
+
+test('prompt path provenance upgrades to observed active evidence', () => {
+  const router = new TaskAgentRouter()
+  router.register('s1', 'inspect src/auth/token.ts')
+  assert.equal(pathSource(router, 'src/auth/token.ts'), 'prompt')
+
+  router.recordSessionEvidence('s1', { activePaths: ['src/auth/token.ts'] })
+
+  assert.equal(pathSource(router, 'src/auth/token.ts'), 'active')
+})
+
+test('prompt path provenance upgrades directly to touched evidence', () => {
+  const router = new TaskAgentRouter()
+  router.register('s1', 'inspect src/auth/token.ts')
+
+  router.recordSessionEvidence('s1', { touchedPaths: ['src/auth/token.ts'] })
+
+  assert.equal(pathSource(router, 'src/auth/token.ts'), 'touched')
+})
+
+test('observed active provenance upgrades to touched evidence', () => {
+  const router = new TaskAgentRouter()
+  router.register('s1', '', { activePaths: ['src/auth/token.ts'] })
+  assert.equal(pathSource(router, 'src/auth/token.ts'), 'active')
+
+  router.recordSessionEvidence('s1', { touchedPaths: ['src/auth/token.ts'] })
+
+  assert.equal(pathSource(router, 'src/auth/token.ts'), 'touched')
+})
+
+test('weaker later evidence cannot downgrade stronger touched provenance', () => {
+  const router = new TaskAgentRouter()
+  router.register('s1', '', { touchedPaths: ['src/auth/token.ts'] })
+  assert.equal(pathSource(router, 'src/auth/token.ts'), 'touched')
+
+  router.recordSessionEvidence('s1', { activePaths: ['src/auth/token.ts'] })
+  router.recordTurn('revisit src/auth/token.ts')
+
+  assert.equal(pathSource(router, 'src/auth/token.ts'), 'touched')
+})
+
+test('localized provenance upgrades to observed and prompt symbols upgrade to runtime symbols', () => {
+  const router = new TaskAgentRouter()
+  router.register('s1', 'inspect RefreshToken', { localizedPaths: ['src/auth/token.ts'] })
+  assert.equal(pathSource(router, 'src/auth/token.ts'), 'localized')
+  assert.equal(symbolSource(router, 'refreshtoken'), 'prompt')
+
+  router.recordSessionEvidence('s1', {
+    activePaths: ['src/auth/token.ts'],
+    recentSymbols: ['RefreshToken'],
+  })
+
+  assert.equal(pathSource(router, 'src/auth/token.ts'), 'active')
+  assert.equal(symbolSource(router, 'refreshtoken'), 'symbol')
+})
+
+function pathSource(router: TaskAgentRouter, path: string) {
+  return router.active?.fingerprint.paths.find((signal) => signal.value === path)?.source
+}
+
+function symbolSource(router: TaskAgentRouter, symbol: string) {
+  return router.active?.fingerprint.symbols.find((signal) => signal.value === symbol)?.source
+}

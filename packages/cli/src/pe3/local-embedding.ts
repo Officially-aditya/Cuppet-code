@@ -61,11 +61,21 @@ export class LocalTransformersEmbeddingProvider implements TaskEmbeddingProvider
   async embed(text: string): Promise<Float32Array> {
     const normalized = text.trim()
     if (!normalized) throw new Error('cannot embed an empty task description')
-    const extractor = await (this.#extractor ??= this.#createExtractor())
+    const extractor = await this.#getExtractor()
     const output = await extractor(normalized, { pooling: 'mean', normalize: true })
     const data = isArrayLike(output) ? output : output.data
     if (!data || data.length === 0) throw new Error('local embedding model returned no values')
     return Float32Array.from(data)
+  }
+
+  #getExtractor(): Promise<FeatureExtractor> {
+    if (this.#extractor) return this.#extractor
+    const pending = this.#createExtractor()
+    this.#extractor = pending
+    void pending.catch(() => {
+      if (this.#extractor === pending) this.#extractor = undefined
+    })
+    return pending
   }
 
   async #createExtractor(): Promise<FeatureExtractor> {

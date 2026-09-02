@@ -4,6 +4,7 @@ import {
   nativeRoutingPrompt,
   parseNativeRoutingAttachments,
 } from '../src/pe3/native-envelope.js'
+import { TaskAgentRouter } from '../src/pe3/task-agents.js'
 import { TaskSessionRouter, type TaskSessionAdapter } from '../src/pe3/session-router.js'
 
 test('bounded file metadata enriches routing identity without carrying payloads', () => {
@@ -20,6 +21,26 @@ test('bounded file metadata enriches routing identity without carrying payloads'
   assert.match(routed, /dashboard\.png image\/png/)
   assert.match(routed, /requirements\.pdf application\/pdf/)
   assert.doesNotMatch(routed, /data:|base64|https?:\/\//)
+})
+
+test('attachment MIME classes cannot become deterministic task paths', () => {
+  const router = new TaskAgentRouter()
+  router.register(
+    's1',
+    'inspect image/png and application/json while working in src/auth/token.ts',
+    {
+      activePaths: ['image/png', 'src/auth/token.ts'],
+      touchedPaths: ['application/json'],
+    },
+  )
+
+  const active = router.active
+  assert.ok(active)
+  assert.deepEqual(active.activePaths, ['src/auth/token.ts'])
+  assert.deepEqual(active.touchedPaths, [])
+  assert.equal(active.fingerprint.paths.some((signal) => signal.value === 'image/png'), false)
+  assert.equal(active.fingerprint.paths.some((signal) => signal.value === 'application/json'), false)
+  assert.equal(active.fingerprint.paths.some((signal) => signal.value === 'src/auth/token.ts'), true)
 })
 
 test('same-task attachment request preserves the active cache-friendly session', async () => {
@@ -53,6 +74,26 @@ test('clear disjoint attachment request can create a fresh task session', async 
   )
   const switched = await router.prepare(
     nativeRoutingPrompt('implement src/dashboard/view.ts from this screenshot', dashboard),
+    harness.adapter,
+  )
+
+  assert.equal(switched.action, 'create')
+  assert.notEqual(switched.sessionID, first.sessionID)
+  assert.equal(harness.created, 2)
+})
+
+test('application/json MIME overlap does not mask a real disjoint path switch', async () => {
+  const router = new TaskSessionRouter(undefined, { semantic: false })
+  const harness = adapterHarness()
+  const firstAttachment = [{ type: 'file' as const, filename: 'auth-response.json', mime: 'application/json' }]
+  const secondAttachment = [{ type: 'file' as const, filename: 'forecast.json', mime: 'application/json' }]
+
+  const first = await router.prepare(
+    nativeRoutingPrompt('fix auth parsing in src/auth/parser.ts', firstAttachment),
+    harness.adapter,
+  )
+  const switched = await router.prepare(
+    nativeRoutingPrompt('implement weather parsing in src/weather/parser.ts', secondAttachment),
     harness.adapter,
   )
 

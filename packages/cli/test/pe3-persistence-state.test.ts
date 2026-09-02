@@ -45,6 +45,33 @@ test('save-load-restore preserves validated rich task-agent routing state exactl
   }
 })
 
+test('corrected strongest fingerprint provenance survives save-load-restore', async () => {
+  const fixture = await fixtureDir()
+  try {
+    const path = 'src/auth/token.ts'
+    await mkdir(join(fixture.root, 'src/auth'), { recursive: true })
+    await writeFile(join(fixture.root, path), 'current\n')
+
+    const source = new TaskSessionRouter(undefined, { semantic: false })
+    source.bindSession('auth', {}, `inspect ${path}`)
+    assert.equal(source.active?.fingerprint.paths.find((signal) => signal.value === path)?.source, 'prompt')
+    source.noteSessionObservedPaths('auth', [path])
+    assert.equal(source.active?.fingerprint.paths.find((signal) => signal.value === path)?.source, 'active')
+    source.noteSessionWorkspaceMutation('auth', [path])
+    assert.equal(source.active?.fingerprint.paths.find((signal) => signal.value === path)?.source, 'touched')
+
+    const registry = new Pe3TaskRegistry(fixture.store, fixture.root)
+    await registry.save(source.agents(), 'auth')
+    const loaded = await registry.load(new Set(['auth']))
+    const restored = new TaskSessionRouter(undefined, { semantic: false })
+    restorePersistedTaskAgents(restored, loaded, 'auth')
+
+    assert.equal(restored.active?.fingerprint.paths.find((signal) => signal.value === path)?.source, 'touched')
+  } finally {
+    await fixture.cleanup()
+  }
+})
+
 test('offline invalidation survives hydration without replaying the invalidated path', async () => {
   const fixture = await fixtureDir()
   try {

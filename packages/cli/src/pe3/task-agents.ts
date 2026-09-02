@@ -6,6 +6,7 @@ const FINGERPRINT_DECAY = 0.96
 const MIN_FINGERPRINT_WEIGHT = 0.08
 const STRONG_LEXICAL_WEIGHT = 0.9
 const MIME_PATH = /^(?:application|audio|font|image|message|model|multipart|text|video)\/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,127}$/i
+const PATH_TOKEN = /(?:\.?\.?\/)?[A-Za-z0-9_.@-]+(?:\/[A-Za-z0-9_.@-]+)+(?:\.[A-Za-z0-9_-]+)?|[A-Za-z0-9_.@-]+\.(?:ts|tsx|js|jsx|rs|py|go|java|json|md|yaml|yml|toml|css|html)/g
 
 const CONTINUATION_CUES = ['also', 'that', 'those', 'the previous', 'same task', 'same issue', 'continue', 'keep going', 'update the tests', 'fix the tests', 'what about']
 const SWITCH_CUES = ['new task', 'separate task', 'separately', 'unrelated', 'instead', 'switch to', 'now build', 'now implement', 'move on to']
@@ -439,8 +440,8 @@ function cloneAgent(agent: TaskAgentState | undefined): TaskAgentState | undefin
 
 function emptyAffinity(): TaskAffinity { return { score: 0, pathOverlap: 0, symbolOverlap: 0, termOverlap: 0, lexicalRatio: 0, weightedOverlap: 0 } }
 function overlapCount(left: Set<string>, right: Set<string>): number { let count = 0; for (const value of left) if (right.has(value)) count += 1; return count }
-function extractTerms(value: string): string[] { const normalized = normalizeText(value); const terms = normalized.match(/[a-z0-9][a-z0-9_-]{2,}/g) ?? []; return boundedUnique(terms.filter((term) => !STOP_TERMS.has(term) && !looksLikePath(term)), MAX_TERMS) }
-function extractPaths(value: string): string[] { const matches = value.match(/(?:\.?\.?\/)?[A-Za-z0-9_.@-]+(?:\/[A-Za-z0-9_.@-]+)+(?:\.[A-Za-z0-9_-]+)?|[A-Za-z0-9_.@-]+\.(?:ts|tsx|js|jsx|rs|py|go|java|json|md|yaml|yml|toml|css|html)/g) ?? []; return boundedUnique(normalizePaths(matches), MAX_PATHS) }
+function extractTerms(value: string): string[] { const normalized = normalizeText(value.replace(PATH_TOKEN, ' ')); const terms = normalized.match(/[a-z0-9][a-z0-9_-]{2,}/g) ?? []; return boundedUnique(terms.filter((term) => !STOP_TERMS.has(term) && !looksLikePath(term)), MAX_TERMS) }
+function extractPaths(value: string): string[] { const matches = value.match(PATH_TOKEN) ?? []; return boundedUnique(normalizePaths(matches), MAX_PATHS) }
 function extractSymbols(value: string): string[] { const symbols = value.match(/\b(?:[A-Z][A-Za-z0-9]{2,}|[a-z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*)\b/g) ?? []; return boundedUnique(normalizeSymbols(symbols), MAX_SYMBOLS) }
 function normalizePaths(values: Iterable<string>): string[] { const output: string[] = []; for (const value of values) { let path = String(value).trim().replaceAll('\\', '/').replace(/^\.\//, ''); path = path.replace(/[),.;:'"\]}>]+$/g, ''); if (!path || path.startsWith('http://') || path.startsWith('https://') || path.length > 512 || looksLikeMimeType(path)) continue; output.push(path.toLowerCase()) } return output }
 function normalizeSymbols(values: Iterable<string>): string[] { return [...values].map((value) => String(value).trim().toLowerCase()).filter(Boolean) }

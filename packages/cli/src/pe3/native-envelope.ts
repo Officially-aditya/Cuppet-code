@@ -42,19 +42,21 @@ export function parseNativeRoutingAttachments(value: unknown): NativeRoutingAtta
 }
 
 /**
- * Build task-affinity text from bounded metadata only.
- *
- * This string is router/index input, never a replacement for the original
- * OpenCode prompt parts. Attachment URLs and payload bytes are intentionally
- * absent from this representation.
+ * Deterministic PE3 affinity is based only on user-authored task text.
+ * Attachment metadata stays structured in the native control envelope and is
+ * deliberately excluded from lexical/path extraction. This prevents generic
+ * MIME/category vocabulary from masking a real disjoint task switch.
  */
-export function nativeRoutingPrompt(prompt: string, attachments: readonly NativeRoutingAttachment[]): string {
-  if (attachments.length === 0) return prompt
-  const metadata = attachments.map((attachment) => {
+export function nativeRoutingPrompt(prompt: string, _attachments: readonly NativeRoutingAttachment[]): string {
+  return prompt
+}
+
+/** Bounded, payload-free metadata for semantic-only consumers. */
+export function nativeSemanticAttachmentText(attachments: readonly NativeRoutingAttachment[]): string {
+  return attachments.map((attachment) => {
     const filename = attachment.filename ? ` ${routingLabel(attachment.filename)}` : ''
     return `[attachment${filename} ${attachment.mime}]`
-  })
-  return [prompt, ...metadata].join('\n')
+  }).join('\n')
 }
 
 function routingLabel(value: string): string {

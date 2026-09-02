@@ -1,7 +1,7 @@
 diff --git a/packages/opencode/src/cuppet/pe3-route.ts b/packages/opencode/src/cuppet/pe3-route.ts
 --- a/packages/opencode/src/cuppet/pe3-route.ts
 +++ b/packages/opencode/src/cuppet/pe3-route.ts
-@@ -14,6 +14,7 @@ export type CuppetNativeRoute = {
+@@ -19,6 +19,7 @@
    sequence: number
    refreshPaths: string[]
    forwarded?: boolean
@@ -9,10 +9,7 @@ diff --git a/packages/opencode/src/cuppet/pe3-route.ts b/packages/opencode/src/c
  }
  
  type RoutingAttachment = {
-@@ -56,10 +57,41 @@ export async function routeCuppetNativePrompt(input: {
-     method: "pe3.route-native",
-     params: {
-       sessionID: input.sessionID,
+@@ -64,7 +65,38 @@
        prompt: envelope.prompt,
        attachments: envelope.attachments,
      },
@@ -52,7 +49,8 @@ diff --git a/packages/opencode/src/cuppet/pe3-route.ts b/packages/opencode/src/c
  }
  
  function routingEnvelope(parts: unknown[]): RoutingEnvelope | undefined {
-@@ -105,13 +136,13 @@ function callControl(
+@@ -105,12 +137,12 @@
+ function callControl(
    socketPath: string,
    request: Record<string, unknown>,
 -): Promise<CuppetNativeRoute | undefined> {
@@ -66,9 +64,7 @@ diff --git a/packages/opencode/src/cuppet/pe3-route.ts b/packages/opencode/src/c
        if (settled) return
        settled = true
        clearTimeout(timer)
-       socket?.destroy()
-       resolve(value)
-@@ -144,10 +175,7 @@ function callControl(
+@@ -147,10 +179,7 @@
            ok?: boolean
            result?: unknown
          }
@@ -83,7 +79,8 @@ diff --git a/packages/opencode/src/cuppet/pe3-route.ts b/packages/opencode/src/c
 diff --git a/packages/opencode/src/session/prompt.ts b/packages/opencode/src/session/prompt.ts
 --- a/packages/opencode/src/session/prompt.ts
 +++ b/packages/opencode/src/session/prompt.ts
-@@ -52,6 +52,12 @@ import { LLMEvent } from "@opencode-ai/llm"
+@@ -52,7 +52,13 @@
+ import { LLMEvent } from "@opencode-ai/llm"
  import { Token } from "@/util/token"
  import { usable } from "./overflow"
 -import { clearCuppetNativeForward, markCuppetNativeForward, routeCuppetNativePrompt } from "@/cuppet/pe3-route"
@@ -97,8 +94,7 @@ diff --git a/packages/opencode/src/session/prompt.ts b/packages/opencode/src/ses
  
  // @ts-ignore
  globalThis.AI_SDK_LOG_WARNINGS = false
-@@ -557,38 +563,56 @@ const layer = Layer.effect(
-       )
+@@ -557,36 +563,59 @@
        if (nativeRoute?.rerouted) {
 -        const originalParts = input.parts
 -        const targetParts = nativeRoute.refreshPaths.length
@@ -124,12 +120,18 @@ diff --git a/packages/opencode/src/session/prompt.ts b/packages/opencode/src/ses
 -            ...input,
 -            noReply: true,
 -            parts: [{ type: "text", text: `[PE3 routed this request to task session ${nativeRoute.targetSessionID}.]` }],
+-          }
+-        } else {
+-          clearCuppetNativeForward(targetParts)
+-          yield* Effect.logError("PE3 native reroute handoff failed; preserving source request", {
 +        const routeToken = nativeRoute.routeToken
 +        if (!routeToken) {
 +          yield* Effect.logError("PE3 native reroute missing transaction token; preserving source request", {
-+            "source.session.id": input.sessionID,
-+            "target.session.id": nativeRoute.targetSessionID,
-+          })
+             "source.session.id": input.sessionID,
+             "target.session.id": nativeRoute.targetSessionID,
+-            action: nativeRoute.action,
+-            error: Cause.squash(handoff.cause),
+           })
 +        } else {
 +          const originalParts = input.parts
 +          const targetParts = nativeRoute.refreshPaths.length
@@ -145,44 +147,40 @@ diff --git a/packages/opencode/src/session/prompt.ts b/packages/opencode/src/ses
 +          markCuppetNativeForward(targetParts)
 +          const targetInput = { ...input }
 +          delete targetInput.messageID
-+          const handoff = yield* prompt({
++          const acceptance = yield* prompt({
 +            ...targetInput,
 +            sessionID: nativeRoute.targetSessionID,
 +            parts: targetParts,
++            noReply: true,
 +          }).pipe(Effect.exit)
-+          if (Exit.isSuccess(handoff)) {
++          if (Exit.isSuccess(acceptance)) {
 +            const commit = yield* Effect.tryPromise(() => commitCuppetNativeRoute(routeToken)).pipe(Effect.exit)
-+            if (Exit.isFailure(commit)) {
-+              yield* Effect.logError("PE3 native reroute target succeeded but route-state commit failed", {
++            if (Exit.isSuccess(commit)) {
++              input = {
++                ...input,
++                noReply: true,
++                parts: [{ type: "text", text: `[PE3 routed this request to task session ${nativeRoute.targetSessionID}.]` }],
++              }
++              yield* loop({ sessionID: nativeRoute.targetSessionID }).pipe(Effect.forkIn(scope))
++            } else {
++              const abort = yield* Effect.tryPromise(() => abortCuppetNativeRoute(routeToken)).pipe(Effect.exit)
++              yield* Effect.logError("PE3 native reroute commit failed after target acceptance; preserving source request", {
 +                "source.session.id": input.sessionID,
 +                "target.session.id": nativeRoute.targetSessionID,
 +                error: Cause.squash(commit.cause),
++                ...(Exit.isFailure(abort) ? { abortError: Cause.squash(abort.cause) } : {}),
 +              })
-+            }
-+            input = {
-+              ...input,
-+              noReply: true,
-+              parts: [{ type: "text", text: `[PE3 routed this request to task session ${nativeRoute.targetSessionID}.]` }],
 +            }
 +          } else {
 +            clearCuppetNativeForward(targetParts)
 +            const abort = yield* Effect.tryPromise(() => abortCuppetNativeRoute(routeToken)).pipe(Effect.exit)
-+            yield* Effect.logError("PE3 native reroute handoff failed; preserving source request", {
++            yield* Effect.logError("PE3 native reroute target acceptance failed; preserving source request", {
 +              "source.session.id": input.sessionID,
 +              "target.session.id": nativeRoute.targetSessionID,
 +              action: nativeRoute.action,
-+              error: Cause.squash(handoff.cause),
++              error: Cause.squash(acceptance.cause),
 +              ...(Exit.isFailure(abort) ? { abortError: Cause.squash(abort.cause) } : {}),
 +            })
-           }
--        } else {
--          clearCuppetNativeForward(targetParts)
--          yield* Effect.logError("PE3 native reroute handoff failed; preserving source request", {
--            "source.session.id": input.sessionID,
--            "target.session.id": nativeRoute.targetSessionID,
--            action: nativeRoute.action,
--            error: Cause.squash(handoff.cause),
--          })
++          }
          }
        }
-       const message = yield* createUserMessage(input)

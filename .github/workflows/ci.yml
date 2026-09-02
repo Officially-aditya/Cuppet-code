@@ -28,6 +28,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Verify and materialize complete OpenCode patch stack
+        run: node scripts/check-opencode-patches.mjs --source=.opencode-src --output="${{ runner.temp }}/cuppet-opencode-patched"
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
@@ -40,6 +42,8 @@ jobs:
           toolchain: 1.88
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - name: Build TST contract daemon
+        run: cargo build --locked -p tst-daemon
       - run: npm ci
       - run: npm run build
       - name: Build audited OpenCode contract binary
@@ -60,6 +64,7 @@ jobs:
         env:
           CUPPET_CONTRACT_OPENCODE_BIN: ${{ github.workspace }}/.opencode/opencode
           CUPPET_TEST_TST_BIN: ${{ github.workspace }}/target/debug/tst-daemon
+          CUPPET_PE3_PATCHED_SOURCE: ${{ runner.temp }}/cuppet-opencode-patched
 
   security:
     runs-on: ubuntu-24.04

@@ -1,8 +1,11 @@
 import { CuppetController } from '../controller.js'
 import type { AgentEvent, SessionInfo, TokenUsage } from '../types.js'
+import { totalTokenUsage } from '../usage.js'
 import { TaskSessionRouter, type PreparedTaskSession } from './session-router.js'
 
 const NATIVE_ROUTE_GUARD_MS = 5_000
+
+const emptyUsage = (): TokenUsage => ({ input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 })
 
 export type Pe3Snapshot = {
   activeAgent?: ReturnType<TaskSessionRouter['agents']>[number]
@@ -10,8 +13,14 @@ export type Pe3Snapshot = {
   routing: ReturnType<TaskSessionRouter['stats']>
   cachedInput: number
   uncachedInput: number
+  outputTokens: number
+  reasoningTokens: number
   cacheWrite: number
+  totalModelTokens: number
   providerAdjustedCost: number
+  completedTurns: number
+  totalLatencyMs: number
+  averageLatencyMs: number
   nativeRouteFailures: number
 }
 
@@ -43,6 +52,11 @@ export class Pe3Controller extends CuppetController {
   readonly #taskSessions = new TaskSessionRouter()
   readonly #nativeBypass = new Map<string, NativeBypass>()
   readonly #suppressedNativeSessions = new Map<string, number>()
+  readonly #cumulativeUsage = emptyUsage()
+  readonly #turnStartedAt = new Map<string, number>()
+  #cumulativeCost = 0
+  #completedTurns = 0
+  #totalLatencyMs = 0
   #nativeRouteFailures = 0
 
   constructor(options: ConstructorParameters<typeof CuppetController>[0]) {
@@ -87,6 +101,7 @@ export class Pe3Controller extends CuppetController {
   override async submit(prompt: string, delivery: 'queue' | 'steer' = 'queue'): Promise<void> {
     const prepared = await this.#prepareTaskSession(prompt)
     this.#armNativeBypass(prepared.sessionID, prepared.prompt)
+    this.#turnStartedAt.set(prepared.sessionID, Date.now())
     await super.submit(prepared.prompt, delivery)
   }
 
@@ -133,6 +148,7 @@ export class Pe3Controller extends CuppetController {
 
     const prepared = await this.#prepareTaskSession(prompt)
     if (prepared.action === 'continue' && prepared.sessionID === sessionID) {
+      this.#turnStartedAt.set(sessionID, Date.now())
       return {
         rerouted: false,
         action: 'continue',
@@ -146,8 +162,10 @@ export class Pe3Controller extends CuppetController {
 
     this.#suppressedNativeSessions.set(sessionID, Date.now() + NATIVE_ROUTE_GUARD_MS)
     this.#armNativeBypass(prepared.sessionID, prepared.prompt)
+    this.#turnStartedAt.set(prepared.sessionID, Date.now())
     void super.submit(prepared.prompt).catch((error) => {
       this.#nativeRouteFailures += 1
+      this.#turnStartedAt.delete(prepared.sessionID)
       this.emit('agent-event', {
         type: 'error',
         sessionID: prepared.sessionID,
@@ -175,20 +193,25 @@ export class Pe3Controller extends CuppetController {
   }
 
   pe3Snapshot(): Pe3Snapshot {
-    const usage = this.snapshot.foregroundUsage
-    const cachedInput = boundedCachedInput(usage)
+    const cachedInput = boundedCachedInput(this.#cumulativeUsage)
     const agents = this.#taskSessions.agents()
     return {
       ...(this.#taskSessions.active ? { activeAgent: this.#taskSessions.active } : {}),
       agents,
       routing: this.#taskSessions.stats(),
       cachedInput,
-      uncachedInput: Math.max(0, usage.input - cachedInput),
-      cacheWrite: Math.max(0, usage.cacheWrite),
-      // OpenCode's usage event already reports provider-calculated cost. Do
-      // not invent a cache discount when provider pricing metadata does not
-      // expose one separately.
-      providerAdjustedCost: Math.max(0, this.snapshot.foregroundCost),
+      uncachedInput: Math.max(0, this.#cumulativeUsage.input - cachedInput),
+      outputTokens: this.#cumulativeUsage.output,
+      reasoningTokens: this.#cumulativeUsage.reasoning,
+      cacheWrite: Math.max(0, this.#cumulativeUsage.cacheWrite),
+      totalModelTokens: totalTokenUsage(this.#cumulativeUsage),
+      // Usage events contain the provider-calculated request cost, including
+      // provider-specific cache pricing when OpenCode exposes it. Accumulating
+      // those events across task sessions preserves effective-cost accounting.
+      providerAdjustedCost: Math.max(0, this.#cumulativeCost),
+      completedTurns: this.#completedTurns,
+      totalLatencyMs: this.#totalLatencyMs,
+      averageLatencyMs: this.#completedTurns > 0 ? this.#totalLatencyMs / this.#completedTurns : 0,
       nativeRouteFailures: this.#nativeRouteFailures,
     }
   }
@@ -240,6 +263,24 @@ export class Pe3Controller extends CuppetController {
   }
 
   #observeTaskEvent(event: AgentEvent): void {
+    if (event.type === 'usage') {
+      this.#cumulativeUsage.input += event.usage.input
+      this.#cumulativeUsage.output += event.usage.output
+      this.#cumulativeUsage.reasoning += event.usage.reasoning
+      this.#cumulativeUsage.cacheRead += event.usage.cacheRead
+      this.#cumulativeUsage.cacheWrite += event.usage.cacheWrite
+      this.#cumulativeCost += event.cost
+    }
+
+    if (event.type === 'idle') {
+      const startedAt = this.#turnStartedAt.get(event.sessionID)
+      if (startedAt !== undefined) {
+        this.#turnStartedAt.delete(event.sessionID)
+        this.#completedTurns += 1
+        this.#totalLatencyMs += Math.max(0, Date.now() - startedAt)
+      }
+    }
+
     if (event.type === 'tool-end' && event.success && event.outputPaths?.length) {
       this.#taskSessions.noteActivePaths(event.outputPaths)
       if (event.diff) this.#taskSessions.noteWorkspaceMutation(event.outputPaths)

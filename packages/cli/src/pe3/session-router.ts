@@ -60,14 +60,6 @@ export type TaskSessionRouterOptions = {
   semantic?: SemanticTaskRouter | false
 }
 
-/**
- * Maps PE3 task-agent decisions onto inert OpenCode sessions.
- *
- * Normal continuation remains deterministic and model-free. Only the narrow
- * ambiguous band may perform cheap local graph localization and then local
- * embedding inference. Dormant sessions consume no model tokens merely by
- * existing.
- */
 export class TaskSessionRouter {
   readonly #router: TaskAgentRouter
   readonly #semantic: SemanticTaskRouter | undefined
@@ -135,8 +127,6 @@ export class TaskSessionRouter {
 
     this.bindSession(current.id, evidence)
     const active = this.#router.active
-    // A newly created/resumed session has no established task descriptor yet.
-    // The first prompt must seed it rather than immediately triggering a split.
     if (!active || active.turns === 0) {
       this.#router.recordTurn(prompt, evidence)
       return this.#record({
@@ -156,9 +146,6 @@ export class TaskSessionRouter {
       if (hasLocalizedEvidence(localized)) {
         this.#stats.localizationHits += 1
         evidence = mergeEvidence(evidence, localized)
-        // Re-run the deterministic router with graph-localized query evidence.
-        // A concrete active/dormant match or disjoint path can settle the task
-        // boundary without paying embedding cost.
         route = this.#router.route(prompt, evidence)
       }
     }
@@ -180,9 +167,6 @@ export class TaskSessionRouter {
       })
     }
 
-    // A task switch is an isolation boundary. Adapter evidence observed while
-    // the source task was active must never seed the target task's working set.
-    // Only query-localized evidence and the global workspace epoch may cross.
     const transitionEvidence = mergeTransitionEvidence(adapter.evidence(), evidence)
 
     if (route.action === 'reactivate') {
@@ -212,27 +196,34 @@ export class TaskSessionRouter {
     })
   }
 
-  noteActivePaths(paths: Iterable<string>): void {
+  noteSessionPaths(sessionID: string, paths: Iterable<string>): void {
     const bounded = [...paths]
     if (bounded.length === 0) return
-    this.#router.recordTurn('', {
+    this.#router.recordSessionEvidence(sessionID, {
       activePaths: bounded,
       touchedPaths: bounded,
     })
+    this.#router.acknowledgeSessionRefresh(sessionID, bounded)
+  }
+
+  noteSessionWorkspaceMutation(sessionID: string, paths: Iterable<string>): void {
+    const bounded = [...paths]
+    if (bounded.length === 0) return
+    this.noteSessionPaths(sessionID, bounded)
+    this.#router.noteWorkspaceChange(bounded)
+    this.#router.acknowledgeSessionRefresh(sessionID, bounded)
+  }
+
+  noteActivePaths(paths: Iterable<string>): void {
     const active = this.#router.active
-    if (active) this.#router.acknowledgeRefresh(active.id, bounded)
+    if (!active) return
+    this.noteSessionPaths(active.sessionID, paths)
   }
 
   noteWorkspaceMutation(paths: Iterable<string>): void {
-    const bounded = [...paths]
-    if (bounded.length === 0) return
-    // Record the active task's knowledge of its own mutation first. The
-    // mutation then invalidates every task-local view that privileged the path,
-    // after which the active task immediately acknowledges its own fresh view.
-    this.noteActivePaths(bounded)
-    this.#router.noteWorkspaceChange(bounded)
     const active = this.#router.active
-    if (active) this.#router.acknowledgeRefresh(active.id, bounded)
+    if (!active) return
+    this.noteSessionWorkspaceMutation(active.sessionID, paths)
   }
 
   async #semanticRoute(

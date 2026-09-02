@@ -2,6 +2,8 @@ import { CuppetController } from '../controller.js'
 import type { AgentEvent, SessionInfo, TokenUsage } from '../types.js'
 import { TaskSessionRouter, type PreparedTaskSession } from './session-router.js'
 
+const NATIVE_ROUTE_GUARD_MS = 5_000
+
 export type Pe3Snapshot = {
   activeAgent?: ReturnType<TaskSessionRouter['agents']>[number]
   agents: ReturnType<TaskSessionRouter['agents']>
@@ -10,6 +12,23 @@ export type Pe3Snapshot = {
   uncachedInput: number
   cacheWrite: number
   providerAdjustedCost: number
+  nativeRouteFailures: number
+}
+
+export type NativeTaskRouteResult = {
+  rerouted: boolean
+  action: PreparedTaskSession['action']
+  sourceSessionID: string
+  targetSessionID: string
+  reason: string
+  sequence: number
+  refreshPaths: string[]
+  forwarded?: boolean
+}
+
+type NativeBypass = {
+  prompt: string
+  expiresAt: number
 }
 
 /**
@@ -22,6 +41,9 @@ export type Pe3Snapshot = {
  */
 export class Pe3Controller extends CuppetController {
   readonly #taskSessions = new TaskSessionRouter()
+  readonly #nativeBypass = new Map<string, NativeBypass>()
+  readonly #suppressedNativeSessions = new Map<string, number>()
+  #nativeRouteFailures = 0
 
   constructor(options: ConstructorParameters<typeof CuppetController>[0]) {
     super(options)
@@ -47,6 +69,14 @@ export class Pe3Controller extends CuppetController {
   }
 
   override async adoptSession(sessionID: string): Promise<SessionInfo> {
+    const suppressedUntil = this.#suppressedNativeSessions.get(sessionID)
+    if (suppressedUntil && suppressedUntil > Date.now()) {
+      // A routed native request still emits source-session bookkeeping events.
+      // Read them without allowing those delayed events to steal active-agent
+      // privilege back from the routed target session.
+      return this.gateway.getSession(sessionID)
+    }
+    if (suppressedUntil) this.#suppressedNativeSessions.delete(sessionID)
     const session = await super.adoptSession(sessionID)
     if (session.agent !== 'cuppet-background') {
       this.#taskSessions.bindSession(session.id, this.#taskEvidence())
@@ -55,23 +85,85 @@ export class Pe3Controller extends CuppetController {
   }
 
   override async submit(prompt: string, delivery: 'queue' | 'steer' = 'queue'): Promise<void> {
-    const prepared = await this.#taskSessions.prepare(prompt, {
-      current: () => {
-        const session = this.snapshot.activeSession
-        return session ? { id: session.id } : undefined
-      },
-      create: async () => {
-        const session = await super.newSession()
-        return { id: session.id }
-      },
-      resume: async (sessionID) => {
-        const session = await super.resume(sessionID)
-        return { id: session.id }
-      },
-      evidence: () => this.#taskEvidence(),
+    const prepared = await this.#prepareTaskSession(prompt)
+    this.#armNativeBypass(prepared.sessionID, prepared.prompt)
+    await super.submit(prepared.prompt, delivery)
+  }
+
+  /**
+   * Pre-inference routing entrypoint used by the bundled OpenCode derivative.
+   *
+   * Native TUI prompts normally bypass CuppetController.submit(). The patched
+   * derivative asks this method before starting inference. A true task switch
+   * is forwarded to the selected task-local session and the derivative stores
+   * only a synthetic routing marker in the old session with `noReply=true`.
+   */
+  async routeNativePrompt(sessionID: string, prompt: string): Promise<NativeTaskRouteResult> {
+    this.#expireNativeGuards()
+    const bypass = this.#nativeBypass.get(sessionID)
+    if (bypass && bypass.expiresAt > Date.now() && bypass.prompt === prompt) {
+      this.#nativeBypass.delete(sessionID)
+      return {
+        rerouted: false,
+        action: 'continue',
+        sourceSessionID: sessionID,
+        targetSessionID: sessionID,
+        reason: 'controller-forwarded prompt already passed PE3 routing',
+        sequence: this.#taskSessions.stats().sequence,
+        refreshPaths: [],
+        forwarded: true,
+      }
+    }
+
+    // A real native user request is authoritative even if late bookkeeping
+    // events from an earlier reroute temporarily suppress event-driven adoption.
+    const source = await super.adoptSession(sessionID)
+    if (source.agent === 'cuppet-background') {
+      return {
+        rerouted: false,
+        action: 'continue',
+        sourceSessionID: sessionID,
+        targetSessionID: sessionID,
+        reason: 'background sessions are outside PE3 foreground routing',
+        sequence: this.#taskSessions.stats().sequence,
+        refreshPaths: [],
+      }
+    }
+    this.#taskSessions.bindSession(source.id)
+
+    const prepared = await this.#prepareTaskSession(prompt)
+    if (prepared.action === 'continue' && prepared.sessionID === sessionID) {
+      return {
+        rerouted: false,
+        action: 'continue',
+        sourceSessionID: sessionID,
+        targetSessionID: sessionID,
+        reason: prepared.reason,
+        sequence: this.#taskSessions.stats().sequence,
+        refreshPaths: [],
+      }
+    }
+
+    this.#suppressedNativeSessions.set(sessionID, Date.now() + NATIVE_ROUTE_GUARD_MS)
+    this.#armNativeBypass(prepared.sessionID, prepared.prompt)
+    void super.submit(prepared.prompt).catch((error) => {
+      this.#nativeRouteFailures += 1
+      this.emit('agent-event', {
+        type: 'error',
+        sessionID: prepared.sessionID,
+        message: `PE3 routed prompt delivery failed: ${error instanceof Error ? error.message : String(error)}`,
+      } satisfies AgentEvent)
     })
 
-    await super.submit(prepared.prompt, delivery)
+    return {
+      rerouted: true,
+      action: prepared.action,
+      sourceSessionID: sessionID,
+      targetSessionID: prepared.sessionID,
+      reason: prepared.reason,
+      sequence: this.#taskSessions.stats().sequence,
+      refreshPaths: [...prepared.refreshPaths],
+    }
   }
 
   override async status(): Promise<Record<string, unknown>> {
@@ -97,6 +189,42 @@ export class Pe3Controller extends CuppetController {
       // not invent a cache discount when provider pricing metadata does not
       // expose one separately.
       providerAdjustedCost: Math.max(0, this.snapshot.foregroundCost),
+      nativeRouteFailures: this.#nativeRouteFailures,
+    }
+  }
+
+  async #prepareTaskSession(prompt: string): Promise<PreparedTaskSession> {
+    return this.#taskSessions.prepare(prompt, {
+      current: () => {
+        const session = this.snapshot.activeSession
+        return session ? { id: session.id } : undefined
+      },
+      create: async () => {
+        const session = await super.newSession()
+        return { id: session.id }
+      },
+      resume: async (sessionID) => {
+        const session = await super.resume(sessionID)
+        return { id: session.id }
+      },
+      evidence: () => this.#taskEvidence(),
+    })
+  }
+
+  #armNativeBypass(sessionID: string, prompt: string): void {
+    this.#nativeBypass.set(sessionID, {
+      prompt,
+      expiresAt: Date.now() + NATIVE_ROUTE_GUARD_MS,
+    })
+  }
+
+  #expireNativeGuards(): void {
+    const now = Date.now()
+    for (const [sessionID, bypass] of this.#nativeBypass) {
+      if (bypass.expiresAt <= now) this.#nativeBypass.delete(sessionID)
+    }
+    for (const [sessionID, expiresAt] of this.#suppressedNativeSessions) {
+      if (expiresAt <= now) this.#suppressedNativeSessions.delete(sessionID)
     }
   }
 

@@ -77,9 +77,11 @@ export class Pe3Controller extends CuppetController {
   readonly #nativeBypass = new Map<string, NativeBypass>()
   readonly #suppressedNativeSessions = new Map<string, number>()
   readonly #pendingNativeRoutes = new Map<string, NativeRouteTransaction>()
+  readonly #nativeRouteReleases = new Map<string, () => void>()
   readonly #restoredStaleBySession = new Map<string, string[]>()
   readonly #cumulativeUsage = emptyUsage()
   readonly #turnStartedAt = new Map<string, number>()
+  #routingTail: Promise<void> = Promise.resolve()
   #persistTail: Promise<void> = Promise.resolve()
   #registryReady = false
   #cumulativeCost = 0
@@ -132,36 +134,61 @@ export class Pe3Controller extends CuppetController {
   }
 
   override async newSession(): Promise<SessionInfo> {
-    const session = await super.newSession()
-    this.#taskSessions.bindSession(session.id, this.#taskEvidence())
-    this.#schedulePersist()
-    return session
+    this.#expireNativeGuards()
+    const release = await this.#acquireRoutingLock()
+    try {
+      const session = await super.newSession()
+      this.#taskSessions.bindSession(session.id, this.#taskEvidence())
+      this.#schedulePersist()
+      return session
+    } finally {
+      release()
+    }
   }
 
   override async resume(sessionID: string): Promise<SessionInfo> {
-    const session = await super.resume(sessionID)
-    this.#taskSessions.bindSession(session.id, this.#taskEvidence())
-    this.#schedulePersist()
-    return session
+    this.#expireNativeGuards()
+    const release = await this.#acquireRoutingLock()
+    try {
+      const session = await super.resume(sessionID)
+      this.#taskSessions.bindSession(session.id, this.#taskEvidence())
+      this.#schedulePersist()
+      return session
+    } finally {
+      release()
+    }
   }
 
   override async adoptSession(sessionID: string): Promise<SessionInfo> {
-    const suppressedUntil = this.#suppressedNativeSessions.get(sessionID)
-    if (suppressedUntil && suppressedUntil > Date.now()) return this.gateway.getSession(sessionID)
-    if (suppressedUntil) this.#suppressedNativeSessions.delete(sessionID)
-    const session = await super.adoptSession(sessionID)
-    if (session.agent !== 'cuppet-background') {
-      this.#taskSessions.bindSession(session.id, this.#taskEvidence())
-      this.#schedulePersist()
+    this.#expireNativeGuards()
+    const release = await this.#acquireRoutingLock()
+    try {
+      const suppressedUntil = this.#suppressedNativeSessions.get(sessionID)
+      if (suppressedUntil && suppressedUntil > Date.now()) return this.gateway.getSession(sessionID)
+      if (suppressedUntil) this.#suppressedNativeSessions.delete(sessionID)
+      const session = await super.adoptSession(sessionID)
+      if (session.agent !== 'cuppet-background') {
+        this.#taskSessions.bindSession(session.id, this.#taskEvidence())
+        this.#schedulePersist()
+      }
+      return session
+    } finally {
+      release()
     }
-    return session
   }
 
   override async submit(prompt: string, delivery: 'queue' | 'steer' = 'queue'): Promise<void> {
-    const prepared = await this.#prepareTaskSession(prompt)
-    this.#schedulePersist()
-    this.#armNativeBypass(prepared.sessionID, prepared.prompt)
-    this.#turnStartedAt.set(prepared.sessionID, Date.now())
+    this.#expireNativeGuards()
+    const release = await this.#acquireRoutingLock()
+    let prepared!: PreparedTaskSession
+    try {
+      prepared = await this.#prepareTaskSession(prompt)
+      this.#schedulePersist()
+      this.#armNativeBypass(prepared.sessionID, prepared.prompt)
+      this.#turnStartedAt.set(prepared.sessionID, Date.now())
+    } finally {
+      release()
+    }
     await super.submit(prepared.prompt, delivery)
   }
 
@@ -171,6 +198,25 @@ export class Pe3Controller extends CuppetController {
     attachments: NativeRoutingAttachment[] = [],
   ): Promise<NativeTaskRouteResult> {
     this.#expireNativeGuards()
+    const release = await this.#acquireRoutingLock()
+    let transferred = false
+    try {
+      const result = await this.#routeNativePromptLocked(sessionID, prompt, attachments)
+      if (result.routeToken) {
+        this.#nativeRouteReleases.set(result.routeToken, release)
+        transferred = true
+      }
+      return result
+    } finally {
+      if (!transferred) release()
+    }
+  }
+
+  async #routeNativePromptLocked(
+    sessionID: string,
+    prompt: string,
+    attachments: NativeRoutingAttachment[],
+  ): Promise<NativeTaskRouteResult> {
     const bypass = this.#nativeBypass.get(sessionID)
     if (attachments.length === 0 && bypass && bypass.expiresAt > Date.now() && bypass.prompt === prompt) {
       this.#nativeBypass.delete(sessionID)
@@ -271,6 +317,7 @@ export class Pe3Controller extends CuppetController {
     this.#suppressedNativeSessions.set(transaction.sourceSessionID, Date.now() + NATIVE_ROUTE_GUARD_MS)
     this.#turnStartedAt.set(transaction.targetSessionID, Date.now())
     this.#schedulePersist()
+    this.#releaseNativeRoute(routeToken)
     return { committed: true, targetSessionID: transaction.targetSessionID }
   }
 
@@ -280,18 +327,22 @@ export class Pe3Controller extends CuppetController {
     if (!transaction) throw new Error('native PE3 route token is missing or expired')
 
     this.#pendingNativeRoutes.delete(routeToken)
-    this.#taskSessions.restoreCheckpoint(transaction.before)
-    if (this.snapshot.activeSession?.id !== transaction.sourceSessionID) {
-      await super.resume(transaction.sourceSessionID)
-    }
-    if (transaction.action === 'create') {
-      await this.gateway.interrupt(transaction.targetSessionID).catch(() => undefined)
-    }
-    this.#turnStartedAt.delete(transaction.targetSessionID)
-    this.#suppressedNativeSessions.delete(transaction.sourceSessionID)
     this.#nativeRouteFailures += 1
-    this.#schedulePersist()
-    return { aborted: true, sourceSessionID: transaction.sourceSessionID }
+    try {
+      this.#taskSessions.restoreCheckpoint(transaction.before)
+      if (this.snapshot.activeSession?.id !== transaction.sourceSessionID) {
+        await super.resume(transaction.sourceSessionID)
+      }
+      if (transaction.action === 'create') {
+        await this.gateway.interrupt(transaction.targetSessionID).catch(() => undefined)
+      }
+      this.#turnStartedAt.delete(transaction.targetSessionID)
+      this.#suppressedNativeSessions.delete(transaction.sourceSessionID)
+      this.#schedulePersist()
+      return { aborted: true, sourceSessionID: transaction.sourceSessionID }
+    } finally {
+      this.#releaseNativeRoute(routeToken)
+    }
   }
 
   override async status(): Promise<Record<string, unknown>> {
@@ -359,6 +410,27 @@ export class Pe3Controller extends CuppetController {
     this.#nativeBypass.set(sessionID, { prompt, expiresAt: Date.now() + NATIVE_ROUTE_GUARD_MS })
   }
 
+  async #acquireRoutingLock(): Promise<() => void> {
+    const previous = this.#routingTail
+    let resolveGate!: () => void
+    const gate = new Promise<void>((resolve) => { resolveGate = resolve })
+    this.#routingTail = previous.then(() => gate)
+    await previous
+    let released = false
+    return () => {
+      if (released) return
+      released = true
+      resolveGate()
+    }
+  }
+
+  #releaseNativeRoute(routeToken: string): void {
+    const release = this.#nativeRouteReleases.get(routeToken)
+    if (!release) return
+    this.#nativeRouteReleases.delete(routeToken)
+    release()
+  }
+
   #expireNativeGuards(): void {
     const now = Date.now()
     for (const [sessionID, bypass] of this.#nativeBypass) {
@@ -371,6 +443,7 @@ export class Pe3Controller extends CuppetController {
       if (transaction.expiresAt > now) continue
       this.#pendingNativeRoutes.delete(routeToken)
       this.#nativeRouteFailures += 1
+      this.#releaseNativeRoute(routeToken)
       if (transaction.action === 'create') {
         void this.gateway.interrupt(transaction.targetSessionID).catch(() => undefined)
       }

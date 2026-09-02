@@ -20,6 +20,13 @@ export type Pe3BenchmarkTurn = {
   outcome?: Pe3TurnOutcome
 }
 
+export type Pe3SemanticTrace = {
+  modelID?: string
+  activeSimilarity?: number
+  bestDormantSimilarity?: number
+  embeddingLatencyMs: number
+}
+
 export type Pe3BenchmarkTurnResult = {
   index: number
   taskID: string
@@ -30,6 +37,8 @@ export type Pe3BenchmarkTurnResult = {
   actualSwitch: boolean
   falseSplit: boolean
   missedSwitch: boolean
+  semanticEscalated: boolean
+  semantic?: Pe3SemanticTrace
   outcome: Required<Pe3TurnOutcome>
 }
 
@@ -50,7 +59,28 @@ export type Pe3BenchmarkResult = {
     missedTaskSwitches: number
     agentSwitches: number
     cacheReuseRatio: number
+    semanticEscalations: number
+    semanticEmbeddingLatencyMs: number
   }
+}
+
+export type Pe3BenchmarkOptions = {
+  /** Injectable detected router lets calibration runs compare embedding models. */
+  detectedRouter?: TaskSessionRouter
+}
+
+export type Pe3SemanticCalibrationRow = {
+  index: number
+  taskID: string
+  expectedSwitch: boolean
+  actualSwitch: boolean
+  falseSplit: boolean
+  missedSwitch: boolean
+  activeSimilarity?: number
+  bestDormantSimilarity?: number
+  dormantActiveMargin?: number
+  embeddingLatencyMs: number
+  modelID?: string
 }
 
 /**
@@ -62,12 +92,13 @@ export type Pe3BenchmarkResult = {
 export async function runPe3BenchmarkArm(
   arm: Pe3BenchmarkArm,
   turns: Pe3BenchmarkTurn[],
+  options: Pe3BenchmarkOptions = {},
 ): Promise<Pe3BenchmarkResult> {
-  const detected = arm === 'detected' ? new TaskSessionRouter() : undefined
+  const detected = arm === 'detected' ? options.detectedRouter ?? new TaskSessionRouter() : undefined
   const detectedHarness = detected ? adapterHarness() : undefined
   const oracleSessions = new Map<string, string>()
   let oracleCreated = 0
-  let fixedSession = 'session-1'
+  const fixedSession = 'session-1'
   const results: Pe3BenchmarkTurnResult[] = []
   let previousTask: string | undefined
   let previousSession: string | undefined
@@ -77,6 +108,8 @@ export async function runPe3BenchmarkArm(
     const expectedSwitch = previousTask !== undefined && turn.taskID !== previousTask
     let sessionID: string
     let action: Pe3BenchmarkTurnResult['action']
+    let semanticEscalated = false
+    let semantic: Pe3SemanticTrace | undefined
 
     if (arm === 'current' || arm === 'pe3_no_routing') {
       sessionID = fixedSession
@@ -93,9 +126,24 @@ export async function runPe3BenchmarkArm(
         action = 'create'
       }
     } else {
+      const before = detected!.stats()
       const route = await detected!.prepare(turn.prompt, detectedHarness!.adapter)
+      const after = detected!.stats()
       sessionID = route.sessionID
       action = route.action
+      semanticEscalated = after.semanticEscalations > before.semanticEscalations
+      if (semanticEscalated) {
+        semantic = {
+          ...(after.semanticModelID ? { modelID: after.semanticModelID } : {}),
+          ...(after.lastSemanticActiveSimilarity !== undefined
+            ? { activeSimilarity: after.lastSemanticActiveSimilarity }
+            : {}),
+          ...(after.lastSemanticDormantSimilarity !== undefined
+            ? { bestDormantSimilarity: after.lastSemanticDormantSimilarity }
+            : {}),
+          embeddingLatencyMs: Math.max(0, after.semanticEmbeddingLatencyMs - before.semanticEmbeddingLatencyMs),
+        }
+      }
     }
 
     const actualSwitch = previousSession !== undefined && sessionID !== previousSession
@@ -111,6 +159,8 @@ export async function runPe3BenchmarkArm(
       actualSwitch,
       falseSplit,
       missedSwitch,
+      semanticEscalated,
+      ...(semantic ? { semantic } : {}),
       outcome: normalizeOutcome(turn.outcome),
     })
     previousTask = turn.taskID
@@ -120,10 +170,41 @@ export async function runPe3BenchmarkArm(
   return { arm, turns: results, metrics: summarize(results) }
 }
 
-export async function runPe3Benchmark(turns: Pe3BenchmarkTurn[]): Promise<Pe3BenchmarkResult[]> {
+export async function runPe3Benchmark(
+  turns: Pe3BenchmarkTurn[],
+  options: Pe3BenchmarkOptions = {},
+): Promise<Pe3BenchmarkResult[]> {
   return Promise.all(
-    (['current', 'pe3_no_routing', 'oracle', 'detected'] as const).map((arm) => runPe3BenchmarkArm(arm, turns)),
+    (['current', 'pe3_no_routing', 'oracle', 'detected'] as const)
+      .map((arm) => runPe3BenchmarkArm(arm, turns, arm === 'detected' ? options : {})),
   )
+}
+
+/**
+ * Compact rows suitable for Issue #4/offline threshold sweeps. No threshold is
+ * learned in production; benchmark tooling can group these rows by ground-truth
+ * task boundary and choose margins that minimize false splits first.
+ */
+export function semanticCalibrationRows(result: Pe3BenchmarkResult): Pe3SemanticCalibrationRow[] {
+  return result.turns
+    .filter((turn) => turn.semanticEscalated && turn.semantic)
+    .map((turn) => {
+      const active = turn.semantic?.activeSimilarity
+      const dormant = turn.semantic?.bestDormantSimilarity
+      return {
+        index: turn.index,
+        taskID: turn.taskID,
+        expectedSwitch: turn.expectedSwitch,
+        actualSwitch: turn.actualSwitch,
+        falseSplit: turn.falseSplit,
+        missedSwitch: turn.missedSwitch,
+        ...(active !== undefined ? { activeSimilarity: active } : {}),
+        ...(dormant !== undefined ? { bestDormantSimilarity: dormant } : {}),
+        ...(active !== undefined && dormant !== undefined ? { dormantActiveMargin: dormant - active } : {}),
+        embeddingLatencyMs: turn.semantic?.embeddingLatencyMs ?? 0,
+        ...(turn.semantic?.modelID ? { modelID: turn.semantic.modelID } : {}),
+      }
+    })
 }
 
 function summarize(turns: Pe3BenchmarkTurnResult[]): Pe3BenchmarkResult['metrics'] {
@@ -147,6 +228,8 @@ function summarize(turns: Pe3BenchmarkTurnResult[]): Pe3BenchmarkResult['metrics
     missedTaskSwitches: turns.filter((turn) => turn.missedSwitch).length,
     agentSwitches: turns.filter((turn) => turn.actualSwitch).length,
     cacheReuseRatio: totalInput > 0 ? cachedInput / totalInput : 0,
+    semanticEscalations: turns.filter((turn) => turn.semanticEscalated).length,
+    semanticEmbeddingLatencyMs: turns.reduce((total, turn) => total + (turn.semantic?.embeddingLatencyMs ?? 0), 0),
   }
 }
 

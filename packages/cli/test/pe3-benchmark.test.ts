@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { runPe3Benchmark, runPe3BenchmarkArm } from '../src/benchmark/pe3-routing.js'
+import {
+  runPe3Benchmark,
+  runPe3BenchmarkArm,
+  semanticCalibrationRows,
+} from '../src/benchmark/pe3-routing.js'
+import { SemanticTaskRouter, type TaskEmbeddingProvider } from '../src/pe3/semantic-router.js'
+import { TaskSessionRouter } from '../src/pe3/session-router.js'
 
 const sequence = [
   { taskID: 'A', prompt: 'fix refresh token expiry in src/auth/token.ts' },
@@ -9,6 +15,15 @@ const sequence = [
   { taskID: 'B', prompt: 'also add analytics export tests' },
   { taskID: 'C', prompt: 'separately, new task: implement billing invoice retry in src/billing/retry.ts' },
   { taskID: 'A', prompt: 'go back to the refresh token issue in src/auth/token.ts' },
+]
+
+const naturalSequence = [
+  { taskID: 'A', prompt: 'fix refresh token expiration' },
+  { taskID: 'A', prompt: 'repair the oauth credential renewal lifecycle regression' },
+  { taskID: 'B', prompt: 'add pagination to the csv export pipeline' },
+  { taskID: 'B', prompt: 'make the data download stream pages reliable' },
+  { taskID: 'C', prompt: 'create an organization schema migration lifecycle' },
+  { taskID: 'A', prompt: 'the oauth credential renewal lifecycle regressed again' },
 ]
 
 test('A → A → B → B → C → A benchmark compares all required PE3 arms', async () => {
@@ -38,6 +53,31 @@ test('A → A → B → B → C → A benchmark compares all required PE3 arms',
     'reactivate',
   ])
   assert.equal(detected.turns[5]?.sessionID, detected.turns[0]?.sessionID)
+})
+
+test('natural-language benchmark covers vocabulary gaps and task switches without cue phrases', async () => {
+  const detectedRouter = new TaskSessionRouter(undefined, {
+    semantic: new SemanticTaskRouter(benchmarkEmbeddingProvider()),
+  })
+  const result = await runPe3BenchmarkArm('detected', naturalSequence, { detectedRouter })
+
+  assert.deepEqual(result.turns.map((turn) => turn.action), [
+    'create',
+    'continue',
+    'create',
+    'continue',
+    'create',
+    'reactivate',
+  ])
+  assert.equal(result.metrics.missedTaskSwitches, 0)
+  assert.equal(result.metrics.unnecessaryAgentSwitches, 0)
+  assert.ok(result.metrics.semanticEscalations >= 4)
+
+  const calibration = semanticCalibrationRows(result)
+  assert.ok(calibration.length >= 4)
+  assert.ok(calibration.every((row) => row.modelID === 'benchmark-minilm'))
+  assert.ok(calibration.some((row) => row.expectedSwitch && row.actualSwitch))
+  assert.ok(calibration.some((row) => !row.expectedSwitch && !row.actualSwitch))
 })
 
 test('benchmark aggregates correctness, retry, cache, cost, stale-context, and latency telemetry', async () => {
@@ -83,3 +123,22 @@ test('benchmark aggregates correctness, retry, cache, cost, stale-context, and l
   assert.equal(result.metrics.latencyMs, 3_000)
   assert.equal(result.metrics.cacheReuseRatio, 0.6)
 })
+
+function benchmarkEmbeddingProvider(): TaskEmbeddingProvider {
+  return {
+    modelID: 'benchmark-minilm',
+    embed: async (text) => {
+      const value = text.toLowerCase()
+      if (value.includes('refresh token') || value.includes('credential renewal') || value.includes('oauth')) {
+        return new Float32Array([1, 0, 0, 0])
+      }
+      if (value.includes('csv') || value.includes('download stream') || value.includes('export pipeline')) {
+        return new Float32Array([0, 1, 0, 0])
+      }
+      if (value.includes('organization') || value.includes('schema migration')) {
+        return new Float32Array([0, 0, 1, 0])
+      }
+      return new Float32Array([0, 0, 0, 1])
+    },
+  }
+}

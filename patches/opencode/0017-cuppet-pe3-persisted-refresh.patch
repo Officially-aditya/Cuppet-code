@@ -1,0 +1,21 @@
+diff --git a/packages/opencode/src/session/prompt.ts b/packages/opencode/src/session/prompt.ts
+--- a/packages/opencode/src/session/prompt.ts
++++ b/packages/opencode/src/session/prompt.ts
+@@ -565,4 +565,17 @@
+         }
+       }
++      if (!nativeRoute?.rerouted && nativeRoute?.refreshPaths.length) {
++        const refresh = nativeRoute.refreshPaths.slice(0, 12).join(", ")
++        input = {
++          ...input,
++          parts: [
++            {
++              type: "text",
++              text: `[PE3 persisted task resume]\nRefresh these paths from current workspace truth before relying on prior file-specific assumptions: ${refresh}`,
++            },
++            ...input.parts,
++          ],
++        }
++      }
+       const message = yield* createUserMessage(input)
+       yield* sessions.touch(input.sessionID)

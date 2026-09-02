@@ -16,6 +16,7 @@ on:
       - 'packages/opencode-plugin/test/pe3-tui.test.ts'
       - 'packages/opencode-plugin/tsup.config.ts'
       - 'patches/opencode/0016-cuppet-pe3-native-routing.patch'
+      - 'patches/opencode/0017-cuppet-pe3-persisted-refresh.patch'
       - 'scripts/pe3-routing-benchmark.ts'
       - 'package.json'
       - 'package-lock.json'

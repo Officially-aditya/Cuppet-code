@@ -44,12 +44,14 @@ test('applied derivative aborts before source suppression when target acceptance
   const failure = source.indexOf('PE3 native reroute target acceptance failed; preserving source request')
   assert.ok(failure >= 0)
   const branchStart = source.lastIndexOf('} else {', failure)
-  const abort = source.indexOf('abortCuppetNativeRoute(routeToken)', branchStart)
-  const nextSourceMutation = source.indexOf('input = {', branchStart)
-  const routeBlockEnd = source.indexOf('const message = yield* createUserMessage(input)', branchStart)
+  const branchEnd = source.indexOf('if (!nativeRoute?.rerouted && nativeRoute?.refreshPaths.length)', failure)
+  assert.ok(branchStart >= 0 && branchEnd > failure)
+  const branch = source.slice(branchStart, branchEnd)
+  const abort = branch.indexOf('abortCuppetNativeRoute(routeToken)')
+  const log = branch.indexOf('PE3 native reroute target acceptance failed; preserving source request')
 
-  assert.ok(abort > branchStart && abort < failure)
-  assert.ok(nextSourceMutation === -1 || nextSourceMutation > routeBlockEnd, 'acceptance failure must not replace source input')
+  assert.ok(abort >= 0 && abort < log, 'provisional route must abort before the failure is reported')
+  assert.doesNotMatch(branch, /\n\s*input = \{/, 'acceptance failure must leave source input unchanged')
 })
 
 test('applied persisted refresh hint is synthetic and keeps original parts', { skip: !derivativeAvailable }, async () => {

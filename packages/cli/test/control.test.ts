@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { CuppetControlClient } from '../src/control/client.js'
 import { CuppetControlServer, createControlAddress } from '../src/control/server.js'
+import type { NativeRoutingAttachment } from '../src/pe3/native-envelope.js'
 
 test('launch-scoped control API authenticates and exposes diagnostics', async (t) => {
   const runtime = await mkdtemp(join(process.cwd(), '.control-test-'))
@@ -11,7 +12,7 @@ test('launch-scoped control API authenticates and exposes diagnostics', async (t
   let selectedPlatform = 'openai'
   let nativeAgent = 'build'
   let autoMode = false
-  const nativeRoutes: Array<{ sessionID: string; prompt: string }> = []
+  const nativeRoutes: Array<{ sessionID: string; prompt: string; attachments: NativeRoutingAttachment[] }> = []
   const controller = {
     async status() { return { product: 'Cuppet' } },
     async doctor() { return { healthy: true } },
@@ -27,8 +28,8 @@ test('launch-scoped control API authenticates and exposes diagnostics', async (t
       return platform === 'vertex' ? [{ id: 'google-vertex', connections: [{ type: 'provider' }] }] : []
     },
     async selectPlatform(platform: string) { selectedPlatform = platform },
-    async routeNativePrompt(sessionID: string, prompt: string) {
-      nativeRoutes.push({ sessionID, prompt })
+    async routeNativePrompt(sessionID: string, prompt: string, attachments: NativeRoutingAttachment[] = []) {
+      nativeRoutes.push({ sessionID, prompt, attachments })
       return {
         rerouted: true,
         action: 'create',
@@ -85,7 +86,14 @@ test('launch-scoped control API authenticates and exposes diagnostics', async (t
     assert.deepEqual(await client.call('remote.status'), { running: true, hostId: 'host_test', deviceName: 'test-host' })
     assert.deepEqual(await client.call('remote.stop'), { running: false })
     assert.deepEqual(
-      await client.call('pe3.route-native', { sessionID: 'task-a', prompt: '  new task: billing retry  ' }),
+      await client.call('pe3.route-native', {
+        sessionID: 'task-a',
+        prompt: '  new task: billing retry  ',
+        attachments: [
+          { type: 'file', filename: 'dashboard.png', mime: 'image/png' },
+          { type: 'file', filename: 'requirements.pdf', mime: 'application/pdf' },
+        ],
+      }),
       {
         rerouted: true,
         action: 'create',
@@ -96,7 +104,23 @@ test('launch-scoped control API authenticates and exposes diagnostics', async (t
         refreshPaths: [],
       },
     )
-    assert.deepEqual(nativeRoutes, [{ sessionID: 'task-a', prompt: '  new task: billing retry  ' }])
+    assert.deepEqual(nativeRoutes, [{
+      sessionID: 'task-a',
+      prompt: '  new task: billing retry  ',
+      attachments: [
+        { type: 'file', filename: 'dashboard.png', mime: 'image/png' },
+        { type: 'file', filename: 'requirements.pdf', mime: 'application/pdf' },
+      ],
+    }])
+    await assert.rejects(
+      () => client.call('pe3.route-native', {
+        sessionID: 'task-a',
+        prompt: 'route this image',
+        attachments: [{ type: 'file', filename: 'x.png', mime: 'image/png', url: 'data:image/png;base64,AAAA' }],
+      }),
+      /unsupported field url/,
+    )
+    assert.equal(nativeRoutes.length, 1)
     assert.equal((await stat(address.socket)).mode & 0o777, 0o600)
     await assert.rejects(() => new CuppetControlClient(address.socket, 'wrong').call('status'), /unauthorized/)
   } finally {

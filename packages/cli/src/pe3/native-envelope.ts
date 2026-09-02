@@ -1,0 +1,72 @@
+const MAX_ATTACHMENTS = 16
+const MAX_FILENAME_BYTES = 256
+const MAX_MIME_BYTES = 128
+const MAX_ATTACHMENT_METADATA_BYTES = 8 * 1024
+
+export type NativeRoutingAttachment = {
+  type: 'file'
+  mime: string
+  filename?: string
+}
+
+export function parseNativeRoutingAttachments(value: unknown): NativeRoutingAttachment[] {
+  if (value === undefined) return []
+  if (!Array.isArray(value)) throw new Error('attachments must be an array')
+  if (value.length > MAX_ATTACHMENTS) throw new Error(`attachments exceed limit ${MAX_ATTACHMENTS}`)
+
+  const attachments = value.map((item, index) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new Error(`attachments[${index}] must be an object`)
+    }
+    const record = item as Record<string, unknown>
+    const allowed = new Set(['type', 'mime', 'filename'])
+    const unsupported = Object.keys(record).find((key) => !allowed.has(key))
+    if (unsupported) throw new Error(`attachments[${index}] contains unsupported field ${unsupported}`)
+    if (record.type !== 'file') throw new Error(`attachments[${index}].type must be file`)
+
+    const mime = boundedRequiredString(record.mime, `attachments[${index}].mime`, MAX_MIME_BYTES)
+    const filename = boundedOptionalString(record.filename, `attachments[${index}].filename`, MAX_FILENAME_BYTES)
+    return {
+      type: 'file' as const,
+      mime,
+      ...(filename ? { filename } : {}),
+    }
+  })
+
+  if (Buffer.byteLength(JSON.stringify(attachments)) > MAX_ATTACHMENT_METADATA_BYTES) {
+    throw new Error('attachment metadata exceeds routing limit')
+  }
+  return attachments
+}
+
+/**
+ * Build task-affinity text from bounded metadata only.
+ *
+ * This string is router/index input, never a replacement for the original
+ * OpenCode prompt parts. Attachment URLs and payload bytes are intentionally
+ * absent from this representation.
+ */
+export function nativeRoutingPrompt(prompt: string, attachments: readonly NativeRoutingAttachment[]): string {
+  if (attachments.length === 0) return prompt
+  const metadata = attachments.map((attachment) => {
+    const filename = attachment.filename ? ` ${attachment.filename}` : ''
+    return `[attachment${filename} ${attachment.mime}]`
+  })
+  return [prompt, ...metadata].join('\n')
+}
+
+function boundedRequiredString(value: unknown, name: string, maxBytes: number): string {
+  if (typeof value !== 'string' || !value.trim()) throw new Error(`${name} is required`)
+  return boundedString(value.trim(), name, maxBytes)
+}
+
+function boundedOptionalString(value: unknown, name: string, maxBytes: number): string | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'string' || !value.trim()) throw new Error(`${name} must be a non-empty string`)
+  return boundedString(value.trim(), name, maxBytes)
+}
+
+function boundedString(value: string, name: string, maxBytes: number): string {
+  if (Buffer.byteLength(value) > maxBytes) throw new Error(`${name} exceeds ${maxBytes} bytes`)
+  return value
+}

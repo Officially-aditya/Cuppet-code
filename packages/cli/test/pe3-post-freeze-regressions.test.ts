@@ -17,6 +17,18 @@ test('explicit new-task intent outranks a weak continuation cue', async () => {
   assert.notEqual(second.sessionID, first.sessionID)
 })
 
+test('all explicit switch cues suppress the early continuation shortcut', async () => {
+  const router = new TaskSessionRouter(undefined, { semantic: false })
+  const harness = adapterHarness()
+
+  const first = await router.prepare('fix refresh token expiration', harness.adapter)
+  const second = await router.prepare('also, now implement rate limiting middleware', harness.adapter)
+
+  assert.equal(first.action, 'create')
+  assert.equal(second.action, 'create')
+  assert.notEqual(second.sessionID, first.sessionID)
+})
+
 test('terse attachment-dependent prompts can enter semantic escalation', async () => {
   const provider = new RecordingEmbeddingProvider()
   const router = new TaskSessionRouter(undefined, {

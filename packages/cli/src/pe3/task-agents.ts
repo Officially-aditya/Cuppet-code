@@ -162,6 +162,8 @@ export class TaskAgentRouter {
     const currentAffinity = affinityFor(active, prompt)
     const normalizedPrompt = normalizeText(prompt)
     const explicitSwitch = hasCue(normalizedPrompt, SWITCH_CUES)
+    const explicitReturn = hasCue(normalizedPrompt, RETURN_CUES)
+    const dormant = this.#bestDormantMatch(active, prompt, normalizedPrompt)
 
     if (hasCue(normalizedPrompt, CONTINUATION_CUES)) {
       return {
@@ -169,6 +171,19 @@ export class TaskAgentRouter {
         agent: cloneAgent(active) as TaskAgentState,
         reason: 'continuation language defaults to the active agent',
         affinity: currentAffinity,
+      }
+    }
+
+    // An explicit return to a known dormant task is stronger task identity
+    // evidence than incidental path overlap on the currently active task. A
+    // task may touch another task's file without taking ownership of it.
+    if (explicitReturn && dormant) {
+      return {
+        action: 'reactivate',
+        agent: cloneAgent(dormant.agent) as TaskAgentState,
+        reason: 'explicit return language matches a dormant task agent',
+        affinity: dormant.affinity,
+        refreshPaths: [...dormant.agent.stalePaths],
       }
     }
 
@@ -192,14 +207,6 @@ export class TaskAgentRouter {
         affinity: currentAffinity,
       }
     }
-
-    const dormant = [...this.#agents.values()]
-      .filter((agent) => agent.id !== active.id)
-      .map((agent) => ({ agent, affinity: affinityFor(agent, prompt) }))
-      .filter(({ affinity }) => isDormantMatch(affinity, normalizedPrompt))
-      .sort((left, right) =>
-        right.affinity.score - left.affinity.score || right.agent.lastActiveAt - left.agent.lastActiveAt,
-      )[0]
 
     if (dormant) {
       return {
@@ -264,6 +271,20 @@ export class TaskAgentRouter {
       agent.workspaceEpoch = Math.max(agent.workspaceEpoch, evidence.workspaceEpoch)
       this.#workspaceEpoch = Math.max(this.#workspaceEpoch, evidence.workspaceEpoch)
     }
+  }
+
+  #bestDormantMatch(
+    active: TaskAgentState,
+    prompt: string,
+    normalizedPrompt: string,
+  ): { agent: TaskAgentState; affinity: TaskAffinity } | undefined {
+    return [...this.#agents.values()]
+      .filter((agent) => agent.id !== active.id)
+      .map((agent) => ({ agent, affinity: affinityFor(agent, prompt) }))
+      .filter(({ affinity }) => isDormantMatch(affinity, normalizedPrompt))
+      .sort((left, right) =>
+        right.affinity.score - left.affinity.score || right.agent.lastActiveAt - left.agent.lastActiveAt,
+      )[0]
   }
 }
 

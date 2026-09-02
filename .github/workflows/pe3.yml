@@ -17,6 +17,7 @@ on:
       - 'packages/opencode-plugin/tsup.config.ts'
       - 'patches/opencode/0016-cuppet-pe3-native-routing.patch'
       - 'patches/opencode/0017-cuppet-pe3-persisted-refresh.patch'
+      - 'patches/opencode/0018-cuppet-pe3-attachment-routing.patch'
       - 'scripts/pe3-routing-benchmark.ts'
       - 'package.json'
       - 'package-lock.json'
@@ -72,6 +73,8 @@ jobs:
           packages/cli/test/pe3-model-contract.test.ts
       - name: Test task-agent restart persistence
         run: node --import tsx --test packages/cli/test/pe3-persistence.test.ts
+      - name: Test attachment-aware native routing
+        run: node --import tsx --test packages/cli/test/pe3-attachment-routing.test.ts
       - name: Test task session routing
         run: node --import tsx --test packages/cli/test/pe3-session-router.test.ts
       - name: Test PE3 benchmark metrics

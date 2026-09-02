@@ -59,7 +59,11 @@ jobs:
       - name: Test task affinity router
         run: node --import tsx --test packages/cli/test/task-agents.test.ts
       - name: Test natural semantic routing
-        run: node --import tsx --test packages/cli/test/pe3-semantic-router.test.ts
+        run: >-
+          node --import tsx --test
+          packages/cli/test/pe3-semantic-router.test.ts
+          packages/cli/test/pe3-localizer.test.ts
+          packages/cli/test/pe3-model-contract.test.ts
       - name: Test task session routing
         run: node --import tsx --test packages/cli/test/pe3-session-router.test.ts
       - name: Test PE3 benchmark metrics

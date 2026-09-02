@@ -74,7 +74,10 @@ jobs:
       - name: Test task-agent restart persistence
         run: node --import tsx --test packages/cli/test/pe3-persistence.test.ts
       - name: Test attachment-aware native routing
-        run: node --import tsx --test packages/cli/test/pe3-attachment-routing.test.ts
+        run: >-
+          node --import tsx --test
+          packages/cli/test/pe3-attachment-routing.test.ts
+          packages/cli/test/pe3-attachment-controller-contract.test.ts
       - name: Test task session routing
         run: node --import tsx --test packages/cli/test/pe3-session-router.test.ts
       - name: Test PE3 benchmark metrics

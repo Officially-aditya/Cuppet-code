@@ -3,6 +3,7 @@ import { chmod, mkdir, unlink } from 'node:fs/promises'
 import { createServer, type Server, type Socket } from 'node:net'
 
 import type { CuppetController } from '../controller.js'
+import { parseNativeRoutingAttachments, type NativeRoutingAttachment } from '../pe3/native-envelope.js'
 import { ControlRouter, providerState } from './router.js'
 import type { RuntimePaths } from '../runtime/paths.js'
 
@@ -43,7 +44,11 @@ type ControlServerOptions = {
 }
 
 type NativePe3Controller = CuppetController & {
-  routeNativePrompt?: (sessionID: string, prompt: string) => Promise<unknown>
+  routeNativePrompt?: (
+    sessionID: string,
+    prompt: string,
+    attachments?: NativeRoutingAttachment[],
+  ) => Promise<unknown>
 }
 
 export class CuppetControlServer {
@@ -202,7 +207,11 @@ export class CuppetControlServer {
         if (typeof controller.routeNativePrompt !== 'function') {
           throw new Error('PE3 native routing is unavailable')
         }
-        return controller.routeNativePrompt(stringParam(params, 'sessionID'), textParam(params, 'prompt'))
+        return controller.routeNativePrompt(
+          stringParam(params, 'sessionID'),
+          textParam(params, 'prompt'),
+          parseNativeRoutingAttachments(params.attachments),
+        )
       }
       default: throw new Error(`unknown control method ${method}`)
     }

@@ -20,25 +20,9 @@ export type Pe3RegistryLoadResult = {
   recoveredFromCorruption: boolean
 }
 
-type FileSignature = {
-  size: number
-  mtimeMs: number
-  mode: number
-}
+type FileSignature = { size: number; mtimeMs: number; mode: number }
+type StoredRegistry = { schemaVersion: number; activeSessionID?: string; agents: TaskAgentState[]; fileSignatures: Record<string, FileSignature> }
 
-type StoredRegistry = {
-  schemaVersion: number
-  activeSessionID?: string
-  agents: TaskAgentState[]
-  fileSignatures: Record<string, FileSignature>
-}
-
-/**
- * Project-scoped persistence for PE3 routing/index metadata only.
- *
- * OpenCode remains authoritative for conversation history. This file never
- * stores transcripts, assistant text, tool output, or embedding vectors.
- */
 export class Pe3TaskRegistry {
   readonly #path: string
   readonly #projectRoot: string
@@ -48,9 +32,7 @@ export class Pe3TaskRegistry {
     this.#projectRoot = projectRoot
   }
 
-  get path(): string {
-    return this.#path
-  }
+  get path(): string { return this.#path }
 
   async load(validSessionIDs: ReadonlySet<string>): Promise<Pe3RegistryLoadResult> {
     let parsed: unknown
@@ -79,23 +61,22 @@ export class Pe3TaskRegistry {
       if (offlineChanged.length === 0) return cloneAgent(agent)
 
       const changed = new Set(offlineChanged)
+      const cloned = cloneAgent(agent)
       return {
-        ...cloneAgent(agent),
-        activePaths: agent.activePaths.filter((path) => !changed.has(path)),
-        touchedPaths: agent.touchedPaths.filter((path) => !changed.has(path)),
+        ...cloned,
+        activePaths: cloned.activePaths.filter((path) => !changed.has(path)),
+        touchedPaths: cloned.touchedPaths.filter((path) => !changed.has(path)),
         fingerprint: {
-          ...cloneAgent(agent).fingerprint,
-          revision: agent.fingerprint.revision + 1,
-          paths: agent.fingerprint.paths.filter((signal) => !changed.has(signal.value)),
+          ...cloned.fingerprint,
+          revision: cloned.fingerprint.revision + 1,
+          paths: cloned.fingerprint.paths.filter((signal) => !changed.has(signal.value)),
         },
         stalePaths: stale,
-        cacheEpoch: agent.cacheEpoch + 1,
-        workspaceEpoch: agent.workspaceEpoch + 1,
+        cacheEpoch: cloned.cacheEpoch + 1,
+        workspaceEpoch: cloned.workspaceEpoch + 1,
       }
     })
-    const activeSessionID = stored.activeSessionID && validSessionIDs.has(stored.activeSessionID)
-      ? stored.activeSessionID
-      : undefined
+    const activeSessionID = stored.activeSessionID && validSessionIDs.has(stored.activeSessionID) ? stored.activeSessionID : undefined
 
     return {
       agents,
@@ -111,12 +92,18 @@ export class Pe3TaskRegistry {
     activeSessionID?: string,
     supplementalStale: ReadonlyMap<string, readonly string[]> = new Map(),
   ): Promise<void> {
-    const boundedAgents = agents
+    const boundedAgents = [...agents]
       .sort((left, right) => right.lastActiveAt - left.lastActiveAt)
       .slice(0, MAX_PERSISTED_AGENTS)
       .map((agent) => sanitizeAgent(agent, supplementalStale.get(agent.sessionID) ?? []))
-    const signaturePaths = boundedUnique(
-      boundedAgents.flatMap((agent) => [...agent.activePaths, ...agent.touchedPaths]),
+    const activeAgent = activeSessionID
+      ? boundedAgents.find((agent) => agent.sessionID === activeSessionID)
+      : undefined
+    const signatureAgents = activeAgent
+      ? [activeAgent, ...boundedAgents.filter((agent) => agent.sessionID !== activeAgent.sessionID)]
+      : boundedAgents
+    const signaturePaths = firstUnique(
+      signatureAgents.flatMap((agent) => [...agent.activePaths, ...agent.touchedPaths]),
       MAX_PATH_SIGNATURES,
     )
     const fileSignatures: Record<string, FileSignature> = {}
@@ -127,9 +114,7 @@ export class Pe3TaskRegistry {
 
     const state: StoredRegistry = {
       schemaVersion: REGISTRY_SCHEMA_VERSION,
-      ...(activeSessionID && boundedAgents.some((agent) => agent.sessionID === activeSessionID)
-        ? { activeSessionID }
-        : {}),
+      ...(activeSessionID && boundedAgents.some((agent) => agent.sessionID === activeSessionID) ? { activeSessionID } : {}),
       agents: boundedAgents,
       fileSignatures,
     }
@@ -155,41 +140,22 @@ export class Pe3TaskRegistry {
     if (!target) return undefined
     try {
       const info = await lstat(target)
-      return {
-        size: Math.max(0, info.size),
-        mtimeMs: Math.trunc(info.mtimeMs),
-        mode: info.mode,
-      }
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+      return { size: Math.max(0, info.size), mtimeMs: Math.trunc(info.mtimeMs), mode: info.mode }
+    } catch {
       return undefined
     }
   }
 }
 
-/** Restore inert task identities without opening sessions or invoking a model. */
+/** Restore already-validated task state without replaying turns or touching recency. */
 export function restorePersistedTaskAgents(
   router: TaskSessionRouter,
   loaded: Pe3RegistryLoadResult,
   currentActiveSessionID?: string,
 ): void {
+  for (const agent of loaded.agents) router.restoreAgent(agent)
   const activeSessionID = currentActiveSessionID ?? loaded.activeSessionID
-  const ordered = [...loaded.agents].sort((left, right) => left.lastActiveAt - right.lastActiveAt)
-  for (const agent of ordered) {
-    if (agent.sessionID === activeSessionID) continue
-    router.bindSession(agent.sessionID, restoreEvidence(agent), agent.taskDescriptor)
-  }
-  const active = activeSessionID ? loaded.agents.find((agent) => agent.sessionID === activeSessionID) : undefined
-  if (active) router.bindSession(active.sessionID, restoreEvidence(active), active.taskDescriptor)
-}
-
-function restoreEvidence(agent: TaskAgentState) {
-  return {
-    activePaths: agent.activePaths,
-    touchedPaths: agent.touchedPaths,
-    recentSymbols: agent.recentSymbols,
-    workspaceEpoch: agent.workspaceEpoch,
-  }
+  if (activeSessionID) router.selectRestoredSession(activeSessionID)
 }
 
 function parseRegistry(value: unknown): StoredRegistry | undefined {
@@ -259,12 +225,7 @@ function signalArray(value: unknown, limit: number): TaskFingerprintSignal[] {
     if (weight === undefined || updatedAt === undefined) return []
     const safe = safeArrayValue(item.value, 512)
     if (!safe) return []
-    return [{
-      value: safe,
-      weight: Math.max(0, Math.min(1, weight)),
-      source: item.source as TaskFingerprintSignal['source'],
-      updatedAt,
-    }]
+    return [{ value: safe, weight: Math.max(0, Math.min(1, weight)), source: item.source as TaskFingerprintSignal['source'], updatedAt }]
   })
 }
 
@@ -302,28 +263,10 @@ function sanitizeSignals(signals: TaskFingerprintSignal[], limit: number): TaskF
 function safeArray(values: Iterable<string>, limit: number, bytes: number): string[] {
   return boundedUnique([...values].map((value) => safeArrayValue(value, bytes)).filter(Boolean), limit)
 }
-
-function stringArray(value: unknown, limit: number, bytes: number): string[] {
-  return Array.isArray(value) ? safeArray(value.filter((item): item is string => typeof item === 'string'), limit, bytes) : []
-}
-
-function safeArrayValue(value: string, bytes: number): string {
-  const redacted = redact(value.trim())
-  if (!redacted || redacted.includes('[REDACTED]')) return ''
-  return bounded(redacted, bytes)
-}
-
-function safeProjectPath(root: string, path: string): string | undefined {
-  if (!path || isAbsolute(path)) return undefined
-  const target = resolve(root, path)
-  const rel = relative(root, target)
-  if (!rel || rel.startsWith('..') || isAbsolute(rel)) return undefined
-  return target
-}
-
-function sameSignature(left: FileSignature, right: FileSignature): boolean {
-  return left.size === right.size && left.mtimeMs === right.mtimeMs && left.mode === right.mode
-}
+function stringArray(value: unknown, limit: number, bytes: number): string[] { return Array.isArray(value) ? safeArray(value.filter((item): item is string => typeof item === 'string'), limit, bytes) : [] }
+function safeArrayValue(value: string, bytes: number): string { const redacted = redact(value.trim()); if (!redacted || redacted.includes('[REDACTED]')) return ''; return bounded(redacted, bytes) }
+function safeProjectPath(root: string, path: string): string | undefined { if (!path || isAbsolute(path)) return undefined; const target = resolve(root, path); const rel = relative(root, target); if (!rel || rel.startsWith('..') || isAbsolute(rel)) return undefined; return target }
+function sameSignature(left: FileSignature, right: FileSignature): boolean { return left.size === right.size && left.mtimeMs === right.mtimeMs && left.mode === right.mode }
 
 function cloneAgent(agent: TaskAgentState): TaskAgentState {
   return {
@@ -342,47 +285,13 @@ function cloneAgent(agent: TaskAgentState): TaskAgentState {
   }
 }
 
-function emptyLoadResult(recoveredFromCorruption: boolean): Pe3RegistryLoadResult {
-  return {
-    agents: [],
-    staleBySession: new Map(),
-    droppedSessionCount: 0,
-    recoveredFromCorruption,
-  }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-}
-
-function finiteNumber(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
-}
-
-function nonNegativeInteger(value: unknown): number {
-  const number = finiteNumber(value) ?? 0
-  return Math.max(0, Math.trunc(number))
-}
-
-function boundedUnique(values: Iterable<string>, limit: number): string[] {
-  const output: string[] = []
-  for (const raw of values) {
-    const value = String(raw).trim()
-    if (!value) continue
-    const index = output.indexOf(value)
-    if (index >= 0) output.splice(index, 1)
-    output.push(value)
-    if (output.length > limit) output.splice(0, output.length - limit)
-  }
-  return output
-}
-
-function bounded(value: string, maxBytes: number): string {
-  const normalized = value.trim().replace(/\s+/g, ' ')
-  if (Buffer.byteLength(normalized) <= maxBytes) return normalized
-  let end = normalized.length
-  while (end > 0 && Buffer.byteLength(normalized.slice(0, end)) > maxBytes) end -= 1
-  return normalized.slice(0, end)
-}
+function emptyLoadResult(recoveredFromCorruption: boolean): Pe3RegistryLoadResult { return { agents: [], staleBySession: new Map(), droppedSessionCount: 0, recoveredFromCorruption } }
+function isRecord(value: unknown): value is Record<string, unknown> { return Boolean(value) && typeof value === 'object' && !Array.isArray(value) }
+function finiteNumber(value: unknown): number | undefined { return typeof value === 'number' && Number.isFinite(value) ? value : undefined }
+function nonNegativeInteger(value: unknown): number { const number = finiteNumber(value) ?? 0; return Math.max(0, Math.trunc(number)) }
+function boundedUnique(values: Iterable<string>, limit: number): string[] { const output: string[] = []; for (const raw of values) { const value = String(raw).trim(); if (!value) continue; const index = output.indexOf(value); if (index >= 0) output.splice(index, 1); output.push(value); if (output.length > limit) output.splice(0, output.length - limit) } return output }
+function firstUnique(values: Iterable<string>, limit: number): string[] { const output: string[] = []; const seen = new Set<string>(); for (const raw of values) { const value = String(raw).trim(); if (!value || seen.has(value)) continue; seen.add(value); output.push(value); if (output.length >= limit) break } return output }
+function bounded(value: string, maxBytes: number): string { const normalized = value.trim().replace(/\s+/g, ' '); if (Buffer.byteLength(normalized) <= maxBytes) return normalized; let end = normalized.length; while (end > 0 && Buffer.byteLength(normalized.slice(0, end)) > maxBytes) end -= 1; return normalized.slice(0, end) }
 
 export const PE3_MAX_PERSISTED_AGENTS = MAX_PERSISTED_AGENTS
+export const PE3_MAX_PATH_SIGNATURES = MAX_PATH_SIGNATURES

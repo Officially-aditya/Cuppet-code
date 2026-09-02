@@ -2,6 +2,7 @@ const MAX_ATTACHMENTS = 16
 const MAX_FILENAME_BYTES = 256
 const MAX_MIME_BYTES = 128
 const MAX_ATTACHMENT_METADATA_BYTES = 8 * 1024
+const MIME_TOKEN = /^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,63}\/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,63}$/
 
 export type NativeRoutingAttachment = {
   type: 'file'
@@ -25,6 +26,7 @@ export function parseNativeRoutingAttachments(value: unknown): NativeRoutingAtta
     if (record.type !== 'file') throw new Error(`attachments[${index}].type must be file`)
 
     const mime = boundedRequiredString(record.mime, `attachments[${index}].mime`, MAX_MIME_BYTES)
+    if (!MIME_TOKEN.test(mime)) throw new Error(`attachments[${index}].mime must be a media type`)
     const filename = boundedOptionalString(record.filename, `attachments[${index}].filename`, MAX_FILENAME_BYTES)
     return {
       type: 'file' as const,
@@ -49,10 +51,14 @@ export function parseNativeRoutingAttachments(value: unknown): NativeRoutingAtta
 export function nativeRoutingPrompt(prompt: string, attachments: readonly NativeRoutingAttachment[]): string {
   if (attachments.length === 0) return prompt
   const metadata = attachments.map((attachment) => {
-    const filename = attachment.filename ? ` ${attachment.filename}` : ''
+    const filename = attachment.filename ? ` ${routingLabel(attachment.filename)}` : ''
     return `[attachment${filename} ${attachment.mime}]`
   })
   return [prompt, ...metadata].join('\n')
+}
+
+function routingLabel(value: string): string {
+  return value.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
 function boundedRequiredString(value: unknown, name: string, maxBytes: number): string {

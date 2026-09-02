@@ -260,12 +260,18 @@ export class TaskAgentRouter {
     const trimmed = prompt.trim()
     const now = this.#now()
     if (trimmed) {
-      active.taskDescriptor = boundedDescriptor(trimmed)
-      active.terms = mergeRecent(active.terms, extractTerms(trimmed), MAX_TERMS)
-      active.activePaths = mergeRecent(active.activePaths, extractPaths(trimmed), MAX_PATHS)
-      active.recentSymbols = mergeRecent(active.recentSymbols, extractSymbols(trimmed), MAX_SYMBOLS)
+      const promptTerms = extractTerms(trimmed)
+      const promptPaths = extractPaths(trimmed)
+      const promptSymbols = extractSymbols(trimmed)
+      const hasPromptEvidence = promptTerms.length > 0 || promptPaths.length > 0 || promptSymbols.length > 0
+      if (hasPromptEvidence) {
+        active.taskDescriptor = boundedDescriptor(trimmed)
+        active.terms = mergeRecent(active.terms, promptTerms, MAX_TERMS)
+        active.activePaths = mergeRecent(active.activePaths, promptPaths, MAX_PATHS)
+        active.recentSymbols = mergeRecent(active.recentSymbols, promptSymbols, MAX_SYMBOLS)
+        decayFingerprint(active.fingerprint)
+      }
       active.turns += 1
-      decayFingerprint(active.fingerprint)
     }
     this.#mergeObservedEvidence(active, evidence)
     commitPromptFingerprint(active, trimmed, evidence, now)
@@ -457,12 +463,23 @@ function seedFingerprint(agent: TaskAgentState, prompt: string, evidence: TaskAg
 }
 
 function commitPromptFingerprint(agent: TaskAgentState, prompt: string, evidence: TaskAgentEvidence, now: number): void {
-  if (!prompt && !hasLocalization(evidence)) return
-  mergeFingerprintSignals(agent.fingerprint.paths, extractPaths(prompt), 0.46, 'prompt', MAX_PATHS, now)
-  mergeFingerprintSignals(agent.fingerprint.paths, normalizePaths(evidence.localizedPaths ?? []), 0.58, 'localized', MAX_PATHS, now)
-  mergeFingerprintSignals(agent.fingerprint.symbols, extractSymbols(prompt), 0.46, 'prompt', MAX_SYMBOLS, now)
-  mergeFingerprintSignals(agent.fingerprint.symbols, normalizeSymbols(evidence.localizedSymbols ?? []), 0.58, 'localized', MAX_SYMBOLS, now)
-  mergeFingerprintSignals(agent.fingerprint.terms, extractTerms(prompt), 0.32, 'prompt', MAX_TERMS, now)
+  const promptPaths = extractPaths(prompt)
+  const localizedPaths = normalizePaths(evidence.localizedPaths ?? [])
+  const promptSymbols = extractSymbols(prompt)
+  const localizedSymbols = normalizeSymbols(evidence.localizedSymbols ?? [])
+  const promptTerms = extractTerms(prompt)
+  if (
+    promptPaths.length === 0
+    && localizedPaths.length === 0
+    && promptSymbols.length === 0
+    && localizedSymbols.length === 0
+    && promptTerms.length === 0
+  ) return
+  mergeFingerprintSignals(agent.fingerprint.paths, promptPaths, 0.46, 'prompt', MAX_PATHS, now)
+  mergeFingerprintSignals(agent.fingerprint.paths, localizedPaths, 0.58, 'localized', MAX_PATHS, now)
+  mergeFingerprintSignals(agent.fingerprint.symbols, promptSymbols, 0.46, 'prompt', MAX_SYMBOLS, now)
+  mergeFingerprintSignals(agent.fingerprint.symbols, localizedSymbols, 0.58, 'localized', MAX_SYMBOLS, now)
+  mergeFingerprintSignals(agent.fingerprint.terms, promptTerms, 0.32, 'prompt', MAX_TERMS, now)
   agent.fingerprint.revision += 1
 }
 

@@ -136,11 +136,11 @@ diff --git a/packages/opencode/src/session/prompt.ts b/packages/opencode/src/ses
 +        markCuppetNativeForward(targetParts)
 +        const targetInput = { ...input }
 +        delete targetInput.messageID
-+        yield* prompt({
++        yield* Effect.forkDaemon(prompt({
 +          ...targetInput,
 +          sessionID: nativeRoute.targetSessionID,
 +          parts: targetParts,
-+        })
++        }))
          input = {
            ...input,
            noReply: true,

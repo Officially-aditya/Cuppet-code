@@ -50,14 +50,6 @@ type NativeBypass = {
   expiresAt: number
 }
 
-/**
- * PE3 foreground controller.
- *
- * The base controller remains the source of truth for OpenCode/TST behavior.
- * This wrapper only chooses which existing OpenCode session should receive a
- * new user turn. Same-task turns flow through `super.submit()` unchanged,
- * preserving the provider-cache-friendly path.
- */
 export class Pe3Controller extends CuppetController {
   readonly #taskSessions = new TaskSessionRouter()
   readonly #taskLocalizer: TstTaskLocalizer
@@ -134,12 +126,7 @@ export class Pe3Controller extends CuppetController {
 
   override async adoptSession(sessionID: string): Promise<SessionInfo> {
     const suppressedUntil = this.#suppressedNativeSessions.get(sessionID)
-    if (suppressedUntil && suppressedUntil > Date.now()) {
-      // A routed native request still emits source-session bookkeeping events.
-      // Read them without allowing those delayed events to steal active-agent
-      // privilege back from the routed target session.
-      return this.gateway.getSession(sessionID)
-    }
+    if (suppressedUntil && suppressedUntil > Date.now()) return this.gateway.getSession(sessionID)
     if (suppressedUntil) this.#suppressedNativeSessions.delete(sessionID)
     const session = await super.adoptSession(sessionID)
     if (session.agent !== 'cuppet-background') {
@@ -157,14 +144,6 @@ export class Pe3Controller extends CuppetController {
     await super.submit(prepared.prompt, delivery)
   }
 
-  /**
-   * Pre-inference routing entrypoint used by the bundled OpenCode derivative.
-   *
-   * Native OpenCode owns the authoritative prompt parts, including attachment
-   * URLs/payloads. PE3 receives only bounded text + file metadata, chooses the
-   * target task session, and returns that decision. The derivative forwards the
-   * original parts losslessly and writes only a no-reply marker to the source.
-   */
   async routeNativePrompt(
     sessionID: string,
     prompt: string,
@@ -186,8 +165,6 @@ export class Pe3Controller extends CuppetController {
       }
     }
 
-    // A real native user request is authoritative even if late bookkeeping
-    // events from an earlier reroute temporarily suppress event-driven adoption.
     const source = await super.adoptSession(sessionID)
     if (source.agent === 'cuppet-background') {
       return {
@@ -217,8 +194,6 @@ export class Pe3Controller extends CuppetController {
       }
     }
 
-    // Do not submit here. Native OpenCode still owns the original parts and is
-    // the only layer capable of forwarding attachment URLs/data losslessly.
     this.#suppressedNativeSessions.set(sessionID, Date.now() + NATIVE_ROUTE_GUARD_MS)
     this.#turnStartedAt.set(prepared.sessionID, Date.now())
 
@@ -235,10 +210,7 @@ export class Pe3Controller extends CuppetController {
 
   override async status(): Promise<Record<string, unknown>> {
     const status = await super.status()
-    return {
-      ...status,
-      pe3: this.pe3Snapshot(),
-    }
+    return { ...status, pe3: this.pe3Snapshot() }
   }
 
   pe3Snapshot(): Pe3Snapshot {
@@ -254,9 +226,6 @@ export class Pe3Controller extends CuppetController {
       reasoningTokens: this.#cumulativeUsage.reasoning,
       cacheWrite: Math.max(0, this.#cumulativeUsage.cacheWrite),
       totalModelTokens: totalTokenUsage(this.#cumulativeUsage),
-      // Usage events contain the provider-calculated request cost, including
-      // provider-specific cache pricing when OpenCode exposes it. Accumulating
-      // those events across task sessions preserves effective-cost accounting.
       providerAdjustedCost: Math.max(0, this.#cumulativeCost),
       completedTurns: this.#completedTurns,
       totalLatencyMs: this.#totalLatencyMs,
@@ -301,10 +270,7 @@ export class Pe3Controller extends CuppetController {
   }
 
   #armNativeBypass(sessionID: string, prompt: string): void {
-    this.#nativeBypass.set(sessionID, {
-      prompt,
-      expiresAt: Date.now() + NATIVE_ROUTE_GUARD_MS,
-    })
+    this.#nativeBypass.set(sessionID, { prompt, expiresAt: Date.now() + NATIVE_ROUTE_GUARD_MS })
   }
 
   #expireNativeGuards(): void {
@@ -320,12 +286,7 @@ export class Pe3Controller extends CuppetController {
   #taskEvidence() {
     const session = this.snapshot.activeSession
     const active = this.#taskSessions.active
-    // Router state is historical identity, not a new observation. Only carry
-    // the monotonic workspace epoch here; real path/symbol observations arrive
-    // through tool/diff events and are recorded exactly when they occur.
-    return {
-      ...(session ? { workspaceEpoch: active?.workspaceEpoch ?? 0 } : {}),
-    }
+    return { ...(session ? { workspaceEpoch: active?.workspaceEpoch ?? 0 } : {}) }
   }
 
   #clearRestoredStale(sessionID: string, paths: Iterable<string>): void {
@@ -339,9 +300,7 @@ export class Pe3Controller extends CuppetController {
 
   #schedulePersist(): void {
     if (!this.#registryReady) return
-    this.#persistTail = this.#persistTail
-      .then(() => this.#persistRegistry())
-      .catch(() => undefined)
+    this.#persistTail = this.#persistTail.then(() => this.#persistRegistry()).catch(() => undefined)
   }
 
   async #persistRegistry(): Promise<void> {
@@ -377,9 +336,9 @@ export class Pe3Controller extends CuppetController {
     }
 
     if (event.type === 'tool-end' && event.success && event.outputPaths?.length) {
-      this.#taskSessions.noteActivePaths(event.outputPaths)
+      if (event.diff) this.#taskSessions.noteSessionWorkspaceMutation(event.sessionID, event.outputPaths)
+      else this.#taskSessions.noteSessionPaths(event.sessionID, event.outputPaths)
       this.#clearRestoredStale(event.sessionID, event.outputPaths)
-      if (event.diff) this.#taskSessions.noteWorkspaceMutation(event.outputPaths)
       this.#schedulePersist()
       return
     }
@@ -387,7 +346,8 @@ export class Pe3Controller extends CuppetController {
     if (event.type === 'diff') {
       const paths = pathsFromDiff(event.diff)
       if (paths.length > 0) {
-        this.#taskSessions.noteWorkspaceMutation(paths)
+        this.#taskSessions.noteSessionWorkspaceMutation(event.sessionID, paths)
+        this.#clearRestoredStale(event.sessionID, paths)
         this.#schedulePersist()
       }
     }

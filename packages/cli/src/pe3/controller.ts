@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { CuppetController } from '../controller.js'
 import type { AgentEvent, SessionInfo, TokenUsage } from '../types.js'
 import { totalTokenUsage } from '../usage.js'
@@ -7,9 +8,14 @@ import {
   restorePersistedTaskAgents,
 } from './persistence.js'
 import { nativeRoutingPrompt, type NativeRoutingAttachment } from './native-envelope.js'
-import { TaskSessionRouter, type PreparedTaskSession } from './session-router.js'
+import {
+  TaskSessionRouter,
+  type PreparedTaskSession,
+  type TaskSessionRouterCheckpoint,
+} from './session-router.js'
 
 const NATIVE_ROUTE_GUARD_MS = 5_000
+const NATIVE_ROUTE_TRANSACTION_MS = 30_000
 
 const emptyUsage = (): TokenUsage => ({ input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 })
 
@@ -42,11 +48,21 @@ export type NativeTaskRouteResult = {
   reason: string
   sequence: number
   refreshPaths: string[]
+  routeToken?: string
   forwarded?: boolean
 }
 
 type NativeBypass = {
   prompt: string
+  expiresAt: number
+}
+
+type NativeRouteTransaction = {
+  sourceSessionID: string
+  targetSessionID: string
+  action: Extract<PreparedTaskSession['action'], 'create' | 'reactivate'>
+  before: TaskSessionRouterCheckpoint
+  after: TaskSessionRouterCheckpoint
   expiresAt: number
 }
 
@@ -56,6 +72,7 @@ export class Pe3Controller extends CuppetController {
   readonly #taskRegistry: Pe3TaskRegistry
   readonly #nativeBypass = new Map<string, NativeBypass>()
   readonly #suppressedNativeSessions = new Map<string, number>()
+  readonly #pendingNativeRoutes = new Map<string, NativeRouteTransaction>()
   readonly #restoredStaleBySession = new Map<string, string[]>()
   readonly #cumulativeUsage = emptyUsage()
   readonly #turnStartedAt = new Map<string, number>()
@@ -178,10 +195,20 @@ export class Pe3Controller extends CuppetController {
       }
     }
     this.#taskSessions.bindSession(source.id)
+    const before = this.#taskSessions.checkpoint()
 
-    const prepared = await this.#prepareTaskSession(nativeRoutingPrompt(prompt, attachments))
-    this.#schedulePersist()
+    let prepared: PreparedTaskSession
+    try {
+      prepared = await this.#prepareTaskSession(nativeRoutingPrompt(prompt, attachments))
+    } catch (error) {
+      this.#taskSessions.restoreCheckpoint(before)
+      await super.resume(source.id).catch(() => undefined)
+      this.#nativeRouteFailures += 1
+      throw error
+    }
+
     if (prepared.action === 'continue' && prepared.sessionID === sessionID) {
+      this.#schedulePersist()
       this.#turnStartedAt.set(sessionID, Date.now())
       return {
         rerouted: false,
@@ -194,8 +221,24 @@ export class Pe3Controller extends CuppetController {
       }
     }
 
-    this.#suppressedNativeSessions.set(sessionID, Date.now() + NATIVE_ROUTE_GUARD_MS)
-    this.#turnStartedAt.set(prepared.sessionID, Date.now())
+    const after = this.#taskSessions.checkpoint()
+    this.#taskSessions.restoreCheckpoint(before)
+    try {
+      await super.resume(source.id)
+    } catch (error) {
+      this.#nativeRouteFailures += 1
+      throw error
+    }
+
+    const routeToken = randomUUID()
+    this.#pendingNativeRoutes.set(routeToken, {
+      sourceSessionID: source.id,
+      targetSessionID: prepared.sessionID,
+      action: prepared.action,
+      before,
+      after,
+      expiresAt: Date.now() + NATIVE_ROUTE_TRANSACTION_MS,
+    })
 
     return {
       rerouted: true,
@@ -203,9 +246,44 @@ export class Pe3Controller extends CuppetController {
       sourceSessionID: sessionID,
       targetSessionID: prepared.sessionID,
       reason: prepared.reason,
-      sequence: this.#taskSessions.stats().sequence,
+      sequence: after.stats.sequence,
       refreshPaths: [...prepared.refreshPaths],
+      routeToken,
     }
+  }
+
+  async commitNativeRoute(routeToken: string): Promise<{ committed: true; targetSessionID: string }> {
+    this.#expireNativeGuards()
+    const transaction = this.#pendingNativeRoutes.get(routeToken)
+    if (!transaction) throw new Error('native PE3 route token is missing or expired')
+
+    await super.resume(transaction.targetSessionID)
+    this.#taskSessions.restoreCheckpoint(transaction.after)
+    this.#pendingNativeRoutes.delete(routeToken)
+    this.#suppressedNativeSessions.set(transaction.sourceSessionID, Date.now() + NATIVE_ROUTE_GUARD_MS)
+    this.#turnStartedAt.set(transaction.targetSessionID, Date.now())
+    this.#schedulePersist()
+    return { committed: true, targetSessionID: transaction.targetSessionID }
+  }
+
+  async abortNativeRoute(routeToken: string): Promise<{ aborted: true; sourceSessionID: string }> {
+    this.#expireNativeGuards()
+    const transaction = this.#pendingNativeRoutes.get(routeToken)
+    if (!transaction) throw new Error('native PE3 route token is missing or expired')
+
+    this.#pendingNativeRoutes.delete(routeToken)
+    this.#taskSessions.restoreCheckpoint(transaction.before)
+    if (this.snapshot.activeSession?.id !== transaction.sourceSessionID) {
+      await super.resume(transaction.sourceSessionID)
+    }
+    if (transaction.action === 'create') {
+      await this.gateway.interrupt(transaction.targetSessionID).catch(() => undefined)
+    }
+    this.#turnStartedAt.delete(transaction.targetSessionID)
+    this.#suppressedNativeSessions.delete(transaction.sourceSessionID)
+    this.#nativeRouteFailures += 1
+    this.#schedulePersist()
+    return { aborted: true, sourceSessionID: transaction.sourceSessionID }
   }
 
   override async status(): Promise<Record<string, unknown>> {
@@ -280,6 +358,14 @@ export class Pe3Controller extends CuppetController {
     }
     for (const [sessionID, expiresAt] of this.#suppressedNativeSessions) {
       if (expiresAt <= now) this.#suppressedNativeSessions.delete(sessionID)
+    }
+    for (const [routeToken, transaction] of this.#pendingNativeRoutes) {
+      if (transaction.expiresAt > now) continue
+      this.#pendingNativeRoutes.delete(routeToken)
+      this.#nativeRouteFailures += 1
+      if (transaction.action === 'create') {
+        void this.gateway.interrupt(transaction.targetSessionID).catch(() => undefined)
+      }
     }
   }
 

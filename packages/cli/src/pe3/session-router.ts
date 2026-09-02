@@ -136,11 +136,22 @@ export class TaskSessionRouter {
     }
 
     let route = this.#router.route(prompt, evidence)
-    if (route.action === 'continue' && isExplicitDisjointPathSwitch(prompt, active)) {
-      route = {
-        action: 'create',
-        reason: 'explicit switch cue targets a concrete path outside the active task',
-        affinity: route.affinity,
+    if (route.action === 'continue' && isHardExplicitSwitchPrompt(prompt)) {
+      const dormantPath = findDormantPathMatch(prompt, active, this.#router.list())
+      if (dormantPath) {
+        route = {
+          action: 'reactivate',
+          agent: dormantPath.agent,
+          reason: 'explicit switch path matches a dormant task agent',
+          affinity: pathMatchAffinity(dormantPath.overlap),
+          refreshPaths: [...dormantPath.agent.stalePaths],
+        }
+      } else if (shouldForceExplicitSwitch(prompt, active, route.affinity)) {
+        route = {
+          action: 'create',
+          reason: 'explicit task-switch intent has no active structural match or dormant path target',
+          affinity: route.affinity,
+        }
       }
     }
 
@@ -156,7 +167,13 @@ export class TaskSessionRouter {
     }
 
     const semanticReturnOnly = route.action === 'continue' && isExplicitReturnPrompt(prompt)
-    if (route.action === 'continue' && (route.semanticEligible || semanticReturnOnly) && this.#semantic) {
+    const semanticContextEligible = route.action === 'continue'
+      && semanticContextEscalationEligible(prompt, route.affinity, options.semanticContext)
+    if (
+      route.action === 'continue'
+      && (route.semanticEligible || semanticReturnOnly || semanticContextEligible)
+      && this.#semantic
+    ) {
       route = await this.#semanticRoute(prompt, route, semanticReturnOnly, options.semanticContext)
     }
 
@@ -268,6 +285,8 @@ export class TaskSessionRouter {
 
 const ROUTING_PATH_TOKEN = /(?:\.?\.?\/)?[A-Za-z0-9_.@-]+(?:\/[A-Za-z0-9_.@-]+)+(?:\.[A-Za-z0-9_-]+)?|[A-Za-z0-9_.@-]+\.(?:ts|tsx|js|jsx|rs|py|go|java|json|md|yaml|yml|toml|css|html)/g
 const EXPLICIT_SWITCH_CUES = ['new task', 'separate task', 'separately', 'unrelated', 'instead', 'switch to', 'now build', 'now implement', 'move on to']
+const HARD_EXPLICIT_SWITCH_CUES = ['new task', 'separate task', 'separately', 'unrelated', 'switch to', 'move on to']
+const CONTINUATION_CUES = ['also', 'that', 'those', 'the previous', 'same task', 'same issue', 'continue', 'keep going', 'update the tests', 'fix the tests', 'what about']
 
 function emptyRoutingStats(): TaskSessionRoutingStats {
   return {
@@ -284,31 +303,74 @@ function withRefreshHint(prompt: string, paths: string[]): string {
   const bounded = paths.slice(0, 12).join(', ')
   return ['[PE3 task resume]', 'The workspace changed while this task was dormant.', `Before relying on prior file-specific assumptions, refresh these paths from current workspace truth: ${bounded}`, 'Do not assume their previous contents are still current.', '', prompt].join('\n')
 }
+function normalizedPrompt(prompt: string): string { return prompt.toLowerCase().replace(/\s+/g, ' ').trim() }
+function hasCue(prompt: string, cues: readonly string[]): boolean { const normalized = normalizedPrompt(prompt); return cues.some((cue) => normalized.includes(cue)) }
 function isExplicitReturnPrompt(prompt: string): boolean {
-  const normalized = prompt.toLowerCase().replace(/\s+/g, ' ').trim()
-  return ['go back to', 'return to', 'back to', 'resume the', 'resume that', 'previous task', 'earlier task'].some((cue) => normalized.includes(cue))
+  return hasCue(prompt, ['go back to', 'return to', 'back to', 'resume the', 'resume that', 'previous task', 'earlier task'])
 }
-function isExplicitSwitchPrompt(prompt: string): boolean {
-  const normalized = prompt.toLowerCase().replace(/\s+/g, ' ').trim()
-  return EXPLICIT_SWITCH_CUES.some((cue) => normalized.includes(cue))
+function isExplicitSwitchPrompt(prompt: string): boolean { return hasCue(prompt, EXPLICIT_SWITCH_CUES) }
+function isHardExplicitSwitchPrompt(prompt: string): boolean { return hasCue(prompt, HARD_EXPLICIT_SWITCH_CUES) }
+function hasContinuationPrompt(prompt: string): boolean { return hasCue(prompt, CONTINUATION_CUES) }
+function taskPaths(agent: TaskAgentState): Set<string> {
+  return new Set([
+    ...agent.activePaths,
+    ...agent.touchedPaths,
+    ...agent.fingerprint.paths.map((signal) => signal.value),
+  ].map(normalizeRoutingPath).filter(Boolean))
 }
-function isExplicitDisjointPathSwitch(prompt: string, active: TaskAgentState): boolean {
-  if (!isExplicitSwitchPrompt(prompt)) return false
+function shouldForceExplicitSwitch(prompt: string, active: TaskAgentState, affinity: TaskAffinity): boolean {
+  if (!isHardExplicitSwitchPrompt(prompt)) return false
+  if (affinity.pathOverlap > 0 || affinity.symbolOverlap > 0) return false
   const promptPaths = extractRoutingPaths(prompt)
-  if (promptPaths.length === 0) return false
-  const knownPaths = new Set([
-    ...active.activePaths.map(normalizeRoutingPath),
-    ...active.touchedPaths.map(normalizeRoutingPath),
-    ...active.fingerprint.paths.map((signal) => normalizeRoutingPath(signal.value)),
-  ].filter(Boolean))
-  if (knownPaths.size === 0) return true
-  return promptPaths.every((path) => !knownPaths.has(path))
+  if (promptPaths.length === 0) return true
+  const knownPaths = taskPaths(active)
+  return knownPaths.size === 0 || promptPaths.every((path) => !knownPaths.has(path))
+}
+function findDormantPathMatch(
+  prompt: string,
+  active: TaskAgentState,
+  agents: TaskAgentState[],
+): { agent: TaskAgentState; overlap: number } | undefined {
+  const promptPaths = extractRoutingPaths(prompt)
+  if (promptPaths.length === 0) return undefined
+  const candidates = agents
+    .filter((agent) => agent.id !== active.id)
+    .map((agent) => ({
+      agent,
+      overlap: promptPaths.filter((path) => taskPaths(agent).has(path)).length,
+    }))
+    .filter((candidate) => candidate.overlap > 0)
+    .sort((left, right) => right.overlap - left.overlap || right.agent.lastActiveAt - left.agent.lastActiveAt)
+  const best = candidates[0]
+  if (!best) return undefined
+  const runnerUp = candidates[1]
+  if (runnerUp && runnerUp.overlap === best.overlap) return undefined
+  return best
+}
+function pathMatchAffinity(pathOverlap: number): TaskAffinity {
+  return {
+    score: pathOverlap * 8,
+    pathOverlap,
+    symbolOverlap: 0,
+    termOverlap: 0,
+    lexicalRatio: 0,
+    weightedOverlap: pathOverlap,
+  }
 }
 function extractRoutingPaths(prompt: string): string[] {
   return [...new Set((prompt.match(ROUTING_PATH_TOKEN) ?? []).map(normalizeRoutingPath).filter(Boolean))]
 }
 function normalizeRoutingPath(path: string): string {
   return path.trim().replaceAll('\\', '/').replace(/^\.\//, '').replace(/[),.;:'"\]}>]+$/g, '').toLowerCase()
+}
+function semanticContextEscalationEligible(
+  prompt: string,
+  affinity: TaskAffinity,
+  semanticContext: string | undefined,
+): boolean {
+  if (!semanticContext?.trim()) return false
+  if (hasContinuationPrompt(prompt)) return false
+  return affinity.pathOverlap === 0 && affinity.symbolOverlap === 0 && affinity.weightedOverlap < 0.9
 }
 function semanticInput(prompt: string, semanticContext: string): string {
   const context = semanticContext.trim()

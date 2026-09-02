@@ -1,0 +1,154 @@
+diff --git a/packages/opencode/src/cuppet/pe3-route.ts b/packages/opencode/src/cuppet/pe3-route.ts
+--- a/packages/opencode/src/cuppet/pe3-route.ts
++++ b/packages/opencode/src/cuppet/pe3-route.ts
+@@ -2,6 +2,11 @@
+ 
+ const MAX_PROMPT_BYTES = 128 * 1024
+ const MAX_RESPONSE_BYTES = 64 * 1024
++const MAX_PARTS = 32
++const MAX_ATTACHMENTS = 16
++const MAX_FILENAME_BYTES = 256
++const MAX_MIME_BYTES = 128
++const MAX_ATTACHMENT_METADATA_BYTES = 8 * 1024
+ const ROUTE_TIMEOUT_MS = 2_000
+ 
+ export type CuppetNativeRoute = {
+@@ -15,38 +20,83 @@
+   forwarded?: boolean
+ }
+ 
++type RoutingAttachment = {
++  type: "file"
++  mime: string
++  filename?: string
++}
++
++type RoutingEnvelope = {
++  prompt: string
++  attachments: RoutingAttachment[]
++}
++
++const forwardedParts = new WeakSet<object>()
++
++export function markCuppetNativeForward(parts: unknown[]): void {
++  forwardedParts.add(parts)
++}
++
+ export async function routeCuppetNativePrompt(input: {
+   sessionID: string
+   agent?: string
+   parts: unknown[]
+ }): Promise<CuppetNativeRoute | undefined> {
+   if (input.agent === "cuppet-background") return
++  if (forwardedParts.delete(input.parts)) return
+   const socketPath = process.env.CUPPET_CONTROL_SOCKET
+   const token = process.env.CUPPET_CONTROL_TOKEN
+   if (!socketPath || !token) return
+ 
+-  const prompt = textOnlyPrompt(input.parts)
+-  if (!prompt || Buffer.byteLength(prompt) > MAX_PROMPT_BYTES) return
++  const envelope = routingEnvelope(input.parts)
++  if (!envelope) return
+ 
+   return callControl(socketPath, {
+     token,
+     method: "pe3.route-native",
+-    params: { sessionID: input.sessionID, prompt },
++    params: {
++      sessionID: input.sessionID,
++      prompt: envelope.prompt,
++      attachments: envelope.attachments,
++    },
+   }).catch(() => undefined)
+ }
+ 
+-function textOnlyPrompt(parts: unknown[]): string | undefined {
++function routingEnvelope(parts: unknown[]): RoutingEnvelope | undefined {
++  if (parts.length === 0 || parts.length > MAX_PARTS) return
+   const text: string[] = []
++  const attachments: RoutingAttachment[] = []
+   for (const part of parts) {
+     if (!part || typeof part !== "object" || Array.isArray(part)) return
+     const value = part as Record<string, unknown>
+-    if (value.type !== "text") return
+-    if (value.synthetic === true) continue
+-    if (typeof value.text !== "string") return
+-    text.push(value.text)
++    if (value.type === "text") {
++      if (value.synthetic === true) continue
++      if (typeof value.text !== "string") return
++      text.push(value.text)
++      continue
++    }
++    if (value.type === "file") {
++      if (attachments.length >= MAX_ATTACHMENTS) return
++      if (typeof value.mime !== "string" || !value.mime.trim()) return
++      const mime = value.mime.trim()
++      if (Buffer.byteLength(mime) > MAX_MIME_BYTES) return
++      let filename: string | undefined
++      if (value.filename !== undefined) {
++        if (typeof value.filename !== "string" || !value.filename.trim()) return
++        filename = value.filename.trim()
++        if (Buffer.byteLength(filename) > MAX_FILENAME_BYTES) return
++      }
++      attachments.push({ type: "file", mime, ...(filename ? { filename } : {}) })
++      continue
++    }
++    // Agent/subtask/unknown prompt parts cannot be forwarded under the narrow
++    // attachment contract yet, so preserve the current source-session path.
++    return
+   }
+   const prompt = text.join("\n").trim()
+-  return prompt || undefined
++  if (!prompt || Buffer.byteLength(prompt) > MAX_PROMPT_BYTES) return
++  if (Buffer.byteLength(JSON.stringify(attachments)) > MAX_ATTACHMENT_METADATA_BYTES) return
++  return { prompt, attachments }
+ }
+ 
+ function callControl(
+diff --git a/packages/opencode/src/session/prompt.ts b/packages/opencode/src/session/prompt.ts
+--- a/packages/opencode/src/session/prompt.ts
++++ b/packages/opencode/src/session/prompt.ts
+@@ -1,7 +1,7 @@
+ import { LLMEvent } from "@opencode-ai/llm"
+ import { Token } from "@/util/token"
+ import { usable } from "./overflow"
+-import { routeCuppetNativePrompt } from "@/cuppet/pe3-route"
++import { markCuppetNativeForward, routeCuppetNativePrompt } from "@/cuppet/pe3-route"
+ 
+ // @ts-ignore
+ globalThis.AI_SDK_LOG_WARNINGS = false
+@@ -16,6 +16,25 @@
+         }),
+       )
+       if (nativeRoute?.rerouted) {
++        const originalParts = input.parts
++        const targetParts = nativeRoute.refreshPaths.length
++          ? [
++              {
++                type: "text" as const,
++                text: `[PE3 task resume]\nRefresh these paths from current workspace truth before relying on prior file-specific assumptions: ${nativeRoute.refreshPaths.slice(0, 12).join(", ")}`,
++                synthetic: true,
++              },
++              ...originalParts,
++            ]
++          : originalParts
++        markCuppetNativeForward(targetParts)
++        const targetInput = { ...input }
++        delete targetInput.messageID
++        yield* prompt({
++          ...targetInput,
++          sessionID: nativeRoute.targetSessionID,
++          parts: targetParts,
++        })
+         input = {
+           ...input,
+           noReply: true,
+@@ -30,6 +49,7 @@
+             {
+               type: "text",
+               text: `[PE3 persisted task resume]\nRefresh these paths from current workspace truth before relying on prior file-specific assumptions: ${refresh}`,
++              synthetic: true,
+             },
+             ...input.parts,
+           ],

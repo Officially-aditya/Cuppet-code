@@ -15,10 +15,9 @@ on:
       - 'packages/opencode-plugin/src/tui-entry.ts'
       - 'packages/opencode-plugin/test/pe3-tui.test.ts'
       - 'packages/opencode-plugin/tsup.config.ts'
-      - 'patches/opencode/0016-cuppet-pe3-native-routing.patch'
-      - 'patches/opencode/0017-cuppet-pe3-persisted-refresh.patch'
-      - 'patches/opencode/0018-cuppet-pe3-attachment-routing.patch'
+      - 'patches/opencode/**'
       - 'scripts/pe3-routing-benchmark.ts'
+      - 'scripts/run-pe3-tests.mjs'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/pe3.yml'
@@ -58,34 +57,10 @@ jobs:
         run: |
           npm run typecheck --workspace=cuppet
           npm run typecheck --workspace=@cuppet-code/opencode-plugin
+      - name: Test complete discovered PE3 regression suite
+        run: npm run test:pe3
       - name: Test task affinity router
         run: node --import tsx --test packages/cli/test/task-agents.test.ts
-      - name: Test natural semantic routing
-        run: >-
-          node --import tsx --test
-          packages/cli/test/pe3-semantic-router.test.ts
-          packages/cli/test/pe3-semantic-prompt-once.test.ts
-          packages/cli/test/pe3-adversarial-routing.test.ts
-          packages/cli/test/pe3-fallback-regression.test.ts
-          packages/cli/test/pe3-weighted-fingerprint.test.ts
-          packages/cli/test/pe3-task-isolation.test.ts
-          packages/cli/test/pe3-localizer.test.ts
-          packages/cli/test/pe3-model-contract.test.ts
-      - name: Test task-agent restart persistence
-        run: node --import tsx --test packages/cli/test/pe3-persistence.test.ts
-      - name: Test attachment-aware native routing
-        run: >-
-          node --import tsx --test
-          packages/cli/test/pe3-attachment-routing.test.ts
-          packages/cli/test/pe3-attachment-controller-contract.test.ts
-      - name: Test task session routing
-        run: node --import tsx --test packages/cli/test/pe3-session-router.test.ts
-      - name: Test PE3 benchmark metrics
-        run: node --import tsx --test packages/cli/test/pe3-benchmark.test.ts
-      - name: Test native derivative contract
-        run: node --import tsx --test packages/cli/test/pe3-native-contract.test.ts
-      - name: Test cumulative telemetry semantics
-        run: node --import tsx --test packages/cli/test/pe3-telemetry.test.ts
       - name: Test local control routing boundary
         run: node --import tsx --test packages/cli/test/control.test.ts
       - name: Test native TUI handoff

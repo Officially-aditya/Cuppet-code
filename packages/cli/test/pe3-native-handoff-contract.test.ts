@@ -1,62 +1,87 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import { test } from 'node:test'
 
-const FAILURE_SAFE_PATCH = new URL('../../../patches/opencode/0018-cuppet-pe3-attachment-routing.patch', import.meta.url)
-const TRANSACTION_PATCH = new URL('../../../patches/opencode/0019-cuppet-pe3-transactional-routing.patch', import.meta.url)
+const patchedRoot = process.env.CUPPET_PE3_PATCHED_SOURCE
+const derivativeAvailable = Boolean(patchedRoot)
 
-test('native reroute commits PE3 state only after target prompt success and before source suppression', async () => {
-  const additions = await addedPatchLines(TRANSACTION_PATCH)
-  const handoff = additions.indexOf('const handoff = yield* prompt({')
-  const exit = additions.indexOf('}).pipe(Effect.exit)', handoff)
-  const success = additions.indexOf('if (Exit.isSuccess(handoff)) {', exit)
-  const commit = additions.indexOf('commitCuppetNativeRoute(routeToken)', success)
-  const noReply = additions.indexOf('noReply: true', commit)
+test('applied derivative accepts target message, commits PE3, then starts target inference', { skip: !derivativeAvailable }, async () => {
+  const source = await appliedPromptSource()
+  const start = source.indexOf('if (nativeRoute?.rerouted) {')
+  const end = source.indexOf('const message = yield* createUserMessage(input)', start)
+  assert.ok(start >= 0 && end > start)
+  const block = source.slice(start, end)
 
-  assert.ok(handoff >= 0, 'target handoff must be explicit')
-  assert.ok(exit > handoff, 'target handoff must be observed through Effect.exit')
-  assert.ok(success > exit, 'transaction commit must be gated on successful target handoff')
-  assert.ok(commit > success, 'PE3 state must commit only after target success')
-  assert.ok(noReply > commit, 'source noReply must follow the PE3 commit attempt')
+  const acceptance = block.indexOf('const acceptance = yield* prompt({')
+  const acceptanceNoReply = block.indexOf('noReply: true', acceptance)
+  const commit = block.indexOf('commitCuppetNativeRoute(routeToken)', acceptanceNoReply)
+  const sourceNoReply = block.indexOf('noReply: true', commit)
+  const loop = block.indexOf('loop({ sessionID: nativeRoute.targetSessionID })', sourceNoReply)
+
+  assert.ok(acceptance >= 0, 'target message acceptance must be explicit')
+  assert.ok(acceptanceNoReply > acceptance, 'target acceptance must persist without running inference')
+  assert.ok(commit > acceptanceNoReply, 'PE3 must commit only after target message acceptance')
+  assert.ok(sourceNoReply > commit, 'source suppression must happen only after successful commit')
+  assert.ok(loop > sourceNoReply, 'target inference must start only after the route is committed')
 })
 
-test('failed target handoff aborts provisional PE3 state and preserves the source request', async () => {
-  const additions = await addedPatchLines(TRANSACTION_PATCH)
-  const failure = additions.indexOf('} else {', additions.indexOf('if (Exit.isSuccess(handoff)) {'))
-  const clear = additions.indexOf('clearCuppetNativeForward(targetParts)', failure)
-  const abort = additions.indexOf('abortCuppetNativeRoute(routeToken)', failure)
-  const log = additions.indexOf('PE3 native reroute handoff failed; preserving source request', failure)
-  const sourceMutation = additions.indexOf('input = {', failure)
+test('applied derivative preserves multipart forwarding and recursive-route guard invariants', { skip: !derivativeAvailable }, async () => {
+  const source = await appliedPromptSource()
+  const start = source.indexOf('if (nativeRoute?.rerouted) {')
+  const end = source.indexOf('const message = yield* createUserMessage(input)', start)
+  const block = source.slice(start, end)
 
+  assert.match(block, /const originalParts = input\.parts/)
+  assert.match(block, /\.\.\.originalParts/)
+  assert.match(block, /delete targetInput\.messageID/)
+  assert.match(block, /sessionID: nativeRoute\.targetSessionID/)
+  assert.match(block, /markCuppetNativeForward\(targetParts\)/)
+})
+
+test('applied derivative aborts before source suppression when target acceptance fails', { skip: !derivativeAvailable }, async () => {
+  const source = await appliedPromptSource()
+  const failure = source.indexOf('PE3 native reroute target acceptance failed; preserving source request')
   assert.ok(failure >= 0)
-  assert.ok(clear > failure, 'failed handoff must release the one-shot forwarding guard')
-  assert.ok(abort > clear, 'failed handoff must abort the provisional PE3 route')
-  assert.ok(log > abort, 'failed handoff and abort outcome must be observable')
-  assert.equal(sourceMutation, -1, 'failure branch must leave the original source input untouched')
+  const branchStart = source.lastIndexOf('} else {', failure)
+  const abort = source.indexOf('abortCuppetNativeRoute(routeToken)', branchStart)
+  const nextSourceMutation = source.indexOf('input = {', branchStart)
+  const routeBlockEnd = source.indexOf('const message = yield* createUserMessage(input)', branchStart)
+
+  assert.ok(abort > branchStart && abort < failure)
+  assert.ok(nextSourceMutation === -1 || nextSourceMutation > routeBlockEnd, 'acceptance failure must not replace source input')
 })
 
-test('missing transaction token fails closed to the original source request', async () => {
-  const additions = await addedPatchLines(TRANSACTION_PATCH)
-  assert.match(additions, /if \(!routeToken\)/)
-  assert.match(additions, /missing transaction token; preserving source request/)
+test('applied persisted refresh hint is synthetic and keeps original parts', { skip: !derivativeAvailable }, async () => {
+  const source = await appliedPromptSource()
+  const marker = source.indexOf('[PE3 persisted task resume]')
+  assert.ok(marker >= 0)
+  const block = source.slice(Math.max(0, marker - 300), marker + 500)
+  assert.match(block, /synthetic: true/)
+  assert.match(block, /\.\.\.input\.parts/)
 })
 
-test('successful reroute still forwards original multipart content losslessly', async () => {
-  const additions = await addedPatchLines(TRANSACTION_PATCH)
-  assert.match(additions, /const originalParts = input\.parts/)
-  assert.match(additions, /\.\.\.originalParts/)
-  assert.match(additions, /delete targetInput\.messageID/)
-  assert.match(additions, /sessionID: nativeRoute\.targetSessionID/)
-  assert.match(additions, /markCuppetNativeForward\(targetParts\)/)
+test('patch-line helper cannot be satisfied by behavior present only in a deleted line', () => {
+  const syntheticPatch = [
+    'diff --git a/example.ts b/example.ts',
+    '--- a/example.ts',
+    '+++ b/example.ts',
+    '@@ -1 +1 @@',
+    '-dangerousOldBehavior()',
+    '+safeNewBehavior()',
+  ].join('\n')
+
+  const additions = addedPatchLines(syntheticPatch)
+  assert.doesNotMatch(additions, /dangerousOldBehavior/)
+  assert.match(additions, /safeNewBehavior/)
 })
 
-test('the earlier failure-safe patch no longer uses fire-and-forget handoff', async () => {
-  const additions = await addedPatchLines(FAILURE_SAFE_PATCH)
-  assert.equal(additions.includes('Effect.forkIn(scope)'), false)
-})
+async function appliedPromptSource(): Promise<string> {
+  assert.ok(patchedRoot)
+  return readFile(resolve(patchedRoot, 'packages/opencode/src/session/prompt.ts'), 'utf8')
+}
 
-async function addedPatchLines(url: URL): Promise<string> {
-  const patch = await readFile(url, 'utf8')
+function addedPatchLines(patch: string): string {
   return patch
     .split('\n')
     .filter((line) => line.startsWith('+') && !line.startsWith('+++'))

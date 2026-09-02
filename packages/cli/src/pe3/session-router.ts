@@ -179,11 +179,15 @@ export class TaskSessionRouter {
       })
     }
 
+    // A task switch is an isolation boundary. Adapter evidence observed while
+    // the source task was active must never seed the target task's working set.
+    // Only query-localized evidence and the global workspace epoch may cross.
+    const transitionEvidence = mergeTransitionEvidence(adapter.evidence(), evidence)
+
     if (route.action === 'reactivate') {
       const resumed = await adapter.resume(route.agent.sessionID)
-      const resumedEvidence = mergeEvidence(adapter.evidence(), evidence)
-      this.bindSession(resumed.id, resumedEvidence)
-      this.#router.recordTurn(prompt, resumedEvidence)
+      this.bindSession(resumed.id)
+      this.#router.recordTurn(prompt, transitionEvidence)
       return this.#record({
         action: 'reactivate',
         sessionID: resumed.id,
@@ -195,9 +199,8 @@ export class TaskSessionRouter {
     }
 
     const created = await adapter.create()
-    const createdEvidence = mergeEvidence(adapter.evidence(), evidence)
-    this.bindSession(created.id, createdEvidence)
-    this.#router.recordTurn(prompt, createdEvidence)
+    this.bindSession(created.id, transitionEvidence)
+    this.#router.recordTurn(prompt, transitionEvidence)
     return this.#record({
       action: 'create',
       sessionID: created.id,
@@ -328,6 +331,14 @@ function mergeEvidence(left: TaskAgentEvidence, right: TaskAgentEvidence): TaskA
     activePaths: mergeIterables(left.activePaths, right.activePaths),
     touchedPaths: mergeIterables(left.touchedPaths, right.touchedPaths),
     recentSymbols: mergeIterables(left.recentSymbols, right.recentSymbols),
+    localizedPaths: mergeIterables(left.localizedPaths, right.localizedPaths),
+    localizedSymbols: mergeIterables(left.localizedSymbols, right.localizedSymbols),
+    workspaceEpoch: Math.max(left.workspaceEpoch ?? 0, right.workspaceEpoch ?? 0),
+  }
+}
+
+function mergeTransitionEvidence(left: TaskAgentEvidence, right: TaskAgentEvidence): TaskAgentEvidence {
+  return {
     localizedPaths: mergeIterables(left.localizedPaths, right.localizedPaths),
     localizedSymbols: mergeIterables(left.localizedSymbols, right.localizedSymbols),
     workspaceEpoch: Math.max(left.workspaceEpoch ?? 0, right.workspaceEpoch ?? 0),

@@ -49,6 +49,8 @@ type NativePe3Controller = CuppetController & {
     prompt: string,
     attachments?: NativeRoutingAttachment[],
   ) => Promise<unknown>
+  commitNativeRoute?: (routeToken: string) => Promise<unknown>
+  abortNativeRoute?: (routeToken: string) => Promise<unknown>
 }
 
 export class CuppetControlServer {
@@ -148,8 +150,6 @@ export class CuppetControlServer {
   }
 
   async #call(method: string, params: Record<string, unknown>): Promise<unknown> {
-    // The router owns authorization + dispatch for everything a remote
-    // transport may also call, so local and remote surfaces stay in lockstep.
     if (ControlRouter.handles(method)) {
       return this.#router.execute({ kind: 'local' }, method, params)
     }
@@ -212,6 +212,20 @@ export class CuppetControlServer {
           textParam(params, 'prompt'),
           parseNativeRoutingAttachments(params.attachments),
         )
+      }
+      case 'pe3.commit-native-route': {
+        const controller = this.#controller as NativePe3Controller
+        if (typeof controller.commitNativeRoute !== 'function') {
+          throw new Error('PE3 native route commit is unavailable')
+        }
+        return controller.commitNativeRoute(stringParam(params, 'routeToken'))
+      }
+      case 'pe3.abort-native-route': {
+        const controller = this.#controller as NativePe3Controller
+        if (typeof controller.abortNativeRoute !== 'function') {
+          throw new Error('PE3 native route abort is unavailable')
+        }
+        return controller.abortNativeRoute(stringParam(params, 'routeToken'))
       }
       default: throw new Error(`unknown control method ${method}`)
     }

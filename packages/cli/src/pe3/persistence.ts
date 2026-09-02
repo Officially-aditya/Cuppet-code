@@ -92,12 +92,18 @@ export class Pe3TaskRegistry {
     activeSessionID?: string,
     supplementalStale: ReadonlyMap<string, readonly string[]> = new Map(),
   ): Promise<void> {
-    const boundedAgents = agents
+    const boundedAgents = [...agents]
       .sort((left, right) => right.lastActiveAt - left.lastActiveAt)
       .slice(0, MAX_PERSISTED_AGENTS)
       .map((agent) => sanitizeAgent(agent, supplementalStale.get(agent.sessionID) ?? []))
-    const signaturePaths = boundedUnique(
-      boundedAgents.flatMap((agent) => [...agent.activePaths, ...agent.touchedPaths]),
+    const activeAgent = activeSessionID
+      ? boundedAgents.find((agent) => agent.sessionID === activeSessionID)
+      : undefined
+    const signatureAgents = activeAgent
+      ? [activeAgent, ...boundedAgents.filter((agent) => agent.sessionID !== activeAgent.sessionID)]
+      : boundedAgents
+    const signaturePaths = firstUnique(
+      signatureAgents.flatMap((agent) => [...agent.activePaths, ...agent.touchedPaths]),
       MAX_PATH_SIGNATURES,
     )
     const fileSignatures: Record<string, FileSignature> = {}
@@ -284,6 +290,8 @@ function isRecord(value: unknown): value is Record<string, unknown> { return Boo
 function finiteNumber(value: unknown): number | undefined { return typeof value === 'number' && Number.isFinite(value) ? value : undefined }
 function nonNegativeInteger(value: unknown): number { const number = finiteNumber(value) ?? 0; return Math.max(0, Math.trunc(number)) }
 function boundedUnique(values: Iterable<string>, limit: number): string[] { const output: string[] = []; for (const raw of values) { const value = String(raw).trim(); if (!value) continue; const index = output.indexOf(value); if (index >= 0) output.splice(index, 1); output.push(value); if (output.length > limit) output.splice(0, output.length - limit) } return output }
+function firstUnique(values: Iterable<string>, limit: number): string[] { const output: string[] = []; const seen = new Set<string>(); for (const raw of values) { const value = String(raw).trim(); if (!value || seen.has(value)) continue; seen.add(value); output.push(value); if (output.length >= limit) break } return output }
 function bounded(value: string, maxBytes: number): string { const normalized = value.trim().replace(/\s+/g, ' '); if (Buffer.byteLength(normalized) <= maxBytes) return normalized; let end = normalized.length; while (end > 0 && Buffer.byteLength(normalized.slice(0, end)) > maxBytes) end -= 1; return normalized.slice(0, end) }
 
 export const PE3_MAX_PERSISTED_AGENTS = MAX_PERSISTED_AGENTS
+export const PE3_MAX_PATH_SIGNATURES = MAX_PATH_SIGNATURES

@@ -42,6 +42,10 @@ type ControlServerOptions = {
   remote?: RemoteControlManager
 }
 
+type NativePe3Controller = CuppetController & {
+  routeNativePrompt?: (sessionID: string, prompt: string) => Promise<unknown>
+}
+
 export class CuppetControlServer {
   readonly #controller: CuppetController
   readonly #router: ControlRouter
@@ -193,6 +197,13 @@ export class CuppetControlServer {
       }
       case 'session.adopt': return this.#controller.adoptSession(stringParam(params, 'sessionID'))
       case 'session.list': return this.#controller.listSessions()
+      case 'pe3.route-native': {
+        const controller = this.#controller as NativePe3Controller
+        if (typeof controller.routeNativePrompt !== 'function') {
+          throw new Error('PE3 native routing is unavailable')
+        }
+        return controller.routeNativePrompt(stringParam(params, 'sessionID'), textParam(params, 'prompt'))
+      }
       default: throw new Error(`unknown control method ${method}`)
     }
   }
@@ -210,6 +221,12 @@ function stringParam(params: Record<string, unknown>, name: string): string {
   const value = params[name]
   if (typeof value !== 'string' || !value.trim()) throw new Error(`${name} is required`)
   return value.trim()
+}
+
+function textParam(params: Record<string, unknown>, name: string): string {
+  const value = params[name]
+  if (typeof value !== 'string' || !value.trim()) throw new Error(`${name} is required`)
+  return value
 }
 
 function optionalStringParam(params: Record<string, unknown>, name: string): string | undefined {

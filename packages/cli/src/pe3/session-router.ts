@@ -24,6 +24,7 @@ export type PreparedTaskSession = {
 }
 
 export type TaskSessionRoutingStats = {
+  sequence: number
   continuations: number
   created: number
   reactivated: number
@@ -42,6 +43,7 @@ export type TaskSessionRoutingStats = {
 export class TaskSessionRouter {
   readonly #router: TaskAgentRouter
   readonly #stats: TaskSessionRoutingStats = {
+    sequence: 0,
     continuations: 0,
     created: 0,
     reactivated: 0,
@@ -166,6 +168,7 @@ export class TaskSessionRouter {
   }
 
   #record(result: PreparedTaskSession): PreparedTaskSession {
+    this.#stats.sequence += 1
     if (result.action === 'continue') this.#stats.continuations += 1
     if (result.action === 'create') this.#stats.created += 1
     if (result.action === 'reactivate') this.#stats.reactivated += 1

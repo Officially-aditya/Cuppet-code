@@ -272,6 +272,38 @@ export function hasCorrectionCue(value: string): boolean {
   return /\b(?:i\s+said|already\s+told\s+you|don't\s+do\s+that\s+again|do\s+not\s+do\s+that\s+again|as\s+i\s+said|again[, :]\s*(?:use|don't|do\s+not|never))\b/i.test(value)
 }
 
+/** A destructive contradiction needs a deterministic negative/correction cue. */
+export function hasContradictionCue(value: string): boolean {
+  return /\b(?:never\s+(?:use|do)|don't\s+(?:use|do)|do\s+not\s+(?:use|do)|stop\s+(?:using|doing)|no\s+longer\s+(?:use|want|prefer)|instead\s+(?:use|do)|not\s+.+\s+anymore)\b/i.test(value)
+}
+
+/** Mirrors the Rust TST secret-bearing memory rejection before ledger persistence. */
+export function isSensitiveCandidate(key: string, value: string): boolean {
+  const text = `${key.toLowerCase()} ${value.toLowerCase()}`
+  if ([
+    'api_key',
+    'api-key',
+    'password',
+    'private key',
+    'authorization: bearer',
+    'refresh_token',
+    'access_token',
+    'client_secret',
+  ].some((marker) => text.includes(marker))) return true
+  if (value.includes('-----BEGIN ')) return true
+  if (value.split(/\s+/).some((part) =>
+    (part.startsWith('sk-')
+      || part.startsWith('ghp_')
+      || part.startsWith('glpat-')
+      || part.startsWith('xoxb-')
+      || part.startsWith('AIza')
+      || part.startsWith('AKIA')
+      || part.startsWith('ASIA'))
+      && part.length > 16,
+  )) return true
+  return value.startsWith('eyJ') && (value.match(/\./g)?.length ?? 0) >= 2 && value.length > 40
+}
+
 export function candidateSourceRef(kind: string, value: string): string {
   return `${kind}:${createHash('sha256').update(`${kind}\0${value}`).digest('hex').slice(0, 16)}`
 }

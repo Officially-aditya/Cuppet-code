@@ -1,0 +1,37 @@
+name: pe3-lock-refresh
+
+on:
+  push:
+    branches:
+      - feat/pe3-natural-task-switch-detection
+    paths:
+      - packages/cli/package.json
+      - .github/workflows/pe3-lock-refresh.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/pe3-natural-task-switch-detection
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install --package-lock-only --ignore-scripts
+      - name: Commit refreshed lockfile
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add package-lock.json
+          git commit -m "build(pe3): refresh embedding runtime lockfile"
+          git push origin HEAD:feat/pe3-natural-task-switch-detection

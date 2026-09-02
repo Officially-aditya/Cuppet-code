@@ -202,11 +202,11 @@ export class TaskAgentRouter {
     const explicitReturn = hasCue(normalizedPrompt, RETURN_CUES)
     const dormant = this.#bestDormantMatch(active, prompt, normalizedPrompt, evidence)
 
-    if (hasCue(normalizedPrompt, CONTINUATION_CUES)) {
-      return { action: 'continue', agent: cloneAgent(active) as TaskAgentState, reason: 'continuation language defaults to the active agent', affinity: currentAffinity }
-    }
     if (explicitReturn && dormant) {
       return { action: 'reactivate', agent: cloneAgent(dormant.agent) as TaskAgentState, reason: 'explicit return language matches a dormant task agent', affinity: dormant.affinity, refreshPaths: [...dormant.agent.stalePaths] }
+    }
+    if (!explicitSwitch && hasCue(normalizedPrompt, CONTINUATION_CUES)) {
+      return { action: 'continue', agent: cloneAgent(active) as TaskAgentState, reason: 'continuation language defaults to the active agent', affinity: currentAffinity }
     }
     if (!explicitSwitch && isStrongMatch(currentAffinity)) {
       return { action: 'continue', agent: cloneAgent(active) as TaskAgentState, reason: 'active working-set affinity is sufficient', affinity: currentAffinity }

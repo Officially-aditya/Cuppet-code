@@ -50,15 +50,20 @@ jobs:
         run: |
           npm run typecheck --workspace=cuppet
           npm run typecheck --workspace=@cuppet-code/opencode-plugin
-      - name: Run PE3 regression tests
-        run: >-
-          node --import tsx --test
-          packages/cli/test/task-agents.test.ts
-          packages/cli/test/pe3-session-router.test.ts
-          packages/cli/test/pe3-benchmark.test.ts
-          packages/cli/test/pe3-native-contract.test.ts
-          packages/cli/test/control.test.ts
-          packages/opencode-plugin/test/pe3-tui.test.ts
+      - name: Test task affinity router
+        run: node --import tsx --test packages/cli/test/task-agents.test.ts
+      - name: Test task session routing
+        run: node --import tsx --test packages/cli/test/pe3-session-router.test.ts
+      - name: Test PE3 benchmark metrics
+        run: node --import tsx --test packages/cli/test/pe3-benchmark.test.ts
+      - name: Test native derivative contract
+        run: node --import tsx --test packages/cli/test/pe3-native-contract.test.ts
+      - name: Test cumulative telemetry semantics
+        run: node --import tsx --test packages/cli/test/pe3-telemetry.test.ts
+      - name: Test local control routing boundary
+        run: node --import tsx --test packages/cli/test/control.test.ts
+      - name: Test native TUI handoff
+        run: node --import tsx --test packages/opencode-plugin/test/pe3-tui.test.ts
       - name: Run persistent-session routing benchmark
         run: npm run eval:pe3:routing
       - name: Build patched OpenCode derivative

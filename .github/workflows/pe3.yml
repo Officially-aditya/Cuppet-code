@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       CUPPET_PE3_ALLOW_MODEL_DOWNLOAD: '0'
-      CUPPET_PE3_PATCHED_SOURCE: ${{ github.workspace }}/.opencode-patched-src
+      CUPPET_PE3_PATCHED_SOURCE: ${{ runner.temp }}/cuppet-opencode-patched
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -46,7 +46,7 @@ jobs:
           node-version: 22
           cache: npm
       - name: Verify and materialize complete OpenCode patch stack
-        run: node scripts/check-opencode-patches.mjs --source=.opencode-src --output=.opencode-patched-src
+        run: node scripts/check-opencode-patches.mjs --source=.opencode-src --output="${{ runner.temp }}/cuppet-opencode-patched"
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14

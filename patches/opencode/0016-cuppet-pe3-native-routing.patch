@@ -2,7 +2,7 @@ diff --git a/packages/opencode/src/cuppet/pe3-route.ts b/packages/opencode/src/c
 new file mode 100644
 --- /dev/null
 +++ b/packages/opencode/src/cuppet/pe3-route.ts
-@@ -0,0 +1,129 @@
+@@ -0,0 +1,123 @@
 +import { createConnection, type Socket } from "node:net"
 +
 +const MAX_PROMPT_BYTES = 128 * 1024
@@ -33,7 +33,7 @@ new file mode 100644
 +  const prompt = textOnlyPrompt(input.parts)
 +  if (!prompt || Buffer.byteLength(prompt) > MAX_PROMPT_BYTES) return
 +
-+  return callControl(socketPath, token, {
++  return callControl(socketPath, {
 +    token,
 +    method: "pe3.route-native",
 +    params: { sessionID: input.sessionID, prompt },
@@ -56,7 +56,6 @@ new file mode 100644
 +
 +function callControl(
 +  socketPath: string,
-+  token: string,
 +  request: Record<string, unknown>,
 +): Promise<CuppetNativeRoute | undefined> {
 +  return new Promise((resolve) => {
@@ -125,10 +124,6 @@ new file mode 100644
 +    Array.isArray(route.refreshPaths)
 +  )
 +}
-+
-+void token
-+// `token` intentionally appears in the request payload as the local control
-+// server's authentication boundary. It is never logged or exposed to models.
 diff --git a/packages/opencode/src/session/prompt.ts b/packages/opencode/src/session/prompt.ts
 --- a/packages/opencode/src/session/prompt.ts
 +++ b/packages/opencode/src/session/prompt.ts

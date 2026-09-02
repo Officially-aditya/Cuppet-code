@@ -62,7 +62,11 @@ jobs:
         run: >-
           node --import tsx --test
           packages/cli/test/pe3-semantic-router.test.ts
+          packages/cli/test/pe3-semantic-prompt-once.test.ts
           packages/cli/test/pe3-adversarial-routing.test.ts
+          packages/cli/test/pe3-fallback-regression.test.ts
+          packages/cli/test/pe3-weighted-fingerprint.test.ts
+          packages/cli/test/pe3-task-isolation.test.ts
           packages/cli/test/pe3-localizer.test.ts
           packages/cli/test/pe3-model-contract.test.ts
       - name: Test task session routing

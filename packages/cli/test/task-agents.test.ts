@@ -49,6 +49,16 @@ test('clear unrelated task creates a fresh task agent route', () => {
   assert.match(route.reason, /strong task mismatch/)
 })
 
+test('disjoint path components do not become lexical continuation evidence', () => {
+  const router = new TaskAgentRouter()
+  router.register('s-auth', 'fix auth parsing in src/auth/parser.ts')
+
+  const route = router.route('implement weather parsing in src/weather/parser.ts')
+  assert.equal(route.action, 'create')
+  assert.equal(route.affinity.pathOverlap, 0)
+  assert.equal(route.affinity.termOverlap, 1)
+})
+
 test('weak lexical mismatch resists false splitting', () => {
   const router = new TaskAgentRouter()
   router.register('s-a', 'Refactor account settings persistence and validation')

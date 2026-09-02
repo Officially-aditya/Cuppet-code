@@ -33,6 +33,14 @@ export type TaskFingerprintSignal = {
   updatedAt: number
 }
 
+const FINGERPRINT_SOURCE_STRENGTH: Record<TaskFingerprintSignal['source'], number> = {
+  prompt: 0,
+  localized: 1,
+  active: 2,
+  symbol: 2,
+  touched: 3,
+}
+
 export type TaskFingerprint = {
   revision: number
   paths: TaskFingerprintSignal[]
@@ -391,8 +399,9 @@ function mergeFingerprintSignals(target: TaskFingerprintSignal[], values: Iterab
     if (!value) continue
     const existing = target.find((signal) => signal.value === value)
     if (existing) {
+      const previousSource = existing.source
       existing.weight = Math.min(1, Math.max(existing.weight, weight) + Math.min(existing.weight, weight) * 0.12)
-      if (weight >= existing.weight || source === 'touched') existing.source = source
+      if (FINGERPRINT_SOURCE_STRENGTH[source] > FINGERPRINT_SOURCE_STRENGTH[previousSource]) existing.source = source
       existing.updatedAt = now
     } else target.push({ value, weight, source, updatedAt: now })
   }

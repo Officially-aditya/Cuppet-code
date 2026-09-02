@@ -7,9 +7,11 @@ import { spawn } from 'node:child_process'
 
 const revision = '49c69c5ed3ccf706b61b3febb43c8aaff7f8325e'
 const sourceArgument = process.argv.find((argument) => argument.startsWith('--source='))
-if (!sourceArgument) throw new Error('usage: check-opencode-patches.mjs --source=<checkout>')
+const outputArgument = process.argv.find((argument) => argument.startsWith('--output='))
+if (!sourceArgument) throw new Error('usage: check-opencode-patches.mjs --source=<checkout> [--output=<patched-source>]')
 
 const source = resolve(sourceArgument.slice('--source='.length))
+const requestedOutput = outputArgument ? resolve(outputArgument.slice('--output='.length)) : undefined
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const patchDirectory = resolve(repositoryRoot, 'patches', 'opencode')
 const head = (await capture('git', ['rev-parse', 'HEAD'], source)).trim()
@@ -20,9 +22,14 @@ const patchFiles = (await readdir(patchDirectory))
   .sort()
 if (patchFiles.length === 0) throw new Error(`no OpenCode patches found in ${patchDirectory}`)
 
-const temporaryRoot = await mkdtemp(join(tmpdir(), 'cuppet-opencode-patch-check-'))
-const patchedSource = join(temporaryRoot, 'source')
+const temporaryRoot = requestedOutput ? undefined : await mkdtemp(join(tmpdir(), 'cuppet-opencode-patch-check-'))
+const patchedSource = requestedOutput ?? join(temporaryRoot, 'source')
+if (requestedOutput) {
+  await run('git', ['worktree', 'remove', '--force', patchedSource], source).catch(() => undefined)
+  await rm(patchedSource, { recursive: true, force: true }).catch(() => undefined)
+}
 await run('git', ['worktree', 'add', '--detach', patchedSource, revision], source)
+let completed = false
 try {
   for (const patch of patchFiles) {
     const patchPath = join(patchDirectory, patch)
@@ -30,9 +37,14 @@ try {
     await run('git', ['apply', '--whitespace=error', patchPath], patchedSource)
     process.stdout.write(`applied ${patch}\n`)
   }
+  completed = true
+  if (requestedOutput) process.stdout.write(`${patchedSource}\n`)
 } finally {
-  await run('git', ['worktree', 'remove', '--force', patchedSource], source).catch(() => undefined)
-  await rm(temporaryRoot, { recursive: true, force: true }).catch(() => undefined)
+  if (!requestedOutput || !completed) {
+    await run('git', ['worktree', 'remove', '--force', patchedSource], source).catch(() => undefined)
+    if (temporaryRoot) await rm(temporaryRoot, { recursive: true, force: true }).catch(() => undefined)
+    else await rm(patchedSource, { recursive: true, force: true }).catch(() => undefined)
+  }
 }
 
 function run(command, arguments_, cwd) {

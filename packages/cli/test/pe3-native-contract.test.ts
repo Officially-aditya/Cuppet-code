@@ -42,3 +42,26 @@ test('PE3 derivative routes supported attachments without copying payloads throu
   assert.match(patch, /markCuppetNativeForward\(targetParts\)/)
   assert.match(patch, /forwardedParts\.delete\(input\.parts\)/)
 })
+
+test('attachment routing keeps unsupported, attachment-only, and control-failure prompts on the source path', async () => {
+  const patch = await readFile('patches/opencode/0018-cuppet-pe3-attachment-routing.patch', 'utf8')
+
+  // No meaningful text means no routing envelope, so an attachment-only prompt
+  // falls through to the unchanged source input.
+  assert.match(patch, /if \(!prompt \|\| Buffer\.byteLength\(prompt\) > MAX_PROMPT_BYTES\) return/)
+  // Unknown part kinds and oversized input fail closed instead of dropping data.
+  assert.match(patch, /parts\.length === 0 \|\| parts\.length > MAX_PARTS/)
+  assert.match(patch, /Agent\/subtask\/unknown prompt parts cannot be forwarded/)
+  // Socket error or timeout resolves to undefined; input is only replaced when
+  // a concrete reroute result exists.
+  assert.match(patch, /\.catch\(\(\) => undefined\)/)
+  assert.match(patch, /setTimeout\(\(\) => finish\(\), ROUTE_TIMEOUT_MS\)/)
+  assert.match(patch, /if \(nativeRoute\?\.rerouted\)/)
+})
+
+test('successful native reroute marks source noReply immediately while target inference runs separately', async () => {
+  const patch = await readFile('patches/opencode/0018-cuppet-pe3-attachment-routing.patch', 'utf8')
+  assert.match(patch, /Effect\.forkDaemon\(prompt\(/)
+  assert.match(patch, /noReply: true/)
+  assert.match(patch, /PE3 routed this request to task session/)
+})

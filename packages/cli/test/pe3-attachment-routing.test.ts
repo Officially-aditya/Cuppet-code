@@ -73,6 +73,10 @@ test('unsupported payload-bearing or malformed attachment metadata fails closed'
     /mime is required/,
   )
   assert.throws(
+    () => parseNativeRoutingAttachments([{ type: 'file', filename: 'x.png', mime: 'image/png;base64,AAAA' }]),
+    /mime must be a media type/,
+  )
+  assert.throws(
     () => parseNativeRoutingAttachments(Array.from({ length: 17 }, (_, index) => ({
       type: 'file', filename: `${index}.png`, mime: 'image/png',
     }))),

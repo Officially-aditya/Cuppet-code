@@ -1,0 +1,30 @@
+name: candidate-ledger
+
+on:
+  pull_request:
+    paths:
+      - 'packages/cli/src/background/candidate-ledger.ts'
+      - 'packages/cli/src/background/worker.ts'
+      - 'packages/cli/test/background-worker.test.ts'
+      - 'packages/cli/test/candidate-ledger.test.ts'
+      - '.github/workflows/candidate-ledger.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run candidate-ledger regression tests
+        run: >-
+          node --import tsx --test
+          packages/cli/test/candidate-ledger.test.ts
+          packages/cli/test/background-worker.test.ts

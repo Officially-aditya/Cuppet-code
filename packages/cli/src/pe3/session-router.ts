@@ -163,8 +163,9 @@ export class TaskSessionRouter {
       }
     }
 
-    if (route.action === 'continue' && route.semanticEligible && this.#semantic) {
-      route = await this.#semanticRoute(prompt, route)
+    const semanticReturnOnly = route.action === 'continue' && isExplicitReturnPrompt(prompt)
+    if (route.action === 'continue' && (route.semanticEligible || semanticReturnOnly) && this.#semantic) {
+      route = await this.#semanticRoute(prompt, route, semanticReturnOnly)
     }
 
     if (route.action === 'continue') {
@@ -234,7 +235,11 @@ export class TaskSessionRouter {
     if (active) this.#router.acknowledgeRefresh(active.id, bounded)
   }
 
-  async #semanticRoute(prompt: string, deterministic: Extract<TaskRoute, { action: 'continue' }>): Promise<TaskRoute> {
+  async #semanticRoute(
+    prompt: string,
+    deterministic: Extract<TaskRoute, { action: 'continue' }>,
+    returnOnly = false,
+  ): Promise<TaskRoute> {
     const active = this.#router.active
     if (!active || !this.#semantic) return deterministic
     const dormant = this.#router.list().filter((agent) => agent.id !== active.id)
@@ -252,6 +257,13 @@ export class TaskSessionRouter {
       }
     }
     if (decision.action === 'create') {
+      if (returnOnly) {
+        return {
+          ...deterministic,
+          reason: 'explicit return had no decisive dormant semantic match; preserve the active task',
+          semanticEligible: false,
+        }
+      }
       return {
         action: 'create',
         reason: decision.reason,
@@ -314,6 +326,19 @@ function withRefreshHint(prompt: string, paths: string[]): string {
     '',
     prompt,
   ].join('\n')
+}
+
+function isExplicitReturnPrompt(prompt: string): boolean {
+  const normalized = prompt.toLowerCase().replace(/\s+/g, ' ').trim()
+  return [
+    'go back to',
+    'return to',
+    'back to',
+    'resume the',
+    'resume that',
+    'previous task',
+    'earlier task',
+  ].some((cue) => normalized.includes(cue))
 }
 
 function hasLocalizedEvidence(evidence: TaskAgentEvidence): boolean {

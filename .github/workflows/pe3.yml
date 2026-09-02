@@ -69,6 +69,8 @@ jobs:
           packages/cli/test/pe3-task-isolation.test.ts
           packages/cli/test/pe3-localizer.test.ts
           packages/cli/test/pe3-model-contract.test.ts
+      - name: Test task-agent restart persistence
+        run: node --import tsx --test packages/cli/test/pe3-persistence.test.ts
       - name: Test task session routing
         run: node --import tsx --test packages/cli/test/pe3-session-router.test.ts
       - name: Test PE3 benchmark metrics

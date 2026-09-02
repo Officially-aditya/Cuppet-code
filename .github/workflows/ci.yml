@@ -42,6 +42,8 @@ jobs:
           toolchain: 1.88
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - name: Build TST contract daemon
+        run: cargo build --locked -p tst-daemon
       - run: npm ci
       - run: npm run build
       - name: Build audited OpenCode contract binary

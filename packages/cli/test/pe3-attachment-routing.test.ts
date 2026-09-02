@@ -2,12 +2,13 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   nativeRoutingPrompt,
+  nativeSemanticAttachmentText,
   parseNativeRoutingAttachments,
 } from '../src/pe3/native-envelope.js'
 import { TaskAgentRouter } from '../src/pe3/task-agents.js'
 import { TaskSessionRouter, type TaskSessionAdapter } from '../src/pe3/session-router.js'
 
-test('bounded file metadata enriches routing identity without carrying payloads', () => {
+test('bounded attachment metadata stays structured and out of deterministic task text', () => {
   const attachments = parseNativeRoutingAttachments([
     { type: 'file', filename: 'dashboard.png', mime: 'image/png' },
     { type: 'file', filename: 'requirements.pdf', mime: 'application/pdf' },
@@ -16,11 +17,15 @@ test('bounded file metadata enriches routing identity without carrying payloads'
     { type: 'file', filename: 'dashboard.png', mime: 'image/png' },
     { type: 'file', filename: 'requirements.pdf', mime: 'application/pdf' },
   ])
+
   const routed = nativeRoutingPrompt('Implement this dashboard', attachments)
-  assert.match(routed, /Implement this dashboard/)
-  assert.match(routed, /dashboard\.png image\/png/)
-  assert.match(routed, /requirements\.pdf application\/pdf/)
-  assert.doesNotMatch(routed, /data:|base64|https?:\/\//)
+  assert.equal(routed, 'Implement this dashboard')
+  assert.doesNotMatch(routed, /attachment|image\/png|application\/pdf/)
+
+  const semantic = nativeSemanticAttachmentText(attachments)
+  assert.match(semantic, /dashboard\.png image\/png/)
+  assert.match(semantic, /requirements\.pdf application\/pdf/)
+  assert.doesNotMatch(semantic, /data:|base64|https?:\/\//)
 })
 
 test('attachment MIME classes cannot become deterministic task paths', () => {
@@ -62,7 +67,7 @@ test('same-task attachment request preserves the active cache-friendly session',
   assert.equal(harness.created, 1)
 })
 
-test('clear disjoint attachment request can create a fresh task session', async () => {
+test('two unrelated image tasks split without an explicit switch cue', async () => {
   const router = new TaskSessionRouter(undefined, { semantic: false })
   const harness = adapterHarness()
   const auth = [{ type: 'file' as const, filename: 'auth.png', mime: 'image/png' }]
@@ -82,7 +87,7 @@ test('clear disjoint attachment request can create a fresh task session', async 
   assert.equal(harness.created, 2)
 })
 
-test('application/json MIME overlap does not mask a real disjoint path switch', async () => {
+test('unrelated JSON tasks do not inherit lexical affinity from application/json', async () => {
   const router = new TaskSessionRouter(undefined, { semantic: false })
   const harness = adapterHarness()
   const firstAttachment = [{ type: 'file' as const, filename: 'auth-response.json', mime: 'application/json' }]
@@ -131,6 +136,7 @@ test('unsupported payload-bearing or malformed attachment metadata fails closed'
 
 test('no attachment metadata leaves the routing text unchanged', () => {
   assert.equal(nativeRoutingPrompt('same task continuation', []), 'same task continuation')
+  assert.equal(nativeSemanticAttachmentText([]), '')
 })
 
 function adapterHarness(): {

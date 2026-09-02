@@ -6,8 +6,10 @@ import {
   CandidateLedger,
   candidateSourceRef,
   canonicalLedgerKey,
+  hasContradictionCue,
   hasCorrectionCue,
   hasDurableUserCue,
+  isSensitiveCandidate,
   type CandidateRelation,
 } from './candidate-ledger.js'
 import type { OpenCodeGateway } from '../opencode/gateway.js'
@@ -61,6 +63,7 @@ type PreparedSignal = {
   recordedAt: number
   durableCue: boolean
   correctionCue: boolean
+  contradictionCue: boolean
 }
 
 type PendingBatch = {
@@ -176,8 +179,9 @@ export class BackgroundWorker extends EventEmitter {
     this.#now = options.now ?? Date.now
     this.#idleDelayMs = Math.max(0, options.idleDelayMs ?? DEFAULT_IDLE_DELAY_MS)
     this.#cooldownMs = Math.max(0, options.cooldownMs ?? DEFAULT_COOLDOWN_MS)
+    const ledgerPath = options.projectStore ? candidateLedgerPath(options.projectStore) : undefined
     this.#ledger = new CandidateLedger({
-      ...(options.projectStore ? { path: join(options.projectStore, 'candidate-ledger.json') } : {}),
+      ...(ledgerPath ? { path: ledgerPath } : {}),
       now: this.#now,
     })
     this.#ready = this.#initialize()
@@ -472,6 +476,9 @@ export class BackgroundWorker extends EventEmitter {
 
       for (const candidate of parsed.candidates) {
         if (this.#isCancelled(batch)) throw new BackgroundCancelledError()
+        if (isSensitiveCandidate(candidate.key, candidate.value)) {
+          throw new Error('candidate rejected by secret-bearing memory policy')
+        }
         const candidateID = `${candidate.kind}:${canonicalLedgerKey(candidate.key)}`
         if (seenCandidates.has(candidateID)) continue
         seenCandidates.add(candidateID)
@@ -504,7 +511,13 @@ export class BackgroundWorker extends EventEmitter {
             const explicitUser = source.kind === 'user_context' && source.durableCue
             const downstreamVerified = source.kind === 'verified_diff' || source.kind === 'validation'
             const relation: CandidateRelation = candidate.relation === 'contradiction'
-              ? 'contradiction'
+              ? source.kind === 'user_context'
+                ? source.contradictionCue
+                  ? 'contradiction'
+                  : source.correctionCue
+                    ? 'correction'
+                    : 'support'
+                : 'contradiction'
               : source.correctionCue
                 ? 'correction'
                 : candidate.relation
@@ -526,7 +539,7 @@ export class BackgroundWorker extends EventEmitter {
 
         const admission = this.#ledger.admission(candidate.key, candidate.kind)
         const trustedContradiction = candidate.relation === 'contradiction'
-          && citedSources.some((source) => source.kind === 'user_context' && source.durableCue)
+          && citedSources.some((source) => source.kind === 'user_context' && source.contradictionCue)
         if (admission.blocked) {
           // A trusted user contradiction can invalidate an already-promoted
           // exact key. Model-only contradictions are never destructive.
@@ -801,6 +814,7 @@ function prepareSignals(batch: PendingBatch, messages: unknown[], now: number): 
     ...signal,
     durableCue: false,
     correctionCue: false,
+    contradictionCue: false,
   })), ...users].slice(-MAX_SIGNALS_PER_BATCH).map((signal, index) => ({ ...signal, id: `s${index}` }))
 }
 
@@ -819,6 +833,7 @@ function latestUserSignals(messages: unknown[], now: number): PreparedSignal[] {
       recordedAt: now,
       durableCue: hasDurableUserCue(text),
       correctionCue: hasCorrectionCue(text),
+      contradictionCue: hasContradictionCue(text),
     })
   }
   return output.slice(-MAX_USER_SIGNALS_PER_BATCH)
@@ -850,6 +865,18 @@ function messagePartText(message: Record<string, unknown>): string {
 
 function recordValue(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function candidateLedgerPath(projectStore: string): string {
+  const projectsDirectory = dirname(projectStore)
+  // Runtime projects live at <base>/projects/<project-id>. Sharing the compact
+  // ledger under <base>/global lets recurrence span projects without making
+  // any candidate itself globally retrievable. Tests/custom stores retain the
+  // historical per-project location rather than guessing another directory.
+  if (basename(projectsDirectory) === 'projects') {
+    return join(dirname(projectsDirectory), 'global', 'candidate-ledger.json')
+  }
+  return join(projectStore, 'candidate-ledger.json')
 }
 
 function bounded(value: string, maxBytes: number): string {

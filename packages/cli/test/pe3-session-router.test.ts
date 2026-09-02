@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { pe3InputBreakdown, routeChangedSession } from '../src/pe3/controller.js'
+import { SemanticTaskRouter, type TaskEmbeddingProvider } from '../src/pe3/semantic-router.js'
 import { TaskSessionRouter, type TaskSessionAdapter } from '../src/pe3/session-router.js'
 
 test('persistent A → A → B → B → C → A sequence preserves coherent sessions and reactivates A', async () => {
@@ -54,6 +55,86 @@ test('ambiguous and underspecified follow-ups stay on the active cache-friendly 
   assert.equal(third.sessionID, first.sessionID)
   assert.equal(harness.created, 1)
   assert.deepEqual(harness.resumed, [])
+  assert.equal(router.stats().semanticEscalations, 0)
+})
+
+test('natural task switch without explicit cue creates a fresh session through local semantics', async () => {
+  const router = semanticSessionRouter()
+  const harness = adapterHarness()
+
+  const auth = await router.prepare('fix refresh token expiration', harness.adapter)
+  const analytics = await router.prepare('add pagination to the csv export pipeline', harness.adapter)
+
+  assert.equal(auth.action, 'create')
+  assert.equal(analytics.action, 'create')
+  assert.notEqual(analytics.sessionID, auth.sessionID)
+  const stats = router.stats()
+  assert.equal(stats.semanticEscalations, 1)
+  assert.equal(stats.semanticCreated, 1)
+  assert.equal(stats.semanticPromptEmbeddings, 1)
+  assert.equal(stats.semanticFailures, 0)
+})
+
+test('natural rephrased return semantically reactivates dormant session before creating another one', async () => {
+  const router = semanticSessionRouter()
+  const harness = adapterHarness()
+
+  const auth = await router.prepare('fix refresh token expiration', harness.adapter)
+  await router.prepare('separately, new task: build csv export pagination', harness.adapter)
+  const returned = await router.prepare('the oauth credential renewal lifecycle is broken again', harness.adapter)
+
+  assert.equal(returned.action, 'reactivate')
+  assert.equal(returned.sessionID, auth.sessionID)
+  assert.equal(harness.created, 2)
+  assert.deepEqual(harness.resumed, [auth.sessionID])
+  assert.equal(router.stats().semanticReactivated, 1)
+})
+
+test('cheap TST-style code localization resolves natural boundary before embeddings', async () => {
+  const provider: TaskEmbeddingProvider = {
+    modelID: 'must-not-run',
+    embed: async () => {
+      throw new Error('semantic embedding should not be called')
+    },
+  }
+  const router = new TaskSessionRouter(undefined, { semantic: new SemanticTaskRouter(provider) })
+  const harness = adapterHarness(async () => ({
+    localizedPaths: ['src/billing/retry.ts'],
+    localizedSymbols: ['InvoiceRetry'],
+  }))
+
+  const auth = await router.prepare('fix refresh behavior in src/auth/token.ts', harness.adapter)
+  const billing = await router.prepare('implement invoice retry policy', harness.adapter)
+
+  assert.equal(auth.action, 'create')
+  assert.equal(billing.action, 'create')
+  assert.notEqual(billing.sessionID, auth.sessionID)
+  const stats = router.stats()
+  assert.equal(stats.localizationQueries, 1)
+  assert.equal(stats.localizationHits, 1)
+  assert.equal(stats.semanticEscalations, 0)
+})
+
+test('semantic model failure is observable and safely falls back to active session', async () => {
+  const provider: TaskEmbeddingProvider = {
+    modelID: 'broken-local-model',
+    embed: async () => {
+      throw new Error('missing local model')
+    },
+  }
+  const router = new TaskSessionRouter(undefined, { semantic: new SemanticTaskRouter(provider) })
+  const harness = adapterHarness()
+
+  const first = await router.prepare('fix refresh token expiration', harness.adapter)
+  const second = await router.prepare('implement rate limiting middleware', harness.adapter)
+
+  assert.equal(second.action, 'continue')
+  assert.equal(second.sessionID, first.sessionID)
+  const stats = router.stats()
+  assert.equal(stats.semanticEscalations, 1)
+  assert.equal(stats.semanticFallbacks, 1)
+  assert.equal(stats.semanticFailures, 1)
+  assert.equal(stats.semanticModelID, 'broken-local-model')
 })
 
 test('dormant task receives stale-path refresh hint after another task changes its working set', async () => {
@@ -132,7 +213,28 @@ test('routeChangedSession only flags a real task-local session switch', () => {
   assert.equal(routeChangedSession(route), false)
 })
 
-function adapterHarness(): {
+function semanticSessionRouter(): TaskSessionRouter {
+  return new TaskSessionRouter(undefined, { semantic: new SemanticTaskRouter(keywordProvider()) })
+}
+
+function keywordProvider(): TaskEmbeddingProvider {
+  return {
+    modelID: 'synthetic-minilm',
+    embed: async (text) => {
+      const value = text.toLowerCase()
+      if (value.includes('refresh token') || value.includes('credential renewal') || value.includes('oauth')) {
+        return new Float32Array([1, 0, 0])
+      }
+      if (value.includes('csv') || value.includes('export pagination')) return new Float32Array([0, 1, 0])
+      if (value.includes('billing') || value.includes('invoice')) return new Float32Array([0, 0, 1])
+      return new Float32Array([0.2, 0.2, 0.9591663])
+    },
+  }
+}
+
+function adapterHarness(
+  localize?: TaskSessionAdapter['localize'],
+): {
   adapter: TaskSessionAdapter
   resumed: string[]
   readonly created: number
@@ -153,6 +255,7 @@ function adapterHarness(): {
       return { id: sessionID }
     },
     evidence: () => ({}),
+    ...(localize ? { localize } : {}),
   }
   return {
     adapter,

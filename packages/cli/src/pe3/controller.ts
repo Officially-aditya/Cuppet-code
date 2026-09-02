@@ -207,7 +207,8 @@ export class Pe3Controller extends CuppetController {
       throw error
     }
 
-    if (prepared.action === 'continue' && prepared.sessionID === sessionID) {
+    if (prepared.action === 'continue') {
+      if (prepared.sessionID !== sessionID) throw new Error('PE3 continue route changed the active session unexpectedly')
       this.#schedulePersist()
       this.#turnStartedAt.set(sessionID, Date.now())
       return {
@@ -423,7 +424,7 @@ export class Pe3Controller extends CuppetController {
 
     if (event.type === 'tool-end' && event.success && event.outputPaths?.length) {
       if (event.diff) this.#taskSessions.noteSessionWorkspaceMutation(event.sessionID, event.outputPaths)
-      else this.#taskSessions.noteSessionPaths(event.sessionID, event.outputPaths)
+      else this.#taskSessions.noteSessionObservedPaths(event.sessionID, event.outputPaths)
       this.#clearRestoredStale(event.sessionID, event.outputPaths)
       this.#schedulePersist()
       return

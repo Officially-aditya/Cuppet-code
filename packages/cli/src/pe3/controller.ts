@@ -2,6 +2,10 @@ import { CuppetController } from '../controller.js'
 import type { AgentEvent, SessionInfo, TokenUsage } from '../types.js'
 import { totalTokenUsage } from '../usage.js'
 import { TstTaskLocalizer } from './localizer.js'
+import {
+  Pe3TaskRegistry,
+  restorePersistedTaskAgents,
+} from './persistence.js'
 import { TaskSessionRouter, type PreparedTaskSession } from './session-router.js'
 
 const NATIVE_ROUTE_GUARD_MS = 5_000
@@ -23,6 +27,10 @@ export type Pe3Snapshot = {
   totalLatencyMs: number
   averageLatencyMs: number
   nativeRouteFailures: number
+  restoredAgents: number
+  droppedPersistedSessions: number
+  registryRecoveredFromCorruption: boolean
+  registryWriteFailures: number
 }
 
 export type NativeTaskRouteResult = {
@@ -52,36 +60,74 @@ type NativeBypass = {
 export class Pe3Controller extends CuppetController {
   readonly #taskSessions = new TaskSessionRouter()
   readonly #taskLocalizer: TstTaskLocalizer
+  readonly #taskRegistry: Pe3TaskRegistry
   readonly #nativeBypass = new Map<string, NativeBypass>()
   readonly #suppressedNativeSessions = new Map<string, number>()
+  readonly #restoredStaleBySession = new Map<string, string[]>()
   readonly #cumulativeUsage = emptyUsage()
   readonly #turnStartedAt = new Map<string, number>()
+  #persistTail: Promise<void> = Promise.resolve()
+  #registryReady = false
   #cumulativeCost = 0
   #completedTurns = 0
   #totalLatencyMs = 0
   #nativeRouteFailures = 0
+  #restoredAgents = 0
+  #droppedPersistedSessions = 0
+  #registryRecoveredFromCorruption = false
+  #registryWriteFailures = 0
 
   constructor(options: ConstructorParameters<typeof CuppetController>[0]) {
     super(options)
     this.#taskLocalizer = new TstTaskLocalizer(options.tst)
+    this.#taskRegistry = new Pe3TaskRegistry(options.paths.projectStore, options.paths.projectRealpath)
     this.onAgentEvent((event) => this.#observeTaskEvent(event))
   }
 
   override async initialize(): Promise<void> {
     await super.initialize()
     const session = this.snapshot.activeSession
-    if (session) this.#taskSessions.bindSession(session.id, this.#taskEvidence())
+    const sessions = await this.gateway.listSessions().catch(() => [])
+    const validSessionIDs = new Set(
+      sessions
+        .filter((candidate) => candidate.agent !== 'cuppet-background')
+        .map((candidate) => candidate.id),
+    )
+    if (session) validSessionIDs.add(session.id)
+
+    const loaded = await this.#taskRegistry.load(validSessionIDs)
+    this.#restoredAgents = loaded.agents.length
+    this.#droppedPersistedSessions = loaded.droppedSessionCount
+    this.#registryRecoveredFromCorruption = loaded.recoveredFromCorruption
+    for (const [sessionID, paths] of loaded.staleBySession) {
+      this.#restoredStaleBySession.set(sessionID, [...paths])
+    }
+    restorePersistedTaskAgents(this.#taskSessions, loaded, session?.id)
+
+    if (session && !this.#taskSessions.agents().some((agent) => agent.sessionID === session.id)) {
+      this.#taskSessions.bindSession(session.id, this.#taskEvidence())
+    }
+    this.#registryReady = true
+    await this.#persistRegistry()
+  }
+
+  override async close(): Promise<void> {
+    if (this.#registryReady) await this.#persistRegistry()
+    await this.#persistTail
+    await super.close()
   }
 
   override async newSession(): Promise<SessionInfo> {
     const session = await super.newSession()
     this.#taskSessions.bindSession(session.id, this.#taskEvidence())
+    this.#schedulePersist()
     return session
   }
 
   override async resume(sessionID: string): Promise<SessionInfo> {
     const session = await super.resume(sessionID)
     this.#taskSessions.bindSession(session.id, this.#taskEvidence())
+    this.#schedulePersist()
     return session
   }
 
@@ -97,12 +143,14 @@ export class Pe3Controller extends CuppetController {
     const session = await super.adoptSession(sessionID)
     if (session.agent !== 'cuppet-background') {
       this.#taskSessions.bindSession(session.id, this.#taskEvidence())
+      this.#schedulePersist()
     }
     return session
   }
 
   override async submit(prompt: string, delivery: 'queue' | 'steer' = 'queue'): Promise<void> {
     const prepared = await this.#prepareTaskSession(prompt)
+    this.#schedulePersist()
     this.#armNativeBypass(prepared.sessionID, prepared.prompt)
     this.#turnStartedAt.set(prepared.sessionID, Date.now())
     await super.submit(prepared.prompt, delivery)
@@ -150,6 +198,7 @@ export class Pe3Controller extends CuppetController {
     this.#taskSessions.bindSession(source.id)
 
     const prepared = await this.#prepareTaskSession(prompt)
+    this.#schedulePersist()
     if (prepared.action === 'continue' && prepared.sessionID === sessionID) {
       this.#turnStartedAt.set(sessionID, Date.now())
       return {
@@ -159,7 +208,7 @@ export class Pe3Controller extends CuppetController {
         targetSessionID: sessionID,
         reason: prepared.reason,
         sequence: this.#taskSessions.stats().sequence,
-        refreshPaths: [],
+        refreshPaths: [...prepared.refreshPaths],
       }
     }
 
@@ -216,11 +265,15 @@ export class Pe3Controller extends CuppetController {
       totalLatencyMs: this.#totalLatencyMs,
       averageLatencyMs: this.#completedTurns > 0 ? this.#totalLatencyMs / this.#completedTurns : 0,
       nativeRouteFailures: this.#nativeRouteFailures,
+      restoredAgents: this.#restoredAgents,
+      droppedPersistedSessions: this.#droppedPersistedSessions,
+      registryRecoveredFromCorruption: this.#registryRecoveredFromCorruption,
+      registryWriteFailures: this.#registryWriteFailures,
     }
   }
 
   async #prepareTaskSession(prompt: string): Promise<PreparedTaskSession> {
-    return this.#taskSessions.prepare(prompt, {
+    const prepared = await this.#taskSessions.prepare(prompt, {
       current: () => {
         const session = this.snapshot.activeSession
         return session ? { id: session.id } : undefined
@@ -236,6 +289,18 @@ export class Pe3Controller extends CuppetController {
       evidence: () => this.#taskEvidence(),
       localize: (sessionID, value) => this.#taskLocalizer.locate(sessionID, value),
     })
+    return this.#withRestoredRefreshGuard(prepared)
+  }
+
+  #withRestoredRefreshGuard(prepared: PreparedTaskSession): PreparedTaskSession {
+    const restoredStale = this.#restoredStaleBySession.get(prepared.sessionID) ?? []
+    if (restoredStale.length === 0) return prepared
+    const refreshPaths = [...new Set([...prepared.refreshPaths, ...restoredStale])].slice(0, 16)
+    return {
+      ...prepared,
+      refreshPaths,
+      prompt: withPersistedRefreshHint(prepared.prompt, restoredStale),
+    }
   }
 
   #armNativeBypass(sessionID: string, prompt: string): void {
@@ -266,6 +331,34 @@ export class Pe3Controller extends CuppetController {
     }
   }
 
+  #clearRestoredStale(sessionID: string, paths: Iterable<string>): void {
+    const current = this.#restoredStaleBySession.get(sessionID)
+    if (!current?.length) return
+    const refreshed = new Set([...paths].map((path) => normalizePath(path)))
+    const remaining = current.filter((path) => !refreshed.has(normalizePath(path)))
+    if (remaining.length > 0) this.#restoredStaleBySession.set(sessionID, remaining)
+    else this.#restoredStaleBySession.delete(sessionID)
+  }
+
+  #schedulePersist(): void {
+    if (!this.#registryReady) return
+    this.#persistTail = this.#persistTail
+      .then(() => this.#persistRegistry())
+      .catch(() => undefined)
+  }
+
+  async #persistRegistry(): Promise<void> {
+    try {
+      await this.#taskRegistry.save(
+        this.#taskSessions.agents(),
+        this.snapshot.activeSession?.id,
+        this.#restoredStaleBySession,
+      )
+    } catch {
+      this.#registryWriteFailures += 1
+    }
+  }
+
   #observeTaskEvent(event: AgentEvent): void {
     if (event.type === 'usage') {
       this.#cumulativeUsage.input += event.usage.input
@@ -283,17 +376,23 @@ export class Pe3Controller extends CuppetController {
         this.#completedTurns += 1
         this.#totalLatencyMs += Math.max(0, Date.now() - startedAt)
       }
+      this.#schedulePersist()
     }
 
     if (event.type === 'tool-end' && event.success && event.outputPaths?.length) {
       this.#taskSessions.noteActivePaths(event.outputPaths)
+      this.#clearRestoredStale(event.sessionID, event.outputPaths)
       if (event.diff) this.#taskSessions.noteWorkspaceMutation(event.outputPaths)
+      this.#schedulePersist()
       return
     }
 
     if (event.type === 'diff') {
       const paths = pathsFromDiff(event.diff)
-      if (paths.length > 0) this.#taskSessions.noteWorkspaceMutation(paths)
+      if (paths.length > 0) {
+        this.#taskSessions.noteWorkspaceMutation(paths)
+        this.#schedulePersist()
+      }
     }
   }
 }
@@ -319,6 +418,18 @@ function boundedCachedInput(usage: TokenUsage): number {
   return Math.max(0, Math.min(usage.input, usage.cacheRead))
 }
 
+function withPersistedRefreshHint(prompt: string, paths: string[]): string {
+  if (paths.length === 0) return prompt
+  const bounded = paths.slice(0, 12).join(', ')
+  return [
+    '[PE3 persisted task resume]',
+    'This task was restored after a Cuppet restart and the workspace changed while it was offline.',
+    `Refresh these paths from current workspace truth before relying on prior file-specific assumptions: ${bounded}`,
+    '',
+    prompt,
+  ].join('\n')
+}
+
 function pathsFromDiff(diff: unknown): string[] {
   let text = ''
   try {
@@ -327,5 +438,9 @@ function pathsFromDiff(diff: unknown): string[] {
     return []
   }
   const matches = text.match(/(?:\.?\.?\/)?[A-Za-z0-9_.@-]+(?:\/[A-Za-z0-9_.@-]+)+(?:\.[A-Za-z0-9_-]+)?|[A-Za-z0-9_.@-]+\.(?:ts|tsx|js|jsx|rs|py|go|java|json|md|yaml|yml|toml|css|html)/g) ?? []
-  return [...new Set(matches.map((path) => path.replaceAll('\\', '/').replace(/^\.\//, '').toLowerCase()))].slice(0, 16)
+  return [...new Set(matches.map(normalizePath))].slice(0, 16)
+}
+
+function normalizePath(path: string): string {
+  return path.replaceAll('\\', '/').replace(/^\.\//, '').toLowerCase()
 }

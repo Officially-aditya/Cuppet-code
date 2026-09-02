@@ -60,41 +60,28 @@ test('semantically canonicalized repeats merge and reinforce across sessions', a
   assert.ok(admission.score >= 0.8)
 })
 
-test('model-only support cannot create independent reinforcement', async () => {
+test('model-only canonicalization never becomes recurrence evidence', async () => {
   const ledger = new CandidateLedger({ now: () => 3_000 })
   await ledger.ready()
-  ledger.observe({
-    ...baseObservation,
-    explicitUser: false,
-    trustedSupport: false,
-    sessionID: 'session-1',
-    sourceRef: 'turn:1',
-  })
-  ledger.observe({
-    ...baseObservation,
-    explicitUser: false,
-    trustedSupport: false,
-    sessionID: 'session-2',
-    sourceRef: 'turn:2',
-    timestampMs: 2_000,
-  })
-  ledger.observe({
-    ...baseObservation,
-    explicitUser: false,
-    trustedSupport: false,
-    sessionID: 'session-3',
-    sourceRef: 'turn:3',
-    timestampMs: 3_000,
-  })
+  for (let index = 1; index <= 3; index += 1) {
+    ledger.observe({
+      ...baseObservation,
+      explicitUser: false,
+      trustedSupport: false,
+      sessionID: `session-${index}`,
+      sourceRef: `turn:${index}`,
+      timestampMs: index * 1_000,
+    })
+  }
 
   const entry = ledger.entry(baseObservation.key, 'preference')
-  assert.equal(entry?.support_count, 3)
+  assert.equal(entry?.support_count, 0)
   assert.equal(entry?.session_count, 0)
   const admission = ledger.admission(baseObservation.key, 'preference')
   assert.equal(admission.explicitUserPreference, false)
-  assert.equal(admission.independentlyReinforced, true, 'three repeated canonical claims are recurrence evidence')
-  assert.equal(admission.reinforcementEvidenceCount, 1)
-  assert.ok(admission.score < 0.8)
+  assert.equal(admission.independentlyReinforced, false)
+  assert.equal(admission.reinforcementEvidenceCount, 0)
+  assert.equal(admission.score, 0.5)
 })
 
 test('a correction accumulates evidence and resolves one contradiction', async () => {

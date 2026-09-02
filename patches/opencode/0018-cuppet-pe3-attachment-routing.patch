@@ -14,7 +14,7 @@ diff --git a/packages/opencode/src/cuppet/pe3-route.ts b/packages/opencode/src/c
  const ROUTE_TIMEOUT_MS = 2_000
  
  export type CuppetNativeRoute = {
-@@ -15,38 +21,88 @@
+@@ -15,38 +21,85 @@
    forwarded?: boolean
  }
  
@@ -112,7 +112,7 @@ diff --git a/packages/opencode/src/cuppet/pe3-route.ts b/packages/opencode/src/c
 diff --git a/packages/opencode/src/session/prompt.ts b/packages/opencode/src/session/prompt.ts
 --- a/packages/opencode/src/session/prompt.ts
 +++ b/packages/opencode/src/session/prompt.ts
-@@ -1,7 +1,7 @@
+@@ -52,7 +52,7 @@
  import { LLMEvent } from "@opencode-ai/llm"
  import { Token } from "@/util/token"
  import { usable } from "./overflow"
@@ -121,33 +121,26 @@ diff --git a/packages/opencode/src/session/prompt.ts b/packages/opencode/src/ses
  
  // @ts-ignore
  globalThis.AI_SDK_LOG_WARNINGS = false
-@@ -16,20 +16,42 @@
-         }),
-       )
+@@ -557,8 +557,37 @@
        if (nativeRoute?.rerouted) {
-         const originalParts = input.parts
-         const targetParts = nativeRoute.refreshPaths.length
-           ? [
-               {
-                 type: "text" as const,
-                 text: `[PE3 task resume]\nRefresh these paths from current workspace truth before relying on prior file-specific assumptions: ${nativeRoute.refreshPaths.slice(0, 12).join(", ")}`,
-                 synthetic: true,
-               },
-               ...originalParts,
-             ]
-           : originalParts
-         markCuppetNativeForward(targetParts)
-         const targetInput = { ...input }
-         delete targetInput.messageID
--        yield* prompt({
--          ...targetInput,
--          sessionID: nativeRoute.targetSessionID,
--          parts: targetParts,
--        }).pipe(Effect.forkIn(scope))
 -        input = {
 -          ...input,
 -          noReply: true,
 -          parts: [{ type: "text", text: `[PE3 routed this request to task session ${nativeRoute.targetSessionID}.]` }],
++        const originalParts = input.parts
++        const targetParts = nativeRoute.refreshPaths.length
++          ? [
++              {
++                type: "text" as const,
++                text: `[PE3 task resume]\nRefresh these paths from current workspace truth before relying on prior file-specific assumptions: ${nativeRoute.refreshPaths.slice(0, 12).join(", ")}`,
++                synthetic: true,
++              },
++              ...originalParts,
++            ]
++          : originalParts
++        markCuppetNativeForward(targetParts)
++        const targetInput = { ...input }
++        delete targetInput.messageID
 +        const handoff = yield* prompt({
 +          ...targetInput,
 +          sessionID: nativeRoute.targetSessionID,
@@ -169,8 +162,8 @@ diff --git a/packages/opencode/src/session/prompt.ts b/packages/opencode/src/ses
 +          })
          }
        }
-       const message = yield* createUserMessage(input)
-@@ -30,6 +52,7 @@
+       if (!nativeRoute?.rerouted && nativeRoute?.refreshPaths.length) {
+@@ -569,6 +598,7 @@
              {
                type: "text",
                text: `[PE3 persisted task resume]\nRefresh these paths from current workspace truth before relying on prior file-specific assumptions: ${refresh}`,

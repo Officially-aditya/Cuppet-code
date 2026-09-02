@@ -3,7 +3,13 @@ import {
   type TaskAffinity,
   type TaskAgentEvidence,
   type TaskAgentState,
+  type TaskRoute,
 } from './task-agents.js'
+import { LocalTransformersEmbeddingProvider } from './local-embedding.js'
+import {
+  SemanticTaskRouter,
+  type SemanticRouteDecision,
+} from './semantic-router.js'
 
 export type TaskSessionRef = { id: string }
 
@@ -12,6 +18,8 @@ export type TaskSessionAdapter = {
   create: () => Promise<TaskSessionRef>
   resume: (sessionID: string) => Promise<TaskSessionRef>
   evidence: () => TaskAgentEvidence
+  /** Optional cheap local graph/code search used only in the ambiguous band. */
+  localize?: (sessionID: string, prompt: string) => Promise<TaskAgentEvidence>
 }
 
 export type PreparedTaskSession = {
@@ -29,29 +37,65 @@ export type TaskSessionRoutingStats = {
   created: number
   reactivated: number
   switches: number
+  localizationQueries: number
+  localizationHits: number
+  semanticEscalations: number
+  semanticContinuations: number
+  semanticCreated: number
+  semanticReactivated: number
+  semanticFallbacks: number
+  semanticFailures: number
+  semanticPromptEmbeddings: number
+  semanticAgentEmbeddings: number
+  semanticEmbeddingLatencyMs: number
+  semanticEmbeddingLatencyMaxMs: number
+  semanticModelID?: string
+  lastSemanticActiveSimilarity?: number
+  lastSemanticDormantSimilarity?: number
   lastAction?: PreparedTaskSession['action']
   lastReason?: string
 }
 
+export type TaskSessionRouterOptions = {
+  semantic?: SemanticTaskRouter | false
+}
+
 /**
- * Maps deterministic task-agent decisions onto inert OpenCode sessions.
+ * Maps PE3 task-agent decisions onto inert OpenCode sessions.
  *
- * It deliberately knows nothing about models or prompts beyond routing. The
- * caller owns model execution. A dormant session therefore consumes no model
- * tokens until `prepare()` explicitly reactivates it.
+ * Normal continuation remains deterministic and model-free. Only the narrow
+ * ambiguous band may perform cheap local graph localization and then local
+ * embedding inference. Dormant sessions consume no model tokens merely by
+ * existing.
  */
 export class TaskSessionRouter {
   readonly #router: TaskAgentRouter
+  readonly #semantic: SemanticTaskRouter | undefined
   readonly #stats: TaskSessionRoutingStats = {
     sequence: 0,
     continuations: 0,
     created: 0,
     reactivated: 0,
     switches: 0,
+    localizationQueries: 0,
+    localizationHits: 0,
+    semanticEscalations: 0,
+    semanticContinuations: 0,
+    semanticCreated: 0,
+    semanticReactivated: 0,
+    semanticFallbacks: 0,
+    semanticFailures: 0,
+    semanticPromptEmbeddings: 0,
+    semanticAgentEmbeddings: 0,
+    semanticEmbeddingLatencyMs: 0,
+    semanticEmbeddingLatencyMaxMs: 0,
   }
 
-  constructor(router = new TaskAgentRouter()) {
+  constructor(router = new TaskAgentRouter(), options: TaskSessionRouterOptions = {}) {
     this.#router = router
+    this.#semantic = options.semantic === false
+      ? undefined
+      : options.semantic ?? new SemanticTaskRouter(new LocalTransformersEmbeddingProvider())
   }
 
   get active(): TaskAgentState | undefined {
@@ -73,7 +117,7 @@ export class TaskSessionRouter {
   }
 
   async prepare(prompt: string, adapter: TaskSessionAdapter): Promise<PreparedTaskSession> {
-    const evidence = adapter.evidence()
+    let evidence = adapter.evidence()
     let current = adapter.current()
 
     if (!current) {
@@ -104,7 +148,25 @@ export class TaskSessionRouter {
       })
     }
 
-    const route = this.#router.route(prompt, evidence)
+    let route = this.#router.route(prompt, evidence)
+
+    if (route.action === 'continue' && route.semanticEligible && adapter.localize) {
+      this.#stats.localizationQueries += 1
+      const localized = await adapter.localize(current.id, prompt).catch(() => ({} as TaskAgentEvidence))
+      if (hasLocalizedEvidence(localized)) {
+        this.#stats.localizationHits += 1
+        evidence = mergeEvidence(evidence, localized)
+        // Re-run the deterministic router with graph-localized query evidence.
+        // A concrete active/dormant match or disjoint path can settle the task
+        // boundary without paying embedding cost.
+        route = this.#router.route(prompt, evidence)
+      }
+    }
+
+    if (route.action === 'continue' && route.semanticEligible && this.#semantic) {
+      route = await this.#semanticRoute(prompt, route)
+    }
+
     if (route.action === 'continue') {
       this.#router.recordTurn(prompt, evidence)
       return this.#record({
@@ -119,8 +181,9 @@ export class TaskSessionRouter {
 
     if (route.action === 'reactivate') {
       const resumed = await adapter.resume(route.agent.sessionID)
-      this.bindSession(resumed.id, adapter.evidence())
-      this.#router.recordTurn(prompt, adapter.evidence())
+      const resumedEvidence = mergeEvidence(adapter.evidence(), evidence)
+      this.bindSession(resumed.id, resumedEvidence)
+      this.#router.recordTurn(prompt, resumedEvidence)
       return this.#record({
         action: 'reactivate',
         sessionID: resumed.id,
@@ -132,8 +195,9 @@ export class TaskSessionRouter {
     }
 
     const created = await adapter.create()
-    this.bindSession(created.id, adapter.evidence())
-    this.#router.recordTurn(prompt, adapter.evidence())
+    const createdEvidence = mergeEvidence(adapter.evidence(), evidence)
+    this.bindSession(created.id, createdEvidence)
+    this.#router.recordTurn(prompt, createdEvidence)
     return this.#record({
       action: 'create',
       sessionID: created.id,
@@ -167,6 +231,59 @@ export class TaskSessionRouter {
     if (active) this.#router.acknowledgeRefresh(active.id, bounded)
   }
 
+  async #semanticRoute(prompt: string, deterministic: Extract<TaskRoute, { action: 'continue' }>): Promise<TaskRoute> {
+    const active = this.#router.active
+    if (!active || !this.#semantic) return deterministic
+    const dormant = this.#router.list().filter((agent) => agent.id !== active.id)
+    this.#stats.semanticEscalations += 1
+    const decision = await this.#semantic.decide(prompt, active, dormant)
+    this.#recordSemantic(decision)
+
+    if (decision.action === 'reactivate' && decision.agent) {
+      return {
+        action: 'reactivate',
+        agent: decision.agent,
+        reason: decision.reason,
+        affinity: deterministic.affinity,
+        refreshPaths: [...decision.agent.stalePaths],
+      }
+    }
+    if (decision.action === 'create') {
+      return {
+        action: 'create',
+        reason: decision.reason,
+        affinity: deterministic.affinity,
+      }
+    }
+    return {
+      ...deterministic,
+      reason: decision.reason,
+      semanticEligible: false,
+    }
+  }
+
+  #recordSemantic(decision: SemanticRouteDecision): void {
+    this.#stats.semanticModelID = decision.modelID
+    this.#stats.semanticPromptEmbeddings += decision.promptEmbeddingCount
+    this.#stats.semanticAgentEmbeddings += decision.agentEmbeddingCount
+    this.#stats.semanticEmbeddingLatencyMs += decision.embeddingLatencyMs
+    this.#stats.semanticEmbeddingLatencyMaxMs = Math.max(
+      this.#stats.semanticEmbeddingLatencyMaxMs,
+      decision.embeddingLatencyMs,
+    )
+    this.#stats.lastSemanticActiveSimilarity = decision.activeSimilarity
+    if (decision.bestDormantSimilarity !== undefined) {
+      this.#stats.lastSemanticDormantSimilarity = decision.bestDormantSimilarity
+    } else {
+      delete this.#stats.lastSemanticDormantSimilarity
+    }
+    if (decision.fallback) this.#stats.semanticFallbacks += 1
+    if (decision.error) this.#stats.semanticFailures += 1
+    if (decision.action === 'continue') this.#stats.semanticContinuations += 1
+    if (decision.action === 'create') this.#stats.semanticCreated += 1
+    if (decision.action === 'reactivate') this.#stats.semanticReactivated += 1
+  }
+
   #record(result: PreparedTaskSession): PreparedTaskSession {
     this.#stats.sequence += 1
     if (result.action === 'continue') this.#stats.continuations += 1
@@ -194,4 +311,29 @@ function withRefreshHint(prompt: string, paths: string[]): string {
     '',
     prompt,
   ].join('\n')
+}
+
+function hasLocalizedEvidence(evidence: TaskAgentEvidence): boolean {
+  return iterableHasValues(evidence.localizedPaths) || iterableHasValues(evidence.localizedSymbols)
+}
+
+function iterableHasValues(values: Iterable<string> | undefined): boolean {
+  if (!values) return false
+  for (const _value of values) return true
+  return false
+}
+
+function mergeEvidence(left: TaskAgentEvidence, right: TaskAgentEvidence): TaskAgentEvidence {
+  return {
+    activePaths: mergeIterables(left.activePaths, right.activePaths),
+    touchedPaths: mergeIterables(left.touchedPaths, right.touchedPaths),
+    recentSymbols: mergeIterables(left.recentSymbols, right.recentSymbols),
+    localizedPaths: mergeIterables(left.localizedPaths, right.localizedPaths),
+    localizedSymbols: mergeIterables(left.localizedSymbols, right.localizedSymbols),
+    workspaceEpoch: Math.max(left.workspaceEpoch ?? 0, right.workspaceEpoch ?? 0),
+  }
+}
+
+function mergeIterables(left: Iterable<string> | undefined, right: Iterable<string> | undefined): string[] {
+  return [...new Set([...(left ?? []), ...(right ?? [])])]
 }

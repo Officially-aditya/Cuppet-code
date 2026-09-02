@@ -6,6 +6,7 @@ import {
   Pe3TaskRegistry,
   restorePersistedTaskAgents,
 } from './persistence.js'
+import { nativeRoutingPrompt, type NativeRoutingAttachment } from './native-envelope.js'
 import { TaskSessionRouter, type PreparedTaskSession } from './session-router.js'
 
 const NATIVE_ROUTE_GUARD_MS = 5_000
@@ -159,15 +160,19 @@ export class Pe3Controller extends CuppetController {
   /**
    * Pre-inference routing entrypoint used by the bundled OpenCode derivative.
    *
-   * Native TUI prompts normally bypass CuppetController.submit(). The patched
-   * derivative asks this method before starting inference. A true task switch
-   * is forwarded to the selected task-local session and the derivative stores
-   * only a synthetic routing marker in the old session with `noReply=true`.
+   * Native OpenCode owns the authoritative prompt parts, including attachment
+   * URLs/payloads. PE3 receives only bounded text + file metadata, chooses the
+   * target task session, and returns that decision. The derivative forwards the
+   * original parts losslessly and writes only a no-reply marker to the source.
    */
-  async routeNativePrompt(sessionID: string, prompt: string): Promise<NativeTaskRouteResult> {
+  async routeNativePrompt(
+    sessionID: string,
+    prompt: string,
+    attachments: NativeRoutingAttachment[] = [],
+  ): Promise<NativeTaskRouteResult> {
     this.#expireNativeGuards()
     const bypass = this.#nativeBypass.get(sessionID)
-    if (bypass && bypass.expiresAt > Date.now() && bypass.prompt === prompt) {
+    if (attachments.length === 0 && bypass && bypass.expiresAt > Date.now() && bypass.prompt === prompt) {
       this.#nativeBypass.delete(sessionID)
       return {
         rerouted: false,
@@ -197,7 +202,7 @@ export class Pe3Controller extends CuppetController {
     }
     this.#taskSessions.bindSession(source.id)
 
-    const prepared = await this.#prepareTaskSession(prompt)
+    const prepared = await this.#prepareTaskSession(nativeRoutingPrompt(prompt, attachments))
     this.#schedulePersist()
     if (prepared.action === 'continue' && prepared.sessionID === sessionID) {
       this.#turnStartedAt.set(sessionID, Date.now())
@@ -212,18 +217,10 @@ export class Pe3Controller extends CuppetController {
       }
     }
 
+    // Do not submit here. Native OpenCode still owns the original parts and is
+    // the only layer capable of forwarding attachment URLs/data losslessly.
     this.#suppressedNativeSessions.set(sessionID, Date.now() + NATIVE_ROUTE_GUARD_MS)
-    this.#armNativeBypass(prepared.sessionID, prepared.prompt)
     this.#turnStartedAt.set(prepared.sessionID, Date.now())
-    void super.submit(prepared.prompt).catch((error) => {
-      this.#nativeRouteFailures += 1
-      this.#turnStartedAt.delete(prepared.sessionID)
-      this.emit('agent-event', {
-        type: 'error',
-        sessionID: prepared.sessionID,
-        message: `PE3 routed prompt delivery failed: ${error instanceof Error ? error.message : String(error)}`,
-      } satisfies AgentEvent)
-    })
 
     return {
       rerouted: true,

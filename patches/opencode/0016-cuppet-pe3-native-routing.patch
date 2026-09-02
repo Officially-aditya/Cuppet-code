@@ -1,0 +1,159 @@
+diff --git a/packages/opencode/src/cuppet/pe3-route.ts b/packages/opencode/src/cuppet/pe3-route.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/opencode/src/cuppet/pe3-route.ts
+@@ -0,0 +1,121 @@
++import { createConnection, type Socket } from "node:net"
++
++const MAX_PROMPT_BYTES = 128 * 1024
++const MAX_RESPONSE_BYTES = 64 * 1024
++const ROUTE_TIMEOUT_MS = 2_000
++
++export type CuppetNativeRoute = {
++  rerouted: boolean
++  action: "continue" | "create" | "reactivate"
++  sourceSessionID: string
++  targetSessionID: string
++  reason: string
++  sequence: number
++  refreshPaths: string[]
++  forwarded?: boolean
++}
++
++export async function routeCuppetNativePrompt(input: {
++  sessionID: string
++  agent?: string
++  parts: unknown[]
++}): Promise<CuppetNativeRoute | undefined> {
++  if (input.agent === "cuppet-background") return
++  const socketPath = process.env.CUPPET_CONTROL_SOCKET
++  const token = process.env.CUPPET_CONTROL_TOKEN
++  if (!socketPath || !token) return
++
++  const prompt = textOnlyPrompt(input.parts)
++  if (!prompt || Buffer.byteLength(prompt) > MAX_PROMPT_BYTES) return
++
++  return callControl(socketPath, {
++    token,
++    method: "pe3.route-native",
++    params: { sessionID: input.sessionID, prompt },
++  }).catch(() => undefined)
++}
++
++function textOnlyPrompt(parts: unknown[]): string | undefined {
++  const text: string[] = []
++  for (const part of parts) {
++    if (!part || typeof part !== "object" || Array.isArray(part)) return
++    const value = part as Record<string, unknown>
++    if (value.type !== "text") return
++    if (value.synthetic === true) continue
++    if (typeof value.text !== "string") return
++    text.push(value.text)
++  }
++  const prompt = text.join("\n").trim()
++  return prompt || undefined
++}
++
++function callControl(
++  socketPath: string,
++  request: Record<string, unknown>,
++): Promise<CuppetNativeRoute | undefined> {
++  return new Promise((resolve) => {
++    let socket: Socket | undefined
++    let buffer = ""
++    let settled = false
++    const finish = (value?: CuppetNativeRoute) => {
++      if (settled) return
++      settled = true
++      clearTimeout(timer)
++      socket?.destroy()
++      resolve(value)
++    }
++    const timer = setTimeout(() => finish(), ROUTE_TIMEOUT_MS)
++    timer.unref?.()
++
++    try {
++      socket = createConnection(socketPath)
++    } catch {
++      finish()
++      return
++    }
++    socket.setEncoding("utf8")
++    socket.once("error", () => finish())
++    socket.once("close", () => {
++      if (!settled) finish()
++    })
++    socket.once("connect", () => {
++      socket?.write(`${JSON.stringify(request)}\n`)
++    })
++    socket.on("data", (chunk: string) => {
++      buffer += chunk
++      if (Buffer.byteLength(buffer) > MAX_RESPONSE_BYTES) {
++        finish()
++        return
++      }
++      const newline = buffer.indexOf("\n")
++      if (newline < 0) return
++      try {
++        const response = JSON.parse(buffer.slice(0, newline)) as {
++          ok?: boolean
++          result?: unknown
++        }
++        if (response.ok !== true || !isRoute(response.result)) {
++          finish()
++          return
++        }
++        finish(response.result)
++      } catch {
++        finish()
++      }
++    })
++  })
++}
++
++function isRoute(value: unknown): value is CuppetNativeRoute {
++  if (!value || typeof value !== "object" || Array.isArray(value)) return false
++  const route = value as Record<string, unknown>
++  return (
++    typeof route.rerouted === "boolean" &&
++    (route.action === "continue" || route.action === "create" || route.action === "reactivate") &&
++    typeof route.sourceSessionID === "string" &&
++    typeof route.targetSessionID === "string" &&
++    typeof route.reason === "string" &&
++    typeof route.sequence === "number" &&
++    Array.isArray(route.refreshPaths)
++  )
++}
+diff --git a/packages/opencode/src/session/prompt.ts b/packages/opencode/src/session/prompt.ts
+--- a/packages/opencode/src/session/prompt.ts
++++ b/packages/opencode/src/session/prompt.ts
+@@ -49,7 +49,8 @@ import { SessionReminders } from "./reminders"
+ import { SessionTools } from "./tools"
+ import { LLMEvent } from "@opencode-ai/llm"
+ import { Token } from "@/util/token"
+ import { usable } from "./overflow"
++import { routeCuppetNativePrompt } from "@/cuppet/pe3-route"
+ 
+ // @ts-ignore
+ globalThis.AI_SDK_LOG_WARNINGS = false
+@@ -542,6 +543,20 @@ const layer = Layer.effect(
+     )(function* (input: PromptInput) {
+       const session = yield* sessions.get(input.sessionID).pipe(Effect.orDie)
+       yield* revert.cleanup(session)
++      const nativeRoute = yield* Effect.promise(() =>
++        routeCuppetNativePrompt({
++          sessionID: input.sessionID,
++          agent: input.agent,
++          parts: input.parts,
++        }),
++      )
++      if (nativeRoute?.rerouted) {
++        input = {
++          ...input,
++          noReply: true,
++          parts: [{ type: "text", text: `[PE3 routed this request to task session ${nativeRoute.targetSessionID}.]` }],
++        }
++      }
+       const message = yield* createUserMessage(input)
+       yield* sessions.touch(input.sessionID)
+ 

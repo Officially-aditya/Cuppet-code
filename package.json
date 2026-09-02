@@ -30,6 +30,7 @@
     "eval:ab:persistent": "CUPPET_AB_PERSISTENT_GRAPH=1 node --import tsx scripts/ab-eval.ts",
     "eval:native:tst": "node --import tsx scripts/native-tst-benchmark.ts",
     "eval:background": "node --import tsx scripts/continuous-background-benchmark.ts",
+    "eval:pe3:routing": "node --import tsx scripts/pe3-routing-benchmark.ts",
     "eval:ab:tic-tac-toe": "node --import tsx scripts/ab-tictactoe.ts",
     "eval:ab:deepseek-cuppet:tic-tac-toe": "CUPPET_TTT_ARMS=deepseek-harness,cuppet CUPPET_AB_MODEL=openrouter/deepseek/deepseek-v4-flash node --import tsx scripts/ab-tictactoe.ts",
     "eval:ab:weather-codex-cuppet": "node --import tsx scripts/ab-weather-codex-cuppet.ts",

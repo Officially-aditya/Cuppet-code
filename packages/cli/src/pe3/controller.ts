@@ -1,0 +1,327 @@
+import { CuppetController } from '../controller.js'
+import type { AgentEvent, SessionInfo, TokenUsage } from '../types.js'
+import { totalTokenUsage } from '../usage.js'
+import { TaskSessionRouter, type PreparedTaskSession } from './session-router.js'
+
+const NATIVE_ROUTE_GUARD_MS = 5_000
+
+const emptyUsage = (): TokenUsage => ({ input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 })
+
+export type Pe3Snapshot = {
+  activeAgent?: ReturnType<TaskSessionRouter['agents']>[number]
+  agents: ReturnType<TaskSessionRouter['agents']>
+  routing: ReturnType<TaskSessionRouter['stats']>
+  cachedInput: number
+  uncachedInput: number
+  outputTokens: number
+  reasoningTokens: number
+  cacheWrite: number
+  totalModelTokens: number
+  providerAdjustedCost: number
+  completedTurns: number
+  totalLatencyMs: number
+  averageLatencyMs: number
+  nativeRouteFailures: number
+}
+
+export type NativeTaskRouteResult = {
+  rerouted: boolean
+  action: PreparedTaskSession['action']
+  sourceSessionID: string
+  targetSessionID: string
+  reason: string
+  sequence: number
+  refreshPaths: string[]
+  forwarded?: boolean
+}
+
+type NativeBypass = {
+  prompt: string
+  expiresAt: number
+}
+
+/**
+ * PE3 foreground controller.
+ *
+ * The base controller remains the source of truth for OpenCode/TST behavior.
+ * This wrapper only chooses which existing OpenCode session should receive a
+ * new user turn. Same-task turns flow through `super.submit()` unchanged,
+ * preserving the provider-cache-friendly path.
+ */
+export class Pe3Controller extends CuppetController {
+  readonly #taskSessions = new TaskSessionRouter()
+  readonly #nativeBypass = new Map<string, NativeBypass>()
+  readonly #suppressedNativeSessions = new Map<string, number>()
+  readonly #cumulativeUsage = emptyUsage()
+  readonly #turnStartedAt = new Map<string, number>()
+  #cumulativeCost = 0
+  #completedTurns = 0
+  #totalLatencyMs = 0
+  #nativeRouteFailures = 0
+
+  constructor(options: ConstructorParameters<typeof CuppetController>[0]) {
+    super(options)
+    this.onAgentEvent((event) => this.#observeTaskEvent(event))
+  }
+
+  override async initialize(): Promise<void> {
+    await super.initialize()
+    const session = this.snapshot.activeSession
+    if (session) this.#taskSessions.bindSession(session.id, this.#taskEvidence())
+  }
+
+  override async newSession(): Promise<SessionInfo> {
+    const session = await super.newSession()
+    this.#taskSessions.bindSession(session.id, this.#taskEvidence())
+    return session
+  }
+
+  override async resume(sessionID: string): Promise<SessionInfo> {
+    const session = await super.resume(sessionID)
+    this.#taskSessions.bindSession(session.id, this.#taskEvidence())
+    return session
+  }
+
+  override async adoptSession(sessionID: string): Promise<SessionInfo> {
+    const suppressedUntil = this.#suppressedNativeSessions.get(sessionID)
+    if (suppressedUntil && suppressedUntil > Date.now()) {
+      // A routed native request still emits source-session bookkeeping events.
+      // Read them without allowing those delayed events to steal active-agent
+      // privilege back from the routed target session.
+      return this.gateway.getSession(sessionID)
+    }
+    if (suppressedUntil) this.#suppressedNativeSessions.delete(sessionID)
+    const session = await super.adoptSession(sessionID)
+    if (session.agent !== 'cuppet-background') {
+      this.#taskSessions.bindSession(session.id, this.#taskEvidence())
+    }
+    return session
+  }
+
+  override async submit(prompt: string, delivery: 'queue' | 'steer' = 'queue'): Promise<void> {
+    const prepared = await this.#prepareTaskSession(prompt)
+    this.#armNativeBypass(prepared.sessionID, prepared.prompt)
+    this.#turnStartedAt.set(prepared.sessionID, Date.now())
+    await super.submit(prepared.prompt, delivery)
+  }
+
+  /**
+   * Pre-inference routing entrypoint used by the bundled OpenCode derivative.
+   *
+   * Native TUI prompts normally bypass CuppetController.submit(). The patched
+   * derivative asks this method before starting inference. A true task switch
+   * is forwarded to the selected task-local session and the derivative stores
+   * only a synthetic routing marker in the old session with `noReply=true`.
+   */
+  async routeNativePrompt(sessionID: string, prompt: string): Promise<NativeTaskRouteResult> {
+    this.#expireNativeGuards()
+    const bypass = this.#nativeBypass.get(sessionID)
+    if (bypass && bypass.expiresAt > Date.now() && bypass.prompt === prompt) {
+      this.#nativeBypass.delete(sessionID)
+      return {
+        rerouted: false,
+        action: 'continue',
+        sourceSessionID: sessionID,
+        targetSessionID: sessionID,
+        reason: 'controller-forwarded prompt already passed PE3 routing',
+        sequence: this.#taskSessions.stats().sequence,
+        refreshPaths: [],
+        forwarded: true,
+      }
+    }
+
+    // A real native user request is authoritative even if late bookkeeping
+    // events from an earlier reroute temporarily suppress event-driven adoption.
+    const source = await super.adoptSession(sessionID)
+    if (source.agent === 'cuppet-background') {
+      return {
+        rerouted: false,
+        action: 'continue',
+        sourceSessionID: sessionID,
+        targetSessionID: sessionID,
+        reason: 'background sessions are outside PE3 foreground routing',
+        sequence: this.#taskSessions.stats().sequence,
+        refreshPaths: [],
+      }
+    }
+    this.#taskSessions.bindSession(source.id)
+
+    const prepared = await this.#prepareTaskSession(prompt)
+    if (prepared.action === 'continue' && prepared.sessionID === sessionID) {
+      this.#turnStartedAt.set(sessionID, Date.now())
+      return {
+        rerouted: false,
+        action: 'continue',
+        sourceSessionID: sessionID,
+        targetSessionID: sessionID,
+        reason: prepared.reason,
+        sequence: this.#taskSessions.stats().sequence,
+        refreshPaths: [],
+      }
+    }
+
+    this.#suppressedNativeSessions.set(sessionID, Date.now() + NATIVE_ROUTE_GUARD_MS)
+    this.#armNativeBypass(prepared.sessionID, prepared.prompt)
+    this.#turnStartedAt.set(prepared.sessionID, Date.now())
+    void super.submit(prepared.prompt).catch((error) => {
+      this.#nativeRouteFailures += 1
+      this.#turnStartedAt.delete(prepared.sessionID)
+      this.emit('agent-event', {
+        type: 'error',
+        sessionID: prepared.sessionID,
+        message: `PE3 routed prompt delivery failed: ${error instanceof Error ? error.message : String(error)}`,
+      } satisfies AgentEvent)
+    })
+
+    return {
+      rerouted: true,
+      action: prepared.action,
+      sourceSessionID: sessionID,
+      targetSessionID: prepared.sessionID,
+      reason: prepared.reason,
+      sequence: this.#taskSessions.stats().sequence,
+      refreshPaths: [...prepared.refreshPaths],
+    }
+  }
+
+  override async status(): Promise<Record<string, unknown>> {
+    const status = await super.status()
+    return {
+      ...status,
+      pe3: this.pe3Snapshot(),
+    }
+  }
+
+  pe3Snapshot(): Pe3Snapshot {
+    const cachedInput = boundedCachedInput(this.#cumulativeUsage)
+    const agents = this.#taskSessions.agents()
+    return {
+      ...(this.#taskSessions.active ? { activeAgent: this.#taskSessions.active } : {}),
+      agents,
+      routing: this.#taskSessions.stats(),
+      cachedInput,
+      uncachedInput: Math.max(0, this.#cumulativeUsage.input - cachedInput),
+      outputTokens: this.#cumulativeUsage.output,
+      reasoningTokens: this.#cumulativeUsage.reasoning,
+      cacheWrite: Math.max(0, this.#cumulativeUsage.cacheWrite),
+      totalModelTokens: totalTokenUsage(this.#cumulativeUsage),
+      // Usage events contain the provider-calculated request cost, including
+      // provider-specific cache pricing when OpenCode exposes it. Accumulating
+      // those events across task sessions preserves effective-cost accounting.
+      providerAdjustedCost: Math.max(0, this.#cumulativeCost),
+      completedTurns: this.#completedTurns,
+      totalLatencyMs: this.#totalLatencyMs,
+      averageLatencyMs: this.#completedTurns > 0 ? this.#totalLatencyMs / this.#completedTurns : 0,
+      nativeRouteFailures: this.#nativeRouteFailures,
+    }
+  }
+
+  async #prepareTaskSession(prompt: string): Promise<PreparedTaskSession> {
+    return this.#taskSessions.prepare(prompt, {
+      current: () => {
+        const session = this.snapshot.activeSession
+        return session ? { id: session.id } : undefined
+      },
+      create: async () => {
+        const session = await super.newSession()
+        return { id: session.id }
+      },
+      resume: async (sessionID) => {
+        const session = await super.resume(sessionID)
+        return { id: session.id }
+      },
+      evidence: () => this.#taskEvidence(),
+    })
+  }
+
+  #armNativeBypass(sessionID: string, prompt: string): void {
+    this.#nativeBypass.set(sessionID, {
+      prompt,
+      expiresAt: Date.now() + NATIVE_ROUTE_GUARD_MS,
+    })
+  }
+
+  #expireNativeGuards(): void {
+    const now = Date.now()
+    for (const [sessionID, bypass] of this.#nativeBypass) {
+      if (bypass.expiresAt <= now) this.#nativeBypass.delete(sessionID)
+    }
+    for (const [sessionID, expiresAt] of this.#suppressedNativeSessions) {
+      if (expiresAt <= now) this.#suppressedNativeSessions.delete(sessionID)
+    }
+  }
+
+  #taskEvidence() {
+    const session = this.snapshot.activeSession
+    const active = this.#taskSessions.active
+    return {
+      activePaths: active?.activePaths ?? [],
+      touchedPaths: active?.touchedPaths ?? [],
+      recentSymbols: active?.recentSymbols ?? [],
+      ...(session ? { workspaceEpoch: active?.workspaceEpoch ?? 0 } : {}),
+    }
+  }
+
+  #observeTaskEvent(event: AgentEvent): void {
+    if (event.type === 'usage') {
+      this.#cumulativeUsage.input += event.usage.input
+      this.#cumulativeUsage.output += event.usage.output
+      this.#cumulativeUsage.reasoning += event.usage.reasoning
+      this.#cumulativeUsage.cacheRead += event.usage.cacheRead
+      this.#cumulativeUsage.cacheWrite += event.usage.cacheWrite
+      this.#cumulativeCost += event.cost
+    }
+
+    if (event.type === 'idle') {
+      const startedAt = this.#turnStartedAt.get(event.sessionID)
+      if (startedAt !== undefined) {
+        this.#turnStartedAt.delete(event.sessionID)
+        this.#completedTurns += 1
+        this.#totalLatencyMs += Math.max(0, Date.now() - startedAt)
+      }
+    }
+
+    if (event.type === 'tool-end' && event.success && event.outputPaths?.length) {
+      this.#taskSessions.noteActivePaths(event.outputPaths)
+      if (event.diff) this.#taskSessions.noteWorkspaceMutation(event.outputPaths)
+      return
+    }
+
+    if (event.type === 'diff') {
+      const paths = pathsFromDiff(event.diff)
+      if (paths.length > 0) this.#taskSessions.noteWorkspaceMutation(paths)
+    }
+  }
+}
+
+export function pe3InputBreakdown(usage: TokenUsage): {
+  cachedInput: number
+  uncachedInput: number
+  cacheWrite: number
+} {
+  const cachedInput = boundedCachedInput(usage)
+  return {
+    cachedInput,
+    uncachedInput: Math.max(0, usage.input - cachedInput),
+    cacheWrite: Math.max(0, usage.cacheWrite),
+  }
+}
+
+export function routeChangedSession(route: PreparedTaskSession, previousSessionID?: string): boolean {
+  return Boolean(previousSessionID && route.sessionID !== previousSessionID)
+}
+
+function boundedCachedInput(usage: TokenUsage): number {
+  return Math.max(0, Math.min(usage.input, usage.cacheRead))
+}
+
+function pathsFromDiff(diff: unknown): string[] {
+  let text = ''
+  try {
+    text = typeof diff === 'string' ? diff : JSON.stringify(diff)
+  } catch {
+    return []
+  }
+  const matches = text.match(/(?:\.?\.?\/)?[A-Za-z0-9_.@-]+(?:\/[A-Za-z0-9_.@-]+)+(?:\.[A-Za-z0-9_-]+)?|[A-Za-z0-9_.@-]+\.(?:ts|tsx|js|jsx|rs|py|go|java|json|md|yaml|yml|toml|css|html)/g) ?? []
+  return [...new Set(matches.map((path) => path.replaceAll('\\', '/').replace(/^\.\//, '').toLowerCase()))].slice(0, 16)
+}

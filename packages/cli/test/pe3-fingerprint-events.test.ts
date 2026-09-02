@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { SemanticTaskRouter, type TaskEmbeddingProvider } from '../src/pe3/semantic-router.js'
-import { TaskAgentRouter } from '../src/pe3/task-agents.js'
+import { TaskAgentRouter, type TaskAgentState } from '../src/pe3/task-agents.js'
 
 test('plain follow-up turns do not reinforce old artifact evidence or churn fingerprint revision', () => {
   let now = 0
@@ -75,7 +75,7 @@ test('meaningful new prompt evidence still decays older artifact evidence', () =
   assert.ok(after < before)
 })
 
-function pathSignal(agent: NonNullable<ReturnType<TaskAgentRouter['active']>>, path: string) {
+function pathSignal(agent: TaskAgentState, path: string) {
   const signal = agent.fingerprint.paths.find((candidate) => candidate.value === path.toLowerCase())
   assert.ok(signal, `missing fingerprint path signal for ${path}`)
   return signal

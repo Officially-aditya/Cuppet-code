@@ -59,9 +59,10 @@ test('attachment routing keeps unsupported, attachment-only, and control-failure
   assert.match(patch, /if \(nativeRoute\?\.rerouted\)/)
 })
 
-test('successful native reroute marks source noReply immediately while target inference runs separately', async () => {
+test('successful native reroute marks source noReply immediately while target inference runs in the service scope', async () => {
   const patch = await readFile('patches/opencode/0018-cuppet-pe3-attachment-routing.patch', 'utf8')
-  assert.match(patch, /Effect\.forkDaemon\(prompt\(/)
+  assert.match(patch, /\.pipe\(Effect\.forkIn\(scope\)\)/)
+  assert.doesNotMatch(patch, /Effect\.forkDaemon/)
   assert.match(patch, /noReply: true/)
   assert.match(patch, /PE3 routed this request to task session/)
 })

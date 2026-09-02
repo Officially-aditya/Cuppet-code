@@ -5,6 +5,7 @@ import {
   type TaskAgentState,
   type TaskRoute,
 } from './task-agents.js'
+import type { TaskLocalizationEvidence, TaskLocalizationMetadata } from './localizer.js'
 import { LocalTransformersEmbeddingProvider } from './local-embedding.js'
 import {
   SemanticTaskRouter,
@@ -19,7 +20,7 @@ export type TaskSessionAdapter = {
   resume: (sessionID: string) => Promise<TaskSessionRef>
   evidence: () => TaskAgentEvidence
   /** Optional cheap local graph/code search used only in the ambiguous band. */
-  localize?: (sessionID: string, prompt: string) => Promise<TaskAgentEvidence>
+  localize?: (sessionID: string, prompt: string) => Promise<TaskLocalizationEvidence>
 }
 
 export type PreparedTaskSession = {
@@ -39,6 +40,11 @@ export type TaskSessionRoutingStats = {
   switches: number
   localizationQueries: number
   localizationHits: number
+  localizationDecisive: number
+  localizationWeak: number
+  lastLocalizationTopScore?: number
+  lastLocalizationRunnerUpScore?: number
+  lastLocalizationReason?: string
   semanticEscalations: number
   semanticContinuations: number
   semanticCreated: number
@@ -71,6 +77,8 @@ export class TaskSessionRouter {
     switches: 0,
     localizationQueries: 0,
     localizationHits: 0,
+    localizationDecisive: 0,
+    localizationWeak: 0,
     semanticEscalations: 0,
     semanticContinuations: 0,
     semanticCreated: 0,
@@ -142,7 +150,8 @@ export class TaskSessionRouter {
 
     if (route.action === 'continue' && route.semanticEligible && adapter.localize) {
       this.#stats.localizationQueries += 1
-      const localized = await adapter.localize(current.id, prompt).catch(() => ({} as TaskAgentEvidence))
+      const localized = await adapter.localize(current.id, prompt).catch(() => ({} as TaskLocalizationEvidence))
+      this.#recordLocalization(localized.localization)
       if (hasLocalizedEvidence(localized)) {
         this.#stats.localizationHits += 1
         evidence = mergeEvidence(evidence, localized)
@@ -266,6 +275,24 @@ export class TaskSessionRouter {
       reason: decision.reason,
       semanticEligible: false,
     }
+  }
+
+  #recordLocalization(localization: TaskLocalizationMetadata | undefined): void {
+    if (!localization) {
+      delete this.#stats.lastLocalizationTopScore
+      delete this.#stats.lastLocalizationRunnerUpScore
+      delete this.#stats.lastLocalizationReason
+      return
+    }
+    this.#stats.lastLocalizationTopScore = localization.topScore
+    if (localization.runnerUpScore !== undefined) {
+      this.#stats.lastLocalizationRunnerUpScore = localization.runnerUpScore
+    } else {
+      delete this.#stats.lastLocalizationRunnerUpScore
+    }
+    this.#stats.lastLocalizationReason = localization.reason
+    if (localization.decisive) this.#stats.localizationDecisive += 1
+    else this.#stats.localizationWeak += 1
   }
 
   #recordSemantic(decision: SemanticRouteDecision): void {

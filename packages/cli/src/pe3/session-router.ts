@@ -23,6 +23,11 @@ export type TaskSessionAdapter = {
   localize?: (sessionID: string, prompt: string) => Promise<TaskLocalizationEvidence>
 }
 
+export type TaskSessionPrepareOptions = {
+  /** Additional bounded context visible only to semantic escalation. */
+  semanticContext?: string
+}
+
 export type PreparedTaskSession = {
   action: 'continue' | 'create' | 'reactivate'
   sessionID: string
@@ -109,7 +114,11 @@ export class TaskSessionRouter {
     return this.#router.select(taskAgentID(sessionID))
   }
 
-  async prepare(prompt: string, adapter: TaskSessionAdapter): Promise<PreparedTaskSession> {
+  async prepare(
+    prompt: string,
+    adapter: TaskSessionAdapter,
+    options: TaskSessionPrepareOptions = {},
+  ): Promise<PreparedTaskSession> {
     let evidence = adapter.evidence()
     let current = adapter.current()
     if (!current) {
@@ -127,6 +136,14 @@ export class TaskSessionRouter {
     }
 
     let route = this.#router.route(prompt, evidence)
+    if (route.action === 'continue' && isExplicitDisjointPathSwitch(prompt, active)) {
+      route = {
+        action: 'create',
+        reason: 'explicit switch cue targets a concrete path outside the active task',
+        affinity: route.affinity,
+      }
+    }
+
     if (route.action === 'continue' && route.semanticEligible && adapter.localize) {
       this.#stats.localizationQueries += 1
       const localized = await adapter.localize(current.id, prompt).catch(() => ({} as TaskLocalizationEvidence))
@@ -139,7 +156,9 @@ export class TaskSessionRouter {
     }
 
     const semanticReturnOnly = route.action === 'continue' && isExplicitReturnPrompt(prompt)
-    if (route.action === 'continue' && (route.semanticEligible || semanticReturnOnly) && this.#semantic) route = await this.#semanticRoute(prompt, route, semanticReturnOnly)
+    if (route.action === 'continue' && (route.semanticEligible || semanticReturnOnly) && this.#semantic) {
+      route = await this.#semanticRoute(prompt, route, semanticReturnOnly, options.semanticContext)
+    }
 
     if (route.action === 'continue') {
       this.#router.recordTurn(prompt, evidence)
@@ -182,12 +201,17 @@ export class TaskSessionRouter {
   noteActivePaths(paths: Iterable<string>): void { const active = this.#router.active; if (active) this.noteSessionObservedPaths(active.sessionID, paths) }
   noteWorkspaceMutation(paths: Iterable<string>): void { const active = this.#router.active; if (active) this.noteSessionWorkspaceMutation(active.sessionID, paths) }
 
-  async #semanticRoute(prompt: string, deterministic: Extract<TaskRoute, { action: 'continue' }>, returnOnly = false): Promise<TaskRoute> {
+  async #semanticRoute(
+    prompt: string,
+    deterministic: Extract<TaskRoute, { action: 'continue' }>,
+    returnOnly = false,
+    semanticContext = '',
+  ): Promise<TaskRoute> {
     const active = this.#router.active
     if (!active || !this.#semantic) return deterministic
     const dormant = this.#router.list().filter((agent) => agent.id !== active.id)
     this.#stats.semanticEscalations += 1
-    const decision = await this.#semantic.decide(prompt, active, dormant)
+    const decision = await this.#semantic.decide(semanticInput(prompt, semanticContext), active, dormant)
     this.#recordSemantic(decision)
     if (decision.action === 'reactivate' && decision.agent) {
       return { action: 'reactivate', agent: decision.agent, reason: decision.reason, affinity: deterministic.affinity, refreshPaths: [...decision.agent.stalePaths] }
@@ -242,6 +266,9 @@ export class TaskSessionRouter {
   }
 }
 
+const ROUTING_PATH_TOKEN = /(?:\.?\.?\/)?[A-Za-z0-9_.@-]+(?:\/[A-Za-z0-9_.@-]+)+(?:\.[A-Za-z0-9_-]+)?|[A-Za-z0-9_.@-]+\.(?:ts|tsx|js|jsx|rs|py|go|java|json|md|yaml|yml|toml|css|html)/g
+const EXPLICIT_SWITCH_CUES = ['new task', 'separate task', 'separately', 'unrelated', 'instead', 'switch to', 'now build', 'now implement', 'move on to']
+
 function emptyRoutingStats(): TaskSessionRoutingStats {
   return {
     sequence: 0, continuations: 0, created: 0, reactivated: 0, switches: 0,
@@ -260,6 +287,32 @@ function withRefreshHint(prompt: string, paths: string[]): string {
 function isExplicitReturnPrompt(prompt: string): boolean {
   const normalized = prompt.toLowerCase().replace(/\s+/g, ' ').trim()
   return ['go back to', 'return to', 'back to', 'resume the', 'resume that', 'previous task', 'earlier task'].some((cue) => normalized.includes(cue))
+}
+function isExplicitSwitchPrompt(prompt: string): boolean {
+  const normalized = prompt.toLowerCase().replace(/\s+/g, ' ').trim()
+  return EXPLICIT_SWITCH_CUES.some((cue) => normalized.includes(cue))
+}
+function isExplicitDisjointPathSwitch(prompt: string, active: TaskAgentState): boolean {
+  if (!isExplicitSwitchPrompt(prompt)) return false
+  const promptPaths = extractRoutingPaths(prompt)
+  if (promptPaths.length === 0) return false
+  const knownPaths = new Set([
+    ...active.activePaths.map(normalizeRoutingPath),
+    ...active.touchedPaths.map(normalizeRoutingPath),
+    ...active.fingerprint.paths.map((signal) => normalizeRoutingPath(signal.value)),
+  ].filter(Boolean))
+  if (knownPaths.size === 0) return true
+  return promptPaths.every((path) => !knownPaths.has(path))
+}
+function extractRoutingPaths(prompt: string): string[] {
+  return [...new Set((prompt.match(ROUTING_PATH_TOKEN) ?? []).map(normalizeRoutingPath).filter(Boolean))]
+}
+function normalizeRoutingPath(path: string): string {
+  return path.trim().replaceAll('\\', '/').replace(/^\.\//, '').replace(/[),.;:'"\]}>]+$/g, '').toLowerCase()
+}
+function semanticInput(prompt: string, semanticContext: string): string {
+  const context = semanticContext.trim()
+  return context ? `${prompt}\n${context}` : prompt
 }
 function hasLocalizedEvidence(evidence: TaskAgentEvidence): boolean { return iterableHasValues(evidence.localizedPaths) || iterableHasValues(evidence.localizedSymbols) }
 function iterableHasValues(values: Iterable<string> | undefined): boolean { if (!values) return false; for (const _value of values) return true; return false }

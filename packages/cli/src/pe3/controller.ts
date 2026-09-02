@@ -1,6 +1,7 @@
 import { CuppetController } from '../controller.js'
 import type { AgentEvent, SessionInfo, TokenUsage } from '../types.js'
 import { totalTokenUsage } from '../usage.js'
+import { TstTaskLocalizer } from './localizer.js'
 import { TaskSessionRouter, type PreparedTaskSession } from './session-router.js'
 
 const NATIVE_ROUTE_GUARD_MS = 5_000
@@ -50,6 +51,7 @@ type NativeBypass = {
  */
 export class Pe3Controller extends CuppetController {
   readonly #taskSessions = new TaskSessionRouter()
+  readonly #taskLocalizer: TstTaskLocalizer
   readonly #nativeBypass = new Map<string, NativeBypass>()
   readonly #suppressedNativeSessions = new Map<string, number>()
   readonly #cumulativeUsage = emptyUsage()
@@ -61,6 +63,7 @@ export class Pe3Controller extends CuppetController {
 
   constructor(options: ConstructorParameters<typeof CuppetController>[0]) {
     super(options)
+    this.#taskLocalizer = new TstTaskLocalizer(options.tst)
     this.onAgentEvent((event) => this.#observeTaskEvent(event))
   }
 
@@ -231,6 +234,7 @@ export class Pe3Controller extends CuppetController {
         return { id: session.id }
       },
       evidence: () => this.#taskEvidence(),
+      localize: (sessionID, value) => this.#taskLocalizer.locate(sessionID, value),
     })
   }
 

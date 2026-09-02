@@ -35,7 +35,7 @@ test('background batches merge meaningful signals, wait for idle, and persist re
     worker.foregroundIdle('foreground')
     await waitFor(() => worker.stats.completed === 1)
     assert.equal(gateway.prompts.length, 1)
-    assert.ok(Buffer.byteLength(gateway.prompts[0] ?? '') <= 5_096)
+    assert.ok(Buffer.byteLength(gateway.prompts[0] ?? '') <= 5_796)
     assert.equal(worker.stats.lastBatch?.candidates, 1)
     assert.equal(worker.stats.lastBatch?.attempts, 1)
     assert.equal(worker.stats.queued, 0)
@@ -224,16 +224,155 @@ test('turn context remains ephemeral and can create only session-scoped candidat
   }
 })
 
+test('one-off explicit user preference preserves UserPreference evidence without independent promotion', async () => {
+  const directory = await temporaryDirectory()
+  const gateway = new FakeGateway({
+    candidateKey: 'Package manager preference: pnpm',
+    candidateValue: 'Prefer pnpm for package management',
+    candidateKind: 'preference',
+    candidateScope: 'project',
+    candidateSourceIDs: ['s1'],
+  })
+  gateway.userMessages.set('pref-1', 'I prefer pnpm for this repo')
+  const tst = new FakeTst()
+  const worker = new BackgroundWorker({
+    gateway: gateway as never,
+    tst: tst as never,
+    model,
+    projectStore: directory,
+    idleDelayMs: 1,
+    cooldownMs: 0,
+  })
+  try {
+    await worker.ready()
+    await worker.recordTurnContext('pref-1', 'Requirement: choose package manager')
+    worker.foregroundIdle('pref-1')
+    await waitFor(() => worker.stats.completed === 1)
+
+    const observation = tst.calls.find((call) => call.method === 'memory.observe')
+    assert.equal(observation?.params.scope, 'session', 'one-off turn context stays non-durable')
+    assert.equal(observation?.params.provenance, 'model_candidate')
+    const evidence = tst.calls.filter((call) => call.method === 'evidence.record')
+    assert.equal(evidence.filter((call) => call.params.kind === 'user_preference').length, 1)
+    assert.equal(evidence.filter((call) => call.params.kind === 'independent_reinforcement').length, 0)
+  } finally {
+    await worker.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('repeated explicit preference gains deterministic cross-session reinforcement and project admission', async () => {
+  const directory = await temporaryDirectory()
+  const gateway = new FakeGateway({
+    candidateKey: 'Package manager preference: pnpm',
+    candidateValue: 'Prefer pnpm for package management',
+    candidateKind: 'preference',
+    candidateScope: 'project',
+    candidateSourceIDs: ['s1'],
+  })
+  gateway.userMessages.set('pref-1', 'I prefer pnpm for this repo')
+  gateway.userMessages.set('pref-2', 'Please use pnpm here too')
+  const tst = new FakeTst()
+  const worker = new BackgroundWorker({
+    gateway: gateway as never,
+    tst: tst as never,
+    model,
+    projectStore: directory,
+    idleDelayMs: 1,
+    cooldownMs: 0,
+  })
+  try {
+    await worker.ready()
+    await worker.recordTurnContext('pref-1', 'Requirement: choose package manager')
+    worker.foregroundIdle('pref-1')
+    await waitFor(() => worker.stats.completed === 1)
+
+    await worker.recordTurnContext('pref-2', 'Requirement: choose package manager')
+    worker.foregroundIdle('pref-2')
+    await waitFor(() => worker.stats.completed === 2)
+
+    const observations = tst.calls.filter((call) => call.method === 'memory.observe')
+    assert.equal(observations.length, 2)
+    assert.equal(observations[0]?.params.scope, 'session')
+    assert.equal(observations[1]?.params.scope, 'project')
+    const secondMemoryID = observations[1]?.resultID
+    const secondEvidence = tst.calls.filter(
+      (call) => call.method === 'evidence.record' && call.params.memory_id === secondMemoryID,
+    )
+    assert.equal(secondEvidence.filter((call) => call.params.kind === 'user_preference').length, 1)
+    assert.equal(secondEvidence.filter((call) => call.params.kind === 'independent_reinforcement').length, 2)
+
+    const ledger = JSON.parse(await readFile(join(directory, 'candidate-ledger.json'), 'utf8')) as {
+      entries: Array<{ explicit_user_count: number; session_count: number; support_count: number }>
+    }
+    assert.equal(ledger.entries[0]?.explicit_user_count, 2)
+    assert.equal(ledger.entries[0]?.session_count, 2)
+    assert.equal(ledger.entries[0]?.support_count, 2)
+  } finally {
+    await worker.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('trusted user contradiction blocks admission and forgets the exact canonical memory', async () => {
+  const directory = await temporaryDirectory()
+  const gateway = new FakeGateway({
+    candidateKey: 'Package manager preference: pnpm',
+    candidateValue: 'Prefer pnpm for package management',
+    candidateKind: 'preference',
+    candidateScope: 'project',
+    candidateSourceIDs: ['s1'],
+  })
+  gateway.userMessages.set('pref-1', 'I prefer pnpm')
+  gateway.userMessages.set('pref-2', 'Please use pnpm here too')
+  gateway.userMessages.set('pref-3', 'Never use pnpm here')
+  const tst = new FakeTst()
+  const worker = new BackgroundWorker({
+    gateway: gateway as never,
+    tst: tst as never,
+    model,
+    projectStore: directory,
+    idleDelayMs: 1,
+    cooldownMs: 0,
+  })
+  try {
+    await worker.ready()
+    for (const sessionID of ['pref-1', 'pref-2']) {
+      await worker.recordTurnContext(sessionID, 'Requirement: choose package manager')
+      worker.foregroundIdle(sessionID)
+      await waitFor(() => worker.stats.completed >= Number(sessionID.at(-1)))
+    }
+
+    gateway.candidateRelation = 'contradiction'
+    await worker.recordTurnContext('pref-3', 'Requirement changed')
+    worker.foregroundIdle('pref-3')
+    await waitFor(() => worker.stats.completed === 3)
+
+    const forget = tst.calls.find((call) => call.method === 'memory.forget')
+    assert.equal(forget?.params.key, 'Package manager preference: pnpm')
+    assert.equal(tst.calls.filter((call) => call.method === 'memory.observe').length, 2)
+  } finally {
+    await worker.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 class FakeGateway {
   readonly prompts: string[] = []
   readonly sessions = new Map<string, { tokens: TokenUsage; cost: number }>()
   readonly waiters = new Map<string, () => void>()
+  readonly userMessages = new Map<string, string>()
   createdSessions = 0
   holdWait: boolean
   promptFailures: number
   invalidSchema: boolean
   createDelayMs: number
   candidateScope: 'session' | 'project'
+  candidateKind: 'token_statistics' | 'concept_anchor' | 'structure_pattern' | 'behavioral_claim' | 'preference'
+  candidateKey: string
+  candidateValue: string
+  candidateSourceIDs: string[]
+  candidateRelation: 'support' | 'correction' | 'contradiction'
 
   constructor(options: {
     holdWait?: boolean
@@ -241,12 +380,22 @@ class FakeGateway {
     invalidSchema?: boolean
     createDelayMs?: number
     candidateScope?: 'session' | 'project'
+    candidateKind?: 'token_statistics' | 'concept_anchor' | 'structure_pattern' | 'behavioral_claim' | 'preference'
+    candidateKey?: string
+    candidateValue?: string
+    candidateSourceIDs?: string[]
+    candidateRelation?: 'support' | 'correction' | 'contradiction'
   } = {}) {
     this.holdWait = options.holdWait ?? false
     this.promptFailures = options.promptFailures ?? 0
     this.invalidSchema = options.invalidSchema ?? false
     this.createDelayMs = options.createDelayMs ?? 0
     this.candidateScope = options.candidateScope ?? 'project'
+    this.candidateKind = options.candidateKind ?? 'concept_anchor'
+    this.candidateKey = options.candidateKey ?? 'verified signal'
+    this.candidateValue = options.candidateValue ?? 'durable candidate'
+    this.candidateSourceIDs = options.candidateSourceIDs ?? []
+    this.candidateRelation = options.candidateRelation ?? 'support'
   }
 
   async createSession() {
@@ -280,15 +429,23 @@ class FakeGateway {
     await new Promise<void>((resolve) => this.waiters.set(id, resolve))
   }
 
-  async messages() {
+  async messages(id: string) {
+    if (!id.startsWith('background-')) {
+      const text = this.userMessages.get(id)
+      return text
+        ? [{ info: { id: `user-${id}`, role: 'user' }, parts: [{ type: 'text', text }] }]
+        : []
+    }
     return [this.invalidSchema
       ? 'not structured output'
       : JSON.stringify({
           candidates: [{
-            key: 'verified signal',
-            value: 'durable candidate',
-            kind: 'concept_anchor',
+            key: this.candidateKey,
+            value: this.candidateValue,
+            kind: this.candidateKind,
             scope: this.candidateScope,
+            ...(this.candidateSourceIDs.length > 0 ? { source_ids: this.candidateSourceIDs } : {}),
+            ...(this.candidateRelation !== 'support' ? { relation: this.candidateRelation } : {}),
           }],
         })]
   }
@@ -301,11 +458,16 @@ class FakeGateway {
 
 class FakeTst {
   #nextID = 0
-  readonly calls: Array<{ method: string; params: Record<string, unknown> }> = []
+  readonly calls: Array<{ method: string; params: Record<string, unknown>; resultID?: string }> = []
 
   async call<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
+    if (method === 'memory.observe') {
+      const id = `memory-${++this.#nextID}`
+      this.calls.push({ method, params, resultID: id })
+      return { id } as T
+    }
     this.calls.push({ method, params })
-    if (method === 'memory.observe') return { id: `memory-${++this.#nextID}` } as T
+    if (method === 'memory.forget') return { removed: 1 } as T
     return { recorded: true } as T
   }
 }

@@ -1,7 +1,17 @@
 import { EventEmitter } from 'node:events'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { z } from 'zod'
+import {
+  CandidateLedger,
+  candidateSourceRef,
+  canonicalLedgerKey,
+  hasContradictionCue,
+  hasCorrectionCue,
+  hasDurableUserCue,
+  isSensitiveCandidate,
+  type CandidateRelation,
+} from './candidate-ledger.js'
 import type { OpenCodeGateway } from '../opencode/gateway.js'
 import { redact } from '../runtime/logger.js'
 import type { ModelRef, TokenUsage } from '../types.js'
@@ -10,6 +20,7 @@ import type { TstClient } from '../tst/client.js'
 const MAX_BATCH_INPUT_BYTES = 4 * 1024
 const MAX_SIGNAL_BYTES = 1_200
 const MAX_SIGNALS_PER_BATCH = 8
+const MAX_USER_SIGNALS_PER_BATCH = 2
 const MAX_PERSISTED_BATCHES = 50
 const DEFAULT_IDLE_DELAY_MS = 60_000
 const DEFAULT_COOLDOWN_MS = 15 * 60_000
@@ -27,6 +38,8 @@ const candidateSchema = z.object({
   ]),
   file_hashes: z.record(z.string().min(1).max(512), z.string().min(1).max(128)).optional(),
   scope: z.enum(['session', 'project']).default('project'),
+  source_ids: z.array(z.string().regex(/^s[0-7]$/)).max(MAX_SIGNALS_PER_BATCH).default([]),
+  relation: z.enum(['support', 'correction', 'contradiction']).default('support'),
 }).strict()
 
 const outputSchema = z.object({
@@ -35,11 +48,22 @@ const outputSchema = z.object({
 
 type Candidate = z.infer<typeof candidateSchema>
 type SignalKind = 'verified_diff' | 'validation' | 'turn_context'
+type PreparedSignalKind = SignalKind | 'user_context'
 
 type BatchSignal = {
   kind: SignalKind
   summary: string
   recordedAt: number
+}
+
+type PreparedSignal = {
+  id: string
+  kind: PreparedSignalKind
+  summary: string
+  recordedAt: number
+  durableCue: boolean
+  correctionCue: boolean
+  contradictionCue: boolean
 }
 
 type PendingBatch = {
@@ -97,14 +121,17 @@ type BatchRunResult = {
 const emptyUsage = (): TokenUsage => ({ input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 })
 
 /**
- * Secondary-model canonicalization is deliberately deferred.  Native TST
- * indexing and graph persistence remain eager; this worker only processes
- * bounded evidence after the foreground has been idle for long enough.
+ * Secondary-model canonicalization is deliberately deferred. Native TST
+ * indexing and graph persistence remain eager; this worker processes only
+ * bounded evidence after the foreground has been idle long enough. Candidate
+ * importance is decided by the deterministic ledger, never by the model.
  */
 export class BackgroundWorker extends EventEmitter {
   readonly #gateway: OpenCodeGateway
   readonly #tst: TstClient | undefined
   readonly #pendingPath: string | undefined
+  readonly #ledger: CandidateLedger
+  readonly #projectID: string
   readonly #now: () => number
   readonly #idleDelayMs: number
   readonly #cooldownMs: number
@@ -148,10 +175,16 @@ export class BackgroundWorker extends EventEmitter {
     this.#model = options.model
     this.#paused = options.paused ?? false
     this.#pendingPath = options.projectStore ? join(options.projectStore, 'background-pending.json') : undefined
+    this.#projectID = options.projectStore ? basename(options.projectStore) : 'ephemeral-project'
     this.#now = options.now ?? Date.now
     this.#idleDelayMs = Math.max(0, options.idleDelayMs ?? DEFAULT_IDLE_DELAY_MS)
     this.#cooldownMs = Math.max(0, options.cooldownMs ?? DEFAULT_COOLDOWN_MS)
-    this.#ready = this.#restore()
+    const ledgerPath = options.projectStore ? candidateLedgerPath(options.projectStore) : undefined
+    this.#ledger = new CandidateLedger({
+      ...(ledgerPath ? { path: ledgerPath } : {}),
+      now: this.#now,
+    })
+    this.#ready = this.#initialize()
   }
 
   async ready(): Promise<void> {
@@ -245,7 +278,7 @@ export class BackgroundWorker extends EventEmitter {
   async close(): Promise<void> {
     this.pause()
     await this.#ready
-    await this.#persistPending()
+    await Promise.all([this.#persistPending(), this.#ledger.close()])
   }
 
   get stats(): BackgroundStats {
@@ -362,11 +395,7 @@ export class BackgroundWorker extends EventEmitter {
         addUsage(usage, attempt.usage)
         cost += attempt.cost
         candidates += attempt.candidates
-        if (this.#isCancelled(batch)) {
-          status = 'cancelled'
-        } else {
-          status = 'completed'
-        }
+        status = this.#isCancelled(batch) ? 'cancelled' : 'completed'
         break
       } catch (error) {
         const failure = error instanceof AttemptFailure ? error : new AttemptFailure(error, emptyUsage(), 0)
@@ -407,6 +436,15 @@ export class BackgroundWorker extends EventEmitter {
     let failure: unknown
     try {
       if (this.#isCancelled(batch)) throw new BackgroundCancelledError()
+
+      // Preserve authorship before canonicalization. This fetch is background
+      // only and extracts at most two recent user text messages; raw user text
+      // is never persisted in the candidate ledger.
+      const foregroundMessages = await this.#gateway.messages(batch.sessionID).catch(() => [])
+      const signals = prepareSignals(batch, foregroundMessages, this.#now())
+      const signalMap = new Map(signals.map((signal) => [signal.id, signal]))
+      if (this.#isCancelled(batch)) throw new BackgroundCancelledError()
+
       session = await this.#gateway.createSession(this.#model, true)
       this.#rememberBackgroundSession(session.id)
       this.#activeSecondarySessionID = session.id
@@ -415,15 +453,17 @@ export class BackgroundWorker extends EventEmitter {
       if (this.#isCancelled(batch)) throw new BackgroundCancelledError()
       before = await this.#gateway.getSession(session.id).catch(() => session)
       if (this.#isCancelled(batch)) throw new BackgroundCancelledError()
-      const summary = batchSummary(batch)
+      const summary = batchSummary(signals)
       const prompt = [
         'Canonicalize at most four short memory candidates from the supplied bounded foreground signals.',
-        'Return JSON only: {"candidates":[{"key":"...","value":"...","kind":"concept_anchor|structure_pattern|behavioral_claim|token_statistics|preference","scope":"session|project","file_hashes":{}}]}.',
-        'Turn context may produce only session-scoped requirements, decisions, symbols, or unresolved work. Project-scoped candidates must be supported solely by verified diffs or successful validations.',
-        'Do not include secrets, credentials, raw transcripts, unrestricted tool output, or unverifiable claims. Candidates are not verification evidence.',
+        'Return JSON only: {"candidates":[{"key":"...","value":"...","kind":"concept_anchor|structure_pattern|behavioral_claim|token_statistics|preference","scope":"session|project","file_hashes":{},"source_ids":["s0"],"relation":"support|correction|contradiction"}]}.',
+        'source_ids must contain only IDs shown below and identify the bounded signals that support the canonical claim. relation describes how those cited sources relate to the canonical claim; it is not an importance score.',
+        'The model only canonicalizes and deduplicates. It must not decide whether a candidate is important, durable, verified, or promotable.',
+        'User-authored signals remain distinct from turn/outcome summaries. Project scope is only a request; deterministic evidence decides whether it is actually allowed.',
+        'Do not include secrets, credentials, raw transcripts, unrestricted tool output, or unverifiable claims. Model selection of a candidate is never verification evidence.',
         `Signals (redacted and bounded to ${MAX_BATCH_INPUT_BYTES} bytes):\n${summary}`,
       ].join('\n\n')
-      if (Buffer.byteLength(prompt) > MAX_BATCH_INPUT_BYTES + 1_000) {
+      if (Buffer.byteLength(prompt) > MAX_BATCH_INPUT_BYTES + 1_700) {
         throw new Error('background batch prompt exceeded its bounded input budget')
       }
       await this.#gateway.prompt(session.id, prompt)
@@ -431,15 +471,102 @@ export class BackgroundWorker extends EventEmitter {
       if (this.#isCancelled(batch)) throw new BackgroundCancelledError()
       const messages = await this.#gateway.messages(session.id)
       const parsed = outputSchema.parse(findStructuredOutput(messages))
-      const hasVerifiedSignals = batch.signals.some((signal) => signal.kind !== 'turn_context')
+      const batchHasVerifiedSignals = batch.signals.some((signal) => signal.kind !== 'turn_context')
+      const seenCandidates = new Set<string>()
+
       for (const candidate of parsed.candidates) {
         if (this.#isCancelled(batch)) throw new BackgroundCancelledError()
+        if (isSensitiveCandidate(candidate.key, candidate.value)) {
+          throw new Error('candidate rejected by secret-bearing memory policy')
+        }
+        const candidateID = `${candidate.kind}:${canonicalLedgerKey(candidate.key)}`
+        if (seenCandidates.has(candidateID)) continue
+        seenCandidates.add(candidateID)
+
+        const citedSources = [...new Set(candidate.source_ids)]
+          .map((id) => signalMap.get(id))
+          .filter((signal): signal is PreparedSignal => Boolean(signal))
+
+        if (citedSources.length === 0) {
+          // Backward-compatible fallback for a model response without source
+          // IDs. This creates audit metadata only; it cannot add evidence.
+          this.#ledger.observe({
+            key: candidate.key,
+            claim: candidate.value,
+            kind: candidate.kind,
+            relation: 'support',
+            sessionID: batch.sessionID,
+            projectID: this.#projectID,
+            sourceRef: candidateSourceRef('model_candidate', `${candidate.key}\0${candidate.value}`),
+            timestampMs: this.#now(),
+            trustedSupport: false,
+            explicitUser: false,
+            downstreamVerified: false,
+          })
+        } else {
+          for (const source of citedSources) {
+            const trustedSupport = source.kind === 'user_context'
+              || source.kind === 'verified_diff'
+              || source.kind === 'validation'
+            const explicitUser = source.kind === 'user_context' && source.durableCue
+            const downstreamVerified = source.kind === 'verified_diff' || source.kind === 'validation'
+            const relation: CandidateRelation = candidate.relation === 'contradiction'
+              ? source.kind === 'user_context'
+                ? source.contradictionCue
+                  ? 'contradiction'
+                  : source.correctionCue
+                    ? 'correction'
+                    : 'support'
+                : 'contradiction'
+              : source.correctionCue
+                ? 'correction'
+                : candidate.relation
+            this.#ledger.observe({
+              key: candidate.key,
+              claim: candidate.value,
+              kind: candidate.kind,
+              relation,
+              sessionID: batch.sessionID,
+              projectID: this.#projectID,
+              sourceRef: candidateSourceRef(source.kind, source.summary),
+              timestampMs: source.recordedAt,
+              trustedSupport,
+              explicitUser,
+              downstreamVerified,
+            })
+          }
+        }
+
+        const admission = this.#ledger.admission(candidate.key, candidate.kind)
+        const trustedContradiction = candidate.relation === 'contradiction'
+          && citedSources.some((source) => source.kind === 'user_context' && source.contradictionCue)
+        if (admission.blocked) {
+          // A trusted user contradiction can invalidate an already-promoted
+          // exact key. Model-only contradictions are never destructive.
+          if (trustedContradiction) {
+            await tst.call('memory.forget', {
+              session_id: batch.sessionID,
+              key: candidate.key,
+            }).catch(() => undefined)
+          }
+          candidates += 1
+          continue
+        }
+
+        const hasVerifiedSource = citedSources.some(
+          (source) => source.kind === 'verified_diff' || source.kind === 'validation',
+        ) || (candidate.source_ids.length === 0 && batchHasVerifiedSignals)
+        const scope = candidate.scope === 'project'
+          && (hasVerifiedSource || admission.independentlyReinforced)
+          ? 'project'
+          : 'session'
+
         const result = await tst.call<{ id: string }>('memory.observe', {
           session_id: batch.sessionID,
           key: candidate.key,
           value: candidate.value,
           kind: candidate.kind,
-          scope: candidate.scope === 'project' && hasVerifiedSignals ? 'project' : 'session',
+          scope,
           provenance: 'model_candidate',
           file_hashes: candidate.file_hashes ?? {},
         })
@@ -449,6 +576,32 @@ export class BackgroundWorker extends EventEmitter {
         )
         this.#candidateIDs.push({ sessionID: batch.sessionID, memoryID: result.id, kind: candidate.kind })
         this.#candidateIDs = this.#candidateIDs.slice(-256)
+
+        // Feed deterministic ledger evidence into the existing
+        // MemoryRecord::is_promotable() boundary. A one-off explicit preference
+        // receives UserPreference evidence but remains below score 0.8; cross-
+        // session recurrence/correction supplies the additional reinforcement.
+        const evidenceRef = candidateSourceRef('candidate', `${candidate.kind}\0${candidate.key}`)
+        if (candidate.kind === 'preference' && admission.explicitUserPreference) {
+          await tst.call('evidence.record', {
+            session_id: batch.sessionID,
+            memory_id: result.id,
+            kind: 'user_preference',
+            reference: `candidate-ledger:user:${evidenceRef}`,
+            success: true,
+          })
+        }
+        for (let index = 0; index < admission.reinforcementEvidenceCount; index += 1) {
+          await tst.call('evidence.record', {
+            session_id: batch.sessionID,
+            memory_id: result.id,
+            kind: 'independent_reinforcement',
+            reference: `candidate-ledger:reinforcement:${index + 1}:${evidenceRef}`,
+            success: true,
+          })
+        }
+
+        // Existing kind-specific verification remains authoritative.
         if (candidate.kind === 'behavioral_claim') {
           for (const reference of this.#validationReferences.get(batch.sessionID) ?? []) {
             await tst.call('evidence.record', {
@@ -473,9 +626,11 @@ export class BackgroundWorker extends EventEmitter {
           }
         }
       }
+      await this.#ledger.persist()
     } catch (error) {
       failure = error
     } finally {
+      await this.#ledger.persist().catch(() => undefined)
       const after = session
         ? await this.#gateway.getSession(session.id).catch(() => before ?? session)
         : undefined
@@ -549,6 +704,11 @@ export class BackgroundWorker extends EventEmitter {
     if (oldest) this.#lastCompleted.delete(oldest)
   }
 
+  async #initialize(): Promise<void> {
+    await Promise.all([this.#restore(), this.#ledger.ready()])
+    this.#schedule()
+  }
+
   async #restore(): Promise<void> {
     if (!this.#pendingPath) return
     try {
@@ -588,9 +748,8 @@ export class BackgroundWorker extends EventEmitter {
           if (sessionID && completedAt > 0) this.#lastCompleted.set(sessionID, completedAt)
         }
       }
-      this.#schedule()
     } catch {
-      // A missing or malformed private pending file is non-fatal.  It contains
+      // A missing or malformed private pending file is non-fatal. It contains
       // only deferred candidates and never affects native graph freshness.
     }
   }
@@ -647,16 +806,77 @@ class AttemptFailure extends Error {
   }
 }
 
-function batchSummary(batch: PendingBatch): string {
-  const lines = batch.signals.map((signal) => {
+function prepareSignals(batch: PendingBatch, messages: unknown[], now: number): PreparedSignal[] {
+  const users = latestUserSignals(messages, now).slice(-MAX_USER_SIGNALS_PER_BATCH)
+  const retainedBatchSignals = batch.signals.slice(-(MAX_SIGNALS_PER_BATCH - users.length))
+  return [...retainedBatchSignals.map((signal) => ({
+    id: '',
+    ...signal,
+    durableCue: false,
+    correctionCue: false,
+    contradictionCue: false,
+  })), ...users].slice(-MAX_SIGNALS_PER_BATCH).map((signal, index) => ({ ...signal, id: `s${index}` }))
+}
+
+function latestUserSignals(messages: unknown[], now: number): PreparedSignal[] {
+  const output: PreparedSignal[] = []
+  for (const message of messages) {
+    const value = recordValue(message)
+    const info = recordValue(value.info)
+    if (info.role !== 'user') continue
+    const text = bounded(redact(messagePartText(value)), MAX_SIGNAL_BYTES)
+    if (!text) continue
+    output.push({
+      id: '',
+      kind: 'user_context',
+      summary: text,
+      recordedAt: now,
+      durableCue: hasDurableUserCue(text),
+      correctionCue: hasCorrectionCue(text),
+      contradictionCue: hasContradictionCue(text),
+    })
+  }
+  return output.slice(-MAX_USER_SIGNALS_PER_BATCH)
+}
+
+function batchSummary(signals: PreparedSignal[]): string {
+  const lines = signals.map((signal) => {
     const label = signal.kind === 'verified_diff'
       ? 'Verified diff'
       : signal.kind === 'validation'
         ? 'Successful validation'
-        : 'Session turn context'
-    return `- ${label}: ${signal.summary}`
+        : signal.kind === 'user_context'
+          ? 'User-authored foreground message'
+          : 'Session turn/outcome context'
+    return `- [${signal.id}] ${label}: ${signal.summary}`
   })
   return bounded(lines.join('\n'), MAX_BATCH_INPUT_BYTES)
+}
+
+function messagePartText(message: Record<string, unknown>): string {
+  if (!Array.isArray(message.parts)) return ''
+  return message.parts.flatMap((part) => {
+    const value = recordValue(part)
+    return value.type === 'text' && typeof value.text === 'string' && value.synthetic !== true
+      ? [value.text]
+      : []
+  }).join(' ')
+}
+
+function recordValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function candidateLedgerPath(projectStore: string): string {
+  const projectsDirectory = dirname(projectStore)
+  // Runtime projects live at <base>/projects/<project-id>. Sharing the compact
+  // ledger under <base>/global lets recurrence span projects without making
+  // any candidate itself globally retrievable. Tests/custom stores retain the
+  // historical per-project location rather than guessing another directory.
+  if (basename(projectsDirectory) === 'projects') {
+    return join(dirname(projectsDirectory), 'global', 'candidate-ledger.json')
+  }
+  return join(projectStore, 'candidate-ledger.json')
 }
 
 function bounded(value: string, maxBytes: number): string {

@@ -6,8 +6,10 @@ import { test } from 'node:test'
 import {
   CandidateLedger,
   candidateSourceRef,
+  hasContradictionCue,
   hasCorrectionCue,
   hasDurableUserCue,
+  isSensitiveCandidate,
   type CandidateLedgerObservation,
 } from '../src/background/candidate-ledger.js'
 
@@ -129,20 +131,32 @@ test('unresolved contradiction caps and blocks admission', async () => {
   assert.ok(admission.score < 0.8)
 })
 
-test('project recurrence is tracked independently from session recurrence', async () => {
-  const ledger = new CandidateLedger({ now: () => 2_000 })
-  await ledger.ready()
-  ledger.observe(baseObservation)
-  ledger.observe({
-    ...baseObservation,
-    projectID: 'project-2',
-    sessionID: 'session-2',
-    sourceRef: 'user:2',
-    timestampMs: 2_000,
-  })
-  const entry = ledger.entry(baseObservation.key, 'preference')
-  assert.equal(entry?.project_count, 2)
-  assert.equal(entry?.session_count, 2)
+test('project recurrence survives persistence and is counted independently', async () => {
+  const directory = await temporaryDirectory()
+  const path = join(directory, 'candidate-ledger.json')
+  try {
+    const first = new CandidateLedger({ path, now: () => 1_000 })
+    await first.ready()
+    first.observe(baseObservation)
+    await first.close()
+
+    const second = new CandidateLedger({ path, now: () => 2_000 })
+    await second.ready()
+    second.observe({
+      ...baseObservation,
+      projectID: 'project-2',
+      sessionID: 'session-2',
+      sourceRef: 'user:2',
+      timestampMs: 2_000,
+    })
+    const entry = second.entry(baseObservation.key, 'preference')
+    assert.equal(entry?.project_count, 2)
+    assert.equal(entry?.session_count, 2)
+    assert.equal(second.admission(baseObservation.key, 'preference').independentlyReinforced, true)
+    await second.close()
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
 })
 
 test('bounded persisted ledger is private, reloadable, compactable, and decays weak noise', async () => {
@@ -191,13 +205,22 @@ test('bounded persisted ledger is private, reloadable, compactable, and decays w
   }
 })
 
-test('high-recall user cue detection covers preferences and corrections without matching ordinary prose', () => {
+test('high-recall user cues distinguish durable support, corrections, and contradictions', () => {
   assert.equal(hasDurableUserCue('I prefer pnpm'), true)
   assert.equal(hasDurableUserCue('this repo should use pnpm'), true)
   assert.equal(hasDurableUserCue('never use npm here'), true)
   assert.equal(hasDurableUserCue('please use pnpm'), true)
   assert.equal(hasCorrectionCue('I already told you to use pnpm'), true)
+  assert.equal(hasContradictionCue('Never use pnpm here'), true)
+  assert.equal(hasContradictionCue('I prefer pnpm'), false)
   assert.equal(hasDurableUserCue('The package build completed successfully'), false)
+})
+
+test('secret-bearing canonical candidates are detected before ledger persistence', () => {
+  assert.equal(isSensitiveCandidate('credential', 'sk-abcdefghijklmnopqrstuvwxyz'), true)
+  assert.equal(isSensitiveCandidate('api_key', 'value'), true)
+  assert.equal(isSensitiveCandidate('token', 'eyJabcdefghijklmnopqrstuvwxyz.abcdefghijk.abcdefghijklmnop'), true)
+  assert.equal(isSensitiveCandidate('package manager', 'prefer pnpm'), false)
 })
 
 async function temporaryDirectory(): Promise<string> {

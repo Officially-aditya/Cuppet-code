@@ -320,10 +320,10 @@ export class Pe3Controller extends CuppetController {
   #taskEvidence() {
     const session = this.snapshot.activeSession
     const active = this.#taskSessions.active
+    // Router state is historical identity, not a new observation. Only carry
+    // the monotonic workspace epoch here; real path/symbol observations arrive
+    // through tool/diff events and are recorded exactly when they occur.
     return {
-      activePaths: active?.activePaths ?? [],
-      touchedPaths: active?.touchedPaths ?? [],
-      recentSymbols: active?.recentSymbols ?? [],
       ...(session ? { workspaceEpoch: active?.workspaceEpoch ?? 0 } : {}),
     }
   }

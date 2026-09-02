@@ -56,6 +56,7 @@ jobs:
           packages/cli/test/task-agents.test.ts
           packages/cli/test/pe3-session-router.test.ts
           packages/cli/test/pe3-benchmark.test.ts
+          packages/cli/test/pe3-native-contract.test.ts
           packages/cli/test/control.test.ts
           packages/opencode-plugin/test/pe3-tui.test.ts
       - name: Run persistent-session routing benchmark

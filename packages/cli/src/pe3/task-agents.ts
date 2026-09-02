@@ -4,6 +4,7 @@ const MAX_SYMBOLS = 16
 const MAX_DESCRIPTOR_BYTES = 320
 const FINGERPRINT_DECAY = 0.96
 const MIN_FINGERPRINT_WEIGHT = 0.08
+const STRONG_LEXICAL_WEIGHT = 0.9
 
 const CONTINUATION_CUES = [
   'also',
@@ -232,7 +233,7 @@ export class TaskAgentRouter {
         agent: cloneAgent(active) as TaskAgentState,
         reason: 'ambiguous or weak mismatch stays on the active agent',
         affinity: currentAffinity,
-        ...(semanticEscalationEligible(prompt, currentAffinity, evidence) ? { semanticEligible: true } : {}),
+        ...(semanticEscalationEligible(prompt, currentAffinity) ? { semanticEligible: true } : {}),
       }
     }
 
@@ -376,10 +377,13 @@ function affinityFor(agent: TaskAgentState, prompt: string, evidence: TaskAgentE
 }
 
 function isStrongMatch(affinity: TaskAffinity): boolean {
-  return affinity.pathOverlap > 0
-    || affinity.symbolOverlap > 0
-    || affinity.termOverlap >= 2
-    || affinity.lexicalRatio >= 0.34
+  if (affinity.pathOverlap > 0 || affinity.symbolOverlap > 0) return true
+  // Raw term counts are deliberately insufficient: two generic words from a
+  // single prompt (for example "service" and "retry") must not suppress the
+  // semantic ambiguity band. Repeated/reinforced lexical identity can still
+  // stay on the zero-model hot path once its fingerprint weight is strong.
+  return affinity.weightedOverlap >= STRONG_LEXICAL_WEIGHT
+    && (affinity.termOverlap >= 3 || affinity.lexicalRatio >= 0.6)
 }
 
 function isStrongMismatch(
@@ -425,16 +429,12 @@ function isStrongMismatch(
 function semanticEscalationEligible(
   prompt: string,
   affinity: TaskAffinity,
-  evidence: TaskAgentEvidence,
 ): boolean {
   const normalized = normalizeText(prompt)
   if (hasCue(normalized, CONTINUATION_CUES) || hasCue(normalized, SWITCH_CUES) || hasCue(normalized, RETURN_CUES)) return false
   const terms = extractTerms(prompt)
   if (terms.length < 2) return false
-  if (affinity.pathOverlap > 0 || affinity.symbolOverlap > 0 || affinity.termOverlap >= 2 || affinity.lexicalRatio >= 0.34) return false
-  // If cheap localization was available but still found no task match, this is
-  // exactly the vocabulary-gap band semantic routing is intended to resolve.
-  void evidence
+  if (isStrongMatch(affinity)) return false
   return true
 }
 

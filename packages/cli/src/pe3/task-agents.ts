@@ -161,6 +161,7 @@ export class TaskAgentRouter {
     this.#mergeEvidence(active, evidence)
     const currentAffinity = affinityFor(active, prompt)
     const normalizedPrompt = normalizeText(prompt)
+    const explicitSwitch = hasCue(normalizedPrompt, SWITCH_CUES)
 
     if (hasCue(normalizedPrompt, CONTINUATION_CUES)) {
       return {
@@ -171,7 +172,10 @@ export class TaskAgentRouter {
       }
     }
 
-    if (isStrongMatch(currentAffinity)) {
+    // Explicit task-boundary language must be evaluated before weak lexical
+    // overlap. Generic words such as "src" or "export" are not enough to
+    // keep an explicitly separate task on a contaminated session.
+    if (!explicitSwitch && isStrongMatch(currentAffinity)) {
       return {
         action: 'continue',
         agent: cloneAgent(active) as TaskAgentState,
@@ -180,7 +184,7 @@ export class TaskAgentRouter {
       }
     }
 
-    if (!isStrongMismatch(active, prompt, currentAffinity)) {
+    if (!isStrongMismatch(active, prompt, currentAffinity, explicitSwitch)) {
       return {
         action: 'continue',
         agent: cloneAgent(active) as TaskAgentState,
@@ -291,21 +295,36 @@ function isStrongMatch(affinity: TaskAffinity): boolean {
     || affinity.lexicalRatio >= 0.34
 }
 
-function isStrongMismatch(agent: TaskAgentState, prompt: string, affinity: TaskAffinity): boolean {
-  const normalized = normalizeText(prompt)
+function isStrongMismatch(
+  agent: TaskAgentState,
+  prompt: string,
+  affinity: TaskAffinity,
+  explicitSwitch = hasCue(normalizeText(prompt), SWITCH_CUES),
+): boolean {
   const promptTerms = extractTerms(prompt)
   const promptPaths = extractPaths(prompt)
   const agentPaths = [...agent.activePaths, ...agent.touchedPaths]
-  if (affinity.pathOverlap > 0 || affinity.symbolOverlap > 0 || affinity.termOverlap > 0) return false
 
-  if (hasCue(normalized, SWITCH_CUES)) {
-    return promptTerms.length >= 2 || promptPaths.length > 0
-  }
+  // Concrete overlap is stronger evidence than wording alone. Preserve the
+  // active cache when the new request still names the same file or symbol.
+  if (affinity.pathOverlap > 0 || affinity.symbolOverlap > 0) return false
 
   const disjointConcretePaths = promptPaths.length > 0 && agentPaths.length > 0
   if (disjointConcretePaths && promptTerms.length >= 2) return true
 
-  return promptTerms.length >= 5 && agent.terms.length >= 5
+  if (explicitSwitch) {
+    // With no concrete path evidence, explicit boundary language can still
+    // split a task, but only when lexical affinity is weak. A single generic
+    // shared term should not neutralize "separately"; a genuinely similar
+    // prompt should remain on the current task.
+    return promptTerms.length >= 2
+      && affinity.termOverlap <= 1
+      && affinity.lexicalRatio < 0.34
+  }
+
+  // No explicit switch and no disjoint concrete working set means ambiguity.
+  // Stay on the active agent instead of guessing from raw prompt length.
+  return false
 }
 
 function isDormantMatch(affinity: TaskAffinity, normalizedPrompt: string): boolean {

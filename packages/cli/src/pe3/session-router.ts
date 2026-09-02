@@ -160,22 +160,26 @@ export class TaskSessionRouter {
     return this.#record({ action: 'create', sessionID: created.id, prompt, reason: route.reason, refreshPaths: [], affinity: route.affinity })
   }
 
-  noteSessionPaths(sessionID: string, paths: Iterable<string>): void {
+  noteSessionObservedPaths(sessionID: string, paths: Iterable<string>): void {
     const bounded = [...paths]
     if (bounded.length === 0) return
-    this.#router.recordSessionEvidence(sessionID, { activePaths: bounded, touchedPaths: bounded })
+    this.#router.recordSessionEvidence(sessionID, { activePaths: bounded })
     this.#router.acknowledgeSessionRefresh(sessionID, bounded)
+  }
+
+  noteSessionPaths(sessionID: string, paths: Iterable<string>): void {
+    this.noteSessionObservedPaths(sessionID, paths)
   }
 
   noteSessionWorkspaceMutation(sessionID: string, paths: Iterable<string>): void {
     const bounded = [...paths]
     if (bounded.length === 0) return
-    this.noteSessionPaths(sessionID, bounded)
+    this.#router.recordSessionEvidence(sessionID, { activePaths: bounded, touchedPaths: bounded })
     this.#router.noteWorkspaceChange(bounded)
     this.#router.acknowledgeSessionRefresh(sessionID, bounded)
   }
 
-  noteActivePaths(paths: Iterable<string>): void { const active = this.#router.active; if (active) this.noteSessionPaths(active.sessionID, paths) }
+  noteActivePaths(paths: Iterable<string>): void { const active = this.#router.active; if (active) this.noteSessionObservedPaths(active.sessionID, paths) }
   noteWorkspaceMutation(paths: Iterable<string>): void { const active = this.#router.active; if (active) this.noteSessionWorkspaceMutation(active.sessionID, paths) }
 
   async #semanticRoute(prompt: string, deterministic: Extract<TaskRoute, { action: 'continue' }>, returnOnly = false): Promise<TaskRoute> {

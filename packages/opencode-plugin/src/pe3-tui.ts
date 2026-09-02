@@ -1,10 +1,20 @@
 import { CuppetControlClient } from './control.js'
 
+type Pe3TuiRoute = {
+  name?: string
+  params?: Record<string, unknown>
+}
+
 type Pe3TuiApi = {
   route?: {
-    current?: { name?: string; params?: Record<string, unknown> }
+    current?: Pe3TuiRoute
     navigate?(name: string, params?: Record<string, unknown>): void
   }
+}
+
+export type Pe3TuiNavigationDecision = {
+  observedSequence: number
+  targetSessionID?: string
 }
 
 /**
@@ -24,24 +34,10 @@ export function installPe3TuiNavigation(api: Pe3TuiApi): void {
     running = true
     try {
       const status = await client.call<Record<string, unknown>>('status')
-      const pe3 = record(status.pe3)
-      const routing = record(pe3.routing)
-      const sequence = numberValue(routing.sequence)
-      if (sequence === undefined || sequence <= observedSequence) return
-      observedSequence = sequence
-
-      const action = stringValue(routing.lastAction)
-      if (action !== 'create' && action !== 'reactivate') return
-      const session = record(status.session)
-      const targetSessionID = stringValue(session.id)
-      if (!targetSessionID) return
-
-      const current = api.route?.current
-      const currentSessionID = typeof current?.params?.sessionID === 'string'
-        ? current.params.sessionID
-        : undefined
-      if (current?.name !== 'session' || currentSessionID !== targetSessionID) {
-        api.route?.navigate?.('session', { sessionID: targetSessionID })
+      const decision = pe3TuiNavigationDecision(status, api.route?.current, observedSequence)
+      observedSequence = decision.observedSequence
+      if (decision.targetSessionID) {
+        api.route?.navigate?.('session', { sessionID: decision.targetSessionID })
       }
     } catch {
       // The base Cuppet TUI plugin owns user-visible control diagnostics. PE3
@@ -54,6 +50,30 @@ export function installPe3TuiNavigation(api: Pe3TuiApi): void {
   const timer = setInterval(() => void sync(), 200)
   if (typeof timer.unref === 'function') timer.unref()
   void sync()
+}
+
+export function pe3TuiNavigationDecision(
+  status: Record<string, unknown>,
+  current: Pe3TuiRoute | undefined,
+  observedSequence: number,
+): Pe3TuiNavigationDecision {
+  const pe3 = record(status.pe3)
+  const routing = record(pe3.routing)
+  const sequence = numberValue(routing.sequence)
+  if (sequence === undefined || sequence <= observedSequence) return { observedSequence }
+
+  const decision: Pe3TuiNavigationDecision = { observedSequence: sequence }
+  const action = stringValue(routing.lastAction)
+  if (action !== 'create' && action !== 'reactivate') return decision
+
+  const session = record(status.session)
+  const targetSessionID = stringValue(session.id)
+  if (!targetSessionID) return decision
+  const currentSessionID = typeof current?.params?.sessionID === 'string'
+    ? current.params.sessionID
+    : undefined
+  if (current?.name === 'session' && currentSessionID === targetSessionID) return decision
+  return { ...decision, targetSessionID }
 }
 
 function record(value: unknown): Record<string, unknown> {

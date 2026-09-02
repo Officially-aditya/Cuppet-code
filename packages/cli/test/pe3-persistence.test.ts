@@ -137,10 +137,15 @@ test('registry is bounded, private, redacted, and contains routing metadata only
   const fixture = await fixtureDir()
   try {
     const registry = new Pe3TaskRegistry(fixture.store, fixture.root)
+    const secretIndex = PE3_MAX_PERSISTED_AGENTS + 8
     const agents = Array.from({ length: PE3_MAX_PERSISTED_AGENTS + 9 }, (_, index) =>
-      fakeAgent(`s${index}`, index === 0 ? 'use api_key=sk-supersecretvalue123456789 for auth' : `task ${index}`, index),
+      fakeAgent(
+        `s${index}`,
+        index === secretIndex ? 'use api_key=sk-supersecretvalue123456789 for auth' : `task ${index}`,
+        index,
+      ),
     )
-    agents[0]!.terms.push('sk-supersecretvalue123456789')
+    agents[secretIndex]!.terms.push('sk-supersecretvalue123456789')
     await registry.save(agents, agents.at(-1)?.sessionID)
 
     const raw = await readFile(registry.path, 'utf8')

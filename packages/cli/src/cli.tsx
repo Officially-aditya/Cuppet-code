@@ -2,6 +2,7 @@ import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { PreferenceStore } from './config/preferences.js'
 import { CuppetController } from './controller.js'
+import { Pe3Controller } from './pe3/controller.js'
 import {
   CuppetControlServer,
   createControlAddress,
@@ -166,7 +167,7 @@ async function main(): Promise<void> {
       ...(preferences.value.vertexProject ? { vertexProject: preferences.value.vertexProject } : {}),
     })
     const gateway = new OpenCodeGateway(opencode.client, paths.projectRealpath)
-    controller = new CuppetController({
+    controller = new Pe3Controller({
       gateway,
       ...(tst ? { tst: tst.client } : {}),
       preferences,

@@ -53,6 +53,7 @@
     "eval:ab:stm-compaction": "node --import tsx scripts/ab-stm-compaction.ts",
     "test:deepseek-harness": "node --import tsx --test scripts/lib/deepseek-harness.test.ts scripts/lib/cuppet-openai-codex.test.ts scripts/lib/deepseek-benchmark.test.ts scripts/lib/cuppet-opencode-state.test.ts",
     "test:deepseek-harness:gpt-luna": "node --import tsx scripts/test-deepseek-harness-gpt-luna.ts",
+    "test:pe3": "node scripts/run-pe3-tests.mjs",
     "check": "npm run typecheck --workspaces --if-present && cargo check --workspace --locked",
     "dev": "npm run dev --workspace=cuppet",
     "install:global": "node scripts/install-global.mjs",

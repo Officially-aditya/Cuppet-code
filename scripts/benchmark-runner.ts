@@ -7,6 +7,7 @@ import {
   expandCommandArgs,
   freezeManifest,
   sha256Text,
+  summarizeDistribution,
   summarizeArmResults,
   type BenchmarkArm,
   type BenchmarkManifest,
@@ -15,6 +16,7 @@ import {
   type FrozenManifest,
   type HarnessID,
   type HarnessRunResult,
+  type LongHorizonArmSummary,
   type PlaceholderValues,
   type TaskRunResult,
   type VerificationResult,
@@ -28,6 +30,7 @@ type RunnerOptions = {
   repeats?: number
   arms?: Set<HarnessID>
   tasks?: Set<string>
+  sessionTopology: 'isolated' | 'marathon'
 }
 
 type ProcessExecution = {
@@ -58,7 +61,11 @@ async function main(): Promise<void> {
   const frozen = freezeManifest(selected, resolvedSha, environmentSnapshot())
 
   if (options.dryRun) {
-    process.stdout.write(`${JSON.stringify({ manifest: frozen, schedule: schedule(frozen) }, null, 2)}\n`)
+    process.stdout.write(`${JSON.stringify({
+      manifest: frozen,
+      sessionTopology: options.sessionTopology,
+      schedule: options.sessionTopology === 'marathon' ? marathonSchedule(frozen) : schedule(frozen),
+    }, null, 2)}\n`)
     return
   }
 
@@ -70,22 +77,32 @@ async function main(): Promise<void> {
   await writeFile(join(runRoot, 'manifest.json'), `${JSON.stringify(frozen, null, 2)}\n`, 'utf8')
 
   const createdAt = new Date().toISOString()
-  const taskResults = await executeBenchmark(frozen, repoRoot, runRoot, options)
-  const summaries = frozen.arms.filter((arm) => arm.enabled).map((arm) => summarizeArmResults(arm.id, taskResults))
+  const taskResults = options.sessionTopology === 'marathon'
+    ? await executeMarathon(frozen, repoRoot, runRoot, options)
+    : await executeBenchmark(frozen, repoRoot, runRoot, options)
+  const summaryArms = options.sessionTopology === 'marathon'
+    ? frozen.arms.filter((arm) => arm.enabled && (arm.id === 'cuppet' || arm.id === 'opencode'))
+    : frozen.arms.filter((arm) => arm.enabled)
+  const summaries = summaryArms.map((arm) => summarizeArmResults(arm.id, taskResults))
   const report: BenchmarkReport = {
     schema: 1,
     status: taskResults.every((result) => result.success) ? 'completed' : 'failed',
     createdAt,
     completedAt: new Date().toISOString(),
+    sessionTopology: options.sessionTopology,
     manifest: frozen,
     runRoot,
     taskResults,
     summaries,
+    ...(options.sessionTopology === 'marathon' ? { longHorizon: buildLongHorizonSummaries(frozen, taskResults) } : {}),
     notes: [
       'The controller freezes the repository SHA, task prompts, model settings, harness metadata, environment allowlist, and verifier commands before the first arm runs.',
       'The controller only runs deterministic verification commands; it does not rewrite prompts, coach harnesses, or make subjective correctness judgments.',
       'Failed tasks retain all telemetry emitted before failure. A null cost means the harness did not expose provider-adjusted pricing.',
-      'Persistent Cuppet/OpenCode sequences reuse one native session; Codex and Claude Code persistent-family entries currently run sequential native CLI turns because their resume/session telemetry is not yet reliable enough to claim a single persistent session.',
+      'In the default Issue #4 mixed topology, persistent Cuppet/OpenCode sequences reuse one native session; Codex and Claude Code persistent-family entries run sequential native CLI turns because their resume/session telemetry is not yet reliable enough to claim a single persistent session.',
+      ...(options.sessionTopology === 'marathon'
+        ? ['Marathon topology: one workspace and one native session per supported arm/repeat; deterministic verification runs after every task without resetting the evolving workspace.', ...frozen.arms.filter((arm) => arm.enabled && arm.id !== 'cuppet' && arm.id !== 'opencode').map((arm) => `${arm.id}: excluded from marathon topology because reliable native continuation/telemetry is not implemented.`)]
+        : []),
       ...frozen.arms.filter((arm) => arm.enabled && arm.model.parity !== 'exact').map((arm) => `${arm.id}: ${arm.model.notes}`),
     ],
   }
@@ -95,6 +112,89 @@ async function main(): Promise<void> {
   await writeFile(jsonPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8')
   await writeFile(markdownPath, renderMarkdown(report), 'utf8')
   process.stdout.write(`${JSON.stringify({ status: report.status, summaries, jsonPath, markdownPath }, null, 2)}\n`)
+}
+
+function buildLongHorizonSummaries(manifest: FrozenManifest, results: TaskRunResult[]): LongHorizonArmSummary[] {
+  const taskIndex = new Map(manifest.taskSet.tasks.map((task, index) => [task.id, index]))
+  const sequenceLength = manifest.taskSet.tasks.length
+  return manifest.arms
+    .filter((arm) => arm.enabled && (arm.id === 'cuppet' || arm.id === 'opencode'))
+    .map((arm) => {
+      const tasks = results
+        .filter((result) => result.arm === arm.id)
+        .map((result) => {
+          const uncached = result.run.usage.uncachedInputTokens
+          const cached = result.run.usage.cachedInputTokens
+          const totalInput = uncached + cached
+          return {
+            repeat: result.repeat,
+            taskIndex: taskIndex.get(result.taskId) ?? -1,
+            taskId: result.taskId,
+            success: result.success,
+            uncachedInputTokens: uncached,
+            cachedInputTokens: cached,
+            cacheShare: totalInput > 0 ? cached / totalInput : null,
+            totalModelTokens: result.run.usage.totalModelTokens,
+            toolCalls: result.run.toolCalls,
+            compactions: result.run.compactions,
+            effectiveCost: result.run.usage.effectiveCost,
+            durationMs: result.run.durationMs,
+          }
+        })
+        .sort((left, right) => left.repeat - right.repeat || left.taskIndex - right.taskIndex)
+      const early = tasks.filter((task) => task.taskIndex < Math.min(3, sequenceLength))
+      const late = tasks.filter((task) => task.taskIndex >= Math.max(0, sequenceLength - 3))
+      const final = tasks.filter((task) => task.taskIndex === sequenceLength - 1).map((task) => task.cacheShare).filter((value): value is number => value !== null)
+      return {
+        arm: arm.id,
+        sequenceLength,
+        repetitions: manifest.repetitions,
+        tasks,
+        cumulativeUncachedInputTokens: tasks.reduce((total, task) => total + task.uncachedInputTokens, 0),
+        cumulativeCachedInputTokens: tasks.reduce((total, task) => total + task.cachedInputTokens, 0),
+        finalTaskCacheShare: summarizeDistribution(final).median,
+        earlyUncachedInput: summarizeDistribution(early.map((task) => task.uncachedInputTokens)),
+        lateUncachedInput: summarizeDistribution(late.map((task) => task.uncachedInputTokens)),
+        earlyCacheShare: summarizeDistribution(early.map((task) => task.cacheShare).filter((value): value is number => value !== null)),
+        lateCacheShare: summarizeDistribution(late.map((task) => task.cacheShare).filter((value): value is number => value !== null)),
+      }
+    })
+}
+
+async function executeMarathon(
+  manifest: FrozenManifest,
+  repoRoot: string,
+  runRoot: string,
+  options: RunnerOptions,
+): Promise<TaskRunResult[]> {
+  const arms = manifest.arms.filter((arm) => arm.enabled && (arm.id === 'cuppet' || arm.id === 'opencode'))
+  if (arms.length === 0) throw new Error('marathon topology requires at least one supported native-session arm (cuppet or opencode)')
+  const results: TaskRunResult[] = []
+  const promptFiles = new Map<string, string>()
+  const tasks = manifest.taskSet.tasks
+  for (let repeat = 1; repeat <= manifest.repetitions; repeat += 1) {
+    for (const arm of orderedArms(arms, manifest.ordering, repeat, 0)) {
+      for (const task of tasks) {
+        if (!promptFiles.has(task.id)) {
+          const promptFile = join(runRoot, 'prompts', `${safeName(task.id)}.txt`)
+          await writeFile(promptFile, task.prompt, 'utf8')
+          promptFiles.set(task.id, promptFile)
+        }
+      }
+      results.push(...await executeMarathonArm({
+        manifest,
+        arm,
+        tasks,
+        repeat,
+        workRoot: join(runRoot, 'workspaces'),
+        promptFiles,
+        repoRoot,
+        runRoot,
+        keepWorkspace: options.keepWorkspaces,
+      }))
+    }
+  }
+  return results
 }
 
 async function executeBenchmark(
@@ -247,6 +347,116 @@ async function executePersistentSequence(options: {
       ? undefined
       : run.error
         ?? (execution.timedOut ? 'persistent harness process timed out' : execution.exitCode === 0 ? undefined : execution.stderr.trim() || `persistent harness exited with ${String(execution.exitCode)}`)
+        ?? verification.find((check) => !check.passed)?.stderr.trim()
+        ?? 'deterministic verification failed'
+    const normalizedRun: HarnessRunResult = {
+      ...run,
+      parity: { status: options.arm.model.parity, notes: options.arm.model.notes },
+      model: {
+        provider: options.arm.model.provider,
+        model: options.arm.model.model,
+        reasoningEffort: options.arm.model.reasoningEffort,
+      },
+      ...(error && !run.error ? { error } : {}),
+    }
+    results.push({
+      arm: options.arm.id,
+      taskId: task.id,
+      repeat: options.repeat,
+      sessionMode: 'persistent',
+      workspace: options.keepWorkspace ? workspace : '<removed after evaluation>',
+      promptSha256: sha256Text(task.prompt),
+      run: normalizedRun,
+      verification,
+      acceptanceScore,
+      success,
+      changedFiles,
+      gitDiffStat,
+      completedAt: new Date().toISOString(),
+      ...(error ? { error } : {}),
+    })
+  }
+  await rm(runtimeRoot, { recursive: true, force: true })
+  if (!options.keepWorkspace) await rm(workspace, { recursive: true, force: true })
+  return results
+}
+
+async function executeMarathonArm(options: {
+  manifest: FrozenManifest
+  arm: BenchmarkArm
+  tasks: BenchmarkTask[]
+  repeat: number
+  workRoot: string
+  promptFiles: Map<string, string>
+  repoRoot: string
+  runRoot: string
+  keepWorkspace: boolean
+}): Promise<TaskRunResult[]> {
+  const workspace = join(options.workRoot, safeName(`marathon-repeat-${options.repeat}-${options.arm.id}`))
+  await prepareWorkspace(options.repoRoot, options.manifest.repository.resolvedSha, workspace, options.manifest.workspace.dependencyMode)
+  const runtimeBase = process.platform === 'darwin' ? '/private/tmp' : tmpdir()
+  const runtimeRoot = await mkdtemp(join(runtimeBase, 'cuppet-bench-runtime-'))
+  const sequenceFile = join(options.runRoot, 'prompts', `marathon-repeat-${options.repeat}-${options.arm.id}.json`)
+  const entries = options.tasks.map((task) => ({
+    taskId: task.id,
+    promptFile: options.promptFiles.get(task.id)!,
+    resultFile: join(options.runRoot, 'results', `marathon-repeat-${options.repeat}-${safeName(task.id)}-${options.arm.id}.json`),
+    timeoutMs: options.manifest.workspace.timeoutMs,
+    verification: [] as BenchmarkTask['verification'],
+  }))
+  await mkdir(dirname(entries[0]!.resultFile), { recursive: true })
+  const first = options.tasks[0]!
+  const valuesFor = (task: BenchmarkTask, resultFile: string): PlaceholderValues => ({
+    arm: options.arm.id,
+    controllerRoot: options.repoRoot,
+    workspace,
+    promptFile: options.promptFiles.get(task.id)!,
+    resultFile,
+    sequenceFile,
+    runtimeRoot,
+    taskId: task.id,
+    repeat: String(options.repeat),
+    model: options.arm.model.model,
+    provider: options.arm.model.provider,
+    reasoningEffort: options.arm.model.reasoningEffort,
+    timeoutMs: String(options.manifest.workspace.timeoutMs),
+    sessionMode: 'persistent',
+  })
+  for (const [index, task] of options.tasks.entries()) {
+    const entry = entries[index]!
+    const values = valuesFor(task, entry.resultFile)
+    entry.verification = task.verification.map((spec) => ({
+      ...spec,
+      args: expandCommandArgs(spec.args, values),
+    }))
+  }
+  await writeFile(sequenceFile, `${JSON.stringify(entries, null, 2)}\n`, 'utf8')
+  const firstValues = valuesFor(first, entries[0]!.resultFile)
+  const args = [...expandCommandArgs(options.arm.command.args, firstValues), '--sequence-file', sequenceFile]
+  const env = expandEnvironment(options.arm.command.env, firstValues)
+  const execution = await runCommand(options.arm.command.command, args, workspace, {
+    env,
+    timeoutMs: options.manifest.workspace.timeoutMs * options.tasks.length,
+  })
+  await writeFile(join(options.runRoot, 'logs', `marathon-${options.arm.id}-${options.repeat}.stdout.log`), execution.stdout, 'utf8')
+  await writeFile(join(options.runRoot, 'logs', `marathon-${options.arm.id}-${options.repeat}.stderr.log`), execution.stderr, 'utf8')
+
+  const results: TaskRunResult[] = []
+  for (const [index, task] of options.tasks.entries()) {
+    const entry = entries[index]!
+    const run = await readHarnessResult(entry.resultFile, options.arm, task.id, options.manifest.model, execution)
+    const verification = run.verification ?? []
+    const passedChecks = verification.filter((check) => check.passed).length
+    const acceptanceScore = verification.length > 0 ? passedChecks / verification.length : 0
+    const changedFiles = await changedFilesIn(workspace)
+    const gitDiffStat = await git(workspace, ['diff', '--stat']).catch(() => '')
+    const verifierComplete = verification.length === task.verification.length
+    const success = run.success && execution.exitCode === 0 && !execution.timedOut && verifierComplete && verification.every((check) => check.passed)
+    const error = success
+      ? undefined
+      : run.error
+        ?? (execution.timedOut ? 'marathon harness process timed out' : execution.exitCode === 0 ? undefined : execution.stderr.trim() || `marathon harness exited with ${String(execution.exitCode)}`)
+        ?? (!verifierComplete ? 'marathon verifier telemetry was incomplete' : undefined)
         ?? verification.find((check) => !check.passed)?.stderr.trim()
         ?? 'deterministic verification failed'
     const normalizedRun: HarnessRunResult = {
@@ -511,6 +721,18 @@ function schedule(manifest: FrozenManifest): Array<{ repeat: number; taskId: str
   return rows
 }
 
+function marathonSchedule(manifest: FrozenManifest): Array<{ repeat: number; arm: HarnessID; tasks: string[] }> {
+  const arms = manifest.arms.filter((arm) => arm.enabled && (arm.id === 'cuppet' || arm.id === 'opencode'))
+  return Array.from({ length: manifest.repetitions }, (_, index) => {
+    const repeat = index + 1
+    return orderedArms(arms, manifest.ordering, repeat, 0).map((arm) => ({
+      repeat,
+      arm: arm.id,
+      tasks: manifest.taskSet.tasks.map((task) => task.id),
+    }))
+  }).flat()
+}
+
 async function loadManifest(path: string): Promise<BenchmarkManifest> {
   const value = JSON.parse(await readFile(path, 'utf8')) as BenchmarkManifest
   return value
@@ -616,12 +838,26 @@ function renderMarkdown(report: BenchmarkReport): string {
     ...report.manifest.arms.filter((arm) => arm.enabled).map((arm) => `- **${arm.id}**: ${arm.harnessVersion}; config SHA-256 \`${arm.configSha256}\`.`),
     ...report.notes.map((note) => `- ${note}`),
     '',
+    ...(report.longHorizon ? renderLongHorizonMarkdown(report.longHorizon) : []),
     '## Per-task results',
     '',
     ...report.taskResults.map((result) => `- Repeat ${result.repeat}, **${result.arm}**, \`${result.taskId}\`: ${result.success ? 'success' : 'failed'}; acceptance ${(result.acceptanceScore * 100).toFixed(1)}%; model tokens ${result.run.usage.totalModelTokens}; cached input ${result.run.usage.cachedInputTokens}; uncached input ${result.run.usage.uncachedInputTokens}; tools ${result.run.toolCalls}${result.error ? `; ${result.error}` : ''}.`),
     '',
   ]
   return lines.join('\n')
+}
+
+function renderLongHorizonMarkdown(summaries: LongHorizonArmSummary[]): string[] {
+  return [
+    '## Long-horizon sequence',
+    '',
+    '| Arm | Sequence tasks | Total uncached input | Total cached input | Final-task cache share | Early uncached median | Late uncached median | Early cache share | Late cache share |',
+    '|---|---:|---:|---:|---:|---:|---:|---:|---:|',
+    ...summaries.map((summary) => `| ${summary.arm} | ${summary.sequenceLength} × ${summary.repetitions} | ${number(summary.cumulativeUncachedInputTokens)} | ${number(summary.cumulativeCachedInputTokens)} | ${summary.finalTaskCacheShare === null ? 'n/a' : percent(summary.finalTaskCacheShare)} | ${number(summary.earlyUncachedInput.median)} | ${number(summary.lateUncachedInput.median)} | ${summary.earlyCacheShare.median === null ? 'n/a' : percent(summary.earlyCacheShare.median)} | ${summary.lateCacheShare.median === null ? 'n/a' : percent(summary.lateCacheShare.median)} |`),
+    '',
+    'Per-task cache share and marginal uncached input remain available in the JSON report under `longHorizon[].tasks`.',
+    '',
+  ]
 }
 
 function metricRows(report: BenchmarkReport): string[] {
@@ -677,6 +913,7 @@ function parseArgs(argv: string[]): RunnerOptions {
     outputDirectory: 'benchmarks/results',
     dryRun: false,
     keepWorkspaces: false,
+    sessionTopology: 'isolated',
   }
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
@@ -684,7 +921,7 @@ function parseArgs(argv: string[]): RunnerOptions {
       options.dryRun = true
     } else if (arg === '--keep-workspaces') {
       options.keepWorkspaces = true
-    } else if (arg === '--manifest' || arg === '--output' || arg === '--repeats' || arg === '--arms' || arg === '--tasks') {
+    } else if (arg === '--manifest' || arg === '--output' || arg === '--repeats' || arg === '--arms' || arg === '--tasks' || arg === '--session-topology') {
       const value = argv[++index]
       if (!value) throw new Error(`${arg} requires a value`)
       if (arg === '--manifest') options.manifestPath = value
@@ -692,6 +929,10 @@ function parseArgs(argv: string[]): RunnerOptions {
       if (arg === '--repeats') options.repeats = positiveInteger(value, '--repeats')
       if (arg === '--arms') options.arms = new Set(value.split(',').map(parseHarness))
       if (arg === '--tasks') options.tasks = new Set(value.split(',').map((task) => task.trim()).filter(Boolean))
+      if (arg === '--session-topology') {
+        if (value !== 'isolated' && value !== 'marathon') throw new Error('--session-topology must be isolated or marathon')
+        options.sessionTopology = value
+      }
     } else {
       throw new Error(`unknown argument: ${arg}`)
     }

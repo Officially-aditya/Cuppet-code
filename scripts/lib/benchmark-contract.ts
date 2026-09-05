@@ -127,6 +127,8 @@ export type HarnessRunResult = {
     notes: string
   }
   finalMessage: string
+  /** Deterministic checks performed between turns in a long-horizon sequence. */
+  verification?: VerificationResult[]
   error?: string
 }
 
@@ -212,11 +214,42 @@ export type BenchmarkReport = {
   status: 'completed' | 'failed'
   createdAt: string
   completedAt: string
+  sessionTopology: 'isolated' | 'marathon'
   manifest: FrozenManifest
   runRoot: string
   taskResults: TaskRunResult[]
   summaries: ArmSummary[]
+  longHorizon?: LongHorizonArmSummary[]
   notes: string[]
+}
+
+export type LongHorizonTaskMetric = {
+  repeat: number
+  taskIndex: number
+  taskId: string
+  success: boolean
+  uncachedInputTokens: number
+  cachedInputTokens: number
+  cacheShare: number | null
+  totalModelTokens: number
+  toolCalls: number
+  compactions: number
+  effectiveCost: number | null
+  durationMs: number
+}
+
+export type LongHorizonArmSummary = {
+  arm: HarnessID
+  sequenceLength: number
+  repetitions: number
+  tasks: LongHorizonTaskMetric[]
+  cumulativeUncachedInputTokens: number
+  cumulativeCachedInputTokens: number
+  finalTaskCacheShare: number | null
+  earlyUncachedInput: Distribution
+  lateUncachedInput: Distribution
+  earlyCacheShare: Distribution
+  lateCacheShare: Distribution
 }
 
 export type PlaceholderValues = {

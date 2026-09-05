@@ -225,3 +225,19 @@ The controller is infrastructure, not a contestant or correctness judge. It
 does not alter prompts after an arm starts, and it reports 95% confidence
 intervals only when repeated observations exist. Cost is reported as
 unavailable when a harness does not expose provider-adjusted pricing.
+
+### Long-horizon marathon topology
+
+Run the existing Issue #4 task sequence as one continuous native session and
+workspace per arm/repeat with:
+
+```bash
+npm run benchmark -- --session-topology marathon
+```
+
+The marathon currently supports Cuppet and OpenCode, which expose reliable
+native continuation and per-turn telemetry. Codex and Claude Code are reported
+as excluded until their native resume/session telemetry can be measured without
+silently falling back to fresh sessions. Each task is verified before the next
+task is sent, and the JSON report includes per-task cache share, marginal and
+cumulative uncached input, plus early-versus-late sequence summaries.

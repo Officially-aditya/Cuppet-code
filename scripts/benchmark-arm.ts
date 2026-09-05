@@ -13,7 +13,7 @@ import { startTstDaemon, type TstRuntime } from '../packages/cli/src/tst/supervi
 import type { AgentEvent, ModelRef, TokenUsage } from '../packages/cli/src/types.js'
 import { OPENCODE_VERSION } from '../packages/cli/src/constants.js'
 import { seedCuppetOpenCodeProviderState } from './lib/cuppet-opencode-state.js'
-import type { HarnessID, HarnessRunResult, ModelSpec, UsageTotals } from './lib/benchmark-contract.js'
+import type { HarnessID, HarnessRunResult, ModelSpec, UsageTotals, VerificationResult, VerificationSpec } from './lib/benchmark-contract.js'
 
 type ArmOptions = {
   arm: HarnessID
@@ -33,6 +33,7 @@ type SequenceEntry = {
   promptFile: string
   resultFile: string
   timeoutMs: number
+  verification?: VerificationSpec[]
 }
 
 type ProcessResult = {
@@ -342,6 +343,7 @@ async function runOpenCodeSequence(options: ArmOptions, sequence: SequenceEntry[
       const completedAt = new Date().toISOString()
       const failure = activeFailure
       const success = !failure
+      const verification = await runSequenceVerifiers(options.workspace, entry.verification ?? [])
       results.push({
         schema: 1,
         arm: options.arm,
@@ -365,6 +367,7 @@ async function runOpenCodeSequence(options: ArmOptions, sequence: SequenceEntry[
         model: options.model,
         parity: parityFor(options.arm),
         finalMessage: answer,
+        ...(verification.length > 0 ? { verification } : {}),
         ...(failure ? { error: failure } : {}),
       })
       previousTokens = currentTokens
@@ -394,6 +397,66 @@ function diffTokenUsage(after: TokenUsage, before: TokenUsage): TokenUsage {
     cacheRead: Math.max(0, after.cacheRead - before.cacheRead),
     cacheWrite: Math.max(0, after.cacheWrite - before.cacheWrite),
   }
+}
+
+async function runSequenceVerifiers(workspace: string, specs: VerificationSpec[]): Promise<VerificationResult[]> {
+  return Promise.all(specs.map(async (spec) => {
+    const started = performance.now()
+    const execution = await runCommand(spec.command, spec.args, workspace, spec.timeoutMs)
+    return {
+      id: spec.id,
+      command: spec.command,
+      args: spec.args,
+      passed: execution.exitCode === (spec.expectedExitCode ?? 0) && !execution.timedOut,
+      exitCode: execution.exitCode,
+      stdout: truncate(execution.stdout),
+      stderr: truncate(execution.stderr),
+      durationMs: Math.round(performance.now() - started),
+    }
+  }))
+}
+
+async function runCommand(command: string, args: string[], cwd: string, timeoutMs: number): Promise<ProcessResult> {
+  const child = spawn(command, args, {
+    cwd,
+    env: process.env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  const stdout: Buffer[] = []
+  const stderr: Buffer[] = []
+  child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk))
+  child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk))
+  let timedOut = false
+  const started = performance.now()
+  const timer = setTimeout(() => {
+    timedOut = true
+    child.kill('SIGTERM')
+    setTimeout(() => {
+      if (child.exitCode === null) child.kill('SIGKILL')
+    }, 1_500).unref()
+  }, timeoutMs)
+  const exitCode = await new Promise<number | string>((resolveExit) => {
+    let settled = false
+    const settle = (value: number | string) => {
+      if (settled) return
+      settled = true
+      resolveExit(value)
+    }
+    child.once('error', (error) => settle(error.message))
+    child.once('close', (code, signal) => settle(code ?? signal ?? 'unknown'))
+  })
+  clearTimeout(timer)
+  return {
+    exitCode,
+    stdout: Buffer.concat(stdout).toString('utf8'),
+    stderr: Buffer.concat(stderr).toString('utf8'),
+    durationMs: Math.round(performance.now() - started),
+    timedOut,
+  }
+}
+
+function truncate(value: string): string {
+  return value.length > 12_000 ? `${value.slice(0, 12_000)}\n…<truncated>` : value
 }
 
 async function runExternal(options: ArmOptions, prompt: string): Promise<HarnessRunResult> {

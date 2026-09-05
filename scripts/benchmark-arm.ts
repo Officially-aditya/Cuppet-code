@@ -462,8 +462,7 @@ async function runExternalProcess(options: ArmOptions, prompt: string): Promise<
         'exec', '--json', '--ephemeral', '--skip-git-repo-check',
         '--model', options.model.model,
         '--cd', options.workspace,
-        '--sandbox', 'workspace-write',
-        '--ask-for-approval', 'never',
+        '--approve-for-me',
         '-c', `model_reasoning_effort=${JSON.stringify(options.model.reasoningEffort)}`,
         '-',
       ]

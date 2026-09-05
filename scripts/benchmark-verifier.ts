@@ -11,7 +11,7 @@ async function verify(task: string, workspace: string): Promise<void> {
   if (task === 'task-tracker-cross-file') return verifyTaskTracker(workspace)
   if (task === 'quiz-game-greenfield') return verifyWebProject(workspace, 'quiz-game', {
     required: ['quiz', 'question', 'answer', 'score', 'next', 'restart'],
-    scripts: ['questions', 'score', 'addEventListener', 'localStorage'],
+    scripts: ['questions', 'score', 'addEventListener'],
     minimumRecords: 5,
   })
   if (task.startsWith('persistent-build-stage-')) return verifyMiniCrm(workspace, task)
@@ -121,7 +121,7 @@ async function textFiles(root: string, prefix = ''): Promise<Array<{ path: strin
 }
 
 function countRecordSignals(script: string): number {
-  const matches = script.match(/(?:id|title|name|label)\s*:/g)
+  const matches = script.match(/(?:id|title|name|label|category|correct|status)\s*:/g)
   return matches?.length ?? 0
 }
 

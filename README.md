@@ -48,7 +48,7 @@ The source-checkout alias `cupet` launches the same CLI.
 | Command | Purpose |
 | --- | --- |
 | `/platform` or `/login` | Choose a provider platform and connect it. |
-| `/model` and `/effort` | Select the active model and its effort/variant. |
+| `/models` and `/effort` | Select the active model and its effort/variant. |
 | `/plan` | Toggle between native plan mode and build mode. |
 | `/auto` | Toggle guarded auto-approval for this session; protected files, external paths, and risky Bash still ask. |
 | `/memory` | Inspect memory and code-graph health. |

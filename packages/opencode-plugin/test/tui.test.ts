@@ -63,7 +63,6 @@ test('native TUI preserves Cuppet slash commands', async () => {
     'orchestrator',
     'platform',
     'login',
-    'model',
     'effort',
     'steer',
     'abort',
@@ -71,6 +70,7 @@ test('native TUI preserves Cuppet slash commands', async () => {
     'compact',
     'undo',
   ]) assert.ok(names.includes(name), `missing /${name}`)
+  assert.equal(names.includes('model'), false, 'Cuppet must not shadow native /models')
   for (const removed of [
     'cuppet-status', 'cuppet-compact', 'cuppet-undo',
     'memory-remember', 'memory-forget', 'memory-clear',

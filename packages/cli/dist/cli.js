@@ -1107,15 +1107,6 @@ var CuppetController = class extends EventEmitter2 {
     if (this.#secondary) this.#createBackground(preferences.backgroundPaused);
     this.#unsubscribe = this.#gateway.onEvent((event) => void this.#handleEvent(event));
     this.#gateway.startEvents();
-    const previousSessionID = preferences.lastSessionByProject[this.#paths.projectID];
-    if (previousSessionID && this.#primary) {
-      try {
-        this.#session = await this.#gateway.getSession(previousSessionID);
-        await this.#gateway.switchModel(previousSessionID, this.#primary);
-        this.#startUsageWindow(this.#session);
-      } catch {
-      }
-    }
     this.#changed();
   }
   async close() {

@@ -47,6 +47,7 @@ test('effort selection uses live variants, persists the choice, and updates the 
   })
 
   await controller.initialize()
+  await controller.adoptSession('session')
   switched.length = 0
 
   assert.deepEqual(controller.effortOptions(), ['low', 'high'])

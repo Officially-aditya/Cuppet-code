@@ -62,6 +62,10 @@ test('foreground usage starts at zero whenever a session becomes active', async 
   try {
     await controller.initialize()
     assertUsage(controller, usage(), 0)
+    assert.equal(controller.snapshot.activeSession, undefined)
+
+    await controller.resume('history')
+    assertUsage(controller, usage(), 0)
 
     sessions.set('history', session('history', usage(14, 3, 1, 6, 1), 2.5))
     onEvent?.({ type: 'idle', sessionID: 'history' })

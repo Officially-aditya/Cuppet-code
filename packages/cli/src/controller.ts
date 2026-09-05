@@ -183,16 +183,9 @@ export class CuppetController extends EventEmitter {
     this.#unsubscribe = this.#gateway.onEvent((event) => void this.#handleEvent(event))
     this.#gateway.startEvents()
 
-    const previousSessionID = preferences.lastSessionByProject[this.#paths.projectID]
-    if (previousSessionID && this.#primary) {
-      try {
-        this.#session = await this.#gateway.getSession(previousSessionID)
-        await this.#gateway.switchModel(previousSessionID, this.#primary)
-        this.#startUsageWindow(this.#session)
-      } catch {
-        // A missing/archived session is not fatal; create lazily on the next prompt.
-      }
-    }
+    // Session selection belongs to the native TUI or the remote client. Do not
+    // turn the persisted last-session pointer into an implicit resume: a fresh
+    // launch must remain a fresh session until the user explicitly resumes one.
     this.#changed()
   }
 

@@ -35,7 +35,9 @@ On controller startup:
 3. The persisted registry is loaded and reconciled against those session IDs.
 4. Missing/deleted session references are dropped.
 5. Dormant task identities are reconstructed as inert router state.
-6. The actual currently active OpenCode session is activated last.
+6. Restored task identities remain inert; Cuppet does not open a persisted
+   transcript automatically. The native TUI or remote client activates a
+   session only when it creates or explicitly resumes one.
 7. The reconciled bounded registry is written back, eventually removing deleted-session entries from disk.
 
 Missing or malformed JSON returns an empty registry and never blocks Cuppet startup.

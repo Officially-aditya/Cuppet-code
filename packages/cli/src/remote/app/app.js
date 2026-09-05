@@ -268,23 +268,35 @@
     sessions = list.filter((s) => s && typeof s.id === 'string')
     const select = $('session-select')
     const activeID = snapshot?.activeSession?.id ?? ''
+    const hasActive = Boolean(activeID && sessions.some((s) => s.id === activeID))
     // Skip rebuilding when nothing changed so an open dropdown stays open.
     const signature = JSON.stringify([sessions.map((s) => [s.id, s.title]), activeID])
     if (select.dataset.signature === signature) return
     select.dataset.signature = signature
     select.innerHTML = ''
+    if (!hasActive) {
+      const option = el('option', '', 'New session')
+      option.value = ''
+      select.appendChild(option)
+    }
     for (const session of sessions) {
       const option = el('option', '', session.title || session.id.slice(0, 12))
       option.value = session.id
       select.appendChild(option)
     }
-    if (activeID && sessions.some((s) => s.id === activeID)) select.value = activeID
+    if (hasActive) select.value = activeID
+    else select.value = ''
     if (select.value !== activeSessionID) {
       activeSessionID = select.value
-      reloadTranscript()
+      if (activeSessionID) reloadTranscript()
+      else clearTranscript()
     }
     select.onchange = async () => {
       activeSessionID = select.value
+      if (!activeSessionID) {
+        clearTranscript()
+        return
+      }
       clearTranscript()
       try { await command('session.resume', { sessionID: activeSessionID }) } catch { /* ignore */ }
       reloadTranscript()

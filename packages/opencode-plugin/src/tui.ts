@@ -514,15 +514,6 @@ const CuppetTuiPlugin: TuiPluginModule = {
           run: chooseProvider,
         },
         {
-          name: 'cuppet.model',
-          title: 'Select Cuppet model',
-          desc: 'Open the native model selection dialog',
-          category: 'Cuppet',
-          namespace: 'palette',
-          slashName: 'model',
-          run: dispatch('model.list'),
-        },
-        {
           name: 'cuppet.effort',
           title: 'Select model effort',
           desc: 'Open the native model effort/variant dialog',

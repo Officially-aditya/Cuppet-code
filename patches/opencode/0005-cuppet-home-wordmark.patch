@@ -68,7 +68,7 @@ diff --git a/packages/tui/src/feature-plugins/home/tips-view.tsx b/packages/tui/
 +  "Use {highlight}/doctor{/highlight} to diagnose Cuppet configuration",
 +  "Use {highlight}/memory{/highlight} to inspect persistent memory",
 +  "Use {highlight}/background{/highlight} to pause or resume background enrichment",
-+  "Use {highlight}/model{/highlight} to choose the foreground model",
++  "Use {highlight}/models{/highlight} to choose the foreground model",
 +  "Use {highlight}/effort{/highlight} to choose model effort",
 +  "Use {highlight}/plan{/highlight} to toggle Cuppet plan mode",
 +  "Use {highlight}/steer{/highlight} to guide an active session",

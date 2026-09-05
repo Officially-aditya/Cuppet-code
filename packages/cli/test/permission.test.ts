@@ -139,6 +139,7 @@ test('/auto enables guarded workspace approvals only for the active session', as
   try {
     await controller.initialize()
     assert.equal(controller.snapshot.autoMode, false)
+    await controller.adoptSession('session')
     assert.deepEqual(await controller.setAutoApprovalEnabled(true), { enabled: true, sessionID: 'session' })
     assert.equal(controller.snapshot.autoMode, true)
     controller.onAgentEvent((event) => forwarded.push(event))

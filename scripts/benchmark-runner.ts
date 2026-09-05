@@ -57,7 +57,10 @@ async function main(): Promise<void> {
   const actualRoot = await git(repoRoot, ['rev-parse', '--show-toplevel'])
   if (resolve(actualRoot) !== resolve(repoRoot)) throw new Error(`manifest repository path is not a Git root: ${repoRoot}`)
   const resolvedSha = await git(repoRoot, ['rev-parse', `${manifest.repository.startingSha}^{commit}`])
-  const selected = selectManifest(manifest, options)
+  const selectionOptions = options.sessionTopology === 'marathon' && options.repeats === undefined
+    ? { ...options, repeats: 2 }
+    : options
+  const selected = selectManifest(manifest, selectionOptions)
   const frozen = freezeManifest(selected, resolvedSha, environmentSnapshot())
 
   if (options.dryRun) {

@@ -235,6 +235,9 @@ workspace per arm/repeat with:
 npm run benchmark -- --session-topology marathon
 ```
 
+Marathon mode defaults to two repetitions; pass `--repeats N` to override it.
+The isolated Issue #4 mode retains its three-repetition default.
+
 The marathon currently supports Cuppet and OpenCode, which expose reliable
 native continuation and per-turn telemetry. Codex and Claude Code are reported
 as excluded until their native resume/session telemetry can be measured without

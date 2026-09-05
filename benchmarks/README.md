@@ -182,3 +182,46 @@ successful-task efficiency.
 The harness is [`scripts/ab-task-tracker.ts`](../scripts/ab-task-tracker.ts).
 It records all permissions and requires `CUPPET_TTT_ALLOW_EXTERNAL=1` to avoid
 turning approved external-directory discovery into a Cuppet-only failure.
+
+## Issue #4 common benchmark runner
+
+The issue-4 suite is defined by the frozen JSON manifest at
+[`manifests/issue-4.json`](manifests/issue-4.json). It is the common controller
+for isolated, persistent, task-discontinuity, long-tool-use, and cross-file
+workloads. The controller creates each workspace from the recorded Git SHA,
+writes one exact prompt file shared by every arm, alternates arm order, runs
+deterministic verifiers, and stores a normalized result contract with cached
+and uncached input, output/reasoning tokens, tool calls, retries, compactions,
+cost, wall time, acceptance, and failed-task telemetry.
+
+Preview the frozen schedule without launching a model:
+
+```bash
+npm run benchmark:dry-run
+```
+
+Run the complete configured suite:
+
+```bash
+npm run benchmark
+```
+
+Use a small pilot when validating a local installation:
+
+```bash
+npm run benchmark -- --repeats 1 --tasks task-tracker-cross-file --arms cuppet,opencode
+```
+
+Codex is enabled in the manifest through its native JSONL `exec` interface.
+Claude Code is wired through stream-JSON telemetry but disabled by default
+because it cannot use the configured Luna model; enable it explicitly only as
+the report's labeled end-to-end product-comparison arm:
+
+```bash
+npm run benchmark -- --arms cuppet,opencode,codex,claude-code
+```
+
+The controller is infrastructure, not a contestant or correctness judge. It
+does not alter prompts after an arm starts, and it reports 95% confidence
+intervals only when repeated observations exist. Cost is reported as
+unavailable when a harness does not expose provider-adjusted pricing.

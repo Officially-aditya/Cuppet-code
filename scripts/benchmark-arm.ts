@@ -571,7 +571,10 @@ function usageFromExternal(usage: Record<string, unknown> | undefined): UsageTot
     uncachedInputTokens: Math.max(0, inputTokens - cachedInputTokens),
     outputTokens,
     reasoningTokens,
-    totalModelTokens: inputTokens + outputTokens + reasoningTokens,
+    // OpenCode's session input counter excludes cache reads. Normalize the
+    // cross-harness headline metric to the same uncached-input basis while
+    // retaining the provider's raw input and cache counters separately.
+    totalModelTokens: Math.max(0, inputTokens - cachedInputTokens) + outputTokens + reasoningTokens,
     effectiveCost: typeof cost === 'number' && Number.isFinite(cost) ? cost : null,
   }
 }

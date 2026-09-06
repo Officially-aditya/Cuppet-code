@@ -301,8 +301,8 @@ export function validateManifest(manifest: BenchmarkManifest): void {
     promptHashes.add(promptHash)
   }
   const enabledArms = manifest.arms.filter((arm) => arm.enabled)
-  const singleTuraArm = enabledArms.length === 1 && enabledArms[0]?.id === 'tura-direct'
-  if (enabledArms.length < 2 && !singleTuraArm) throw new Error('at least two enabled arms are required')
+  const singleNativeArm = enabledArms.length === 1 && ['cuppet', 'opencode', 'tura-direct'].includes(enabledArms[0]?.id ?? '')
+  if (enabledArms.length < 2 && !singleNativeArm) throw new Error('at least two enabled arms are required')
   const armIDs = new Set<string>()
   for (const arm of manifest.arms) {
     if (armIDs.has(arm.id)) throw new Error(`duplicate arm id: ${arm.id}`)

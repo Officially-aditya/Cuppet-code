@@ -708,8 +708,10 @@ function selectManifest(manifest: BenchmarkManifest, options: RunnerOptions): Be
     ? manifest.arms.map((arm) => ({ ...arm, enabled: options.arms!.has(arm.id) }))
     : manifest.arms
   const enabledCount = arms.filter((arm) => arm.enabled).length
-  const singleMarathonTura = options.sessionTopology === 'marathon' && enabledCount === 1 && arms.some((arm) => arm.enabled && arm.id === 'tura-direct')
-  if (enabledCount < 2 && !singleMarathonTura) throw new Error('arm selection must leave at least two enabled arms')
+  const singleMarathonNativeArm = options.sessionTopology === 'marathon'
+    && enabledCount === 1
+    && arms.some((arm) => arm.enabled && (arm.id === 'cuppet' || arm.id === 'opencode' || arm.id === 'tura-direct'))
+  if (enabledCount < 2 && !singleMarathonNativeArm) throw new Error('arm selection must leave at least two enabled arms')
   return {
     ...manifest,
     repetitions: options.repeats ?? manifest.repetitions,

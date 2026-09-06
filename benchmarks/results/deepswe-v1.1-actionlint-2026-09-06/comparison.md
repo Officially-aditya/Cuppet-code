@@ -1,16 +1,16 @@
 # DeepSWE v1.1 — `actionlint-action-pinning-lint`
 
-Status: completed with an infrastructure-invalid OpenCode arm. This is not a valid efficiency ranking.
+Status: both executions were incomplete because of infrastructure failures. This is not a valid efficiency ranking.
 
 The experiment used one official DeepSWE task, one attempt per harness, and two model-consuming arms total. Earlier Docker/setup failures occurred before model execution and were excluded from the paid-run count. No automatic retries were made.
 
 ## Headline comparison
 
-`Total input` is `uncached input + cached input`. `Normalized model tokens` is `uncached input + output + reasoning`. Percentages are Cuppet minus OpenCode over OpenCode; they are descriptive only because the OpenCode arm is infrastructure-invalid and both official rewards are zero.
+`Total input` is `uncached input + cached input`. `Normalized model tokens` is `uncached input + output + reasoning`. Percentages are Cuppet minus OpenCode over OpenCode; they are descriptive only because both executions were incomplete and both official rewards are zero.
 
 | Metric | Cuppet | OpenCode | Cuppet difference |
 |---|---:|---:|---:|
-| Official DeepSWE reward | 0 (`partial 0.725`) | 0 (`partial 0.975`, infrastructure-invalid) | not ranked |
+| Official DeepSWE reward | 0 (`partial 0.725`, incomplete) | 0 (`partial 0.975`, incomplete) | not ranked |
 | Total input | 23,880 | 1,970,258 | -98.79% |
 | Cached input | 14,336 | 1,875,456 | -99.24% |
 | Uncached input | 9,544 | 94,802 | -89.93% |
@@ -27,9 +27,9 @@ The experiment used one official DeepSWE task, one attempt per harness, and two 
 
 ## Correctness and failure details
 
-Cuppet completed its process without a controller exception, but the model stopped after inspection when its `bash` permission request was not approved. It submitted no patch. The official verifier scored F2P `0/55`, P2P `145/145`, partial `0.725`, reward `0`.
+Cuppet execution was incomplete because its native permission infrastructure rejected the first `bash` request needed to continue. The model stopped after inspection and submitted no patch. The official verifier scored the resulting pristine-base state F2P `0/55`, P2P `145/145`, partial `0.725`, reward `0`.
 
-OpenCode produced a five-file patch and reached F2P `54/55`, P2P `141/145`, partial `0.975`, reward `0`. Its native CLI then hung after emitting a final `stop` event; the process was terminated after more than 20 minutes with no new log output. The arm is therefore marked `infrastructure_invalid`, and its token numbers are preserved but must not be used to claim a harness winner.
+OpenCode produced a five-file patch and reached F2P `54/55`, P2P `141/145`, partial `0.975`, reward `0`. Its native CLI then hung after emitting a final `stop` event; the process was terminated after more than 20 minutes with no new log output. This is an incomplete execution caused by infrastructure failure, not evidence that the OpenCode harness itself is inferior. Its token numbers are preserved but must not be used to claim a harness winner.
 
 The five official failures in the OpenCode patch were:
 
@@ -37,7 +37,7 @@ The five official failures in the OpenCode patch were:
 - expression-only action references were not skipped;
 - one mixed-ref case incorrectly rejected a commit SHA.
 
-This is a Case-F-like correctness outcome with an additional OpenCode infrastructure failure. It does not support an architectural efficiency conclusion.
+This is not a valid A–F architecture case: both executions were incomplete for infrastructure reasons. It does not support an architectural efficiency conclusion.
 
 ## Experimental identity
 

@@ -238,9 +238,33 @@ npm run benchmark -- --session-topology marathon
 Marathon mode defaults to two repetitions; pass `--repeats N` to override it.
 The isolated Issue #4 mode retains its three-repetition default.
 
-The marathon currently supports Cuppet and OpenCode, which expose reliable
-native continuation and per-turn telemetry. Codex and Claude Code are reported
-as excluded until their native resume/session telemetry can be measured without
-silently falling back to fresh sessions. Each task is verified before the next
-task is sent, and the JSON report includes per-task cache share, marginal and
-cumulative uncached input, plus early-versus-late sequence summaries.
+The default marathon supports Cuppet and OpenCode, which expose reliable native
+continuation and per-turn telemetry. Tura Direct is available as an explicit
+single-arm run described below. Codex and Claude Code are reported as excluded
+until their native resume/session telemetry can be measured without silently
+falling back to fresh sessions. Each task is verified before the next task is
+sent, and the JSON report includes per-task cache share, marginal and cumulative
+uncached input, plus early-versus-late sequence summaries.
+
+### Tura Direct arm
+
+The Issue #4 marathon also has a disabled-by-default `tura-direct` arm. It
+invokes Tura's native `exec` session directly with the exact
+`openai/gpt-5.6-luna` model and `low` reasoning effort, using one persistent
+Tura session for the sequence. The no-model preflight checks the installed Tura
+CLI, OpenAI authentication, and exact model catalog entry:
+
+```bash
+node --import tsx scripts/tura-benchmark-probe.ts
+```
+
+After the preflight passes, run the arm explicitly with one repetition:
+
+```bash
+npm run benchmark -- --session-topology marathon --arms tura-direct --repeats 1
+```
+
+The arm records Tura JSONL and turn-log telemetry as sidecars beside each raw
+result. It does not fall back to another model or automatically retry provider,
+session, or telemetry failures. No Cuppet or OpenCode run is repeated by this
+command.

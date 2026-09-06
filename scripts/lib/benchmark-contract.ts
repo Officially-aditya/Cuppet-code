@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 
 export const BENCHMARK_SCHEMA = 1 as const
 
-export const HARNESS_IDS = ['cuppet', 'opencode', 'codex', 'claude-code'] as const
+export const HARNESS_IDS = ['cuppet', 'opencode', 'codex', 'claude-code', 'tura-direct'] as const
 export type HarnessID = typeof HARNESS_IDS[number]
 
 export const TASK_FAMILIES = [
@@ -117,7 +117,7 @@ export type HarnessRunResult = {
   permissionRequests: number
   rejectedPermissions: number
   telemetry: {
-    source: 'native' | 'codex-jsonl' | 'claude-stream-json' | 'unavailable'
+    source: 'native' | 'codex-jsonl' | 'claude-stream-json' | 'tura-jsonl' | 'unavailable'
     complete: boolean
     eventCount: number
   }
@@ -301,7 +301,8 @@ export function validateManifest(manifest: BenchmarkManifest): void {
     promptHashes.add(promptHash)
   }
   const enabledArms = manifest.arms.filter((arm) => arm.enabled)
-  if (enabledArms.length < 2) throw new Error('at least two enabled arms are required')
+  const singleTuraArm = enabledArms.length === 1 && enabledArms[0]?.id === 'tura-direct'
+  if (enabledArms.length < 2 && !singleTuraArm) throw new Error('at least two enabled arms are required')
   const armIDs = new Set<string>()
   for (const arm of manifest.arms) {
     if (armIDs.has(arm.id)) throw new Error(`duplicate arm id: ${arm.id}`)

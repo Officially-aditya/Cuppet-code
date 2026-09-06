@@ -1,5 +1,5 @@
 import { execFile as execFileCallback, spawn } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
@@ -84,12 +84,13 @@ async function main(): Promise<void> {
     ? await executeMarathon(frozen, repoRoot, runRoot, options)
     : await executeBenchmark(frozen, repoRoot, runRoot, options)
   const summaryArms = options.sessionTopology === 'marathon'
-    ? frozen.arms.filter((arm) => arm.enabled && (arm.id === 'cuppet' || arm.id === 'opencode'))
+    ? frozen.arms.filter((arm) => arm.enabled && (arm.id === 'cuppet' || arm.id === 'opencode' || arm.id === 'tura-direct'))
     : frozen.arms.filter((arm) => arm.enabled)
   const summaries = summaryArms.map((arm) => summarizeArmResults(arm.id, taskResults))
+  const expectedTaskResults = summaryArms.length * frozen.repetitions * frozen.taskSet.tasks.length
   const report: BenchmarkReport = {
     schema: 1,
-    status: taskResults.every((result) => result.success) ? 'completed' : 'failed',
+    status: taskResults.length === expectedTaskResults && taskResults.every((result) => result.success) ? 'completed' : 'failed',
     createdAt,
     completedAt: new Date().toISOString(),
     sessionTopology: options.sessionTopology,
@@ -104,7 +105,7 @@ async function main(): Promise<void> {
       'Failed tasks retain all telemetry emitted before failure. A null cost means the harness did not expose provider-adjusted pricing.',
       'In the default Issue #4 mixed topology, persistent Cuppet/OpenCode sequences reuse one native session; Codex and Claude Code persistent-family entries run sequential native CLI turns because their resume/session telemetry is not yet reliable enough to claim a single persistent session.',
       ...(options.sessionTopology === 'marathon'
-        ? ['Marathon topology: one workspace and one native session per supported arm/repeat; deterministic verification runs after every task without resetting the evolving workspace.', ...frozen.arms.filter((arm) => arm.enabled && arm.id !== 'cuppet' && arm.id !== 'opencode').map((arm) => `${arm.id}: excluded from marathon topology because reliable native continuation/telemetry is not implemented.`)]
+        ? ['Marathon topology: one workspace and one native session per supported arm/repeat; deterministic verification runs after every task without resetting the evolving workspace.', ...frozen.arms.filter((arm) => arm.enabled && arm.id !== 'cuppet' && arm.id !== 'opencode' && arm.id !== 'tura-direct').map((arm) => `${arm.id}: excluded from marathon topology because reliable native continuation/telemetry is not implemented.`)]
         : []),
       ...frozen.arms.filter((arm) => arm.enabled && arm.model.parity !== 'exact').map((arm) => `${arm.id}: ${arm.model.notes}`),
     ],
@@ -121,7 +122,7 @@ function buildLongHorizonSummaries(manifest: FrozenManifest, results: TaskRunRes
   const taskIndex = new Map(manifest.taskSet.tasks.map((task, index) => [task.id, index]))
   const sequenceLength = manifest.taskSet.tasks.length
   return manifest.arms
-    .filter((arm) => arm.enabled && (arm.id === 'cuppet' || arm.id === 'opencode'))
+    .filter((arm) => arm.enabled && (arm.id === 'cuppet' || arm.id === 'opencode' || arm.id === 'tura-direct'))
     .map((arm) => {
       const tasks = results
         .filter((result) => result.arm === arm.id)
@@ -170,8 +171,8 @@ async function executeMarathon(
   runRoot: string,
   options: RunnerOptions,
 ): Promise<TaskRunResult[]> {
-  const arms = manifest.arms.filter((arm) => arm.enabled && (arm.id === 'cuppet' || arm.id === 'opencode'))
-  if (arms.length === 0) throw new Error('marathon topology requires at least one supported native-session arm (cuppet or opencode)')
+  const arms = manifest.arms.filter((arm) => arm.enabled && (arm.id === 'cuppet' || arm.id === 'opencode' || arm.id === 'tura-direct'))
+  if (arms.length === 0) throw new Error('marathon topology requires at least one supported native-session arm (cuppet, opencode, or tura-direct)')
   const results: TaskRunResult[] = []
   const promptFiles = new Map<string, string>()
   const tasks = manifest.taskSet.tasks
@@ -447,6 +448,15 @@ async function executeMarathonArm(options: {
   const results: TaskRunResult[] = []
   for (const [index, task] of options.tasks.entries()) {
     const entry = entries[index]!
+    if (options.arm.id === 'tura-direct') {
+      try {
+        await access(entry.resultFile)
+      } catch {
+        // A provider/session failure must not become a fabricated zero-token
+        // task result for work that never executed.
+        break
+      }
+    }
     const run = await readHarnessResult(entry.resultFile, options.arm, task.id, options.manifest.model, execution)
     const verification = run.verification ?? []
     const passedChecks = verification.filter((check) => check.passed).length
@@ -697,7 +707,9 @@ function selectManifest(manifest: BenchmarkManifest, options: RunnerOptions): Be
   const arms = options.arms
     ? manifest.arms.map((arm) => ({ ...arm, enabled: options.arms!.has(arm.id) }))
     : manifest.arms
-  if (arms.filter((arm) => arm.enabled).length < 2) throw new Error('arm selection must leave at least two enabled arms')
+  const enabledCount = arms.filter((arm) => arm.enabled).length
+  const singleMarathonTura = options.sessionTopology === 'marathon' && enabledCount === 1 && arms.some((arm) => arm.enabled && arm.id === 'tura-direct')
+  if (enabledCount < 2 && !singleMarathonTura) throw new Error('arm selection must leave at least two enabled arms')
   return {
     ...manifest,
     repetitions: options.repeats ?? manifest.repetitions,
@@ -725,7 +737,7 @@ function schedule(manifest: FrozenManifest): Array<{ repeat: number; taskId: str
 }
 
 function marathonSchedule(manifest: FrozenManifest): Array<{ repeat: number; arm: HarnessID; tasks: string[] }> {
-  const arms = manifest.arms.filter((arm) => arm.enabled && (arm.id === 'cuppet' || arm.id === 'opencode'))
+  const arms = manifest.arms.filter((arm) => arm.enabled && (arm.id === 'cuppet' || arm.id === 'opencode' || arm.id === 'tura-direct'))
   return Array.from({ length: manifest.repetitions }, (_, index) => {
     const repeat = index + 1
     return orderedArms(arms, manifest.ordering, repeat, 0).map((arm) => ({
@@ -944,7 +956,7 @@ function parseArgs(argv: string[]): RunnerOptions {
 }
 
 function parseHarness(value: string): HarnessID {
-  if (value === 'cuppet' || value === 'opencode' || value === 'codex' || value === 'claude-code') return value
+  if (value === 'cuppet' || value === 'opencode' || value === 'codex' || value === 'claude-code' || value === 'tura-direct') return value
   throw new Error(`unsupported harness: ${value}`)
 }
 

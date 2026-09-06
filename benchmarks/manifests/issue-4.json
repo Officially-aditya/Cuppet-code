@@ -233,6 +233,23 @@
         "command": "node",
         "args": ["--import", "tsx", "{controllerRoot}/scripts/benchmark-arm.ts", "--arm", "{arm}", "--workspace", "{workspace}", "--prompt-file", "{promptFile}", "--result-file", "{resultFile}", "--runtime-root", "{runtimeRoot}", "--task-id", "{taskId}", "--model", "{model}", "--provider", "{provider}", "--reasoning-effort", "{reasoningEffort}", "--timeout-ms", "{timeoutMs}", "--session-mode", "{sessionMode}"]
       }
+    },
+    {
+      "id": "tura-direct",
+      "enabled": false,
+      "harnessVersion": "Tura 0.1.37; resolved from the installed arm at run time",
+      "telemetry": "result-file",
+      "model": {
+        "provider": "openai",
+        "model": "gpt-5.6-luna",
+        "reasoningEffort": "low",
+        "parity": "exact",
+        "notes": "Tura Direct receives the exact Luna/low model settings through native tura exec flags; no Cuppet context or controller history is injected."
+      },
+      "command": {
+        "command": "node",
+        "args": ["--import", "tsx", "{controllerRoot}/scripts/tura-benchmark-arm.ts", "--workspace", "{workspace}", "--prompt-file", "{promptFile}", "--result-file", "{resultFile}", "--runtime-root", "{runtimeRoot}", "--task-id", "{taskId}", "--model", "{model}", "--provider", "{provider}", "--reasoning-effort", "{reasoningEffort}", "--timeout-ms", "{timeoutMs}", "--session-mode", "{sessionMode}"]
+      }
     }
   ]
 }

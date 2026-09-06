@@ -1,0 +1,19 @@
+diff --git a/packages/cli/src/controller.ts b/packages/cli/src/controller.ts
+index ba3396e..c22c5d0 100644
+--- a/packages/cli/src/controller.ts
++++ b/packages/cli/src/controller.ts
+@@ -952,6 +952,14 @@ export class CuppetController extends EventEmitter {
+     }
+     if (event.type === 'permission') {
+       if (!this.#interactive) {
++        if (process.env.CUPPET_HEADLESS_AUTO_APPROVE === '1') {
++          const autoApprove = event.request.action === 'bash' ||
++            await shouldAutoApproveWorkspacePermission(event.request, this.#paths.projectRealpath)
++          if (autoApprove) {
++            await this.#gateway.replyPermission(event.request.sessionID, event.request.id, 'once').catch(() => undefined)
++            return
++          }
++        }
+         await this.#gateway.replyPermission(event.request.sessionID, event.request.id, 'reject').catch(() => undefined)
+         return
+       }

@@ -1,0 +1,2377 @@
+{
+  "schema": 1,
+  "status": "failed",
+  "createdAt": "2026-09-06T09:18:51.554Z",
+  "completedAt": "2026-09-06T09:41:20.085Z",
+  "sessionTopology": "marathon",
+  "manifest": {
+    "schema": 1,
+    "benchmarkVersion": "issue-4.1",
+    "name": "cuppet-harness-comparison",
+    "repository": {
+      "path": ".",
+      "startingSha": "840ed751b61c04afc881a393b7836d4d2c932f61",
+      "resolvedSha": "840ed751b61c04afc881a393b7836d4d2c932f61"
+    },
+    "taskSet": {
+      "id": "issue-4-core",
+      "version": "2026-09-05",
+      "tasks": [
+        {
+          "id": "task-tracker-cross-file",
+          "title": "Task Tracker cross-file refactor",
+          "family": "cross-file",
+          "sessionMode": "isolated",
+          "tags": [
+            "bug-fix",
+            "cross-file",
+            "deterministic-verifier"
+          ],
+          "prompt": "Work on the seeded Task Tracker fixture in games/task-tracker/. Rename Task.dueDate to Task.deadline everywhere, including the --deadline CLI option. Add required Task.priority with low, normal, and high values; default new tasks to normal; reject invalid priorities. Add indexed --status, --priority, and --tag list filters and keep the CLI to API to query to store/index path correct. Reject malformed and past deadlines. Fix the store defect that drops deadlines and the stale-index defect after status, priority, or tag updates. Preserve the named exports and existing task-tracker scripts. Use only TypeScript and local Node conventions; do not add dependencies, use the network, inspect credentials, or modify unrelated projects. Run npm run task-tracker:test, npm run task-tracker:typecheck, and npm run task-tracker:run -- --help before finishing.",
+          "verification": [
+            {
+              "id": "task-tracker-hidden-contract",
+              "command": "node",
+              "args": [
+                "--import",
+                "tsx",
+                "{controllerRoot}/scripts/benchmark-verifier.ts",
+                "--task",
+                "task-tracker-cross-file",
+                "--workspace",
+                "{workspace}"
+              ],
+              "timeoutMs": 120000
+            },
+            {
+              "id": "task-tracker-tests",
+              "command": "npm",
+              "args": [
+                "run",
+                "task-tracker:test"
+              ],
+              "timeoutMs": 120000
+            },
+            {
+              "id": "task-tracker-typecheck",
+              "command": "npm",
+              "args": [
+                "run",
+                "task-tracker:typecheck"
+              ],
+              "timeoutMs": 120000
+            },
+            {
+              "id": "task-tracker-help",
+              "command": "npm",
+              "args": [
+                "run",
+                "task-tracker:run",
+                "--",
+                "--help"
+              ],
+              "timeoutMs": 20000
+            }
+          ]
+        },
+        {
+          "id": "quiz-game-greenfield",
+          "title": "Greenfield quiz game",
+          "family": "isolated",
+          "sessionMode": "isolated",
+          "tags": [
+            "greenfield",
+            "frontend",
+            "deterministic-verifier"
+          ],
+          "prompt": "Build a complete local quiz game inside projects/quiz-game. Create index.html, styles.css, app.js, and README.md without dependencies, network, or remote assets. Include a start state, at least five local multiple-choice questions, one question at a time, answer selection, feedback, progress, score tracking, next-question flow, final results, and restart. Use accessible controls, prevent double answers, make the layout responsive, and modify no other project or root file. Inspect the state transitions before finishing.",
+          "verification": [
+            {
+              "id": "quiz-game-hidden-contract",
+              "command": "node",
+              "args": [
+                "--import",
+                "tsx",
+                "{controllerRoot}/scripts/benchmark-verifier.ts",
+                "--task",
+                "quiz-game-greenfield",
+                "--workspace",
+                "{workspace}"
+              ],
+              "timeoutMs": 30000
+            }
+          ]
+        },
+        {
+          "id": "persistent-build-stage-1",
+          "title": "Persistent build stage 1: mini CRM foundation",
+          "family": "persistent",
+          "sessionMode": "persistent",
+          "tags": [
+            "persistent-session",
+            "cumulative-build"
+          ],
+          "prompt": "Start a cumulative build in projects/mini-crm. Create a dependency-free local contact dashboard with index.html, styles.css, app.js, and README.md. Add a clear semantic shell, a contact form with name and email, a contact list, and local seed data. Do not use the network or edit unrelated files. This is stage 1 of a persistent multi-stage benchmark; leave the project in a runnable state.",
+          "verification": [
+            {
+              "id": "persistent-stage-1",
+              "command": "node",
+              "args": [
+                "--import",
+                "tsx",
+                "{controllerRoot}/scripts/benchmark-verifier.ts",
+                "--task",
+                "persistent-build-stage-1",
+                "--workspace",
+                "{workspace}"
+              ],
+              "timeoutMs": 30000
+            }
+          ]
+        },
+        {
+          "id": "persistent-build-stage-2",
+          "title": "Persistent build stage 2: search and persistence",
+          "family": "persistent",
+          "sessionMode": "persistent",
+          "tags": [
+            "persistent-session",
+            "cumulative-build"
+          ],
+          "prompt": "Continue the existing projects/mini-crm build from the previous stage. Add create, edit, delete, search, and favorite behavior, persist contacts with localStorage, and preserve the existing semantic layout and local-only constraint. Inspect the current implementation before editing and keep the project runnable. Do not modify unrelated files.",
+          "verification": [
+            {
+              "id": "persistent-stage-2",
+              "command": "node",
+              "args": [
+                "--import",
+                "tsx",
+                "{controllerRoot}/scripts/benchmark-verifier.ts",
+                "--task",
+                "persistent-build-stage-2",
+                "--workspace",
+                "{workspace}"
+              ],
+              "timeoutMs": 30000
+            }
+          ]
+        },
+        {
+          "id": "persistent-build-stage-3",
+          "title": "Persistent build stage 3: regression and accessibility pass",
+          "family": "persistent",
+          "sessionMode": "persistent",
+          "tags": [
+            "persistent-session",
+            "cumulative-build",
+            "regression"
+          ],
+          "prompt": "Finish the existing projects/mini-crm build. Review the complete flow, fix regressions, add visible focus styles, keyboard-friendly controls, empty-state text, and a responsive layout. Keep CRUD, search, favorites, and localStorage behavior working. Do not add dependencies, use the network, or change unrelated files. Report the exact files and checks you inspected.",
+          "verification": [
+            {
+              "id": "persistent-stage-3",
+              "command": "node",
+              "args": [
+                "--import",
+                "tsx",
+                "{controllerRoot}/scripts/benchmark-verifier.ts",
+                "--task",
+                "persistent-build-stage-3",
+                "--workspace",
+                "{workspace}"
+              ],
+              "timeoutMs": 30000
+            }
+          ]
+        },
+        {
+          "id": "switch-a-auth",
+          "title": "Discontinuity A1: local auth notes",
+          "family": "discontinuity",
+          "sessionMode": "persistent",
+          "tags": [
+            "task-discontinuity",
+            "A"
+          ],
+          "prompt": "Create projects/discontinuity-auth/README.md with a concise local design note for an offline session-token store. Include token expiry, refresh rotation, and logout invariants. Do not touch other projects or use the network.",
+          "verification": [
+            {
+              "id": "switch-a-auth",
+              "command": "node",
+              "args": [
+                "--import",
+                "tsx",
+                "{controllerRoot}/scripts/benchmark-verifier.ts",
+                "--task",
+                "switch-a-auth",
+                "--workspace",
+                "{workspace}"
+              ],
+              "timeoutMs": 30000
+            }
+          ]
+        },
+        {
+          "id": "switch-a-followup",
+          "title": "Discontinuity A2: auth acceptance cases",
+          "family": "discontinuity",
+          "sessionMode": "persistent",
+          "tags": [
+            "task-discontinuity",
+            "A"
+          ],
+          "prompt": "Return to the authentication note in projects/discontinuity-auth/README.md. Add concrete acceptance cases for expired access tokens, one-time refresh rotation, logout invalidation, and clock-skew handling. Preserve the existing invariants and do not edit unrelated projects.",
+          "verification": [
+            {
+              "id": "switch-a-followup",
+              "command": "node",
+              "args": [
+                "--import",
+                "tsx",
+                "{controllerRoot}/scripts/benchmark-verifier.ts",
+                "--task",
+                "switch-a-followup",
+                "--workspace",
+                "{workspace}"
+              ],
+              "timeoutMs": 30000
+            }
+          ]
+        },
+        {
+          "id": "switch-b-auth",
+          "title": "Discontinuity B1: billing notes",
+          "family": "discontinuity",
+          "sessionMode": "persistent",
+          "tags": [
+            "task-discontinuity",
+            "B"
+          ],
+          "prompt": "Switch to a separate task. Create projects/discontinuity-billing/README.md with a local design note for idempotent invoice retries, including duplicate-request and retry-window invariants. Do not edit the authentication project or use the network.",
+          "verification": [
+            {
+              "id": "switch-b-auth",
+              "command": "node",
+              "args": [
+                "--import",
+                "tsx",
+                "{controllerRoot}/scripts/benchmark-verifier.ts",
+                "--task",
+                "switch-b-auth",
+                "--workspace",
+                "{workspace}"
+              ],
+              "timeoutMs": 30000
+            }
+          ]
+        },
+        {
+          "id": "switch-b-followup",
+          "title": "Discontinuity B2: billing acceptance cases",
+          "family": "discontinuity",
+          "sessionMode": "persistent",
+          "tags": [
+            "task-discontinuity",
+            "B"
+          ],
+          "prompt": "Continue the billing task in projects/discontinuity-billing/README.md. Add acceptance cases for duplicate idempotency keys, failed payment retries, successful replay, and audit ordering. Do not change the authentication project or unrelated files.",
+          "verification": [
+            {
+              "id": "switch-b-followup",
+              "command": "node",
+              "args": [
+                "--import",
+                "tsx",
+                "{controllerRoot}/scripts/benchmark-verifier.ts",
+                "--task",
+                "switch-b-followup",
+                "--workspace",
+                "{workspace}"
+              ],
+              "timeoutMs": 30000
+            }
+          ]
+        },
+        {
+          "id": "switch-c",
+          "title": "Discontinuity C: release checklist",
+          "family": "discontinuity",
+          "sessionMode": "persistent",
+          "tags": [
+            "task-discontinuity",
+            "C"
+          ],
+          "prompt": "Switch to a third unrelated task. Create projects/discontinuity-release/README.md with a local release checklist covering versioning, migration order, rollback, and smoke validation. Keep both earlier projects unchanged.",
+          "verification": [
+            {
+              "id": "switch-c",
+              "command": "node",
+              "args": [
+                "--import",
+                "tsx",
+                "{controllerRoot}/scripts/benchmark-verifier.ts",
+                "--task",
+                "switch-c",
+                "--workspace",
+                "{workspace}"
+              ],
+              "timeoutMs": 30000
+            }
+          ]
+        },
+        {
+          "id": "switch-a-return",
+          "title": "Discontinuity A3: return to auth",
+          "family": "discontinuity",
+          "sessionMode": "persistent",
+          "tags": [
+            "task-discontinuity",
+            "A"
+          ],
+          "prompt": "Return to the authentication task. Review projects/discontinuity-auth/README.md and add a short section connecting refresh-token rotation to logout invalidation without weakening any prior invariant. Do not edit billing or release projects.",
+          "verification": [
+            {
+              "id": "switch-a-return",
+              "command": "node",
+              "args": [
+                "--import",
+                "tsx",
+                "{controllerRoot}/scripts/benchmark-verifier.ts",
+                "--task",
+                "switch-a-return",
+                "--workspace",
+                "{workspace}"
+              ],
+              "timeoutMs": 30000
+            }
+          ]
+        },
+        {
+          "id": "long-tool-use-dashboard",
+          "title": "Long tool-use dashboard",
+          "family": "long-tool-use",
+          "sessionMode": "isolated",
+          "tags": [
+            "long-task",
+            "high-tool-use",
+            "frontend"
+          ],
+          "prompt": "Build a dependency-free local operations dashboard inside projects/operations-dashboard. Create index.html, styles.css, app.js, and README.md. Include a sidebar, header, metric cards, a searchable table of at least eight local records, status and priority filters, a details panel, an empty state, responsive layout, visible focus styles, and local-only interactions. Inspect every main state path and do not use dependencies, network, remote assets, credentials, or unrelated files.",
+          "verification": [
+            {
+              "id": "long-tool-use-hidden-contract",
+              "command": "node",
+              "args": [
+                "--import",
+                "tsx",
+                "{controllerRoot}/scripts/benchmark-verifier.ts",
+                "--task",
+                "long-tool-use-dashboard",
+                "--workspace",
+                "{workspace}"
+              ],
+              "timeoutMs": 30000
+            }
+          ]
+        }
+      ],
+      "sha256": "73826710fe65a6510ba4f6bbedcb4237194ed94a53c40bb14da017800f70713f",
+      "promptSha256ByTask": {
+        "task-tracker-cross-file": "f1e0424f863150f3938adb58a176b830bb41b0cfc0b98b3878c5baa2d4f17a0c",
+        "quiz-game-greenfield": "450395839616dd4ada175a1cf1f826c3f7b292754ccfbd7c0ed255866ef1b8e8",
+        "persistent-build-stage-1": "c2c6e21f9d89f57bbbbc642ed7edfdf5fe9c45cc74cc45b64fb9efb40f0b3945",
+        "persistent-build-stage-2": "86feb425bf46eab255e950577c1dc2688c7b295e41375a7661b808e0e7a36466",
+        "persistent-build-stage-3": "b2c3485e16eca909d9d2cc2bf0c2f46edfca32292186d0b6ad24777c10260183",
+        "switch-a-auth": "a3c4412574d7ba4906adfd23f84539ba1bc2bc5ee5bf58bc817045338c100194",
+        "switch-a-followup": "03e836540e2640d6a3d8d64bbe1c5e59bc83e247da355e483eddc3c848fc357a",
+        "switch-b-auth": "cfad4826b755985e461eddb6945bf2ffffc99d74c2a666c58d4e7a3ebdd78c0b",
+        "switch-b-followup": "2b5c63dc4286e42f3b63e6f69790a90d67e2e4aef9f6eb7e00814fa291dffa01",
+        "switch-c": "b1ab8d96d6d086967477b17a70d1d468246dea2cc011e4b081837613b58a656a",
+        "switch-a-return": "fee021e491b73e4bd5c7a7ae2d17e3a4d205cbc9b11233753290df32e0e6bcf3",
+        "long-tool-use-dashboard": "c92d74ec3c48cfe49cf34fe257b02c7ad61ef5c3e2176eb0368aaae08fee21ee"
+      }
+    },
+    "model": {
+      "provider": "openai",
+      "model": "gpt-5.6-luna",
+      "reasoningEffort": "low"
+    },
+    "controller": {
+      "provider": "local",
+      "model": "deterministic-node-controller",
+      "version": "issue-4.1",
+      "networkPolicy": "no benchmark-controller network access; harness policy is recorded per arm",
+      "role": "reset workspaces, launch arms, capture telemetry, run deterministic verifiers, and report results; never coach or judge"
+    },
+    "workspace": {
+      "dependencyMode": "symlink",
+      "timeoutMs": 900000
+    },
+    "repetitions": 1,
+    "ordering": "alternate",
+    "arms": [
+      {
+        "id": "cuppet",
+        "enabled": false,
+        "harnessVersion": "Cuppet derivative OpenCode 1.18.4; runtime version captured by arm result",
+        "telemetry": "result-file",
+        "model": {
+          "provider": "openai",
+          "model": "gpt-5.6-luna",
+          "reasoningEffort": "low",
+          "parity": "exact",
+          "notes": "Cuppet and OpenCode receive the same Luna/low model settings; Cuppet adds its native TST context and plugin architecture."
+        },
+        "command": {
+          "command": "node",
+          "args": [
+            "--import",
+            "tsx",
+            "{controllerRoot}/scripts/benchmark-arm.ts",
+            "--arm",
+            "{arm}",
+            "--workspace",
+            "{workspace}",
+            "--prompt-file",
+            "{promptFile}",
+            "--result-file",
+            "{resultFile}",
+            "--runtime-root",
+            "{runtimeRoot}",
+            "--task-id",
+            "{taskId}",
+            "--model",
+            "{model}",
+            "--provider",
+            "{provider}",
+            "--reasoning-effort",
+            "{reasoningEffort}",
+            "--timeout-ms",
+            "{timeoutMs}",
+            "--session-mode",
+            "{sessionMode}"
+          ]
+        },
+        "configSha256": "8566dee98e00343b1816c5da73e135449be6131ca47901950d218589d988dc66"
+      },
+      {
+        "id": "opencode",
+        "enabled": false,
+        "harnessVersion": "OpenCode 1.18.4 kernel; runtime version captured by arm result",
+        "telemetry": "result-file",
+        "model": {
+          "provider": "openai",
+          "model": "gpt-5.6-luna",
+          "reasoningEffort": "low",
+          "parity": "exact",
+          "notes": "OpenCode receives the same Luna/low model settings and the same task/verifier contract without Cuppet TST context."
+        },
+        "command": {
+          "command": "node",
+          "args": [
+            "--import",
+            "tsx",
+            "{controllerRoot}/scripts/benchmark-arm.ts",
+            "--arm",
+            "{arm}",
+            "--workspace",
+            "{workspace}",
+            "--prompt-file",
+            "{promptFile}",
+            "--result-file",
+            "{resultFile}",
+            "--runtime-root",
+            "{runtimeRoot}",
+            "--task-id",
+            "{taskId}",
+            "--model",
+            "{model}",
+            "--provider",
+            "{provider}",
+            "--reasoning-effort",
+            "{reasoningEffort}",
+            "--timeout-ms",
+            "{timeoutMs}",
+            "--session-mode",
+            "{sessionMode}"
+          ]
+        },
+        "configSha256": "709807407e28a96537986f76dc94b4e211dae97a487d81c6e5ed87495d70c264"
+      },
+      {
+        "id": "codex",
+        "enabled": false,
+        "harnessVersion": "Codex native exec CLI; version captured by arm result",
+        "telemetry": "result-file",
+        "model": {
+          "provider": "openai",
+          "model": "gpt-5.6-luna",
+          "reasoningEffort": "low",
+          "parity": "exact",
+          "notes": "Codex receives the same model and low reasoning setting through native exec flags; its native sandbox and orchestration remain harness-native."
+        },
+        "command": {
+          "command": "node",
+          "args": [
+            "--import",
+            "tsx",
+            "{controllerRoot}/scripts/benchmark-arm.ts",
+            "--arm",
+            "{arm}",
+            "--workspace",
+            "{workspace}",
+            "--prompt-file",
+            "{promptFile}",
+            "--result-file",
+            "{resultFile}",
+            "--runtime-root",
+            "{runtimeRoot}",
+            "--task-id",
+            "{taskId}",
+            "--model",
+            "{model}",
+            "--provider",
+            "{provider}",
+            "--reasoning-effort",
+            "{reasoningEffort}",
+            "--timeout-ms",
+            "{timeoutMs}",
+            "--session-mode",
+            "{sessionMode}"
+          ]
+        },
+        "configSha256": "d5bf766a71362bd1acb0f88fd14e6d04921e24b449c32bb3051f84e3179e2f59"
+      },
+      {
+        "id": "claude-code",
+        "enabled": false,
+        "harnessVersion": "Claude Code native print CLI; version captured by arm result",
+        "telemetry": "result-file",
+        "model": {
+          "provider": "anthropic",
+          "model": "sonnet",
+          "reasoningEffort": "low",
+          "parity": "product-comparison",
+          "notes": "Claude Code is wired through stream-json telemetry but does not expose the configured Luna model; enable only for an explicitly labeled end-to-end product comparison."
+        },
+        "command": {
+          "command": "node",
+          "args": [
+            "--import",
+            "tsx",
+            "{controllerRoot}/scripts/benchmark-arm.ts",
+            "--arm",
+            "{arm}",
+            "--workspace",
+            "{workspace}",
+            "--prompt-file",
+            "{promptFile}",
+            "--result-file",
+            "{resultFile}",
+            "--runtime-root",
+            "{runtimeRoot}",
+            "--task-id",
+            "{taskId}",
+            "--model",
+            "{model}",
+            "--provider",
+            "{provider}",
+            "--reasoning-effort",
+            "{reasoningEffort}",
+            "--timeout-ms",
+            "{timeoutMs}",
+            "--session-mode",
+            "{sessionMode}"
+          ]
+        },
+        "configSha256": "2abe18850ca00451e0ba7c9e674d814777fe2bdf3cb885d50f92718a48198fb8"
+      },
+      {
+        "id": "tura-direct",
+        "enabled": true,
+        "harnessVersion": "Tura 0.1.37; resolved from the installed arm at run time",
+        "telemetry": "result-file",
+        "model": {
+          "provider": "openai",
+          "model": "gpt-5.6-luna",
+          "reasoningEffort": "low",
+          "parity": "exact",
+          "notes": "Tura Direct receives the exact Luna/low model settings through native tura exec flags; no Cuppet context or controller history is injected."
+        },
+        "command": {
+          "command": "node",
+          "args": [
+            "--import",
+            "tsx",
+            "{controllerRoot}/scripts/tura-benchmark-arm.ts",
+            "--workspace",
+            "{workspace}",
+            "--prompt-file",
+            "{promptFile}",
+            "--result-file",
+            "{resultFile}",
+            "--runtime-root",
+            "{runtimeRoot}",
+            "--task-id",
+            "{taskId}",
+            "--model",
+            "{model}",
+            "--provider",
+            "{provider}",
+            "--reasoning-effort",
+            "{reasoningEffort}",
+            "--timeout-ms",
+            "{timeoutMs}",
+            "--session-mode",
+            "{sessionMode}"
+          ]
+        },
+        "configSha256": "43df1604057121657463dbcbbfeb6bb9b434e5db3e05281ff001b7cbc7ef18f9"
+      }
+    ],
+    "resolvedAt": "2026-09-06T09:18:51.552Z",
+    "environment": {
+      "NODE_VERSION": "v22.21.0",
+      "PLATFORM": "darwin",
+      "ARCH": "arm64",
+      "LANG": "C.UTF-8",
+      "LC_ALL": "C.UTF-8"
+    },
+    "manifestSha256": "eb88cd976a4e449390e667f4e3f3be1fce558f12d2739c8dd871427f645a0dea"
+  },
+  "runRoot": "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A",
+  "taskResults": [
+    {
+      "arm": "tura-direct",
+      "taskId": "task-tracker-cross-file",
+      "repeat": 1,
+      "sessionMode": "persistent",
+      "workspace": "<removed after evaluation>",
+      "promptSha256": "f1e0424f863150f3938adb58a176b830bb41b0cfc0b98b3878c5baa2d4f17a0c",
+      "run": {
+        "schema": 1,
+        "arm": "tura-direct",
+        "taskId": "task-tracker-cross-file",
+        "harnessVersion": "0.1.37",
+        "sessionId": "tura-direct-53053c0c9325249fd320",
+        "startedAt": "2026-09-06T09:18:53.057Z",
+        "completedAt": "2026-09-06T09:20:41.887Z",
+        "durationMs": 108828,
+        "success": true,
+        "attempts": 1,
+        "firstAttemptSuccess": true,
+        "retries": 0,
+        "usage": {
+          "inputTokens": 311689,
+          "cachedInputTokens": 217856,
+          "uncachedInputTokens": 93833,
+          "outputTokens": 3418,
+          "reasoningTokens": 340,
+          "totalModelTokens": 97591,
+          "effectiveCost": null
+        },
+        "toolCalls": 4,
+        "compactions": 0,
+        "regressions": 0,
+        "permissionRequests": 0,
+        "rejectedPermissions": 0,
+        "telemetry": {
+          "source": "tura-jsonl",
+          "complete": true,
+          "eventCount": 9
+        },
+        "model": {
+          "provider": "openai",
+          "model": "gpt-5.6-luna",
+          "reasoningEffort": "low"
+        },
+        "parity": {
+          "status": "exact",
+          "notes": "Tura Direct receives the exact Luna/low model settings through native tura exec flags; no Cuppet context or controller history is injected."
+        },
+        "finalMessage": "Implemented the Task Tracker changes.\n\n- Renamed `dueDate` to `deadline` throughout `games/task-tracker/`.\n- Replaced `--due-date` with `--deadline`.\n- Made `Task.priority` required with `low`, `normal`, and `high` values.\n- Defaulted new tasks to `normal` and rejected invalid priorities.\n- Preserved indexed `--status`, `--priority`, and `--tag` filters.\n- Added deadline validation for malformed and past dates.\n- Fixed deadline propagation in the store and refreshed indexes after updates.\n- Preserved existing named exports and root task-tracker scripts.\n\nChanged files include:\n- `games/task-tracker/src/core/task.ts:7-43`\n- `games/task-tracker/src/core/taskFactory.ts:1-18`\n- `games/task-tracker/src/cli/parser.ts:4-34`\n- `games/task-tracker/src/cli/commands.ts:9-33`\n- `games/task-tracker/src/cli/main.ts:5-12`\n- `games/task-tracker/src/store/taskStore.ts:1-59`\n- `games/task-tracker/src/store/taskIndex.ts:1-43`\n- `games/task-tracker/src/format/display.ts:3-11`\n- `games/task-tracker/src/format/compact.ts:3-6`\n- `games/task-tracker/test/fixtures.ts`\n- `games/task-tracker/test/task-tracker.test.ts`\n\nRequested checks:\n- `npm run task-tracker:test` — passed\n- `npm run task-tracker:typecheck` — passed\n- `npm run task-tracker:run -- --help` — passed and shows `--deadline` plus all three list filters\n\nConclusion: the seeded Task Tracker fixture now follows the requested CLI → API → query → store/index behavior.",
+        "verification": [
+          {
+            "id": "task-tracker-hidden-contract",
+            "command": "node",
+            "args": [
+              "--import",
+              "tsx",
+              "/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts",
+              "--task",
+              "task-tracker-cross-file",
+              "--workspace",
+              "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct"
+            ],
+            "passed": false,
+            "exitCode": 1,
+            "stdout": "",
+            "stderr": "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct/games/task-tracker/src/core/taskFactory.ts:6\n  if (!result.valid) throw new Error(result.errors.join('; '))\n                           ^\n\nError: priority must be low, normal, or high\n    at Module.buildTask (/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct/games/task-tracker/src/core/taskFactory.ts:6:28)\n    at verifyTaskTracker (/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts:50:25)\n    at async <anonymous> (/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts:7:1)\n\nNode.js v22.21.0\n",
+            "durationMs": 377
+          },
+          {
+            "id": "task-tracker-tests",
+            "command": "npm",
+            "args": [
+              "run",
+              "task-tracker:test"
+            ],
+            "passed": true,
+            "exitCode": 0,
+            "stdout": "\n> cuppet-monorepo@0.2.0-alpha.2 task-tracker:test\n> node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n[PASS] validate accepts a well-formed future due date and priority\n[PASS] validate rejects malformed dates and invalid priorities\n[PASS] store supports create, read, update, and delete\n[PASS] API handlers create and list tasks\n[PASS] CLI parser and command formatter work together\n[PASS] indexed filters select status and tags\n[PASS] store preserves due dates and refreshes indexes after updates\n",
+            "stderr": "",
+            "durationMs": 1074
+          },
+          {
+            "id": "task-tracker-typecheck",
+            "command": "npm",
+            "args": [
+              "run",
+              "task-tracker:typecheck"
+            ],
+            "passed": true,
+            "exitCode": 0,
+            "stdout": "\n> cuppet-monorepo@0.2.0-alpha.2 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\n",
+            "stderr": "",
+            "durationMs": 1354
+          },
+          {
+            "id": "task-tracker-help",
+            "command": "npm",
+            "args": [
+              "run",
+              "task-tracker:run",
+              "--",
+              "--help"
+            ],
+            "passed": true,
+            "exitCode": 0,
+            "stdout": "\n> cuppet-monorepo@0.2.0-alpha.2 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\nTask Tracker CLI\n\nUsage:\n  task-tracker add <title> [--deadline ISO] [--priority low|normal|high]\n  task-tracker list [--status STATUS] [--priority PRIORITY] [--tag TAG]\n  task-tracker show <id>\n  task-tracker done <id>\n\n",
+            "stderr": "",
+            "durationMs": 1071
+          }
+        ],
+        "error": "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct/games/task-tracker/src/core/taskFactory.ts:6\n  if (!result.valid) throw new Error(result.errors.join('; '))\n                           ^\n\nError: priority must be low, normal, or high\n    at Module.buildTask (/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct/games/task-tracker/src/core/taskFactory.ts:6:28)\n    at verifyTaskTracker (/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts:50:25)\n    at async <anonymous> (/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts:7:1)\n\nNode.js v22.21.0"
+      },
+      "verification": [
+        {
+          "id": "task-tracker-hidden-contract",
+          "command": "node",
+          "args": [
+            "--import",
+            "tsx",
+            "/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts",
+            "--task",
+            "task-tracker-cross-file",
+            "--workspace",
+            "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct"
+          ],
+          "passed": false,
+          "exitCode": 1,
+          "stdout": "",
+          "stderr": "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct/games/task-tracker/src/core/taskFactory.ts:6\n  if (!result.valid) throw new Error(result.errors.join('; '))\n                           ^\n\nError: priority must be low, normal, or high\n    at Module.buildTask (/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct/games/task-tracker/src/core/taskFactory.ts:6:28)\n    at verifyTaskTracker (/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts:50:25)\n    at async <anonymous> (/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts:7:1)\n\nNode.js v22.21.0\n",
+          "durationMs": 377
+        },
+        {
+          "id": "task-tracker-tests",
+          "command": "npm",
+          "args": [
+            "run",
+            "task-tracker:test"
+          ],
+          "passed": true,
+          "exitCode": 0,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.2 task-tracker:test\n> node --import tsx games/task-tracker/test/task-tracker.test.ts\n\n[PASS] validate accepts a well-formed future due date and priority\n[PASS] validate rejects malformed dates and invalid priorities\n[PASS] store supports create, read, update, and delete\n[PASS] API handlers create and list tasks\n[PASS] CLI parser and command formatter work together\n[PASS] indexed filters select status and tags\n[PASS] store preserves due dates and refreshes indexes after updates\n",
+          "stderr": "",
+          "durationMs": 1074
+        },
+        {
+          "id": "task-tracker-typecheck",
+          "command": "npm",
+          "args": [
+            "run",
+            "task-tracker:typecheck"
+          ],
+          "passed": true,
+          "exitCode": 0,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.2 task-tracker:typecheck\n> tsc --noEmit --project games/task-tracker/tsconfig.json\n\n",
+          "stderr": "",
+          "durationMs": 1354
+        },
+        {
+          "id": "task-tracker-help",
+          "command": "npm",
+          "args": [
+            "run",
+            "task-tracker:run",
+            "--",
+            "--help"
+          ],
+          "passed": true,
+          "exitCode": 0,
+          "stdout": "\n> cuppet-monorepo@0.2.0-alpha.2 task-tracker:run\n> node --import tsx games/task-tracker/src/cli/main.ts --help\n\nTask Tracker CLI\n\nUsage:\n  task-tracker add <title> [--deadline ISO] [--priority low|normal|high]\n  task-tracker list [--status STATUS] [--priority PRIORITY] [--tag TAG]\n  task-tracker show <id>\n  task-tracker done <id>\n\n",
+          "stderr": "",
+          "durationMs": 1071
+        }
+      ],
+      "acceptanceScore": 0.75,
+      "success": false,
+      "changedFiles": [
+        "games/task-tracker/src/cli/commands.ts",
+        "games/task-tracker/src/cli/main.ts",
+        "games/task-tracker/src/cli/parser.ts",
+        "games/task-tracker/src/core/task.ts",
+        "games/task-tracker/src/core/taskFactory.ts",
+        "games/task-tracker/src/format/compact.ts",
+        "games/task-tracker/src/format/display.ts",
+        "games/task-tracker/src/store/taskIndex.ts",
+        "games/task-tracker/src/store/taskStore.ts",
+        "games/task-tracker/test/fixtures.ts",
+        "games/task-tracker/test/task-tracker.test.ts",
+        "projects/"
+      ],
+      "gitDiffStat": "games/task-tracker/src/cli/commands.ts       |  2 +-\n games/task-tracker/src/cli/main.ts           |  2 +-\n games/task-tracker/src/cli/parser.ts         |  8 ++++----\n games/task-tracker/src/core/task.ts          | 18 +++++++++---------\n games/task-tracker/src/core/taskFactory.ts   |  5 +++--\n games/task-tracker/src/format/compact.ts     |  4 ++--\n games/task-tracker/src/format/display.ts     |  6 +++---\n games/task-tracker/src/store/taskIndex.ts    |  2 +-\n games/task-tracker/src/store/taskStore.ts    |  9 ++++++---\n games/task-tracker/test/fixtures.ts          |  2 +-\n games/task-tracker/test/task-tracker.test.ts |  8 ++++----\n 11 files changed, 35 insertions(+), 31 deletions(-)",
+      "completedAt": "2026-09-06T09:41:19.607Z",
+      "error": "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct/games/task-tracker/src/core/taskFactory.ts:6\n  if (!result.valid) throw new Error(result.errors.join('; '))\n                           ^\n\nError: priority must be low, normal, or high\n    at Module.buildTask (/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct/games/task-tracker/src/core/taskFactory.ts:6:28)\n    at verifyTaskTracker (/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts:50:25)\n    at async <anonymous> (/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts:7:1)\n\nNode.js v22.21.0"
+    },
+    {
+      "arm": "tura-direct",
+      "taskId": "quiz-game-greenfield",
+      "repeat": 1,
+      "sessionMode": "persistent",
+      "workspace": "<removed after evaluation>",
+      "promptSha256": "450395839616dd4ada175a1cf1f826c3f7b292754ccfbd7c0ed255866ef1b8e8",
+      "run": {
+        "schema": 1,
+        "arm": "tura-direct",
+        "taskId": "quiz-game-greenfield",
+        "harnessVersion": "0.1.37",
+        "sessionId": "tura-direct-53053c0c9325249fd320",
+        "startedAt": "2026-09-06T09:20:41.887Z",
+        "completedAt": "2026-09-06T09:23:00.998Z",
+        "durationMs": 139111,
+        "success": true,
+        "attempts": 1,
+        "firstAttemptSuccess": true,
+        "retries": 0,
+        "usage": {
+          "inputTokens": 632348,
+          "cachedInputTokens": 436992,
+          "uncachedInputTokens": 195356,
+          "outputTokens": 8937,
+          "reasoningTokens": 806,
+          "totalModelTokens": 205099,
+          "effectiveCost": null
+        },
+        "toolCalls": 7,
+        "compactions": 0,
+        "regressions": 0,
+        "permissionRequests": 0,
+        "rejectedPermissions": 0,
+        "telemetry": {
+          "source": "tura-jsonl",
+          "complete": true,
+          "eventCount": 8
+        },
+        "model": {
+          "provider": "openai",
+          "model": "gpt-5.6-luna",
+          "reasoningEffort": "low"
+        },
+        "parity": {
+          "status": "exact",
+          "notes": "Tura Direct receives the exact Luna/low model settings through native tura exec flags; no Cuppet context or controller history is injected."
+        },
+        "finalMessage": "Built the complete local quiz game in:\n\n`/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct/projects/quiz-game/`\n\nFiles created:\n- `index.html`\n- `styles.css`\n- `app.js`\n- `README.md`\n\nIncluded:\n- Start screen\n- Five local multiple-choice questions\n- One-question-at-a-time flow\n- Accessible answer controls and focus styles\n- Correct/incorrect feedback\n- Progress indicator\n- Live score tracking\n- Locked answers to prevent double scoring\n- Next-question flow\n- Final results screen\n- Restart flow\n- Responsive layout\n- Reduced-motion support\n- No dependencies, network requests, or remote assets\n\nState transitions were inspected and confirmed:\n\n`start → quiz → feedback/locked → next question → results → restart`\n\nChecks passed:\n- `node --check projects/quiz-game/app.js`\n- Confirmed five local questions\n- Confirmed answer locking and restart transitions\n- Confirmed no remote asset references\n- Confirmed only the four requested files exist in `projects/quiz-game`\n\nOpen the game directly at:\n\n`/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct/projects/quiz-game/index.html`",
+        "verification": [
+          {
+            "id": "quiz-game-hidden-contract",
+            "command": "node",
+            "args": [
+              "--import",
+              "tsx",
+              "/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts",
+              "--task",
+              "quiz-game-greenfield",
+              "--workspace",
+              "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct"
+            ],
+            "passed": false,
+            "exitCode": 1,
+            "stdout": "",
+            "stderr": "node:internal/modules/run_main:123\n    triggerUncaughtException(\n    ^\n\nAssertionError [ERR_ASSERTION]: quiz-game has too few local records\n    at verifyWebProject (/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts:85:10)\n    at async <anonymous> (/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts:7:1) {\n  generatedMessage: false,\n  code: 'ERR_ASSERTION',\n  actual: false,\n  expected: true,\n  operator: '==',\n  diff: 'simple'\n}\n\nNode.js v22.21.0\n",
+            "durationMs": 242
+          }
+        ],
+        "error": "node:internal/modules/run_main:123\n    triggerUncaughtException(\n    ^\n\nAssertionError [ERR_ASSERTION]: quiz-game has too few local records\n    at verifyWebProject (/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts:85:10)\n    at async <anonymous> (/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts:7:1) {\n  generatedMessage: false,\n  code: 'ERR_ASSERTION',\n  actual: false,\n  expected: true,\n  operator: '==',\n  diff: 'simple'\n}\n\nNode.js v22.21.0"
+      },
+      "verification": [
+        {
+          "id": "quiz-game-hidden-contract",
+          "command": "node",
+          "args": [
+            "--import",
+            "tsx",
+            "/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts",
+            "--task",
+            "quiz-game-greenfield",
+            "--workspace",
+            "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct"
+          ],
+          "passed": false,
+          "exitCode": 1,
+          "stdout": "",
+          "stderr": "node:internal/modules/run_main:123\n    triggerUncaughtException(\n    ^\n\nAssertionError [ERR_ASSERTION]: quiz-game has too few local records\n    at verifyWebProject (/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts:85:10)\n    at async <anonymous> (/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts:7:1) {\n  generatedMessage: false,\n  code: 'ERR_ASSERTION',\n  actual: false,\n  expected: true,\n  operator: '==',\n  diff: 'simple'\n}\n\nNode.js v22.21.0\n",
+          "durationMs": 242
+        }
+      ],
+      "acceptanceScore": 0,
+      "success": false,
+      "changedFiles": [
+        "games/task-tracker/src/cli/commands.ts",
+        "games/task-tracker/src/cli/main.ts",
+        "games/task-tracker/src/cli/parser.ts",
+        "games/task-tracker/src/core/task.ts",
+        "games/task-tracker/src/core/taskFactory.ts",
+        "games/task-tracker/src/format/compact.ts",
+        "games/task-tracker/src/format/display.ts",
+        "games/task-tracker/src/store/taskIndex.ts",
+        "games/task-tracker/src/store/taskStore.ts",
+        "games/task-tracker/test/fixtures.ts",
+        "games/task-tracker/test/task-tracker.test.ts",
+        "projects/"
+      ],
+      "gitDiffStat": "games/task-tracker/src/cli/commands.ts       |  2 +-\n games/task-tracker/src/cli/main.ts           |  2 +-\n games/task-tracker/src/cli/parser.ts         |  8 ++++----\n games/task-tracker/src/core/task.ts          | 18 +++++++++---------\n games/task-tracker/src/core/taskFactory.ts   |  5 +++--\n games/task-tracker/src/format/compact.ts     |  4 ++--\n games/task-tracker/src/format/display.ts     |  6 +++---\n games/task-tracker/src/store/taskIndex.ts    |  2 +-\n games/task-tracker/src/store/taskStore.ts    |  9 ++++++---\n games/task-tracker/test/fixtures.ts          |  2 +-\n games/task-tracker/test/task-tracker.test.ts |  8 ++++----\n 11 files changed, 35 insertions(+), 31 deletions(-)",
+      "completedAt": "2026-09-06T09:41:19.639Z",
+      "error": "node:internal/modules/run_main:123\n    triggerUncaughtException(\n    ^\n\nAssertionError [ERR_ASSERTION]: quiz-game has too few local records\n    at verifyWebProject (/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts:85:10)\n    at async <anonymous> (/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts:7:1) {\n  generatedMessage: false,\n  code: 'ERR_ASSERTION',\n  actual: false,\n  expected: true,\n  operator: '==',\n  diff: 'simple'\n}\n\nNode.js v22.21.0"
+    },
+    {
+      "arm": "tura-direct",
+      "taskId": "persistent-build-stage-1",
+      "repeat": 1,
+      "sessionMode": "persistent",
+      "workspace": "<removed after evaluation>",
+      "promptSha256": "c2c6e21f9d89f57bbbbc642ed7edfdf5fe9c45cc74cc45b64fb9efb40f0b3945",
+      "run": {
+        "schema": 1,
+        "arm": "tura-direct",
+        "taskId": "persistent-build-stage-1",
+        "harnessVersion": "0.1.37",
+        "sessionId": "tura-direct-53053c0c9325249fd320",
+        "startedAt": "2026-09-06T09:23:00.999Z",
+        "completedAt": "2026-09-06T09:25:00.358Z",
+        "durationMs": 119359,
+        "success": true,
+        "attempts": 1,
+        "firstAttemptSuccess": true,
+        "retries": 0,
+        "usage": {
+          "inputTokens": 987184,
+          "cachedInputTokens": 749312,
+          "uncachedInputTokens": 237872,
+          "outputTokens": 13430,
+          "reasoningTokens": 851,
+          "totalModelTokens": 252153,
+          "effectiveCost": null
+        },
+        "toolCalls": 10,
+        "compactions": 0,
+        "regressions": 0,
+        "permissionRequests": 0,
+        "rejectedPermissions": 0,
+        "telemetry": {
+          "source": "tura-jsonl",
+          "complete": true,
+          "eventCount": 8
+        },
+        "model": {
+          "provider": "openai",
+          "model": "gpt-5.6-luna",
+          "reasoningEffort": "low"
+        },
+        "parity": {
+          "status": "exact",
+          "notes": "Tura Direct receives the exact Luna/low model settings through native tura exec flags; no Cuppet context or controller history is injected."
+        },
+        "finalMessage": "Built stage 1 of the local Mini CRM in:\n\n`/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct/projects/mini-crm/`\n\nCreated:\n- `index.html`\n- `styles.css`\n- `app.js`\n- `README.md`\n\nIncluded:\n- Semantic app shell and navigation\n- Contact form with required name and email fields\n- Three local seed contacts\n- Contact list with initials, names, email links, and contact count\n- Add-contact interaction with live list and count updates\n- Responsive layout and keyboard focus states\n- No dependencies, network access, or remote assets\n\nChecks passed:\n- `node --check projects/mini-crm/app.js`\n- Confirmed required semantic/form/list elements\n- Confirmed local seed data and add flow\n- Confirmed no network references\n- Confirmed only the four requested files exist in `projects/mini-crm/`\n\nRun it by opening:\n\n`/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct/projects/mini-crm/index.html`",
+        "verification": [
+          {
+            "id": "persistent-stage-1",
+            "command": "node",
+            "args": [
+              "--import",
+              "tsx",
+              "/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts",
+              "--task",
+              "persistent-build-stage-1",
+              "--workspace",
+              "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct"
+            ],
+            "passed": true,
+            "exitCode": 0,
+            "stdout": "VERIFIER-OK persistent-build-stage-1\n",
+            "stderr": "",
+            "durationMs": 222
+          }
+        ]
+      },
+      "verification": [
+        {
+          "id": "persistent-stage-1",
+          "command": "node",
+          "args": [
+            "--import",
+            "tsx",
+            "/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts",
+            "--task",
+            "persistent-build-stage-1",
+            "--workspace",
+            "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct"
+          ],
+          "passed": true,
+          "exitCode": 0,
+          "stdout": "VERIFIER-OK persistent-build-stage-1\n",
+          "stderr": "",
+          "durationMs": 222
+        }
+      ],
+      "acceptanceScore": 1,
+      "success": true,
+      "changedFiles": [
+        "games/task-tracker/src/cli/commands.ts",
+        "games/task-tracker/src/cli/main.ts",
+        "games/task-tracker/src/cli/parser.ts",
+        "games/task-tracker/src/core/task.ts",
+        "games/task-tracker/src/core/taskFactory.ts",
+        "games/task-tracker/src/format/compact.ts",
+        "games/task-tracker/src/format/display.ts",
+        "games/task-tracker/src/store/taskIndex.ts",
+        "games/task-tracker/src/store/taskStore.ts",
+        "games/task-tracker/test/fixtures.ts",
+        "games/task-tracker/test/task-tracker.test.ts",
+        "projects/"
+      ],
+      "gitDiffStat": "games/task-tracker/src/cli/commands.ts       |  2 +-\n games/task-tracker/src/cli/main.ts           |  2 +-\n games/task-tracker/src/cli/parser.ts         |  8 ++++----\n games/task-tracker/src/core/task.ts          | 18 +++++++++---------\n games/task-tracker/src/core/taskFactory.ts   |  5 +++--\n games/task-tracker/src/format/compact.ts     |  4 ++--\n games/task-tracker/src/format/display.ts     |  6 +++---\n games/task-tracker/src/store/taskIndex.ts    |  2 +-\n games/task-tracker/src/store/taskStore.ts    |  9 ++++++---\n games/task-tracker/test/fixtures.ts          |  2 +-\n games/task-tracker/test/task-tracker.test.ts |  8 ++++----\n 11 files changed, 35 insertions(+), 31 deletions(-)",
+      "completedAt": "2026-09-06T09:41:19.672Z"
+    },
+    {
+      "arm": "tura-direct",
+      "taskId": "persistent-build-stage-2",
+      "repeat": 1,
+      "sessionMode": "persistent",
+      "workspace": "<removed after evaluation>",
+      "promptSha256": "86feb425bf46eab255e950577c1dc2688c7b295e41375a7661b808e0e7a36466",
+      "run": {
+        "schema": 1,
+        "arm": "tura-direct",
+        "taskId": "persistent-build-stage-2",
+        "harnessVersion": "0.1.37",
+        "sessionId": "tura-direct-53053c0c9325249fd320",
+        "startedAt": "2026-09-06T09:25:00.359Z",
+        "completedAt": "2026-09-06T09:28:28.266Z",
+        "durationMs": 207908,
+        "success": true,
+        "attempts": 1,
+        "firstAttemptSuccess": true,
+        "retries": 0,
+        "usage": {
+          "inputTokens": 1600482,
+          "cachedInputTokens": 1349888,
+          "uncachedInputTokens": 250594,
+          "outputTokens": 15917,
+          "reasoningTokens": 1002,
+          "totalModelTokens": 267513,
+          "effectiveCost": null
+        },
+        "toolCalls": 17,
+        "compactions": 0,
+        "regressions": 0,
+        "permissionRequests": 0,
+        "rejectedPermissions": 0,
+        "telemetry": {
+          "source": "tura-jsonl",
+          "complete": true,
+          "eventCount": 10
+        },
+        "model": {
+          "provider": "openai",
+          "model": "gpt-5.6-luna",
+          "reasoningEffort": "low"
+        },
+        "parity": {
+          "status": "exact",
+          "notes": "Tura Direct receives the exact Luna/low model settings through native tura exec flags; no Cuppet context or controller history is injected."
+        },
+        "finalMessage": "Completed stage 2 of `projects/mini-crm`.\n\nAdded:\n- Create contacts\n- Edit contacts\n- Delete contacts with confirmation\n- Search by name or email\n- Favorite/unfavorite contacts\n- `localStorage` persistence\n- Edit cancellation flow\n- Empty search state\n- Accessible action labels and focus states\n\nPreserved:\n- Existing semantic shell and layout\n- Local-only, dependency-free implementation\n- Four-file project structure\n- Seed data on first run\n- No unrelated files modified\n\nFiles:\n- `/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct/projects/mini-crm/index.html`\n- `/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct/projects/mini-crm/styles.css`\n- `/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct/projects/mini-crm/app.js`\n- `/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct/projects/mini-crm/README.md`\n\nChecks passed:\n- `node --check projects/mini-crm/app.js`\n- Confirmed create, edit, delete, search, favorite, and `localStorage` behavior hooks\n- Confirmed required CSS hooks are present\n- Confirmed no network references\n- Confirmed only the intended project files are present\n\nRun locally by opening:\n\n`/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct/projects/mini-crm/index.html`",
+        "verification": [
+          {
+            "id": "persistent-stage-2",
+            "command": "node",
+            "args": [
+              "--import",
+              "tsx",
+              "/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts",
+              "--task",
+              "persistent-build-stage-2",
+              "--workspace",
+              "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct"
+            ],
+            "passed": true,
+            "exitCode": 0,
+            "stdout": "VERIFIER-OK persistent-build-stage-2\n",
+            "stderr": "",
+            "durationMs": 352
+          }
+        ]
+      },
+      "verification": [
+        {
+          "id": "persistent-stage-2",
+          "command": "node",
+          "args": [
+            "--import",
+            "tsx",
+            "/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts",
+            "--task",
+            "persistent-build-stage-2",
+            "--workspace",
+            "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct"
+          ],
+          "passed": true,
+          "exitCode": 0,
+          "stdout": "VERIFIER-OK persistent-build-stage-2\n",
+          "stderr": "",
+          "durationMs": 352
+        }
+      ],
+      "acceptanceScore": 1,
+      "success": true,
+      "changedFiles": [
+        "games/task-tracker/src/cli/commands.ts",
+        "games/task-tracker/src/cli/main.ts",
+        "games/task-tracker/src/cli/parser.ts",
+        "games/task-tracker/src/core/task.ts",
+        "games/task-tracker/src/core/taskFactory.ts",
+        "games/task-tracker/src/format/compact.ts",
+        "games/task-tracker/src/format/display.ts",
+        "games/task-tracker/src/store/taskIndex.ts",
+        "games/task-tracker/src/store/taskStore.ts",
+        "games/task-tracker/test/fixtures.ts",
+        "games/task-tracker/test/task-tracker.test.ts",
+        "projects/"
+      ],
+      "gitDiffStat": "games/task-tracker/src/cli/commands.ts       |  2 +-\n games/task-tracker/src/cli/main.ts           |  2 +-\n games/task-tracker/src/cli/parser.ts         |  8 ++++----\n games/task-tracker/src/core/task.ts          | 18 +++++++++---------\n games/task-tracker/src/core/taskFactory.ts   |  5 +++--\n games/task-tracker/src/format/compact.ts     |  4 ++--\n games/task-tracker/src/format/display.ts     |  6 +++---\n games/task-tracker/src/store/taskIndex.ts    |  2 +-\n games/task-tracker/src/store/taskStore.ts    |  9 ++++++---\n games/task-tracker/test/fixtures.ts          |  2 +-\n games/task-tracker/test/task-tracker.test.ts |  8 ++++----\n 11 files changed, 35 insertions(+), 31 deletions(-)",
+      "completedAt": "2026-09-06T09:41:19.700Z"
+    },
+    {
+      "arm": "tura-direct",
+      "taskId": "persistent-build-stage-3",
+      "repeat": 1,
+      "sessionMode": "persistent",
+      "workspace": "<removed after evaluation>",
+      "promptSha256": "b2c3485e16eca909d9d2cc2bf0c2f46edfca32292186d0b6ad24777c10260183",
+      "run": {
+        "schema": 1,
+        "arm": "tura-direct",
+        "taskId": "persistent-build-stage-3",
+        "harnessVersion": "0.1.37",
+        "sessionId": "tura-direct-53053c0c9325249fd320",
+        "startedAt": "2026-09-06T09:28:28.268Z",
+        "completedAt": "2026-09-06T09:29:55.814Z",
+        "durationMs": 87547,
+        "success": true,
+        "attempts": 1,
+        "firstAttemptSuccess": true,
+        "retries": 0,
+        "usage": {
+          "inputTokens": 1812640,
+          "cachedInputTokens": 1531392,
+          "uncachedInputTokens": 281248,
+          "outputTokens": 18154,
+          "reasoningTokens": 1229,
+          "totalModelTokens": 300631,
+          "effectiveCost": null
+        },
+        "toolCalls": 19,
+        "compactions": 0,
+        "regressions": 0,
+        "permissionRequests": 0,
+        "rejectedPermissions": 0,
+        "telemetry": {
+          "source": "tura-jsonl",
+          "complete": true,
+          "eventCount": 8
+        },
+        "model": {
+          "provider": "openai",
+          "model": "gpt-5.6-luna",
+          "reasoningEffort": "low"
+        },
+        "parity": {
+          "status": "exact",
+          "notes": "Tura Direct receives the exact Luna/low model settings through native tura exec flags; no Cuppet context or controller history is injected."
+        },
+        "finalMessage": "Finished and reviewed the existing Mini CRM flow.\n\nInspected:\n- `projects/mini-crm/index.html`\n- `projects/mini-crm/app.js`\n- `projects/mini-crm/styles.css`\n- `projects/mini-crm/README.md`\n\nFixed and confirmed:\n- CRUD behavior remains available\n- Search by name and email remains functional\n- Favorite toggling persists\n- `localStorage` load/save behavior remains functional\n- Storage failures degrade gracefully to session-only changes\n- Edit and cancel-edit states remain usable\n- Delete confirmation remains available\n- Empty-state messaging covers both no contacts and no search matches\n- Visible keyboard focus styles for navigation, inputs, links, form controls, and row actions\n- Corrected the contact-row grid regression caused by the added action controls\n- Responsive desktop, tablet, and mobile layout rules remain present\n- No dependencies or network references were added\n- No unrelated files were modified\n\nChecks run:\n- `node --check projects/mini-crm/app.js` — passed\n- Static flow and hook check — passed\n- Focus-style and responsive-rule check — passed\n- Network-reference scan — passed; none found\n- Project file-scope check — only these files are present:\n  - `projects/mini-crm/index.html`\n  - `projects/mini-crm/styles.css`\n  - `projects/mini-crm/app.js`\n  - `projects/mini-crm/README.md`\n\nThe project remains runnable by opening:\n\n`/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct/projects/mini-crm/index.html`",
+        "verification": [
+          {
+            "id": "persistent-stage-3",
+            "command": "node",
+            "args": [
+              "--import",
+              "tsx",
+              "/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts",
+              "--task",
+              "persistent-build-stage-3",
+              "--workspace",
+              "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct"
+            ],
+            "passed": true,
+            "exitCode": 0,
+            "stdout": "VERIFIER-OK persistent-build-stage-3\n",
+            "stderr": "",
+            "durationMs": 335
+          }
+        ]
+      },
+      "verification": [
+        {
+          "id": "persistent-stage-3",
+          "command": "node",
+          "args": [
+            "--import",
+            "tsx",
+            "/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts",
+            "--task",
+            "persistent-build-stage-3",
+            "--workspace",
+            "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct"
+          ],
+          "passed": true,
+          "exitCode": 0,
+          "stdout": "VERIFIER-OK persistent-build-stage-3\n",
+          "stderr": "",
+          "durationMs": 335
+        }
+      ],
+      "acceptanceScore": 1,
+      "success": true,
+      "changedFiles": [
+        "games/task-tracker/src/cli/commands.ts",
+        "games/task-tracker/src/cli/main.ts",
+        "games/task-tracker/src/cli/parser.ts",
+        "games/task-tracker/src/core/task.ts",
+        "games/task-tracker/src/core/taskFactory.ts",
+        "games/task-tracker/src/format/compact.ts",
+        "games/task-tracker/src/format/display.ts",
+        "games/task-tracker/src/store/taskIndex.ts",
+        "games/task-tracker/src/store/taskStore.ts",
+        "games/task-tracker/test/fixtures.ts",
+        "games/task-tracker/test/task-tracker.test.ts",
+        "projects/"
+      ],
+      "gitDiffStat": "games/task-tracker/src/cli/commands.ts       |  2 +-\n games/task-tracker/src/cli/main.ts           |  2 +-\n games/task-tracker/src/cli/parser.ts         |  8 ++++----\n games/task-tracker/src/core/task.ts          | 18 +++++++++---------\n games/task-tracker/src/core/taskFactory.ts   |  5 +++--\n games/task-tracker/src/format/compact.ts     |  4 ++--\n games/task-tracker/src/format/display.ts     |  6 +++---\n games/task-tracker/src/store/taskIndex.ts    |  2 +-\n games/task-tracker/src/store/taskStore.ts    |  9 ++++++---\n games/task-tracker/test/fixtures.ts          |  2 +-\n games/task-tracker/test/task-tracker.test.ts |  8 ++++----\n 11 files changed, 35 insertions(+), 31 deletions(-)",
+      "completedAt": "2026-09-06T09:41:19.730Z"
+    },
+    {
+      "arm": "tura-direct",
+      "taskId": "switch-a-auth",
+      "repeat": 1,
+      "sessionMode": "persistent",
+      "workspace": "<removed after evaluation>",
+      "promptSha256": "a3c4412574d7ba4906adfd23f84539ba1bc2bc5ee5bf58bc817045338c100194",
+      "run": {
+        "schema": 1,
+        "arm": "tura-direct",
+        "taskId": "switch-a-auth",
+        "harnessVersion": "0.1.37",
+        "sessionId": "tura-direct-53053c0c9325249fd320",
+        "startedAt": "2026-09-06T09:29:55.815Z",
+        "completedAt": "2026-09-06T09:31:00.821Z",
+        "durationMs": 65006,
+        "success": true,
+        "attempts": 1,
+        "firstAttemptSuccess": true,
+        "retries": 0,
+        "usage": {
+          "inputTokens": 1912949,
+          "cachedInputTokens": 1641472,
+          "uncachedInputTokens": 271477,
+          "outputTokens": 17446,
+          "reasoningTokens": 1202,
+          "totalModelTokens": 290125,
+          "effectiveCost": null
+        },
+        "toolCalls": 20,
+        "compactions": 0,
+        "regressions": 0,
+        "permissionRequests": 0,
+        "rejectedPermissions": 0,
+        "telemetry": {
+          "source": "tura-jsonl",
+          "complete": true,
+          "eventCount": 8
+        },
+        "model": {
+          "provider": "openai",
+          "model": "gpt-5.6-luna",
+          "reasoningEffort": "low"
+        },
+        "parity": {
+          "status": "exact",
+          "notes": "Tura Direct receives the exact Luna/low model settings through native tura exec flags; no Cuppet context or controller history is injected."
+        },
+        "finalMessage": "Created:\n\n`/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct/projects/discontinuity-auth/README.md`\n\nThe note covers:\n- Offline local session-token storage scope\n- Stored record and sensitive-data handling\n- Access-token expiry\n- Refresh-token expiry and rotation\n- Atomic replacement and concurrent refresh behavior\n- Idempotent logout invariants\n- Fail-closed handling for malformed storage, clock anomalies, and refresh failures\n- Testable storage-interface boundary\n\nChecks passed:\n- README exists\n- Required expiry, refresh rotation, logout, offline, and local-only terms are present\n- No network references found\n- Only `projects/discontinuity-auth/README.md` was created",
+        "verification": [
+          {
+            "id": "switch-a-auth",
+            "command": "node",
+            "args": [
+              "--import",
+              "tsx",
+              "/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts",
+              "--task",
+              "switch-a-auth",
+              "--workspace",
+              "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct"
+            ],
+            "passed": true,
+            "exitCode": 0,
+            "stdout": "VERIFIER-OK switch-a-auth\n",
+            "stderr": "",
+            "durationMs": 266
+          }
+        ]
+      },
+      "verification": [
+        {
+          "id": "switch-a-auth",
+          "command": "node",
+          "args": [
+            "--import",
+            "tsx",
+            "/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts",
+            "--task",
+            "switch-a-auth",
+            "--workspace",
+            "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct"
+          ],
+          "passed": true,
+          "exitCode": 0,
+          "stdout": "VERIFIER-OK switch-a-auth\n",
+          "stderr": "",
+          "durationMs": 266
+        }
+      ],
+      "acceptanceScore": 1,
+      "success": true,
+      "changedFiles": [
+        "games/task-tracker/src/cli/commands.ts",
+        "games/task-tracker/src/cli/main.ts",
+        "games/task-tracker/src/cli/parser.ts",
+        "games/task-tracker/src/core/task.ts",
+        "games/task-tracker/src/core/taskFactory.ts",
+        "games/task-tracker/src/format/compact.ts",
+        "games/task-tracker/src/format/display.ts",
+        "games/task-tracker/src/store/taskIndex.ts",
+        "games/task-tracker/src/store/taskStore.ts",
+        "games/task-tracker/test/fixtures.ts",
+        "games/task-tracker/test/task-tracker.test.ts",
+        "projects/"
+      ],
+      "gitDiffStat": "games/task-tracker/src/cli/commands.ts       |  2 +-\n games/task-tracker/src/cli/main.ts           |  2 +-\n games/task-tracker/src/cli/parser.ts         |  8 ++++----\n games/task-tracker/src/core/task.ts          | 18 +++++++++---------\n games/task-tracker/src/core/taskFactory.ts   |  5 +++--\n games/task-tracker/src/format/compact.ts     |  4 ++--\n games/task-tracker/src/format/display.ts     |  6 +++---\n games/task-tracker/src/store/taskIndex.ts    |  2 +-\n games/task-tracker/src/store/taskStore.ts    |  9 ++++++---\n games/task-tracker/test/fixtures.ts          |  2 +-\n games/task-tracker/test/task-tracker.test.ts |  8 ++++----\n 11 files changed, 35 insertions(+), 31 deletions(-)",
+      "completedAt": "2026-09-06T09:41:19.760Z"
+    },
+    {
+      "arm": "tura-direct",
+      "taskId": "switch-a-followup",
+      "repeat": 1,
+      "sessionMode": "persistent",
+      "workspace": "<removed after evaluation>",
+      "promptSha256": "03e836540e2640d6a3d8d64bbe1c5e59bc83e247da355e483eddc3c848fc357a",
+      "run": {
+        "schema": 1,
+        "arm": "tura-direct",
+        "taskId": "switch-a-followup",
+        "harnessVersion": "0.1.37",
+        "sessionId": "tura-direct-53053c0c9325249fd320",
+        "startedAt": "2026-09-06T09:31:00.822Z",
+        "completedAt": "2026-09-06T09:31:53.068Z",
+        "durationMs": 52247,
+        "success": true,
+        "attempts": 1,
+        "firstAttemptSuccess": true,
+        "retries": 0,
+        "usage": {
+          "inputTokens": 2074305,
+          "cachedInputTokens": 1754368,
+          "uncachedInputTokens": 319937,
+          "outputTokens": 18400,
+          "reasoningTokens": 1163,
+          "totalModelTokens": 339500,
+          "effectiveCost": null
+        },
+        "toolCalls": 22,
+        "compactions": 0,
+        "regressions": 0,
+        "permissionRequests": 0,
+        "rejectedPermissions": 0,
+        "telemetry": {
+          "source": "tura-jsonl",
+          "complete": true,
+          "eventCount": 8
+        },
+        "model": {
+          "provider": "openai",
+          "model": "gpt-5.6-luna",
+          "reasoningEffort": "low"
+        },
+        "parity": {
+          "status": "exact",
+          "notes": "Tura Direct receives the exact Luna/low model settings through native tura exec flags; no Cuppet context or controller history is injected."
+        },
+        "finalMessage": "Updated only:\n\n`/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct/projects/discontinuity-auth/README.md`\n\nAdded concrete acceptance cases for:\n- Expired access tokens\n- One-time refresh-token rotation\n- Logout invalidation\n- Clock-skew and clock-anomaly handling\n\nPreserved the existing invariants for expiry, rotation, logout, single active session, and fail-closed behavior.\n\nChecks passed:\n- Required acceptance cases are present\n- Existing invariant sections remain present\n- No network references found\n- Only `projects/discontinuity-auth/README.md` exists in the target project",
+        "verification": [
+          {
+            "id": "switch-a-followup",
+            "command": "node",
+            "args": [
+              "--import",
+              "tsx",
+              "/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts",
+              "--task",
+              "switch-a-followup",
+              "--workspace",
+              "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct"
+            ],
+            "passed": true,
+            "exitCode": 0,
+            "stdout": "VERIFIER-OK switch-a-followup\n",
+            "stderr": "",
+            "durationMs": 216
+          }
+        ]
+      },
+      "verification": [
+        {
+          "id": "switch-a-followup",
+          "command": "node",
+          "args": [
+            "--import",
+            "tsx",
+            "/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts",
+            "--task",
+            "switch-a-followup",
+            "--workspace",
+            "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct"
+          ],
+          "passed": true,
+          "exitCode": 0,
+          "stdout": "VERIFIER-OK switch-a-followup\n",
+          "stderr": "",
+          "durationMs": 216
+        }
+      ],
+      "acceptanceScore": 1,
+      "success": true,
+      "changedFiles": [
+        "games/task-tracker/src/cli/commands.ts",
+        "games/task-tracker/src/cli/main.ts",
+        "games/task-tracker/src/cli/parser.ts",
+        "games/task-tracker/src/core/task.ts",
+        "games/task-tracker/src/core/taskFactory.ts",
+        "games/task-tracker/src/format/compact.ts",
+        "games/task-tracker/src/format/display.ts",
+        "games/task-tracker/src/store/taskIndex.ts",
+        "games/task-tracker/src/store/taskStore.ts",
+        "games/task-tracker/test/fixtures.ts",
+        "games/task-tracker/test/task-tracker.test.ts",
+        "projects/"
+      ],
+      "gitDiffStat": "games/task-tracker/src/cli/commands.ts       |  2 +-\n games/task-tracker/src/cli/main.ts           |  2 +-\n games/task-tracker/src/cli/parser.ts         |  8 ++++----\n games/task-tracker/src/core/task.ts          | 18 +++++++++---------\n games/task-tracker/src/core/taskFactory.ts   |  5 +++--\n games/task-tracker/src/format/compact.ts     |  4 ++--\n games/task-tracker/src/format/display.ts     |  6 +++---\n games/task-tracker/src/store/taskIndex.ts    |  2 +-\n games/task-tracker/src/store/taskStore.ts    |  9 ++++++---\n games/task-tracker/test/fixtures.ts          |  2 +-\n games/task-tracker/test/task-tracker.test.ts |  8 ++++----\n 11 files changed, 35 insertions(+), 31 deletions(-)",
+      "completedAt": "2026-09-06T09:41:19.790Z"
+    },
+    {
+      "arm": "tura-direct",
+      "taskId": "switch-b-auth",
+      "repeat": 1,
+      "sessionMode": "persistent",
+      "workspace": "<removed after evaluation>",
+      "promptSha256": "cfad4826b755985e461eddb6945bf2ffffc99d74c2a666c58d4e7a3ebdd78c0b",
+      "run": {
+        "schema": 1,
+        "arm": "tura-direct",
+        "taskId": "switch-b-auth",
+        "harnessVersion": "0.1.37",
+        "sessionId": "tura-direct-53053c0c9325249fd320",
+        "startedAt": "2026-09-06T09:31:53.069Z",
+        "completedAt": "2026-09-06T09:33:10.680Z",
+        "durationMs": 77612,
+        "success": true,
+        "attempts": 1,
+        "firstAttemptSuccess": true,
+        "retries": 0,
+        "usage": {
+          "inputTokens": 2111861,
+          "cachedInputTokens": 1847040,
+          "uncachedInputTokens": 264821,
+          "outputTokens": 15426,
+          "reasoningTokens": 994,
+          "totalModelTokens": 281241,
+          "effectiveCost": null
+        },
+        "toolCalls": 25,
+        "compactions": 0,
+        "regressions": 0,
+        "permissionRequests": 0,
+        "rejectedPermissions": 0,
+        "telemetry": {
+          "source": "tura-jsonl",
+          "complete": true,
+          "eventCount": 9
+        },
+        "model": {
+          "provider": "openai",
+          "model": "gpt-5.6-luna",
+          "reasoningEffort": "low"
+        },
+        "parity": {
+          "status": "exact",
+          "notes": "Tura Direct receives the exact Luna/low model settings through native tura exec flags; no Cuppet context or controller history is injected."
+        },
+        "finalMessage": "Created only:\n\n`/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct/projects/discontinuity-billing/README.md`\n\nThe note includes:\n- Idempotency records keyed by account and operation key\n- Duplicate-request replay invariants\n- Payload-conflict handling\n- Fixed retry-window rules, including boundary behavior\n- Atomic invoice/idempotency commits\n- Concurrency serialization\n- Five concrete acceptance cases\n\nChecks passed:\n- Required billing invariants and acceptance cases present\n- No network references found\n- Only `projects/discontinuity-billing/README.md` exists in the new project\n- Authentication project confirmed untouched",
+        "verification": [
+          {
+            "id": "switch-b-auth",
+            "command": "node",
+            "args": [
+              "--import",
+              "tsx",
+              "/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts",
+              "--task",
+              "switch-b-auth",
+              "--workspace",
+              "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct"
+            ],
+            "passed": true,
+            "exitCode": 0,
+            "stdout": "VERIFIER-OK switch-b-auth\n",
+            "stderr": "",
+            "durationMs": 232
+          }
+        ]
+      },
+      "verification": [
+        {
+          "id": "switch-b-auth",
+          "command": "node",
+          "args": [
+            "--import",
+            "tsx",
+            "/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts",
+            "--task",
+            "switch-b-auth",
+            "--workspace",
+            "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct"
+          ],
+          "passed": true,
+          "exitCode": 0,
+          "stdout": "VERIFIER-OK switch-b-auth\n",
+          "stderr": "",
+          "durationMs": 232
+        }
+      ],
+      "acceptanceScore": 1,
+      "success": true,
+      "changedFiles": [
+        "games/task-tracker/src/cli/commands.ts",
+        "games/task-tracker/src/cli/main.ts",
+        "games/task-tracker/src/cli/parser.ts",
+        "games/task-tracker/src/core/task.ts",
+        "games/task-tracker/src/core/taskFactory.ts",
+        "games/task-tracker/src/format/compact.ts",
+        "games/task-tracker/src/format/display.ts",
+        "games/task-tracker/src/store/taskIndex.ts",
+        "games/task-tracker/src/store/taskStore.ts",
+        "games/task-tracker/test/fixtures.ts",
+        "games/task-tracker/test/task-tracker.test.ts",
+        "projects/"
+      ],
+      "gitDiffStat": "games/task-tracker/src/cli/commands.ts       |  2 +-\n games/task-tracker/src/cli/main.ts           |  2 +-\n games/task-tracker/src/cli/parser.ts         |  8 ++++----\n games/task-tracker/src/core/task.ts          | 18 +++++++++---------\n games/task-tracker/src/core/taskFactory.ts   |  5 +++--\n games/task-tracker/src/format/compact.ts     |  4 ++--\n games/task-tracker/src/format/display.ts     |  6 +++---\n games/task-tracker/src/store/taskIndex.ts    |  2 +-\n games/task-tracker/src/store/taskStore.ts    |  9 ++++++---\n games/task-tracker/test/fixtures.ts          |  2 +-\n games/task-tracker/test/task-tracker.test.ts |  8 ++++----\n 11 files changed, 35 insertions(+), 31 deletions(-)",
+      "completedAt": "2026-09-06T09:41:19.820Z"
+    },
+    {
+      "arm": "tura-direct",
+      "taskId": "switch-b-followup",
+      "repeat": 1,
+      "sessionMode": "persistent",
+      "workspace": "<removed after evaluation>",
+      "promptSha256": "2b5c63dc4286e42f3b63e6f69790a90d67e2e4aef9f6eb7e00814fa291dffa01",
+      "run": {
+        "schema": 1,
+        "arm": "tura-direct",
+        "taskId": "switch-b-followup",
+        "harnessVersion": "0.1.37",
+        "sessionId": "tura-direct-53053c0c9325249fd320",
+        "startedAt": "2026-09-06T09:33:10.681Z",
+        "completedAt": "2026-09-06T09:34:24.481Z",
+        "durationMs": 73800,
+        "success": true,
+        "attempts": 1,
+        "firstAttemptSuccess": true,
+        "retries": 0,
+        "usage": {
+          "inputTokens": 2306051,
+          "cachedInputTokens": 1999616,
+          "uncachedInputTokens": 306435,
+          "outputTokens": 16619,
+          "reasoningTokens": 1018,
+          "totalModelTokens": 324072,
+          "effectiveCost": null
+        },
+        "toolCalls": 27,
+        "compactions": 0,
+        "regressions": 0,
+        "permissionRequests": 0,
+        "rejectedPermissions": 0,
+        "telemetry": {
+          "source": "tura-jsonl",
+          "complete": true,
+          "eventCount": 8
+        },
+        "model": {
+          "provider": "openai",
+          "model": "gpt-5.6-luna",
+          "reasoningEffort": "low"
+        },
+        "parity": {
+          "status": "exact",
+          "notes": "Tura Direct receives the exact Luna/low model settings through native tura exec flags; no Cuppet context or controller history is injected."
+        },
+        "finalMessage": "Updated only:\n\n`/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct/projects/discontinuity-billing/README.md`\n\nAdded acceptance cases for:\n- Duplicate idempotency keys\n- Retryable payment failures\n- Successful replay with zero side effects\n- Audit event ordering for success and failure paths\n\nChecks passed:\n- Requested acceptance cases are present\n- No network references found\n- Only the billing README exists in `projects/discontinuity-billing`\n- `projects/discontinuity-auth/README.md` remains present and untouched",
+        "verification": [
+          {
+            "id": "switch-b-followup",
+            "command": "node",
+            "args": [
+              "--import",
+              "tsx",
+              "/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts",
+              "--task",
+              "switch-b-followup",
+              "--workspace",
+              "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct"
+            ],
+            "passed": true,
+            "exitCode": 0,
+            "stdout": "VERIFIER-OK switch-b-followup\n",
+            "stderr": "",
+            "durationMs": 228
+          }
+        ]
+      },
+      "verification": [
+        {
+          "id": "switch-b-followup",
+          "command": "node",
+          "args": [
+            "--import",
+            "tsx",
+            "/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts",
+            "--task",
+            "switch-b-followup",
+            "--workspace",
+            "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct"
+          ],
+          "passed": true,
+          "exitCode": 0,
+          "stdout": "VERIFIER-OK switch-b-followup\n",
+          "stderr": "",
+          "durationMs": 228
+        }
+      ],
+      "acceptanceScore": 1,
+      "success": true,
+      "changedFiles": [
+        "games/task-tracker/src/cli/commands.ts",
+        "games/task-tracker/src/cli/main.ts",
+        "games/task-tracker/src/cli/parser.ts",
+        "games/task-tracker/src/core/task.ts",
+        "games/task-tracker/src/core/taskFactory.ts",
+        "games/task-tracker/src/format/compact.ts",
+        "games/task-tracker/src/format/display.ts",
+        "games/task-tracker/src/store/taskIndex.ts",
+        "games/task-tracker/src/store/taskStore.ts",
+        "games/task-tracker/test/fixtures.ts",
+        "games/task-tracker/test/task-tracker.test.ts",
+        "projects/"
+      ],
+      "gitDiffStat": "games/task-tracker/src/cli/commands.ts       |  2 +-\n games/task-tracker/src/cli/main.ts           |  2 +-\n games/task-tracker/src/cli/parser.ts         |  8 ++++----\n games/task-tracker/src/core/task.ts          | 18 +++++++++---------\n games/task-tracker/src/core/taskFactory.ts   |  5 +++--\n games/task-tracker/src/format/compact.ts     |  4 ++--\n games/task-tracker/src/format/display.ts     |  6 +++---\n games/task-tracker/src/store/taskIndex.ts    |  2 +-\n games/task-tracker/src/store/taskStore.ts    |  9 ++++++---\n games/task-tracker/test/fixtures.ts          |  2 +-\n games/task-tracker/test/task-tracker.test.ts |  8 ++++----\n 11 files changed, 35 insertions(+), 31 deletions(-)",
+      "completedAt": "2026-09-06T09:41:19.855Z"
+    },
+    {
+      "arm": "tura-direct",
+      "taskId": "switch-c",
+      "repeat": 1,
+      "sessionMode": "persistent",
+      "workspace": "<removed after evaluation>",
+      "promptSha256": "b1ab8d96d6d086967477b17a70d1d468246dea2cc011e4b081837613b58a656a",
+      "run": {
+        "schema": 1,
+        "arm": "tura-direct",
+        "taskId": "switch-c",
+        "harnessVersion": "0.1.37",
+        "sessionId": "tura-direct-53053c0c9325249fd320",
+        "startedAt": "2026-09-06T09:34:24.482Z",
+        "completedAt": "2026-09-06T09:35:37.483Z",
+        "durationMs": 73001,
+        "success": true,
+        "attempts": 1,
+        "firstAttemptSuccess": true,
+        "retries": 0,
+        "usage": {
+          "inputTokens": 2161833,
+          "cachedInputTokens": 1854208,
+          "uncachedInputTokens": 307625,
+          "outputTokens": 13387,
+          "reasoningTokens": 712,
+          "totalModelTokens": 321724,
+          "effectiveCost": null
+        },
+        "toolCalls": 28,
+        "compactions": 0,
+        "regressions": 0,
+        "permissionRequests": 0,
+        "rejectedPermissions": 0,
+        "telemetry": {
+          "source": "tura-jsonl",
+          "complete": true,
+          "eventCount": 8
+        },
+        "model": {
+          "provider": "openai",
+          "model": "gpt-5.6-luna",
+          "reasoningEffort": "low"
+        },
+        "parity": {
+          "status": "exact",
+          "notes": "Tura Direct receives the exact Luna/low model settings through native tura exec flags; no Cuppet context or controller history is injected."
+        },
+        "finalMessage": "Created only:\n\n`/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct/projects/discontinuity-release/README.md`\n\nThe local release checklist covers:\n- Versioning and reproducibility\n- Migration order and backfill safety\n- Rollback targets and data preservation\n- Local smoke validation\n- Final release gates and remote-operation boundaries\n\nChecks passed:\n- Required checklist sections are present\n- Local-only boundary is documented\n- No network references found\n- Only the release README exists in `projects/discontinuity-release`\n- Authentication and billing README files remain present and unchanged\n- No CI, deployment, or cloud-cost operation was run",
+        "verification": [
+          {
+            "id": "switch-c",
+            "command": "node",
+            "args": [
+              "--import",
+              "tsx",
+              "/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts",
+              "--task",
+              "switch-c",
+              "--workspace",
+              "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct"
+            ],
+            "passed": true,
+            "exitCode": 0,
+            "stdout": "VERIFIER-OK switch-c\n",
+            "stderr": "",
+            "durationMs": 303
+          }
+        ]
+      },
+      "verification": [
+        {
+          "id": "switch-c",
+          "command": "node",
+          "args": [
+            "--import",
+            "tsx",
+            "/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts",
+            "--task",
+            "switch-c",
+            "--workspace",
+            "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct"
+          ],
+          "passed": true,
+          "exitCode": 0,
+          "stdout": "VERIFIER-OK switch-c\n",
+          "stderr": "",
+          "durationMs": 303
+        }
+      ],
+      "acceptanceScore": 1,
+      "success": true,
+      "changedFiles": [
+        "games/task-tracker/src/cli/commands.ts",
+        "games/task-tracker/src/cli/main.ts",
+        "games/task-tracker/src/cli/parser.ts",
+        "games/task-tracker/src/core/task.ts",
+        "games/task-tracker/src/core/taskFactory.ts",
+        "games/task-tracker/src/format/compact.ts",
+        "games/task-tracker/src/format/display.ts",
+        "games/task-tracker/src/store/taskIndex.ts",
+        "games/task-tracker/src/store/taskStore.ts",
+        "games/task-tracker/test/fixtures.ts",
+        "games/task-tracker/test/task-tracker.test.ts",
+        "projects/"
+      ],
+      "gitDiffStat": "games/task-tracker/src/cli/commands.ts       |  2 +-\n games/task-tracker/src/cli/main.ts           |  2 +-\n games/task-tracker/src/cli/parser.ts         |  8 ++++----\n games/task-tracker/src/core/task.ts          | 18 +++++++++---------\n games/task-tracker/src/core/taskFactory.ts   |  5 +++--\n games/task-tracker/src/format/compact.ts     |  4 ++--\n games/task-tracker/src/format/display.ts     |  6 +++---\n games/task-tracker/src/store/taskIndex.ts    |  2 +-\n games/task-tracker/src/store/taskStore.ts    |  9 ++++++---\n games/task-tracker/test/fixtures.ts          |  2 +-\n games/task-tracker/test/task-tracker.test.ts |  8 ++++----\n 11 files changed, 35 insertions(+), 31 deletions(-)",
+      "completedAt": "2026-09-06T09:41:19.882Z"
+    },
+    {
+      "arm": "tura-direct",
+      "taskId": "switch-a-return",
+      "repeat": 1,
+      "sessionMode": "persistent",
+      "workspace": "<removed after evaluation>",
+      "promptSha256": "fee021e491b73e4bd5c7a7ae2d17e3a4d205cbc9b11233753290df32e0e6bcf3",
+      "run": {
+        "schema": 1,
+        "arm": "tura-direct",
+        "taskId": "switch-a-return",
+        "harnessVersion": "0.1.37",
+        "sessionId": "tura-direct-53053c0c9325249fd320",
+        "startedAt": "2026-09-06T09:35:37.487Z",
+        "completedAt": "2026-09-06T09:36:33.773Z",
+        "durationMs": 56286,
+        "success": true,
+        "attempts": 1,
+        "firstAttemptSuccess": true,
+        "retries": 0,
+        "usage": {
+          "inputTokens": 2259236,
+          "cachedInputTokens": 1914880,
+          "uncachedInputTokens": 344356,
+          "outputTokens": 14012,
+          "reasoningTokens": 741,
+          "totalModelTokens": 359109,
+          "effectiveCost": null
+        },
+        "toolCalls": 29,
+        "compactions": 0,
+        "regressions": 0,
+        "permissionRequests": 0,
+        "rejectedPermissions": 0,
+        "telemetry": {
+          "source": "tura-jsonl",
+          "complete": true,
+          "eventCount": 8
+        },
+        "model": {
+          "provider": "openai",
+          "model": "gpt-5.6-luna",
+          "reasoningEffort": "low"
+        },
+        "parity": {
+          "status": "exact",
+          "notes": "Tura Direct receives the exact Luna/low model settings through native tura exec flags; no Cuppet context or controller history is injected."
+        },
+        "finalMessage": "Updated only:\n\n`/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct/projects/discontinuity-auth/README.md`\n\nAdded the short “Rotation and logout boundary” section covering:\n- Invalidation of the current rotated token pair on logout\n- In-flight refresh protection using a session generation or compare-and-swap guard\n- Discarding stale refresh results\n- Preventing logout races from restoring authenticated state\n- Starting a new generation after sign-in\n\nChecks passed:\n- New rotation/logout connection is present\n- All prior invariants remain present\n- No network references found\n- Billing and release README files remain present and untouched\n- Only the authentication README was modified",
+        "verification": [
+          {
+            "id": "switch-a-return",
+            "command": "node",
+            "args": [
+              "--import",
+              "tsx",
+              "/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts",
+              "--task",
+              "switch-a-return",
+              "--workspace",
+              "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct"
+            ],
+            "passed": true,
+            "exitCode": 0,
+            "stdout": "VERIFIER-OK switch-a-return\n",
+            "stderr": "",
+            "durationMs": 376
+          }
+        ]
+      },
+      "verification": [
+        {
+          "id": "switch-a-return",
+          "command": "node",
+          "args": [
+            "--import",
+            "tsx",
+            "/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts",
+            "--task",
+            "switch-a-return",
+            "--workspace",
+            "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct"
+          ],
+          "passed": true,
+          "exitCode": 0,
+          "stdout": "VERIFIER-OK switch-a-return\n",
+          "stderr": "",
+          "durationMs": 376
+        }
+      ],
+      "acceptanceScore": 1,
+      "success": true,
+      "changedFiles": [
+        "games/task-tracker/src/cli/commands.ts",
+        "games/task-tracker/src/cli/main.ts",
+        "games/task-tracker/src/cli/parser.ts",
+        "games/task-tracker/src/core/task.ts",
+        "games/task-tracker/src/core/taskFactory.ts",
+        "games/task-tracker/src/format/compact.ts",
+        "games/task-tracker/src/format/display.ts",
+        "games/task-tracker/src/store/taskIndex.ts",
+        "games/task-tracker/src/store/taskStore.ts",
+        "games/task-tracker/test/fixtures.ts",
+        "games/task-tracker/test/task-tracker.test.ts",
+        "projects/"
+      ],
+      "gitDiffStat": "games/task-tracker/src/cli/commands.ts       |  2 +-\n games/task-tracker/src/cli/main.ts           |  2 +-\n games/task-tracker/src/cli/parser.ts         |  8 ++++----\n games/task-tracker/src/core/task.ts          | 18 +++++++++---------\n games/task-tracker/src/core/taskFactory.ts   |  5 +++--\n games/task-tracker/src/format/compact.ts     |  4 ++--\n games/task-tracker/src/format/display.ts     |  6 +++---\n games/task-tracker/src/store/taskIndex.ts    |  2 +-\n games/task-tracker/src/store/taskStore.ts    |  9 ++++++---\n games/task-tracker/test/fixtures.ts          |  2 +-\n games/task-tracker/test/task-tracker.test.ts |  8 ++++----\n 11 files changed, 35 insertions(+), 31 deletions(-)",
+      "completedAt": "2026-09-06T09:41:19.909Z"
+    },
+    {
+      "arm": "tura-direct",
+      "taskId": "long-tool-use-dashboard",
+      "repeat": 1,
+      "sessionMode": "persistent",
+      "workspace": "<removed after evaluation>",
+      "promptSha256": "c92d74ec3c48cfe49cf34fe257b02c7ad61ef5c3e2176eb0368aaae08fee21ee",
+      "run": {
+        "schema": 1,
+        "arm": "tura-direct",
+        "taskId": "long-tool-use-dashboard",
+        "harnessVersion": "0.1.37",
+        "sessionId": "tura-direct-53053c0c9325249fd320",
+        "startedAt": "2026-09-06T09:36:33.773Z",
+        "completedAt": "2026-09-06T09:41:19.411Z",
+        "durationMs": 285638,
+        "success": true,
+        "attempts": 1,
+        "firstAttemptSuccess": true,
+        "retries": 0,
+        "usage": {
+          "inputTokens": 2356706,
+          "cachedInputTokens": 1975552,
+          "uncachedInputTokens": 381154,
+          "outputTokens": 20077,
+          "reasoningTokens": 1072,
+          "totalModelTokens": 402303,
+          "effectiveCost": null
+        },
+        "toolCalls": 33,
+        "compactions": 0,
+        "regressions": 0,
+        "permissionRequests": 0,
+        "rejectedPermissions": 0,
+        "telemetry": {
+          "source": "tura-jsonl",
+          "complete": true,
+          "eventCount": 9
+        },
+        "model": {
+          "provider": "openai",
+          "model": "gpt-5.6-luna",
+          "reasoningEffort": "low"
+        },
+        "parity": {
+          "status": "exact",
+          "notes": "Tura Direct receives the exact Luna/low model settings through native tura exec flags; no Cuppet context or controller history is injected."
+        },
+        "finalMessage": "Built the dependency-free local operations dashboard in:\n\n`/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct/projects/operations-dashboard/`\n\nCreated:\n- `index.html`\n- `styles.css`\n- `app.js`\n- `README.md`\n\nIncluded:\n- Sidebar and operations header\n- Four derived metric cards\n- Eight local records\n- Search by ID, title, or owner\n- Status and priority filters\n- Keyboard-accessible selectable table rows\n- Details panel with selected-record state\n- Empty search/filter state\n- Responsive desktop, tablet, and mobile layout\n- Visible focus styles\n- Local-only in-memory interactions\n\nChecks passed:\n- `node --check projects/operations-dashboard/app.js`\n- DOM structure and required interaction-hook check\n- Eight-record coverage check\n- Search, filter, selection, keyboard, details, metrics, and empty-state code-path check\n- Focus and responsive CSS rule check\n- Network, persistence, credential, and token-reference scan\n- Confirmed exactly the four requested files exist in the new project\n\nNo dependencies, network calls, remote assets, credentials, or unrelated files were used. Browser screenshot validation was not available in the current tool environment; static and JavaScript-path validation passed.",
+        "verification": [
+          {
+            "id": "long-tool-use-hidden-contract",
+            "command": "node",
+            "args": [
+              "--import",
+              "tsx",
+              "/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts",
+              "--task",
+              "long-tool-use-dashboard",
+              "--workspace",
+              "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct"
+            ],
+            "passed": true,
+            "exitCode": 0,
+            "stdout": "VERIFIER-OK long-tool-use-dashboard\n",
+            "stderr": "",
+            "durationMs": 344
+          }
+        ]
+      },
+      "verification": [
+        {
+          "id": "long-tool-use-hidden-contract",
+          "command": "node",
+          "args": [
+            "--import",
+            "tsx",
+            "/Users/addy/Downloads/cuppet/scripts/benchmark-verifier.ts",
+            "--task",
+            "long-tool-use-dashboard",
+            "--workspace",
+            "/Users/addy/Downloads/cuppet/.benchmarks/cuppet-harness-comparison-qKv57A/workspaces/marathon-repeat-1-tura-direct"
+          ],
+          "passed": true,
+          "exitCode": 0,
+          "stdout": "VERIFIER-OK long-tool-use-dashboard\n",
+          "stderr": "",
+          "durationMs": 344
+        }
+      ],
+      "acceptanceScore": 1,
+      "success": true,
+      "changedFiles": [
+        "games/task-tracker/src/cli/commands.ts",
+        "games/task-tracker/src/cli/main.ts",
+        "games/task-tracker/src/cli/parser.ts",
+        "games/task-tracker/src/core/task.ts",
+        "games/task-tracker/src/core/taskFactory.ts",
+        "games/task-tracker/src/format/compact.ts",
+        "games/task-tracker/src/format/display.ts",
+        "games/task-tracker/src/store/taskIndex.ts",
+        "games/task-tracker/src/store/taskStore.ts",
+        "games/task-tracker/test/fixtures.ts",
+        "games/task-tracker/test/task-tracker.test.ts",
+        "projects/"
+      ],
+      "gitDiffStat": "games/task-tracker/src/cli/commands.ts       |  2 +-\n games/task-tracker/src/cli/main.ts           |  2 +-\n games/task-tracker/src/cli/parser.ts         |  8 ++++----\n games/task-tracker/src/core/task.ts          | 18 +++++++++---------\n games/task-tracker/src/core/taskFactory.ts   |  5 +++--\n games/task-tracker/src/format/compact.ts     |  4 ++--\n games/task-tracker/src/format/display.ts     |  6 +++---\n games/task-tracker/src/store/taskIndex.ts    |  2 +-\n games/task-tracker/src/store/taskStore.ts    |  9 ++++++---\n games/task-tracker/test/fixtures.ts          |  2 +-\n games/task-tracker/test/task-tracker.test.ts |  8 ++++----\n 11 files changed, 35 insertions(+), 31 deletions(-)",
+      "completedAt": "2026-09-06T09:41:19.936Z"
+    }
+  ],
+  "summaries": [
+    {
+      "arm": "tura-direct",
+      "tasksAttempted": 12,
+      "tasksSuccessful": 10,
+      "successRate": 0.8333333333333334,
+      "successRateConfidenceInterval95": {
+        "lower": 0.5519636426153274,
+        "upper": 0.9530358523851776
+      },
+      "firstAttemptSuccesses": 10,
+      "firstAttemptSuccessRate": 0.8333333333333334,
+      "acceptanceChecksPassed": 13,
+      "acceptanceChecksTotal": 15,
+      "acceptanceRate": 0.8666666666666667,
+      "modelTokens": {
+        "count": 12,
+        "mean": 286755.0833333333,
+        "median": 295378,
+        "standardDeviation": 78761.11452124575,
+        "confidenceInterval95": {
+          "lower": 242191.78767622745,
+          "upper": 331318.3789904392
+        }
+      },
+      "successfulModelTokens": {
+        "count": 10,
+        "mean": 313837.1,
+        "median": 311177.5,
+        "standardDeviation": 45278.54793865781,
+        "confidenceInterval95": {
+          "lower": 285773.165236269,
+          "upper": 341901.03476373095
+        }
+      },
+      "uncachedInputTokens": {
+        "count": 12,
+        "mean": 271225.6666666667,
+        "median": 276362.5,
+        "standardDeviation": 74634.69464036552,
+        "confidenceInterval95": {
+          "lower": 228997.11284599613,
+          "upper": 313454.2204873372
+        }
+      },
+      "cachedInputTokens": {
+        "count": 12,
+        "mean": 1439381.3333333333,
+        "median": 1697920,
+        "standardDeviation": 624888.6487718262,
+        "confidenceInterval95": {
+          "lower": 1085817.296343017,
+          "upper": 1792945.3703236496
+        }
+      },
+      "outputTokens": {
+        "count": 12,
+        "mean": 14601.916666666666,
+        "median": 15671.5,
+        "standardDeviation": 4592.028160713725,
+        "confidenceInterval95": {
+          "lower": 12003.732145846543,
+          "upper": 17200.10118748679
+        }
+      },
+      "toolCalls": {
+        "count": 12,
+        "mean": 20.083333333333332,
+        "median": 21,
+        "standardDeviation": 9.179605193860546,
+        "confidenceInterval95": {
+          "lower": 14.889482754198056,
+          "upper": 25.277183912468608
+        }
+      },
+      "retries": 0,
+      "compactions": 0,
+      "regressions": 0,
+      "wallClockMs": {
+        "count": 12,
+        "mean": 112195.25,
+        "median": 82579.5,
+        "standardDeviation": 69929.06627969517,
+        "confidenceInterval95": {
+          "lower": 72629.15606405403,
+          "upper": 151761.34393594597
+        }
+      },
+      "effectiveCost": {
+        "count": 0,
+        "mean": null,
+        "median": null,
+        "standardDeviation": null,
+        "confidenceInterval95": null
+      },
+      "successfulEffectiveCost": {
+        "count": 0,
+        "mean": null,
+        "median": null,
+        "standardDeviation": null,
+        "confidenceInterval95": null
+      },
+      "modelTokensPerSuccessfulTask": 344106.1,
+      "parity": [
+        {
+          "status": "exact",
+          "notes": "Tura Direct receives the exact Luna/low model settings through native tura exec flags; no Cuppet context or controller history is injected."
+        }
+      ]
+    }
+  ],
+  "longHorizon": [
+    {
+      "arm": "tura-direct",
+      "sequenceLength": 12,
+      "repetitions": 1,
+      "tasks": [
+        {
+          "repeat": 1,
+          "taskIndex": 0,
+          "taskId": "task-tracker-cross-file",
+          "success": false,
+          "uncachedInputTokens": 93833,
+          "cachedInputTokens": 217856,
+          "cacheShare": 0.6989531231451864,
+          "totalModelTokens": 97591,
+          "toolCalls": 4,
+          "compactions": 0,
+          "effectiveCost": null,
+          "durationMs": 108828
+        },
+        {
+          "repeat": 1,
+          "taskIndex": 1,
+          "taskId": "quiz-game-greenfield",
+          "success": false,
+          "uncachedInputTokens": 195356,
+          "cachedInputTokens": 436992,
+          "cacheShare": 0.6910625162094289,
+          "totalModelTokens": 205099,
+          "toolCalls": 7,
+          "compactions": 0,
+          "effectiveCost": null,
+          "durationMs": 139111
+        },
+        {
+          "repeat": 1,
+          "taskIndex": 2,
+          "taskId": "persistent-build-stage-1",
+          "success": true,
+          "uncachedInputTokens": 237872,
+          "cachedInputTokens": 749312,
+          "cacheShare": 0.7590398547788457,
+          "totalModelTokens": 252153,
+          "toolCalls": 10,
+          "compactions": 0,
+          "effectiveCost": null,
+          "durationMs": 119359
+        },
+        {
+          "repeat": 1,
+          "taskIndex": 3,
+          "taskId": "persistent-build-stage-2",
+          "success": true,
+          "uncachedInputTokens": 250594,
+          "cachedInputTokens": 1349888,
+          "cacheShare": 0.8434259179422199,
+          "totalModelTokens": 267513,
+          "toolCalls": 17,
+          "compactions": 0,
+          "effectiveCost": null,
+          "durationMs": 207908
+        },
+        {
+          "repeat": 1,
+          "taskIndex": 4,
+          "taskId": "persistent-build-stage-3",
+          "success": true,
+          "uncachedInputTokens": 281248,
+          "cachedInputTokens": 1531392,
+          "cacheShare": 0.8448406743754965,
+          "totalModelTokens": 300631,
+          "toolCalls": 19,
+          "compactions": 0,
+          "effectiveCost": null,
+          "durationMs": 87547
+        },
+        {
+          "repeat": 1,
+          "taskIndex": 5,
+          "taskId": "switch-a-auth",
+          "success": true,
+          "uncachedInputTokens": 271477,
+          "cachedInputTokens": 1641472,
+          "cacheShare": 0.8580845594942678,
+          "totalModelTokens": 290125,
+          "toolCalls": 20,
+          "compactions": 0,
+          "effectiveCost": null,
+          "durationMs": 65006
+        },
+        {
+          "repeat": 1,
+          "taskIndex": 6,
+          "taskId": "switch-a-followup",
+          "success": true,
+          "uncachedInputTokens": 319937,
+          "cachedInputTokens": 1754368,
+          "cacheShare": 0.8457618334815757,
+          "totalModelTokens": 339500,
+          "toolCalls": 22,
+          "compactions": 0,
+          "effectiveCost": null,
+          "durationMs": 52247
+        },
+        {
+          "repeat": 1,
+          "taskIndex": 7,
+          "taskId": "switch-b-auth",
+          "success": true,
+          "uncachedInputTokens": 264821,
+          "cachedInputTokens": 1847040,
+          "cacheShare": 0.874603016012891,
+          "totalModelTokens": 281241,
+          "toolCalls": 25,
+          "compactions": 0,
+          "effectiveCost": null,
+          "durationMs": 77612
+        },
+        {
+          "repeat": 1,
+          "taskIndex": 8,
+          "taskId": "switch-b-followup",
+          "success": true,
+          "uncachedInputTokens": 306435,
+          "cachedInputTokens": 1999616,
+          "cacheShare": 0.8671169891732663,
+          "totalModelTokens": 324072,
+          "toolCalls": 27,
+          "compactions": 0,
+          "effectiveCost": null,
+          "durationMs": 73800
+        },
+        {
+          "repeat": 1,
+          "taskIndex": 9,
+          "taskId": "switch-c",
+          "success": true,
+          "uncachedInputTokens": 307625,
+          "cachedInputTokens": 1854208,
+          "cacheShare": 0.8577017743738763,
+          "totalModelTokens": 321724,
+          "toolCalls": 28,
+          "compactions": 0,
+          "effectiveCost": null,
+          "durationMs": 73001
+        },
+        {
+          "repeat": 1,
+          "taskIndex": 10,
+          "taskId": "switch-a-return",
+          "success": true,
+          "uncachedInputTokens": 344356,
+          "cachedInputTokens": 1914880,
+          "cacheShare": 0.8475785619563427,
+          "totalModelTokens": 359109,
+          "toolCalls": 29,
+          "compactions": 0,
+          "effectiveCost": null,
+          "durationMs": 56286
+        },
+        {
+          "repeat": 1,
+          "taskIndex": 11,
+          "taskId": "long-tool-use-dashboard",
+          "success": true,
+          "uncachedInputTokens": 381154,
+          "cachedInputTokens": 1975552,
+          "cacheShare": 0.8382683287605667,
+          "totalModelTokens": 402303,
+          "toolCalls": 33,
+          "compactions": 0,
+          "effectiveCost": null,
+          "durationMs": 285638
+        }
+      ],
+      "cumulativeUncachedInputTokens": 3254708,
+      "cumulativeCachedInputTokens": 17272576,
+      "finalTaskCacheShare": 0.8382683287605667,
+      "earlyUncachedInput": {
+        "count": 3,
+        "mean": 175687,
+        "median": 195356,
+        "standardDeviation": 74006.48992487078,
+        "confidenceInterval95": {
+          "lower": 91940.7729153892,
+          "upper": 259433.2270846108
+        }
+      },
+      "lateUncachedInput": {
+        "count": 3,
+        "mean": 344378.3333333333,
+        "median": 344356,
+        "standardDeviation": 36764.50508756147,
+        "confidenceInterval95": {
+          "lower": 302775.3793918364,
+          "upper": 385981.2872748302
+        }
+      },
+      "earlyCacheShare": {
+        "count": 3,
+        "mean": 0.7163518313778203,
+        "median": 0.6989531231451864,
+        "standardDeviation": 0.03717883706987784,
+        "confidenceInterval95": {
+          "lower": 0.6742800166605359,
+          "upper": 0.7584236460951047
+        }
+      },
+      "lateCacheShare": {
+        "count": 3,
+        "mean": 0.8478495550302618,
+        "median": 0.8475785619563427,
+        "standardDeviation": 0.00971955657609697,
+        "confidenceInterval95": {
+          "lower": 0.8368508413632596,
+          "upper": 0.858848268697264
+        }
+      }
+    }
+  ],
+  "notes": [
+    "The controller freezes the repository SHA, task prompts, model settings, harness metadata, environment allowlist, and verifier commands before the first arm runs.",
+    "The controller only runs deterministic verification commands; it does not rewrite prompts, coach harnesses, or make subjective correctness judgments.",
+    "Failed tasks retain all telemetry emitted before failure. A null cost means the harness did not expose provider-adjusted pricing.",
+    "In the default Issue #4 mixed topology, persistent Cuppet/OpenCode sequences reuse one native session; Codex and Claude Code persistent-family entries run sequential native CLI turns because their resume/session telemetry is not yet reliable enough to claim a single persistent session.",
+    "Marathon topology: one workspace and one native session per supported arm/repeat; deterministic verification runs after every task without resetting the evolving workspace."
+  ]
+}

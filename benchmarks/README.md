@@ -261,10 +261,14 @@ node --import tsx scripts/tura-benchmark-probe.ts
 After the preflight passes, run the arm explicitly with one repetition:
 
 ```bash
+TURA_HOME="$PWD" \
+TURA_PROJECT_ROOT="/path/to/tura-release" \
+CUPPET_TURA_ROUTER_BIN="/path/to/tura-release/tura_router" \
 npm run benchmark -- --session-topology marathon --arms tura-direct --repeats 1
 ```
 
 The arm records Tura JSONL and turn-log telemetry as sidecars beside each raw
 result. It does not fall back to another model or automatically retry provider,
-session, or telemetry failures. No Cuppet or OpenCode run is repeated by this
-command.
+session, or telemetry failures. The native router is prestarted and health-
+checked for the sequence, then the arm removes the router/session-db endpoint
+markers it created. No Cuppet or OpenCode run is repeated by this command.

@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto'
-import { spawn } from 'node:child_process'
-import { readFile, writeFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { createConnection } from 'node:net'
+import { spawn, type ChildProcess } from 'node:child_process'
+import { readFile, rm, writeFile } from 'node:fs/promises'
+import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import type {
   HarnessRunResult,
@@ -44,16 +45,132 @@ const sequence = JSON.parse(await readFile(options.sequenceFile, 'utf8')) as Seq
 const sessionID = `tura-direct-${createHash('sha256').update(resolve(options.workspace)).digest('hex').slice(0, 20)}`
 const harnessVersion = process.env.CUPPET_TURA_VERSION?.trim() || 'unreported'
 const results: HarnessRunResult[] = []
+const router = await ensureNativeRouter(options, sequence[0]?.resultFile)
 
-for (const entry of sequence) {
-  const result = await runTurn(options, entry, sessionID, harnessVersion)
-  results.push(result)
-  await writeFile(entry.resultFile, `${JSON.stringify(result, null, 2)}\n`, 'utf8')
-  if (!result.success) break
+try {
+  for (const entry of sequence) {
+    const result = await runTurn(options, entry, sessionID, harnessVersion)
+    results.push(result)
+    await writeFile(entry.resultFile, `${JSON.stringify(result, null, 2)}\n`, 'utf8')
+    if (!result.success) break
+  }
+} finally {
+  await stopNativeRouter(router)
 }
 
 process.stdout.write(`${JSON.stringify({ arm: 'tura-direct', sequence: results.map((result) => ({ taskId: result.taskId, success: result.success, sessionId: result.sessionId })) })}\n`)
 if (results.some((result) => !result.success) || results.length !== sequence.length) process.exitCode = 1
+
+async function ensureNativeRouter(options: TuraOptions, routerLogFile: string | undefined): Promise<{ child?: ChildProcess }> {
+  const binary = process.env.CUPPET_TURA_ROUTER_BIN?.trim()
+  if (!binary) return {}
+  const home = resolve(process.env.TURA_HOME?.trim() || process.cwd())
+  const endpointPath = join(home, 'db', 'session_log', 'router.addr')
+  if (await waitForRouter(endpointPath, 0)) return {}
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    TURA_HOME: home,
+    TURA_DEBUG_RUNTIME: process.env.TURA_DEBUG_RUNTIME || '1',
+    ...(routerLogFile ? { TURA_ROUTER_STDERR_LOG: `${routerLogFile}.tura.router.stderr.log` } : {}),
+  }
+  const routerCwd = resolve(process.env.TURA_HOME?.trim() || options.workspace)
+  const child = spawn(binary, ['serve-socket'], { cwd: routerCwd, env, stdio: ['ignore', 'ignore', 'pipe'] })
+  const nativeStderr: Buffer[] = []
+  child.stderr?.on('data', (chunk: Buffer) => nativeStderr.push(chunk))
+  const ready = await waitForRouter(endpointPath, 30_000, child)
+  if (!ready) {
+    await stopNativeRouter({ child })
+    const detail = Buffer.concat(nativeStderr).toString('utf8').trim()
+    throw new Error(`Tura native router did not become healthy before the first turn${detail ? `: ${detail}` : ''}`)
+  }
+  return { child }
+}
+
+async function waitForRouter(endpointPath: string, timeoutMs: number, child?: ChildProcess): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  do {
+    if (await routerHealth(endpointPath)) return true
+    if (child && child.exitCode !== null) return false
+    if (timeoutMs === 0) return false
+    await delay(200)
+  } while (Date.now() < deadline)
+  return false
+}
+
+async function routerHealth(endpointPath: string): Promise<boolean> {
+  let endpoint: { addr?: string }
+  try {
+    endpoint = JSON.parse(await readFile(endpointPath, 'utf8')) as { addr?: string }
+  } catch {
+    return false
+  }
+  const addr = endpoint.addr?.trim() || ''
+  const split = addr.lastIndexOf(':')
+  if (split <= 0) return false
+  const host = addr.slice(0, split)
+  const port = Number(addr.slice(split + 1))
+  if (!host || !Number.isInteger(port) || port <= 0) return false
+  return new Promise<boolean>((resolveHealth) => {
+    const socket = createConnection({ host, port })
+    let settled = false
+    const finish = (value: boolean) => {
+      if (settled) return
+      settled = true
+      socket.destroy()
+      resolveHealth(value)
+    }
+    socket.setTimeout(2_500, () => finish(false))
+    socket.once('error', () => finish(false))
+    socket.once('connect', () => {
+      socket.write(`${JSON.stringify({ request_id: `benchmark-health-${Date.now()}`, kind: 'health_check', method: 'health_check', payload: {}, deadline_ms: 5_000 })}\n`)
+    })
+    let buffer = ''
+    socket.on('data', (chunk: Buffer) => {
+      buffer += chunk.toString('utf8')
+      const line = buffer.split(/\r?\n/)[0]
+      try {
+        const response = JSON.parse(line) as { ok?: boolean }
+        finish(response.ok === true)
+      } catch {
+        // Wait for a complete JSONL response.
+      }
+    })
+  })
+}
+
+async function stopNativeRouter(router: { child?: ChildProcess }): Promise<void> {
+  const child = router.child
+  if (child && child.exitCode === null) {
+    child.kill('SIGTERM')
+    await new Promise<void>((resolveStop) => {
+      const timer = setTimeout(() => {
+        if (child.exitCode === null) child.kill('SIGKILL')
+        resolveStop()
+      }, 5_000)
+      child.once('close', () => {
+        clearTimeout(timer)
+        resolveStop()
+      })
+    })
+  }
+  if (child) await cleanupNativeRouterState()
+}
+
+async function cleanupNativeRouterState(): Promise<void> {
+  const home = resolve(process.env.TURA_HOME?.trim() || process.cwd())
+  const runtime = join(home, 'db', 'session_log')
+  await Promise.all([
+    rm(join(runtime, 'router.addr'), { force: true }),
+    rm(join(runtime, 'service.addr'), { force: true }),
+    rm(join(home, '.tura', 'locks', 'router-release.lock'), { force: true }),
+    rm(join(home, '.tura', 'locks', 'session-db-release.lock'), { force: true }),
+    rm(join(runtime, 'index.sqlite3.init.lock'), { force: true }),
+  ])
+}
+
+function delay(timeoutMs: number): Promise<void> {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, timeoutMs))
+}
 
 async function runTurn(
   options: TuraOptions,
@@ -76,7 +193,18 @@ async function runTurn(
     '--log',
     '--sandbox',
   ]
-  const execution = await runProcess(binary, args, options.workspace, prompt, options.timeoutMs)
+  const turaEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    TURA_DEBUG_RUNTIME: process.env.TURA_DEBUG_RUNTIME || '1',
+    TURA_ROUTER_STDERR_LOG: `${entry.resultFile}.tura.router.stderr.log`,
+    TURA_RUNTIME_WORKER_STDERR_LOG: `${entry.resultFile}.tura.runtime.stderr.log`,
+  }
+  // The installed Tura release resolves its shared native router/session-db
+  // service from the explicit repository home; forcing a workspace home makes
+  // that service unreachable on this release.
+  delete turaEnv.TURA_DB_ROOT
+  delete turaEnv.SESSION_LOG_DB_ROOT
+  const execution = await runProcess(binary, args, options.workspace, prompt, options.timeoutMs, turaEnv)
   await writeFile(`${entry.resultFile}.tura.stdout.ndjson`, execution.stdout, 'utf8')
   await writeFile(`${entry.resultFile}.tura.stderr.log`, execution.stderr, 'utf8')
   const events = parseJsonLines(execution.stdout)
@@ -173,8 +301,8 @@ async function runVerifierProcess(command: string, args: string[], cwd: string, 
   return { exitCode, stdout: Buffer.concat(stdout).toString('utf8'), stderr: Buffer.concat(stderr).toString('utf8'), durationMs: Math.round(performance.now() - started), timedOut }
 }
 
-async function runProcess(command: string, args: string[], cwd: string, input: string, timeoutMs: number): Promise<ProcessResult> {
-  const child = spawn(command, args, { cwd, env: process.env, stdio: ['pipe', 'pipe', 'pipe'] })
+async function runProcess(command: string, args: string[], cwd: string, input: string, timeoutMs: number, env = process.env): Promise<ProcessResult> {
+  const child = spawn(command, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] })
   const stdout: Buffer[] = []
   const stderr: Buffer[] = []
   child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk))

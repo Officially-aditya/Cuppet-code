@@ -1,0 +1,642 @@
+{
+  "schema": 1,
+  "status": "completed_with_infrastructure_invalid_opencode",
+  "task": {
+    "id": "actionlint-action-pinning-lint",
+    "name": "datacurve/actionlint-action-pinning-lint",
+    "ext_id": "kh79dnvkvq8j9bs22ededmsc79823akj",
+    "repository": "rhysd/actionlint",
+    "base_commit": "0bdc95715fa58f64e3fd6e63b0f89be8733cbbab",
+    "dataset_digest": "sha256:31f1f6c3b4054e331c40f906409102c23a53f2b9667a3fe779dec4d2704ad4aa",
+    "prompt_sha256": "02472c08b7de7ca4d7d709a3b53db835fe8bcc76a887a13c18dc5aba86bd37f9",
+    "task_toml_sha256": "a171ddc6849f81f146c05b5fa230341fbc691e26b90edb4d3d80efd274141f66"
+  },
+  "official_source": {
+    "repository": "https://github.com/datacurve-ai/deep-swe",
+    "revision": "0b9fabbb63b9104d678fe965e1632f2dd9eaa2ea",
+    "revision_subject": "Update task timeout settings to 10800s",
+    "controller": "datacurve-pier 0.3.1"
+  },
+  "verifier": {
+    "network": "no-network",
+    "environment": "separate",
+    "timeout_sec": 1800,
+    "sha256": "8f85ac81d62f7f7da3d42f2c6a3f07048f9ad571f57b29553a8098a3077de527",
+    "files": {
+      "tests/Dockerfile": "0b9bdabc3f18bafa78d129d076c3464c5a8d9d52d4b1f07ff58603c85ca3e89e",
+      "tests/config.json": "003e2833f422b8c74af29572915c0c020466255dd5125ed33e8587e7ef60cf17",
+      "tests/grader.py": "47cc9eaadf21e636323c360ec4fa786f0733ec9fd1d21ea5a5717ff9f8c4077c",
+      "tests/test.sh": "ad32349418c97fe12a090d09ddb5c3880b1b992500c2f69275ef702b52c6e0e3",
+      "tests/test.patch": "608be125ea90894b68b06e664229b6de7911403695132fc0ff794ceefa39a856"
+    }
+  },
+  "environment": {
+    "image": "public.ecr.aws/d3j8x8q7/swe-bench-202605:kh79dnvkvq8j9bs22ededmsc79823akj-v1.1",
+    "image_digest": "sha256:522a6e93a31656d03cc79474dafc5542bb27109051914d5566d7d29789c2a1a6",
+    "platform": "linux/amd64",
+    "cpus": 2,
+    "memory_mb": 8192,
+    "storage_mb": 20480,
+    "agent_timeout_sec": 10800,
+    "verifier_timeout_sec": 1800,
+    "agent_network": "no-network with provider egress proxy"
+  },
+  "run_contract": {
+    "tasks_selected": 1,
+    "arms": [
+      "opencode",
+      "cuppet"
+    ],
+    "repetitions": 1,
+    "paid_model_attempts": 2,
+    "pre_model_setup_failures_excluded": true,
+    "automatic_retries": 0,
+    "order": [
+      "opencode",
+      "cuppet"
+    ]
+  },
+  "arms": {
+    "opencode": {
+      "status": "infrastructure_invalid",
+      "agent": "stock OpenCode",
+      "version": "1.18.4",
+      "upstream_revision": "49c69c5ed3ccf706b61b3febb43c8aaff7f8325e",
+      "model": {
+        "provider": "openai",
+        "id": "gpt-5.6-luna",
+        "reasoning_effort": "low"
+      },
+      "verifier": {
+        "reward": 0,
+        "f2p_total": 55,
+        "f2p_passed": 54,
+        "p2p_total": 145,
+        "p2p_passed": 141,
+        "f2p": 0.9818181818181818,
+        "p2p": 0.9724137931034482,
+        "partial": 0.975
+      },
+      "exception": "NonZeroAgentExitCodeError exit 137 after final stop event; process was manually terminated after >20 minutes with no new log output",
+      "telemetry": {
+        "total_input": 1970258,
+        "cached_input": 1875456,
+        "uncached_input": 94802,
+        "output": 6098,
+        "reasoning": 1085,
+        "normalized_model_tokens": 101985,
+        "observed_token_volume": 1976356,
+        "model_rounds": 36,
+        "tool_calls": 50,
+        "commands": 15,
+        "trajectory_duration_ms": 533609,
+        "cost_usd": null,
+        "patch": {
+          "bytes": 11093,
+          "lines": 323,
+          "files": 5
+        },
+        "cache_share": 0.9518834589175631
+      },
+      "trajectory": [
+        {
+          "round": 1,
+          "uncached_input": 6345,
+          "cached_input": 0,
+          "total_input": 6345,
+          "output": 178,
+          "reasoning": 20,
+          "cache_share": 0.0,
+          "cumulative_uncached": 6345,
+          "cumulative_cached": 0,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 2,
+          "uncached_input": 3164,
+          "cached_input": 3584,
+          "total_input": 6748,
+          "output": 141,
+          "reasoning": 0,
+          "cache_share": 0.5311203319502075,
+          "cumulative_uncached": 9509,
+          "cumulative_cached": 3584,
+          "tool_calls_since_previous_round": 5
+        },
+        {
+          "round": 3,
+          "uncached_input": 1426,
+          "cached_input": 5632,
+          "total_input": 7058,
+          "output": 26,
+          "reasoning": 24,
+          "cache_share": 0.7979597619722301,
+          "cumulative_uncached": 10935,
+          "cumulative_cached": 9216,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 4,
+          "uncached_input": 854,
+          "cached_input": 6656,
+          "total_input": 7510,
+          "output": 134,
+          "reasoning": 8,
+          "cache_share": 0.8862849533954728,
+          "cumulative_uncached": 11789,
+          "cumulative_cached": 15872,
+          "tool_calls_since_previous_round": 3
+        },
+        {
+          "round": 5,
+          "uncached_input": 1093,
+          "cached_input": 6656,
+          "total_input": 7749,
+          "output": 134,
+          "reasoning": 29,
+          "cache_share": 0.8589495418763712,
+          "cumulative_uncached": 12882,
+          "cumulative_cached": 22528,
+          "tool_calls_since_previous_round": 6
+        },
+        {
+          "round": 6,
+          "uncached_input": 28150,
+          "cached_input": 6656,
+          "total_input": 34806,
+          "output": 120,
+          "reasoning": 11,
+          "cache_share": 0.19123139688559443,
+          "cumulative_uncached": 41032,
+          "cumulative_cached": 29184,
+          "tool_calls_since_previous_round": 5
+        },
+        {
+          "round": 7,
+          "uncached_input": 18480,
+          "cached_input": 34304,
+          "total_input": 52784,
+          "output": 55,
+          "reasoning": 13,
+          "cache_share": 0.6498939072446196,
+          "cumulative_uncached": 59512,
+          "cumulative_cached": 63488,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 8,
+          "uncached_input": 3050,
+          "cached_input": 51712,
+          "total_input": 54762,
+          "output": 30,
+          "reasoning": 0,
+          "cache_share": 0.9443044446879223,
+          "cumulative_uncached": 62562,
+          "cumulative_cached": 115200,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 9,
+          "uncached_input": 1500,
+          "cached_input": 53760,
+          "total_input": 55260,
+          "output": 30,
+          "reasoning": 0,
+          "cache_share": 0.9728555917480999,
+          "cumulative_uncached": 64062,
+          "cumulative_cached": 168960,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 10,
+          "uncached_input": 2011,
+          "cached_input": 54784,
+          "total_input": 56795,
+          "output": 32,
+          "reasoning": 69,
+          "cache_share": 0.964591953517035,
+          "cumulative_uncached": 66073,
+          "cumulative_cached": 223744,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 11,
+          "uncached_input": 1110,
+          "cached_input": 55808,
+          "total_input": 56918,
+          "output": 38,
+          "reasoning": 100,
+          "cache_share": 0.9804982606556801,
+          "cumulative_uncached": 67183,
+          "cumulative_cached": 279552,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 12,
+          "uncached_input": 277,
+          "cached_input": 56832,
+          "total_input": 57109,
+          "output": 30,
+          "reasoning": 0,
+          "cache_share": 0.9951496261534959,
+          "cumulative_uncached": 67460,
+          "cumulative_cached": 336384,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 13,
+          "uncached_input": 731,
+          "cached_input": 56832,
+          "total_input": 57563,
+          "output": 748,
+          "reasoning": 16,
+          "cache_share": 0.9873008703507461,
+          "cumulative_uncached": 68191,
+          "cumulative_cached": 393216,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 14,
+          "uncached_input": 1551,
+          "cached_input": 56832,
+          "total_input": 58383,
+          "output": 593,
+          "reasoning": 21,
+          "cache_share": 0.9734340475823442,
+          "cumulative_uncached": 69742,
+          "cumulative_cached": 450048,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 15,
+          "uncached_input": 1197,
+          "cached_input": 57856,
+          "total_input": 59053,
+          "output": 522,
+          "reasoning": 15,
+          "cache_share": 0.9797300729852844,
+          "cumulative_uncached": 70939,
+          "cumulative_cached": 507904,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 16,
+          "uncached_input": 736,
+          "cached_input": 58880,
+          "total_input": 59616,
+          "output": 113,
+          "reasoning": 0,
+          "cache_share": 0.9876543209876543,
+          "cumulative_uncached": 71675,
+          "cumulative_cached": 566784,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 17,
+          "uncached_input": 905,
+          "cached_input": 58880,
+          "total_input": 59785,
+          "output": 129,
+          "reasoning": 26,
+          "cache_share": 0.9848624236848708,
+          "cumulative_uncached": 72580,
+          "cumulative_cached": 625664,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 18,
+          "uncached_input": 1081,
+          "cached_input": 58880,
+          "total_input": 59961,
+          "output": 1061,
+          "reasoning": 39,
+          "cache_share": 0.9819716148830073,
+          "cumulative_uncached": 73661,
+          "cumulative_cached": 684544,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 19,
+          "uncached_input": 2205,
+          "cached_input": 58880,
+          "total_input": 61085,
+          "output": 130,
+          "reasoning": 61,
+          "cache_share": 0.9639027584513383,
+          "cumulative_uncached": 75866,
+          "cumulative_cached": 743424,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 20,
+          "uncached_input": 383,
+          "cached_input": 60928,
+          "total_input": 61311,
+          "output": 32,
+          "reasoning": 7,
+          "cache_share": 0.9937531601180865,
+          "cumulative_uncached": 76249,
+          "cumulative_cached": 804352,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 21,
+          "uncached_input": 1421,
+          "cached_input": 60928,
+          "total_input": 62349,
+          "output": 128,
+          "reasoning": 0,
+          "cache_share": 0.9772089367912877,
+          "cumulative_uncached": 77670,
+          "cumulative_cached": 865280,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 22,
+          "uncached_input": 547,
+          "cached_input": 61952,
+          "total_input": 62499,
+          "output": 138,
+          "reasoning": 57,
+          "cache_share": 0.9912478599657595,
+          "cumulative_uncached": 78217,
+          "cumulative_cached": 927232,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 23,
+          "uncached_input": 764,
+          "cached_input": 61952,
+          "total_input": 62716,
+          "output": 105,
+          "reasoning": 10,
+          "cache_share": 0.9878181006441737,
+          "cumulative_uncached": 78981,
+          "cumulative_cached": 989184,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 24,
+          "uncached_input": 4810,
+          "cached_input": 61952,
+          "total_input": 66762,
+          "output": 150,
+          "reasoning": 131,
+          "cache_share": 0.9279530271711453,
+          "cumulative_uncached": 83791,
+          "cumulative_cached": 1051136,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 25,
+          "uncached_input": 1017,
+          "cached_input": 66048,
+          "total_input": 67065,
+          "output": 43,
+          "reasoning": 15,
+          "cache_share": 0.9848356072467009,
+          "cumulative_uncached": 84808,
+          "cumulative_cached": 1117184,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 26,
+          "uncached_input": 1861,
+          "cached_input": 66048,
+          "total_input": 67909,
+          "output": 265,
+          "reasoning": 107,
+          "cache_share": 0.9725956795122885,
+          "cumulative_uncached": 86669,
+          "cumulative_cached": 1183232,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 27,
+          "uncached_input": 1233,
+          "cached_input": 67072,
+          "total_input": 68305,
+          "output": 54,
+          "reasoning": 41,
+          "cache_share": 0.98194861283947,
+          "cumulative_uncached": 87902,
+          "cumulative_cached": 1250304,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 28,
+          "uncached_input": 352,
+          "cached_input": 68096,
+          "total_input": 68448,
+          "output": 32,
+          "reasoning": 92,
+          "cache_share": 0.9948574100046751,
+          "cumulative_uncached": 88254,
+          "cumulative_cached": 1318400,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 29,
+          "uncached_input": 1490,
+          "cached_input": 68096,
+          "total_input": 69586,
+          "output": 263,
+          "reasoning": 12,
+          "cache_share": 0.9785876469404765,
+          "cumulative_uncached": 89744,
+          "cumulative_cached": 1386496,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 30,
+          "uncached_input": 763,
+          "cached_input": 69120,
+          "total_input": 69883,
+          "output": 134,
+          "reasoning": 17,
+          "cache_share": 0.9890817509265487,
+          "cumulative_uncached": 90507,
+          "cumulative_cached": 1455616,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 31,
+          "uncached_input": 1119,
+          "cached_input": 69120,
+          "total_input": 70239,
+          "output": 87,
+          "reasoning": 0,
+          "cache_share": 0.9840686797932773,
+          "cumulative_uncached": 91626,
+          "cumulative_cached": 1524736,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 32,
+          "uncached_input": 280,
+          "cached_input": 70144,
+          "total_input": 70424,
+          "output": 67,
+          "reasoning": 24,
+          "cache_share": 0.9960240826990798,
+          "cumulative_uncached": 91906,
+          "cumulative_cached": 1594880,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 33,
+          "uncached_input": 465,
+          "cached_input": 70144,
+          "total_input": 70609,
+          "output": 36,
+          "reasoning": 33,
+          "cache_share": 0.9934144372530413,
+          "cumulative_uncached": 92371,
+          "cumulative_cached": 1665024,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 34,
+          "uncached_input": 559,
+          "cached_input": 70144,
+          "total_input": 70703,
+          "output": 101,
+          "reasoning": 8,
+          "cache_share": 0.9920936876794478,
+          "cumulative_uncached": 92930,
+          "cumulative_cached": 1735168,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 35,
+          "uncached_input": 728,
+          "cached_input": 70144,
+          "total_input": 70872,
+          "output": 133,
+          "reasoning": 79,
+          "cache_share": 0.9897279602663958,
+          "cumulative_uncached": 93658,
+          "cumulative_cached": 1805312,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 36,
+          "uncached_input": 1144,
+          "cached_input": 70144,
+          "total_input": 71288,
+          "output": 86,
+          "reasoning": 0,
+          "cache_share": 0.9839524183593311,
+          "cumulative_uncached": 94802,
+          "cumulative_cached": 1875456,
+          "tool_calls_since_previous_round": 0
+        }
+      ],
+      "raw_paths": [
+        "raw/opencode/opencode.txt",
+        "raw/opencode/trajectory.json",
+        "raw/opencode/model.patch",
+        "raw/opencode/reward.json",
+        "raw/opencode/ctrf.json",
+        "raw/opencode/exception.txt"
+      ]
+    },
+    "cuppet": {
+      "status": "completed_attempt",
+      "agent": "Cuppet",
+      "version": "0.2.0-alpha.2",
+      "commit": "12e34fc27050889e21215dc3dac95fc2390d9820",
+      "derivative": {
+        "version": "1.18.4",
+        "upstream_revision": "49c69c5ed3ccf706b61b3febb43c8aaff7f8325e",
+        "patch_set_digest": "d410071d21b6ab86af307e5e8f6706b99b3b75454be1e312fd9fa2f7998419b0",
+        "tst_protocol": "cuppet.tst.v3"
+      },
+      "model": {
+        "provider": "openai",
+        "id": "gpt-5.6-luna",
+        "reasoning_effort": "low"
+      },
+      "verifier": {
+        "reward": 0,
+        "f2p_total": 55,
+        "f2p_passed": 0,
+        "p2p_total": 145,
+        "p2p_passed": 145,
+        "f2p": 0.0,
+        "p2p": 1.0,
+        "partial": 0.725
+      },
+      "exception": null,
+      "telemetry": {
+        "total_input": 23880,
+        "cached_input": 14336,
+        "uncached_input": 9544,
+        "output": 309,
+        "reasoning": 34,
+        "normalized_model_tokens": 9887,
+        "observed_token_volume": 24189,
+        "model_rounds": 3,
+        "tool_calls": 6,
+        "commands": 1,
+        "trajectory_duration_ms": 50097,
+        "server_start_to_dispose_ms": 99211,
+        "cost_usd": null,
+        "patch": {
+          "bytes": 0,
+          "lines": 0,
+          "files": 0
+        },
+        "cache_share": 0.6003350083752094
+      },
+      "trajectory": [
+        {
+          "round": 1,
+          "uncached_input": 7654,
+          "cached_input": 0,
+          "total_input": 7654,
+          "output": 164,
+          "reasoning": 20,
+          "cache_share": 0.0,
+          "cumulative_uncached": 7654,
+          "cumulative_cached": 0,
+          "tool_calls_since_previous_round": 1
+        },
+        {
+          "round": 2,
+          "uncached_input": 1381,
+          "cached_input": 6656,
+          "total_input": 8037,
+          "output": 101,
+          "reasoning": 0,
+          "cache_share": 0.8281697150678113,
+          "cumulative_uncached": 9035,
+          "cumulative_cached": 6656,
+          "tool_calls_since_previous_round": 4
+        },
+        {
+          "round": 3,
+          "uncached_input": 509,
+          "cached_input": 7680,
+          "total_input": 8189,
+          "output": 44,
+          "reasoning": 14,
+          "cache_share": 0.9378434485285139,
+          "cumulative_uncached": 9544,
+          "cumulative_cached": 14336,
+          "tool_calls_since_previous_round": 1
+        }
+      ],
+      "raw_paths": [
+        "raw/cuppet/opencode.db",
+        "raw/cuppet/opencode.db-wal",
+        "raw/cuppet/opencode.log",
+        "raw/cuppet/cuppet.stdout",
+        "raw/cuppet/reward.json",
+        "raw/cuppet/verifier-test-stdout.txt",
+        "raw/cuppet/model.patch",
+        "raw/cuppet/cuppet-projects"
+      ]
+    }
+  }
+}

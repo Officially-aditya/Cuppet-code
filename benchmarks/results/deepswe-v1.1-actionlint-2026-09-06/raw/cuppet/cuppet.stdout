@@ -1,0 +1,1 @@
+I’ll inspect the existing rule, configuration, CLI, and test structure first, then create a branch from `main`, implement the rule end to end, run focused and full tests, and commit the finished changes.

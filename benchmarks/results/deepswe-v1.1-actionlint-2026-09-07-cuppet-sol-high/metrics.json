@@ -1,0 +1,77 @@
+{
+  "schema": 1,
+  "status": "completed",
+  "task": {
+    "id": "actionlint-action-pinning-lint",
+    "name": "datacurve/actionlint-action-pinning-lint",
+    "repository": "rhysd/actionlint",
+    "base_commit": "0bdc95715fa58f64e3fd6e63b0f89be8733cbbab",
+    "dataset_digest": "sha256:31f1f6c3b4054e331c40f906409102c23a53f2b9667a3fe779dec4d2704ad4aa",
+    "prompt_sha256": "02472c08b7de7ca4d7d709a3b53db835fe8bcc76a887a13c18dc5aba86bd37f9",
+    "task_toml_sha256": "a171ddc6849f81f146c05b5fa230341fbc691e26b90edb4d3d80efd274141f66"
+  },
+  "official_source": {
+    "revision": "0b9fabbb63b9104d678fe965e1632f2dd9eaa2ea",
+    "controller": "datacurve-pier 0.3.1"
+  },
+  "run": {
+    "job_id": "de0e8192-9c40-4e67-82a6-adad0b5545fe",
+    "trial": "actionlint-action-pinning-lint__bMY8jdL",
+    "tasks": 1,
+    "repetitions": 1,
+    "automatic_retries": 0,
+    "arm": "cuppet",
+    "agent_exit_code": 0,
+    "exception": null,
+    "started_at": "2026-09-07T03:50:33.522775Z",
+    "finished_at": "2026-09-07T04:53:41.240925Z",
+    "agent_finished_at": "2026-09-07T04:49:54.410354Z",
+    "verifier_finished_at": "2026-09-07T04:53:41.234694Z"
+  },
+  "agent": {
+    "runtime": "Cuppet 0.2.0-alpha.2+64fa9a0",
+    "model": "openai/gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "native_tst_protocol": "cuppet.tst.v3"
+  },
+  "resources": {
+    "cpus": 2,
+    "memory_mb": 8192,
+    "storage_mb": 20480,
+    "agent_timeout_sec": 10800,
+    "verifier_timeout_sec": 1800
+  },
+  "verifier": {
+    "reward": 1,
+    "partial": 1.0,
+    "f2p": 1.0,
+    "f2p_passed": 55,
+    "f2p_total": 55,
+    "p2p": 1.0,
+    "p2p_passed": 145,
+    "p2p_total": 145,
+    "ctrf_tests": 200,
+    "ctrf_passed": 200,
+    "reward_sha256": "6d351ecb8db214f1e6e4683e0497d4c1bedda9d6eeef33c91cd5d3b2ab06e659",
+    "ctrf_sha256": "9f751e9b5c5ac3de7892af0cf740f11c8d8a84612473d417afc57b0cdf96906c"
+  },
+  "native_telemetry": {
+    "foreground_model_rounds": 64,
+    "uncached_input": 142208,
+    "cached_input": 5503360,
+    "total_input": 5645568,
+    "output": 21341,
+    "reasoning": 12244,
+    "normalized_model_tokens": 175793,
+    "observed_token_volume": 5666909,
+    "foreground_session_duration_sec": 3520.713,
+    "agent_execution_duration_sec": 3553.087
+  },
+  "patch": {
+    "files": 12,
+    "insertions": 818,
+    "deletions": 14,
+    "bytes": 39595,
+    "sha256": "1af6af99ecfbee9a7673c01890aeb557ca213d0398fc2e67401fdd7405f78dbe"
+  }
+}

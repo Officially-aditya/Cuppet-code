@@ -3,14 +3,14 @@
 > A local-first coding agent with OpenCode's terminal workflow, durable memory,
 > and a Tree-sitter code graph.
 
-Cuppet is a modified OpenCode 1.18.4 derivative with a native Solid/OpenTUI
+Cuppet is a modified OpenCode 1.18.29 derivative with a native Solid/OpenTUI
 terminal client, backed by a private OpenCode server and a native Rust
 tiered-memory/code-graph daemon. The Cuppet wrapper supplies memory and
 background-agent services; the derived TUI owns the interactive transcript,
 composer, sessions, permissions, questions, models, and provider connection.
 
-The alpha pins OpenCode and `@opencode-ai/sdk` to the stable **v1.18.4** release
-at revision `49c69c5ed3ccf706b61b3febb43c8aaff7f8325e`. Numbered patches live in
+The alpha pins OpenCode and `@opencode-ai/sdk` to the stable **v1.18.29** release
+at revision `16747470f976aca3d362ad730bcd3fe82ecc2c9a`. Numbered patches live in
 [`patches/opencode/`](patches/opencode/) and are applied in a temporary detached
 worktree. Provider credentials, tools,
 sessions, model routing, diffs, permissions, compaction, and undo stay inside
@@ -163,7 +163,7 @@ later.
 ## Architecture
 
 ```text
-Derived OpenCode 1.18.4 TUI + Cuppet wrapper
+Derived OpenCode 1.18.29 TUI + Cuppet wrapper
   ├─ private OpenCode server + native attach TUI + SDK observer
   │  └─ sessions, tools, permissions, models, diffs, auth, undo
   ├─ Cuppet server/TUI plugins + authenticated launch-scoped Unix control socket

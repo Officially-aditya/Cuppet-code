@@ -101,7 +101,7 @@ const execFile = promisify(execFileCallback)
 const project = resolve(process.cwd())
 const codexBinary = process.env.CUPPET_CODEX_BIN ?? 'codex'
 const officialOpenCodeBinary = process.env.CUPPET_OFFICIAL_OPENCODE_BIN
-  ?? '/private/tmp/cuppet-opencode-official-1.18.4/node_modules/opencode-darwin-arm64/bin/opencode'
+  ?? '/private/tmp/cuppet-opencode-official-1.18.29/node_modules/opencode-darwin-arm64/bin/opencode'
 const configuredArms = parseArms(process.env.CUPPET_WEATHER_ARMS)
 const reportLabel = process.env.CUPPET_WEATHER_LABEL ?? configuredArms.join('-')
 const repeats = Math.max(1, Math.min(3, Number(process.env.CUPPET_WEATHER_REPEATS ?? '1') || 1))

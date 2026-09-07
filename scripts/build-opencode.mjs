@@ -6,8 +6,8 @@ import { dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
-const revision = '49c69c5ed3ccf706b61b3febb43c8aaff7f8325e'
-const version = '1.18.4'
+const revision = '16747470f976aca3d362ad730bcd3fe82ecc2c9a'
+const version = '1.18.29'
 const sourceArgument = process.argv.find((argument) => argument.startsWith('--source='))
 const outputArgument = process.argv.find((argument) => argument.startsWith('--output='))
 if (!sourceArgument || !outputArgument) {

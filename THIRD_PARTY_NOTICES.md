@@ -2,8 +2,8 @@
 
 ## OpenCode
 
-OpenCode v1.18.4, pinned to stable release revision
-`49c69c5ed3ccf706b61b3febb43c8aaff7f8325e`, is distributed under the MIT
+OpenCode v1.18.29, pinned to stable release revision
+`16747470f976aca3d362ad730bcd3fe82ecc2c9a`, is distributed under the MIT
 License. Cuppet distributes a modified derivative built from a numbered patch
 stack; the patch-set SHA-256 is recorded in each runtime `manifest.json` and
 SBOM. Platform packages include the upstream license next to the derived

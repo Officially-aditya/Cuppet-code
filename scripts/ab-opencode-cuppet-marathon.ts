@@ -552,7 +552,7 @@ async function main(): Promise<void> {
     throw new Error(`Cuppet runtime unavailable: ${assets.diagnostics.join('; ')}`)
   }
   const officialBinary = process.env.CUPPET_OFFICIAL_OPENCODE_BIN
-    ?? '/private/tmp/cuppet-opencode-official-1.18.4/node_modules/opencode-darwin-arm64/bin/opencode'
+    ?? '/private/tmp/cuppet-opencode-official-1.18.29/node_modules/opencode-darwin-arm64/bin/opencode'
   const officialVersion = await commandVersion(officialBinary)
   if (officialVersion.trim() !== OPENCODE_VERSION) {
     throw new Error(`Official OpenCode version mismatch: expected ${OPENCODE_VERSION}, received ${officialVersion || 'unknown'}`)

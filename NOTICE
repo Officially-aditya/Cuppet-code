@@ -1,8 +1,8 @@
 Cuppet
 Copyright 2026 Cuppet contributors
 
-This product bundles a modified OpenCode v1.18.4 derivative at revision
-49c69c5ed3ccf706b61b3febb43c8aaff7f8325e. OpenCode is licensed under the MIT
+This product bundles a modified OpenCode v1.18.29 derivative at revision
+16747470f976aca3d362ad730bcd3fe82ecc2c9a. OpenCode is licensed under the MIT
 License. The numbered derivative patch stack and its digest are included in
 the runtime manifest. See THIRD_PARTY_NOTICES.md.
 

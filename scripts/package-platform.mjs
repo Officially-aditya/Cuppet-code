@@ -19,7 +19,7 @@ const [packageDirectory, platform, arch, libc] = configuration
 const expectedTstProtocol = 'cuppet.tst.v3'
 const releaseVersion = JSON.parse(await readFile(resolve('package.json'), 'utf8')).version
 const opencodeSource = process.env.CUPPET_OPENCODE_BIN
-if (!opencodeSource) throw new Error('CUPPET_OPENCODE_BIN must point to OpenCode v1.18.4 at revision 49c69c5ed3ccf706b61b3febb43c8aaff7f8325e')
+if (!opencodeSource) throw new Error('CUPPET_OPENCODE_BIN must point to OpenCode v1.18.29 at revision 16747470f976aca3d362ad730bcd3fe82ecc2c9a')
 const derivativeMarker = join(dirname(resolve(opencodeSource)), '.cuppet-derivative.json')
 let marker
 try {
@@ -27,7 +27,7 @@ try {
 } catch {
   throw new Error(`OpenCode binary is not a Cuppet derivative: missing or unreadable ${derivativeMarker}`)
 }
-if (marker.product !== 'cuppet-opencode-derivative' || marker.upstreamVersion !== '1.18.4' || marker.upstreamRevision !== '49c69c5ed3ccf706b61b3febb43c8aaff7f8325e') {
+if (marker.product !== 'cuppet-opencode-derivative' || marker.upstreamVersion !== '1.18.29' || marker.upstreamRevision !== '16747470f976aca3d362ad730bcd3fe82ecc2c9a') {
   throw new Error('OpenCode derivative marker targets an incompatible upstream binary')
 }
 
@@ -101,7 +101,7 @@ const cargoMetadata = JSON.parse(await capture('cargo', [
 ]))
 const softwarePackages = [
   spdxPackage('Cuppet', releaseVersion, 'Apache-2.0', 'SPDXRef-Cuppet'),
-  spdxPackage('OpenCode', '1.18.4', 'MIT', 'SPDXRef-OpenCode'),
+  spdxPackage('OpenCode', '1.18.29', 'MIT', 'SPDXRef-OpenCode'),
   spdxPackage('Cuppet OpenCode derivative patch set', manifest.patchSetDigest, 'Apache-2.0', 'SPDXRef-Cuppet-Patches'),
   spdxPackage('zod', '3.25.76', 'MIT', 'SPDXRef-Zod'),
   ...cargoMetadata.packages.map((item, index) => spdxPackage(

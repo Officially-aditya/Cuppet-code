@@ -32,7 +32,7 @@
   },
   "dependencies": {
     "@huggingface/transformers": "4.2.0",
-    "@opencode-ai/sdk": "1.18.4",
+    "@opencode-ai/sdk": "1.18.29",
     "qrcode": "1.5.4",
     "zod": "3.25.76"
   },

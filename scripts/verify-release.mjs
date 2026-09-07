@@ -21,9 +21,9 @@ for (const manifestPath of manifests) {
   const directory = manifestPath.slice(0, -'/manifest.json'.length)
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
   if (
-    manifest.opencodeVersion !== '1.18.4' ||
-    manifest.sdkVersion !== '1.18.4' ||
-    manifest.opencodeRevision !== '49c69c5ed3ccf706b61b3febb43c8aaff7f8325e'
+    manifest.opencodeVersion !== '1.18.29' ||
+    manifest.sdkVersion !== '1.18.29' ||
+    manifest.opencodeRevision !== '16747470f976aca3d362ad730bcd3fe82ecc2c9a'
   ) {
     throw new Error(`version mismatch in ${manifestPath}`)
   }
@@ -53,8 +53,8 @@ for (const manifestPath of manifests) {
   const marker = JSON.parse(await readFile(join(directory, 'bin/.cuppet-derivative.json'), 'utf8'))
   if (
     marker.product !== 'cuppet-opencode-derivative' ||
-    marker.upstreamVersion !== '1.18.4' ||
-    marker.upstreamRevision !== '49c69c5ed3ccf706b61b3febb43c8aaff7f8325e' ||
+    marker.upstreamVersion !== '1.18.29' ||
+    marker.upstreamRevision !== '16747470f976aca3d362ad730bcd3fe82ecc2c9a' ||
     marker.patchSetDigest !== manifest.patchSetDigest
   ) throw new Error(`invalid derivative identity marker in ${directory}`)
   for (const required of ['LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md', 'sbom.spdx.json']) {
@@ -64,7 +64,7 @@ for (const manifestPath of manifests) {
   if (
     sbom.spdxVersion !== 'SPDX-2.3' ||
     !Array.isArray(sbom.packages) ||
-    !sbom.packages.some((item) => item.name === 'OpenCode' && item.versionInfo === '1.18.4') ||
+    !sbom.packages.some((item) => item.name === 'OpenCode' && item.versionInfo === '1.18.29') ||
     !sbom.packages.some((item) => item.name === 'tst-daemon') ||
     !sbom.packages.some((item) => item.name === 'Cuppet OpenCode derivative patch set')
   ) {

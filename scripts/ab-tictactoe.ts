@@ -171,7 +171,7 @@ try {
     task: 'Create a complete TypeScript Tic-Tac-Toe game with engine, AI, CLI, tests, and scripts.',
     model,
     arms: benchmarkArms,
-    kernel: { name: 'official OpenCode', version: '1.18.4' },
+    kernel: { name: 'official OpenCode', version: '1.18.29' },
     design: 'paired fresh repository copies; identical task/model/tools/permissions; Cuppet adds bounded TST context; arm order alternates; mutations are isolated per trial',
     repeats: taskRepeats,
     summary,

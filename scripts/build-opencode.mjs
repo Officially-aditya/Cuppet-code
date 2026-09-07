@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { createHash } from 'node:crypto'
-import { chmod, copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { createHash, randomBytes } from 'node:crypto'
+import { chmod, copyFile, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -79,7 +79,13 @@ try {
   const packageName = `opencode-${platform}-${process.arch}${process.arch === 'x64' ? '-baseline' : ''}`
   const built = resolve(patchedSource, 'packages/opencode/dist', packageName, 'bin/opencode')
   await mkdir(dirname(output), { recursive: true })
-  await copyFile(built, output)
+  const temporaryOutput = `${output}.${randomBytes(6).toString('hex')}.tmp`
+  try {
+    await copyFile(built, temporaryOutput)
+    await rename(temporaryOutput, output)
+  } finally {
+    await rm(temporaryOutput, { force: true }).catch(() => undefined)
+  }
   await chmod(output, 0o755)
   const markerPath = join(dirname(output), '.cuppet-derivative.json')
   await writeFile(markerPath, `${JSON.stringify({

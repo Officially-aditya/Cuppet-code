@@ -109,9 +109,9 @@ function run(command, arguments_, environment) {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(command, arguments_, { stdio: 'inherit', env: environment })
     child.once('error', reject)
-    child.once('exit', (code) => code === 0
+    child.once('exit', (code, signal) => code === 0
       ? resolvePromise()
-      : reject(new Error(`${command} exited ${code}`)))
+      : reject(new Error(`${command} exited ${exitReason(code, signal)}`)))
   })
 }
 
@@ -121,8 +121,12 @@ function capture(command, arguments_, environment) {
     let output = ''
     child.stdout.on('data', (chunk) => (output += chunk.toString('utf8')))
     child.once('error', reject)
-    child.once('exit', (code) => code === 0
+    child.once('exit', (code, signal) => code === 0
       ? resolvePromise(output)
-      : reject(new Error(`${command} exited ${code}`)))
+      : reject(new Error(`${command} exited ${exitReason(code, signal)}`)))
   })
+}
+
+function exitReason(code, signal) {
+  return signal ?? (code === null ? 'unknown' : code)
 }

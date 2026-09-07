@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { createHash } from 'node:crypto'
-import { chmod, copyFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
+import { createHash, randomBytes } from 'node:crypto'
+import { chmod, copyFile, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { basename, dirname, join, resolve } from 'node:path'
 
@@ -51,7 +51,7 @@ if (daemonProtocol !== expectedTstProtocol) {
 for (const [destination, source] of Object.entries(files)) {
   if (destination === 'package.json') continue
   const targetPath = join(output, destination)
-  if (resolve(source) !== resolve(targetPath)) await copyFile(source, targetPath)
+  if (resolve(source) !== resolve(targetPath)) await replaceFile(source, targetPath)
 }
 const packageMetadata = {
   ...sourcePackage,
@@ -138,6 +138,16 @@ async function sha256(path) {
   const data = await readFile(path)
   hash.update(data)
   return hash.digest('hex')
+}
+
+async function replaceFile(source, destination) {
+  const temporary = `${destination}.${randomBytes(6).toString('hex')}.tmp`
+  try {
+    await copyFile(source, temporary)
+    await rename(temporary, destination)
+  } finally {
+    await rm(temporary, { force: true }).catch(() => undefined)
+  }
 }
 
 function run(command, arguments_) {

@@ -1,3 +1,4 @@
+pub mod editing;
 pub mod graph;
 pub mod memory;
 pub mod persistence;

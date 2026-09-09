@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { canExecuteRuntime } from './release-platform.mjs'
 
 const root = resolve(process.argv[2] ?? 'artifacts')
@@ -18,7 +18,7 @@ if (manifests.length !== expectedCount) {
 }
 const platformKeys = new Set()
 for (const manifestPath of manifests) {
-  const directory = manifestPath.slice(0, -'/manifest.json'.length)
+  const directory = dirname(manifestPath)
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
   if (
     manifest.opencodeVersion !== '1.18.4' ||
@@ -71,7 +71,45 @@ for (const manifestPath of manifests) {
     throw new Error(`incomplete SPDX SBOM in ${directory}`)
   }
 }
-process.stdout.write(`verified ${manifests.length} platform package(s)\n`)
+
+const standaloneTst = await find(root, 'tst-runtime.json')
+if (standaloneTst.length !== expectedCount) {
+  throw new Error(`expected ${expectedCount} standalone TST runtimes, found ${standaloneTst.length}`)
+}
+const standaloneKeys = new Set()
+for (const metadataPath of standaloneTst) {
+  const directory = dirname(metadataPath)
+  const metadata = JSON.parse(await readFile(metadataPath, 'utf8'))
+  if (
+    metadata.schema !== 1 ||
+    metadata.kind !== 'cuppet-tst-runtime' ||
+    metadata.version !== releaseVersion ||
+    metadata.protocol !== expectedTstProtocol
+  ) throw new Error(`invalid standalone TST metadata in ${metadataPath}`)
+  const platformKey = `${metadata.platform}-${metadata.arch}-${metadata.libc ?? 'native'}`
+  if (!platformKeys.has(platformKey)) throw new Error(`standalone TST runtime has no matching full runtime: ${platformKey}`)
+  if (standaloneKeys.has(platformKey)) throw new Error(`duplicate standalone TST runtime ${platformKey}`)
+  standaloneKeys.add(platformKey)
+  const files = Object.entries(metadata.files ?? {})
+  if (files.length !== 1 || !files[0][0].startsWith('bin/tst-daemon')) {
+    throw new Error(`standalone TST runtime must identify exactly one daemon in ${metadataPath}`)
+  }
+  const [relative, expected] = files[0]
+  if (!/^[a-f0-9]{64}$/.test(expected)) throw new Error(`invalid standalone TST checksum in ${metadataPath}`)
+  const path = join(directory, relative)
+  const actual = createHash('sha256').update(await readFile(path)).digest('hex')
+  if (actual !== expected) throw new Error(`standalone TST checksum mismatch for ${path}`)
+  if (((await stat(path)).mode & 0o111) === 0) throw new Error(`standalone TST daemon is not executable: ${path}`)
+  for (const required of ['LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md']) {
+    if (!(await stat(join(directory, required))).isFile()) throw new Error(`standalone TST runtime is missing ${required}: ${directory}`)
+  }
+  if (verifyExecutables && canExecuteRuntime(metadata)) {
+    const daemonProtocol = (await capture(path, ['--protocol'])).trim()
+    if (daemonProtocol !== expectedTstProtocol) throw new Error(`standalone TST executable protocol mismatch in ${directory}`)
+  }
+}
+
+process.stdout.write(`verified ${manifests.length} platform package(s) and ${standaloneTst.length} standalone TST runtime(s)\n`)
 
 async function find(directory, name) {
   const output = []

@@ -93,6 +93,8 @@ jobs:
         env:
           CUPPET_OPENCODE_BIN: ${{ github.workspace }}/.opencode/opencode
           CUPPET_APPLE_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
+      - name: Package standalone TST runtime
+        run: node scripts/package-tst-runtime.mjs --source=${{ github.workspace }}/artifacts/${{ matrix.package_dir }}/bin/tst-daemon --target=${{ matrix.target }} --output=${{ github.workspace }}/artifacts/tst-${{ matrix.package_dir }}
       - name: Notarize macOS runtime
         if: startsWith(matrix.target, 'aarch64-apple') || startsWith(matrix.target, 'x86_64-apple')
         run: |
@@ -124,7 +126,7 @@ jobs:
         with:
           path: artifacts
       - name: Restore runtime executable permissions
-        run: chmod 755 artifacts/**/bin/opencode artifacts/**/bin/tst-daemon
+        run: find artifacts -type f \( -name opencode -o -name tst-daemon \) -exec chmod 755 {} +
       - run: npm ci
       - run: npm run build:ts
       - name: Create and verify installable npm bundle
@@ -172,7 +174,7 @@ jobs:
           path: artifacts
           merge-multiple: true
       - name: Restore runtime executable permissions
-        run: chmod 755 artifacts/**/bin/opencode artifacts/**/bin/tst-daemon
+        run: find artifacts -type f \( -name opencode -o -name tst-daemon \) -exec chmod 755 {} +
       - run: npm ci
       - name: Configure GitHub Packages authentication
         run: npm config set //npm.pkg.github.com/:_authToken "$NODE_AUTH_TOKEN"

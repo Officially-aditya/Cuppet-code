@@ -347,7 +347,9 @@ fn introduced_diagnostic_count(
 ) -> usize {
     let mut available = HashMap::<String, usize>::new();
     for diagnostic in base {
-        *available.entry(diagnostic_signature(diagnostic, base_source)).or_default() += 1;
+        *available
+            .entry(diagnostic_signature(diagnostic, base_source))
+            .or_default() += 1;
     }
     let mut introduced = 0usize;
     for diagnostic in staged {
@@ -587,22 +589,40 @@ mod tests {
     fn diagnostic_diff_detects_replacement_errors_without_count_growth() {
         let base = vec![ParseDiagnostic {
             kind: "ERROR".into(),
-            start_byte: 0, end_byte: 3,
-            start_row: 0, start_column: 0, end_row: 0, end_column: 3,
+            start_byte: 0,
+            end_byte: 3,
+            start_row: 0,
+            start_column: 0,
+            end_row: 0,
+            end_column: 3,
         }];
         let moved_same = vec![ParseDiagnostic {
             kind: "ERROR".into(),
-            start_byte: 2, end_byte: 5,
-            start_row: 0, start_column: 2, end_row: 0, end_column: 5,
+            start_byte: 2,
+            end_byte: 5,
+            start_row: 0,
+            start_column: 2,
+            end_row: 0,
+            end_column: 5,
         }];
-        assert_eq!(introduced_diagnostic_count(&base, b"bad", &moved_same, b"xxbad"), 0);
+        assert_eq!(
+            introduced_diagnostic_count(&base, b"bad", &moved_same, b"xxbad"),
+            0
+        );
 
         let replacement = vec![ParseDiagnostic {
             kind: "ERROR".into(),
-            start_byte: 0, end_byte: 3,
-            start_row: 0, start_column: 0, end_row: 0, end_column: 3,
+            start_byte: 0,
+            end_byte: 3,
+            start_row: 0,
+            start_column: 0,
+            end_row: 0,
+            end_column: 3,
         }];
-        assert_eq!(introduced_diagnostic_count(&base, b"bad", &replacement, b"new"), 1);
+        assert_eq!(
+            introduced_diagnostic_count(&base, b"bad", &replacement, b"new"),
+            1
+        );
     }
 
     #[test]

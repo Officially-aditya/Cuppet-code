@@ -294,7 +294,8 @@ fn language_for_path(path: &Path) -> Option<(Language, &'static str)> {
 fn symbol_name_node(node: Node<'_>) -> Option<Node<'_>> {
     node.child_by_field_name("name").or_else(|| node.child_by_field_name("declarator")).or_else(|| {
         let mut cursor = node.walk();
-        node.named_children(&mut cursor).find(|child| matches!(child.kind(), "identifier" | "type_identifier" | "field_identifier"))
+        let result = node.named_children(&mut cursor).find(|child| matches!(child.kind(), "identifier" | "type_identifier" | "field_identifier"));
+        result
     })
 }
 

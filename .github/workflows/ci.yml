@@ -44,6 +44,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build TST contract daemon
         run: cargo build --locked -p tst-daemon
+      - name: Verify standalone TST runtime packaging
+        run: node scripts/package-tst-runtime.mjs --source=${{ github.workspace }}/target/debug/tst-daemon --output=${{ runner.temp }}/cuppet-tst-runtime
       - run: npm ci
       - run: npm run build
       - name: Build audited OpenCode contract binary

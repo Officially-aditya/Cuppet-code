@@ -25,6 +25,7 @@
     "package:cli": "node scripts/package-cli.mjs",
     "build:opencode": "node scripts/build-opencode.mjs",
     "package:platform": "node scripts/package-platform.mjs",
+    "package:tst-runtime": "node scripts/package-tst-runtime.mjs",
     "build:rust": "cargo build --workspace --locked",
     "eval:ab": "node --import tsx scripts/ab-eval.ts",
     "eval:ab:persistent": "CUPPET_AB_PERSISTENT_GRAPH=1 node --import tsx scripts/ab-eval.ts",

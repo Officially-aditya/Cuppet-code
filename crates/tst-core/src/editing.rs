@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use tree_sitter::{Language, Node, Parser};
@@ -186,7 +187,12 @@ pub fn parse_staged(root: &Path, input: StagedParseInput) -> Result<StagedParseO
     let staged_tree = parse_source(&language, &staged)?;
     let mut staged_diagnostics = Vec::new();
     collect_error_nodes(staged_tree.root_node(), &mut staged_diagnostics);
-    let introduced_syntax_errors = staged_diagnostics.len().saturating_sub(base_diagnostics.len());
+    let introduced_syntax_errors = introduced_diagnostic_count(
+        &base_diagnostics,
+        current.as_deref().unwrap_or_default(),
+        &staged_diagnostics,
+        &staged,
+    );
     let diagnostics_truncated =
         base_diagnostics.len() > MAX_PARSE_ERRORS || staged_diagnostics.len() > MAX_PARSE_ERRORS;
     base_diagnostics.truncate(MAX_PARSE_ERRORS);
@@ -331,6 +337,33 @@ fn collect_error_nodes(node: Node<'_>, output: &mut Vec<ParseDiagnostic>) {
             collect_error_nodes(child, output);
         }
     }
+}
+
+fn introduced_diagnostic_count(
+    base: &[ParseDiagnostic],
+    base_source: &[u8],
+    staged: &[ParseDiagnostic],
+    staged_source: &[u8],
+) -> usize {
+    let mut available = HashMap::<String, usize>::new();
+    for diagnostic in base {
+        *available.entry(diagnostic_signature(diagnostic, base_source)).or_default() += 1;
+    }
+    let mut introduced = 0usize;
+    for diagnostic in staged {
+        let signature = diagnostic_signature(diagnostic, staged_source);
+        match available.get_mut(&signature) {
+            Some(count) if *count > 0 => *count -= 1,
+            _ => introduced += 1,
+        }
+    }
+    introduced
+}
+
+fn diagnostic_signature(diagnostic: &ParseDiagnostic, source: &[u8]) -> String {
+    let start = diagnostic.start_byte.min(source.len());
+    let end = diagnostic.end_byte.min(source.len()).max(start);
+    format!("{}:{}", diagnostic.kind, sha256(&source[start..end]))
 }
 
 fn resolve_workspace_path(root: &Path, requested: &str, must_exist: bool) -> Result<PathBuf> {
@@ -548,6 +581,28 @@ mod tests {
         assert_eq!(parsed.base_syntax_ok, Some(true));
         assert!(parsed.introduced_syntax_errors > 0);
         assert!(!parsed.staged_syntax_ok);
+    }
+
+    #[test]
+    fn diagnostic_diff_detects_replacement_errors_without_count_growth() {
+        let base = vec![ParseDiagnostic {
+            kind: "ERROR".into(),
+            start_byte: 0, end_byte: 3,
+            start_row: 0, start_column: 0, end_row: 0, end_column: 3,
+        }];
+        let moved_same = vec![ParseDiagnostic {
+            kind: "ERROR".into(),
+            start_byte: 2, end_byte: 5,
+            start_row: 0, start_column: 2, end_row: 0, end_column: 5,
+        }];
+        assert_eq!(introduced_diagnostic_count(&base, b"bad", &moved_same, b"xxbad"), 0);
+
+        let replacement = vec![ParseDiagnostic {
+            kind: "ERROR".into(),
+            start_byte: 0, end_byte: 3,
+            start_row: 0, start_column: 0, end_row: 0, end_column: 3,
+        }];
+        assert_eq!(introduced_diagnostic_count(&base, b"bad", &replacement, b"new"), 1);
     }
 
     #[test]

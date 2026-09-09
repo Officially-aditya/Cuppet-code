@@ -52,6 +52,7 @@ jobs:
       - run: npm run fmt:check
       - run: npm run lint
       - name: Run npm test
+        timeout-minutes: 10
         run: |
           if npm test; then
             exit 0

@@ -245,6 +245,7 @@ fn collect_targets(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn push_target(
     node: Node<'_>,
     source: &[u8],
@@ -348,7 +349,7 @@ fn resolve_workspace_path(root: &Path, requested: &str, must_exist: bool) -> Res
     }
     let candidate = root.join(requested_path);
     let resolved = if must_exist {
-        let resolved = fs::canonicalize(&candidate).with_context(|| format!("resolve {}", requested))?;
+        let resolved = fs::canonicalize(&candidate).with_context(|| format!("resolve {requested}"))?;
         let metadata = fs::symlink_metadata(&resolved)?;
         if metadata.file_type().is_symlink() || !metadata.is_file() {
             return Err(anyhow!("path is not a regular project file"));
@@ -356,7 +357,7 @@ fn resolve_workspace_path(root: &Path, requested: &str, must_exist: bool) -> Res
         resolved
     } else {
         if candidate.exists() {
-            return Err(anyhow!("new staged file already exists: {}", requested));
+            return Err(anyhow!("new staged file already exists: {requested}"));
         }
         let mut ancestor = candidate
             .parent()
@@ -365,7 +366,7 @@ fn resolve_workspace_path(root: &Path, requested: &str, must_exist: bool) -> Res
         while !ancestor.exists() {
             ancestor = ancestor
                 .parent()
-                .ok_or_else(|| anyhow!("no existing project ancestor for {}", requested))?
+                .ok_or_else(|| anyhow!("no existing project ancestor for {requested}"))?
                 .to_path_buf();
         }
         let actual_ancestor = fs::canonicalize(&ancestor)?;

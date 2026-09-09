@@ -52,7 +52,8 @@ jobs:
       - run: npm run fmt:check
       - run: npm run lint
       - name: Run npm test
-        timeout-minutes: 10
+        # Bound the full suite so a wedged hosted macOS runner cannot hold a PR indefinitely.
+        timeout-minutes: 12
         run: |
           if npm test; then
             exit 0

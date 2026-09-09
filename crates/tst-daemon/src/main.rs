@@ -153,7 +153,8 @@ impl Options {
                 _ => return Err(anyhow!("unknown argument {argument}")),
             }
         }
-        let token = env::var("CUPPET_TST_TOKEN").context("CUPPET_TST_TOKEN must be supplied by the supervisor")?;
+        let token =
+            env::var("CUPPET_TST_TOKEN").context("CUPPET_TST_TOKEN must be supplied by the supervisor")?;
         if token.len() < 32 {
             return Err(anyhow!("CUPPET_TST_TOKEN is too short"));
         }
@@ -197,24 +198,44 @@ async fn serve_connection(
         let request: Request = match serde_json::from_slice(&payload) {
             Ok(request) => request,
             Err(error) => {
-                write_response(&mut writer, Response::error(Value::Null, -32700, format!("parse error: {error}"))).await?;
+                write_response(
+                    &mut writer,
+                    Response::error(Value::Null, -32700, format!("parse error: {error}")),
+                )
+                .await?;
                 continue;
             }
         };
         let id = request.id.clone().unwrap_or(Value::Null);
         if request.jsonrpc != "2.0" {
-            write_response(&mut writer, Response::error(id, -32600, "jsonrpc must be 2.0".into())).await?;
+            write_response(
+                &mut writer,
+                Response::error(id, -32600, "jsonrpc must be 2.0".into()),
+            )
+            .await?;
             continue;
         }
 
         if request.method == "initialize" {
-            let token = request.params.get("token").and_then(Value::as_str).unwrap_or_default();
+            let token = request
+                .params
+                .get("token")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
             if !constant_time_equal(token.as_bytes(), expected_token.as_bytes()) {
-                write_response(&mut writer, Response::error(id, -32001, "authentication failed".into())).await?;
+                write_response(
+                    &mut writer,
+                    Response::error(id, -32001, "authentication failed".into()),
+                )
+                .await?;
                 break;
             }
             authenticated = true;
-            notifications_enabled = request.params.get("notifications").and_then(Value::as_bool).unwrap_or(false);
+            notifications_enabled = request
+                .params
+                .get("notifications")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
             write_response(
                 &mut writer,
                 Response::success(
@@ -231,18 +252,27 @@ async fn serve_connection(
                 ),
             ).await?;
             if notifications_enabled {
-                let health = RpcNotification::new("health", serde_json::to_value(service.lock().await.status())?);
+                let health =
+                    RpcNotification::new("health", serde_json::to_value(service.lock().await.status())?);
                 write_message(&mut writer, &health).await?;
             }
             continue;
         }
 
         if !authenticated {
-            write_response(&mut writer, Response::error(id, -32001, "initialize with a valid token first".into())).await?;
+            write_response(
+                &mut writer,
+                Response::error(id, -32001, "initialize with a valid token first".into()),
+            )
+            .await?;
             continue;
         }
         if !is_known_method(&request.method) {
-            write_response(&mut writer, Response::error(id, -32601, format!("method not found: {}", request.method))).await?;
+            write_response(
+                &mut writer,
+                Response::error(id, -32601, format!("method not found: {}", request.method)),
+            )
+            .await?;
             continue;
         }
 
@@ -253,10 +283,16 @@ async fn serve_connection(
                 if let Some(notification) = notification_for(&request.method, result) {
                     let _ = events.send(notification);
                 }
-                if should_shutdown { shutdown.notify_waiters(); }
+                if should_shutdown {
+                    shutdown.notify_waiters();
+                }
             }
             Err(error) => {
-                write_response(&mut writer, Response::error(id, -32000, redact_error(&format!("{error:#}")))).await?;
+                write_response(
+                    &mut writer,
+                    Response::error(id, -32000, redact_error(&format!("{error:#}"))),
+                )
+                .await?;
             }
         }
     }
@@ -291,7 +327,12 @@ fn is_known_method(method: &str) -> bool {
     )
 }
 
-async fn dispatch(method: &str, params: Value, service: &Arc<Mutex<TstService>>, project_root: &Path) -> Result<Value> {
+async fn dispatch(
+    method: &str,
+    params: Value,
+    service: &Arc<Mutex<TstService>>,
+    project_root: &Path,
+) -> Result<Value> {
     match method {
         "memory.observe" => {
             let input: ObserveInput = serde_json::from_value(params)?;
@@ -331,24 +372,32 @@ async fn dispatch(method: &str, params: Value, service: &Arc<Mutex<TstService>>,
             let query = required_string(&params, "query")?;
             let prefix = params.get("prefix").and_then(Value::as_str);
             let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(20) as usize;
-            Ok(serde_json::to_value(service.lock().await.graph_query(query, prefix, limit))?)
+            Ok(serde_json::to_value(
+                service.lock().await.graph_query(query, prefix, limit),
+            )?)
         }
         "graph.search" => {
             let pattern = required_string(&params, "pattern")?;
             let prefix = params.get("prefix").and_then(Value::as_str);
             let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(20) as usize;
-            Ok(serde_json::to_value(service.lock().await.graph_search(pattern, prefix, limit))?)
+            Ok(serde_json::to_value(
+                service.lock().await.graph_search(pattern, prefix, limit),
+            )?)
         }
         "graph.locate" => {
             let pattern = required_string(&params, "pattern")?;
             let prefix = params.get("prefix").and_then(Value::as_str);
             let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(12) as usize;
-            Ok(serde_json::to_value(service.lock().await.graph_locate(pattern, prefix, limit))?)
+            Ok(serde_json::to_value(
+                service.lock().await.graph_locate(pattern, prefix, limit),
+            )?)
         }
         "graph.list" => {
             let prefix = params.get("prefix").and_then(Value::as_str);
             let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(100) as usize;
-            Ok(serde_json::to_value(service.lock().await.graph_list(prefix, limit))?)
+            Ok(serde_json::to_value(
+                service.lock().await.graph_list(prefix, limit),
+            )?)
         }
         "graph.workspace" => {
             let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(100) as usize;
@@ -359,14 +408,21 @@ async fn dispatch(method: &str, params: Value, service: &Arc<Mutex<TstService>>,
             let direction = params.get("direction").and_then(Value::as_str).unwrap_or("both");
             let depth = params.get("depth").and_then(Value::as_u64).unwrap_or(2) as usize;
             let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(40) as usize;
-            Ok(serde_json::to_value(service.lock().await.graph_trace(query, direction, depth, limit)?)?)
+            Ok(serde_json::to_value(
+                service.lock().await.graph_trace(query, direction, depth, limit)?,
+            )?)
         }
         "graph.trace_summary" => {
             let query = required_string(&params, "query")?;
             let direction = params.get("direction").and_then(Value::as_str).unwrap_or("both");
             let depth = params.get("depth").and_then(Value::as_u64).unwrap_or(2) as usize;
             let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(12) as usize;
-            Ok(serde_json::to_value(service.lock().await.graph_trace_summary(query, direction, depth, limit)?)?)
+            Ok(serde_json::to_value(
+                service
+                    .lock()
+                    .await
+                    .graph_trace_summary(query, direction, depth, limit)?,
+            )?)
         }
         "edit.resolve_targets" => {
             let input: ResolveEditTargetsInput = serde_json::from_value(params)?;
@@ -377,13 +433,20 @@ async fn dispatch(method: &str, params: Value, service: &Arc<Mutex<TstService>>,
             Ok(serde_json::to_value(parse_staged(project_root, input)?)?)
         }
         "graph.refresh_paths" => {
-            let values = params.get("paths").and_then(Value::as_array).ok_or_else(|| anyhow!("paths array is required"))?;
-            if values.len() > MAX_REFRESH_PATHS { return Err(anyhow!("too many graph refresh paths")); }
+            let values = params
+                .get("paths")
+                .and_then(Value::as_array)
+                .ok_or_else(|| anyhow!("paths array is required"))?;
+            if values.len() > MAX_REFRESH_PATHS {
+                return Err(anyhow!("too many graph refresh paths"));
+            }
             let mut refreshed = Vec::new();
             let graph = {
                 let mut service = service.lock().await;
                 for value in values {
-                    let relative = value.as_str().ok_or_else(|| anyhow!("refresh path must be a string"))?;
+                    let relative = value
+                        .as_str()
+                        .ok_or_else(|| anyhow!("refresh path must be a string"))?;
                     let path = safe_project_join(project_root, relative)?;
                     let hash = service.update_graph_path(&path)?;
                     refreshed.push(json!({ "path": relative.replace('\\', "/"), "content_hash": hash }));
@@ -397,35 +460,55 @@ async fn dispatch(method: &str, params: Value, service: &Arc<Mutex<TstService>>,
             Ok(json!({ "promoted": service.lock().await.completed_foreground_turn(session_id)? }))
         }
         "status" => Ok(serde_json::to_value(service.lock().await.status())?),
-        "compact" => { service.lock().await.compact()?; Ok(json!({ "compacted": true })) }
-        "flush" => { service.lock().await.flush()?; Ok(json!({ "flushed": true })) }
-        "shutdown" => { service.lock().await.flush()?; Ok(json!({ "shutting_down": true })) }
+        "compact" => {
+            service.lock().await.compact()?;
+            Ok(json!({ "compacted": true }))
+        }
+        "flush" => {
+            service.lock().await.flush()?;
+            Ok(json!({ "flushed": true }))
+        }
+        "shutdown" => {
+            service.lock().await.flush()?;
+            Ok(json!({ "shutting_down": true }))
+        }
         _ => Err(anyhow!("method not found: {method}")),
     }
 }
 
 fn notification_for(method: &str, result: Value) -> Option<RpcNotification> {
     let event = match method {
-        "memory.observe" | "memory.remember" | "memory.forget" | "evidence.record" | "turn.completed" => "memory.changed",
+        "memory.observe" | "memory.remember" | "memory.forget" | "evidence.record" | "turn.completed" => {
+            "memory.changed"
+        }
         "stm.refresh" => "stm.refreshed",
         "graph.refresh_paths" => "graph.changed",
         "compact" | "flush" => "health",
         "shutdown" => "health.shutdown",
         _ => return None,
     };
-    Some(RpcNotification::new(event, json!({ "operation": method, "result": result })))
+    Some(RpcNotification::new(
+        event,
+        json!({ "operation": method, "result": result }),
+    ))
 }
 
 fn spawn_initial_index(service: Arc<Mutex<TstService>>, events: broadcast::Sender<RpcNotification>) {
     tokio::spawn(async move {
         let paths = service.lock().await.begin_graph_index();
         let discovered = paths.len();
-        let _ = events.send(RpcNotification::new("indexing.progress", json!({ "discovered": discovered, "indexed": 0, "complete": false })));
+        let _ = events.send(RpcNotification::new(
+            "indexing.progress",
+            json!({ "discovered": discovered, "indexed": 0, "complete": false }),
+        ));
         for (index, path) in paths.into_iter().enumerate() {
             service.lock().await.index_graph_path(&path);
             let indexed = index + 1;
             if indexed % 25 == 0 || indexed == discovered {
-                let _ = events.send(RpcNotification::new("indexing.progress", json!({ "discovered": discovered, "indexed": indexed, "complete": false })));
+                let _ = events.send(RpcNotification::new(
+                    "indexing.progress",
+                    json!({ "discovered": discovered, "indexed": indexed, "complete": false }),
+                ));
             }
             tokio::task::yield_now().await;
         }
@@ -434,11 +517,18 @@ fn spawn_initial_index(service: Arc<Mutex<TstService>>, events: broadcast::Sende
             service.finish_graph_index();
             service.status().graph
         };
-        let _ = events.send(RpcNotification::new("indexing.complete", serde_json::to_value(graph).unwrap_or_else(|_| json!({ "complete": true }))));
+        let _ = events.send(RpcNotification::new(
+            "indexing.complete",
+            serde_json::to_value(graph).unwrap_or_else(|_| json!({ "complete": true })),
+        ));
     });
 }
 
-fn spawn_watcher(root: PathBuf, service: Arc<Mutex<TstService>>, events: broadcast::Sender<RpcNotification>) -> Result<()> {
+fn spawn_watcher(
+    root: PathBuf,
+    service: Arc<Mutex<TstService>>,
+    events: broadcast::Sender<RpcNotification>,
+) -> Result<()> {
     let (sender, mut receiver) = mpsc::channel::<notify::Result<Event>>(256);
     let mut watcher: RecommendedWatcher = notify::recommended_watcher(move |event| {
         let _ = sender.blocking_send(event);
@@ -447,23 +537,37 @@ fn spawn_watcher(root: PathBuf, service: Arc<Mutex<TstService>>, events: broadca
     tokio::spawn(async move {
         let _watcher = watcher;
         while let Some(event) = receiver.recv().await {
-            let Ok(event) = event else { continue; };
-            if !matches!(event.kind, EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_)) { continue; }
+            let Ok(event) = event else {
+                continue;
+            };
+            if !matches!(
+                event.kind,
+                EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_)
+            ) {
+                continue;
+            }
             let mut paths: HashSet<PathBuf> = event.paths.into_iter().collect();
             tokio::time::sleep(Duration::from_millis(125)).await;
             while let Ok(next) = receiver.try_recv() {
-                if let Ok(next) = next { paths.extend(next.paths); }
+                if let Ok(next) = next {
+                    paths.extend(next.paths);
+                }
             }
             let mut changed = 0usize;
             let graph = {
                 let mut service = service.lock().await;
                 for path in paths {
-                    if service.update_graph_path(&path).is_ok() { changed += 1; }
+                    if service.update_graph_path(&path).is_ok() {
+                        changed += 1;
+                    }
                 }
                 service.status().graph
             };
             if changed > 0 {
-                let _ = events.send(RpcNotification::new("graph.changed", json!({ "changed_paths": changed, "graph": graph })));
+                let _ = events.send(RpcNotification::new(
+                    "graph.changed",
+                    json!({ "changed_paths": changed, "graph": graph }),
+                ));
             }
         }
     });
@@ -481,7 +585,9 @@ where
         Err(error) => return Err(error.into()),
     }
     let length = u32::from_be_bytes(length) as usize;
-    if length == 0 || length > MAX_FRAME_BYTES { return Err(anyhow!("invalid RPC frame length {length}")); }
+    if length == 0 || length > MAX_FRAME_BYTES {
+        return Err(anyhow!("invalid RPC frame length {length}"));
+    }
     let mut payload = vec![0u8; length];
     stream.read_exact(&mut payload).await?;
     Ok(Some(payload))
@@ -500,7 +606,9 @@ where
     T: Serialize,
 {
     let payload = serde_json::to_vec(message)?;
-    if payload.len() > MAX_FRAME_BYTES { return Err(anyhow!("RPC response exceeds frame limit")); }
+    if payload.len() > MAX_FRAME_BYTES {
+        return Err(anyhow!("RPC response exceeds frame limit"));
+    }
     stream.write_all(&(payload.len() as u32).to_be_bytes()).await?;
     stream.write_all(&payload).await?;
     stream.flush().await?;
@@ -509,16 +617,30 @@ where
 
 impl Response {
     fn success(id: Value, result: Value) -> Self {
-        Self { jsonrpc: "2.0", id, result: Some(result), error: None }
+        Self {
+            jsonrpc: "2.0",
+            id,
+            result: Some(result),
+            error: None,
+        }
     }
     fn error(id: Value, code: i32, message: String) -> Self {
-        Self { jsonrpc: "2.0", id, result: None, error: Some(RpcError { code, message }) }
+        Self {
+            jsonrpc: "2.0",
+            id,
+            result: None,
+            error: Some(RpcError { code, message }),
+        }
     }
 }
 
 impl RpcNotification {
     fn new(method: impl Into<String>, params: Value) -> Self {
-        Self { jsonrpc: "2.0", method: method.into(), params }
+        Self {
+            jsonrpc: "2.0",
+            method: method.into(),
+            params,
+        }
     }
 }
 
@@ -528,7 +650,9 @@ fn prepare_socket(path: &Path) -> Result<()> {
     set_runtime_mode(parent)?;
     if path.exists() {
         let metadata = fs::symlink_metadata(path)?;
-        if !metadata.file_type().is_socket() { return Err(anyhow!("refusing to replace non-socket path {}", path.display())); }
+        if !metadata.file_type().is_socket() {
+            return Err(anyhow!("refusing to replace non-socket path {}", path.display()));
+        }
         fs::remove_file(path)?;
     }
     Ok(())
@@ -547,33 +671,62 @@ fn set_socket_mode(path: &Path) -> Result<()> {
     Ok(())
 }
 #[cfg(not(unix))]
-fn set_runtime_mode(_path: &Path) -> Result<()> { Ok(()) }
+fn set_runtime_mode(_path: &Path) -> Result<()> {
+    Ok(())
+}
 #[cfg(not(unix))]
-fn set_socket_mode(_path: &Path) -> Result<()> { Ok(()) }
+fn set_socket_mode(_path: &Path) -> Result<()> {
+    Ok(())
+}
 
 fn required_string<'a>(value: &'a Value, key: &str) -> Result<&'a str> {
-    value.get(key).and_then(Value::as_str).ok_or_else(|| anyhow!("missing string parameter {key}"))
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("missing string parameter {key}"))
 }
 
 fn safe_project_join(root: &Path, relative: &str) -> Result<PathBuf> {
     let path = Path::new(relative);
-    if path.is_absolute() || relative.contains('\0') || path.components().any(|component| matches!(component, Component::ParentDir | Component::RootDir | Component::Prefix(_))) {
+    if path.is_absolute()
+        || relative.contains('\0')
+        || path.components().any(|component| {
+            matches!(
+                component,
+                Component::ParentDir | Component::RootDir | Component::Prefix(_)
+            )
+        })
+    {
         return Err(anyhow!("refresh path must stay inside project root"));
     }
     Ok(root.join(path))
 }
 
 fn constant_time_equal(left: &[u8], right: &[u8]) -> bool {
-    if left.len() != right.len() { return false; }
+    if left.len() != right.len() {
+        return false;
+    }
     let mut difference = 0u8;
-    for (left, right) in left.iter().zip(right) { difference |= left ^ right; }
+    for (left, right) in left.iter().zip(right) {
+        difference |= left ^ right;
+    }
     difference == 0
 }
 
 fn redact_error(message: &str) -> String {
-    message.split_whitespace().map(|part| {
-        if (part.starts_with("sk-") || part.starts_with("ghp_") || part.starts_with("xoxb-")) && part.len() > 12 { "[REDACTED]" } else { part }
-    }).collect::<Vec<_>>().join(" ")
+    message
+        .split_whitespace()
+        .map(|part| {
+            if (part.starts_with("sk-") || part.starts_with("ghp_") || part.starts_with("xoxb-"))
+                && part.len() > 12
+            {
+                "[REDACTED]"
+            } else {
+                part
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 #[cfg(test)]

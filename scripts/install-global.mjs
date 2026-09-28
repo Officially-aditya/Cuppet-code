@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto'
-import { access, chmod, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
+import { access, chmod, mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { spawn } from 'node:child_process'
@@ -48,28 +48,10 @@ const buildRemedy = [
 ].join('\n')
 
 const npmLauncher = await resolveNpmLauncher()
-const runtime = repoPath('artifacts', runtimeDirectory)
+const localRuntime = repoPath('artifacts', runtimeDirectory)
 const cliSource = repoPath('packages', 'cli')
 const pluginDist = repoPath('packages', 'opencode-plugin', 'dist')
 const patchDirectory = repoPath('patches', 'opencode')
-
-try {
-  await access(resolve(runtime, 'manifest.json'))
-} catch {
-  throw new Error(`runtime artifact is missing at ${runtime};\n${buildRemedy}`)
-}
-
-await validateRuntime(runtime)
-await refreshRuntimePlugins(runtime, pluginDist)
-await validateRuntime(runtime)
-
-try {
-  await access(resolve(cliSource, 'dist', 'cli.js'))
-} catch {
-  throw new Error(
-    `CLI build is missing at ${resolve(cliSource, 'dist', 'cli.js')}; run npm ci && npm run build, then re-run npm run install:global`,
-  )
-}
 
 const staging = await mkdtemp(join(tmpdir(), 'cuppet-install-'))
 const npmEnvironment = {
@@ -79,7 +61,31 @@ const npmEnvironment = {
   NPM_CONFIG_CACHE: join(staging, 'npm-cache'),
   npm_config_cache: join(staging, 'npm-cache'),
 }
+
+// Fresh clones have no gitignored `artifacts/` output. Prefer a local build
+// when present, otherwise fall back to the published `@cuppet-code/*` runtime
+// for this version so `npm run install:global` works on a new machine.
 try {
+  let runtime = localRuntime
+  try {
+    await access(resolve(localRuntime, 'manifest.json'))
+    await validateRuntime(localRuntime)
+    await refreshRuntimePlugins(localRuntime, pluginDist)
+    await validateRuntime(localRuntime)
+  } catch (localError) {
+    const fallback = await tryRegistryRuntime()
+    if (!fallback) throw localError
+    runtime = fallback
+    process.stdout.write(`Using published runtime for ${platformKey} (local artifacts missing).\n`)
+  }
+
+  try {
+    await access(resolve(cliSource, 'dist', 'cli.js'))
+  } catch {
+    throw new Error(
+      `CLI build is missing at ${resolve(cliSource, 'dist', 'cli.js')}; run npm ci && npm run build, then re-run npm run install:global`,
+    )
+  }
   const runtimeTarball = await pack(runtime, staging, npmEnvironment)
   const cliTarball = await pack(cliSource, staging, npmEnvironment)
   await run(npmLauncher.command, [...npmLauncher.prefix, 'install', '--global', '--force', runtimeTarball, cliTarball], npmEnvironment, npmLauncher.shell)
@@ -132,6 +138,70 @@ async function pack(source, destination, environment) {
     throw new Error(`npm pack reported ${filename} for ${source} but the file is missing at ${tarball}`)
   }
   return tarball
+}
+
+async function tryRegistryRuntime() {
+  let version
+  try {
+    version = JSON.parse(await readFile(repoPath('package.json'), 'utf8')).version
+  } catch {
+    return undefined
+  }
+  const spec = `@cuppet-code/${runtimeDirectory}@${version}`
+  const downloadDir = join(staging, 'registry-runtime-download')
+  const extractDir = join(staging, 'registry-runtime')
+  try {
+    await mkdir(downloadDir, { recursive: true })
+    await mkdir(extractDir, { recursive: true })
+    let output
+    try {
+      output = await capture(
+        npmLauncher.command,
+        [...npmLauncher.prefix, 'pack', spec, '--pack-destination', downloadDir],
+        npmEnvironment,
+        npmLauncher.shell,
+      )
+    } catch (error) {
+      process.stderr.write(`Registry fallback unavailable for ${spec}: ${error.message ?? error}\n`)
+      return undefined
+    }
+    const filename = output.trim().split(/\r?\n/).at(-1)?.trim()
+    if (!filename || !filename.endsWith('.tgz')) return undefined
+    const tarball = resolve(downloadDir, filename)
+    try {
+      await access(tarball)
+    } catch {
+      return undefined
+    }
+    // `tar` ships with macOS, Linux, and Windows 10+; package-cli.mjs relies on it too.
+    try {
+      await run('tar', ['-xzf', tarball, '-C', extractDir, '--strip-components=1'], npmEnvironment, process.platform === 'win32')
+    } catch (error) {
+      process.stderr.write(`Unable to unpack registry runtime ${spec}: ${error.message ?? error}\n`)
+      return undefined
+    }
+    // Best-effort: overlay locally built plugins so `npm run build` changes ship
+    // even when the binary runtime comes from the registry. Keep the published
+    // plugin when no local build exists (fresh clone).
+    try {
+      await access(resolve(pluginDist, 'index.js'))
+      await refreshRuntimePlugins(extractDir, pluginDist)
+    } catch {
+      // Keep registry-bundled plugin; validation below still applies.
+    }
+    try {
+      await validateRuntime(extractDir)
+    } catch (error) {
+      // Local patches differ from the published artifact: require a rebuild
+      // rather than silently installing a stale runtime.
+      process.stderr.write(`Registry runtime failed validation: ${error.message ?? error}\n`)
+      return undefined
+    }
+    return extractDir
+  } catch (error) {
+    process.stderr.write(`Registry fallback failed: ${error.message ?? error}\n`)
+    return undefined
+  }
 }
 
 async function validateRuntime(root) {

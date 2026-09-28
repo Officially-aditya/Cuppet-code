@@ -1,0 +1,4 @@
+# Patch files are applied byte-for-byte via `git apply --whitespace=error`.
+# Any CRLF conversion reintroduced by a Windows checkout's core.autocrlf would
+# be read as trailing whitespace and fail the whole derivative build.
+*.patch -text

@@ -40,7 +40,9 @@ const digest = patchSetDigest.digest('hex')
 const temporaryRoot = await mkdtemp(join(tmpdir(), 'cuppet-opencode-'))
 const patchedSource = join(temporaryRoot, 'source')
 
-await run('git', ['worktree', 'add', '--detach', patchedSource, revision], source)
+// Windows runners default to core.autocrlf=true, which would materialize CRLF
+// into the worktree and make every LF-context hunk fail to apply.
+await run('git', ['-c', 'core.autocrlf=false', 'worktree', 'add', '--detach', patchedSource, revision], source)
 try {
   for (const patch of patchFiles) {
     const patchPath = join(patchDirectory, patch)

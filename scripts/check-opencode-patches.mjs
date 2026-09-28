@@ -28,7 +28,9 @@ if (requestedOutput) {
   await run('git', ['worktree', 'remove', '--force', patchedSource], source).catch(() => undefined)
   await rm(patchedSource, { recursive: true, force: true }).catch(() => undefined)
 }
-await run('git', ['worktree', 'add', '--detach', patchedSource, revision], source)
+// Windows runners default to core.autocrlf=true, which would materialize CRLF
+// into the worktree and make every LF-context hunk fail to apply.
+await run('git', ['-c', 'core.autocrlf=false', 'worktree', 'add', '--detach', patchedSource, revision], source)
 let completed = false
 try {
   for (const patch of patchFiles) {

@@ -20,7 +20,13 @@ const target = argument('target')
 const configuration = target ? TARGETS[target] : inferCurrentPlatform()
 if (!configuration) throw new Error(`unsupported TST runtime target: ${target ?? `${process.platform}-${process.arch}`}`)
 
-const source = resolve(sourceArgument)
+let source = resolve(sourceArgument)
+// Cargo emits `tst-daemon.exe` on Windows, while CI and the release matrix pass
+// the extensionless target path; fall back to the suffixed binary.
+if (process.platform === 'win32' && !source.toLowerCase().endsWith('.exe')) {
+  const stats = await stat(source).catch(() => null)
+  if (!stats?.isFile()) source = `${source}.exe`
+}
 const version = JSON.parse(await readFile(resolve('package.json'), 'utf8')).version
 const runtime = runtimeKey(configuration)
 const output = resolve(argument('output') ?? join('artifacts', `tst-runtime-${runtime}`))

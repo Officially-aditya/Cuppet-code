@@ -104,7 +104,11 @@ for (const metadataPath of standaloneTst) {
   const path = join(directory, relative)
   const actual = createHash('sha256').update(await readFile(path)).digest('hex')
   if (actual !== expected) throw new Error(`standalone TST checksum mismatch for ${path}`)
-  if (((await stat(path)).mode & 0o111) === 0) throw new Error(`standalone TST daemon is not executable: ${path}`)
+  // Windows executables arrive from the artifact round-trip without POSIX
+  // execute bits, so only enforce the mode check on POSIX runtimes.
+  if (metadata.platform !== 'win32' && ((await stat(path)).mode & 0o111) === 0) {
+    throw new Error(`standalone TST daemon is not executable: ${path}`)
+  }
   for (const required of ['LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md']) {
     if (!(await stat(join(directory, required))).isFile()) throw new Error(`standalone TST runtime is missing ${required}: ${directory}`)
   }

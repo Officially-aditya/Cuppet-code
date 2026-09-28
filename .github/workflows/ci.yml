@@ -51,7 +51,9 @@ jobs:
       - name: Build TST contract daemon
         run: cargo build --locked -p tst-daemon
       - name: Verify standalone TST runtime packaging
-        run: node scripts/package-tst-runtime.mjs --source=${{ github.workspace }}/target/debug/tst-daemon --output=${{ runner.temp }}/cuppet-tst-runtime
+        # Quote the interpolated Windows paths: the default bash shell treats
+        # backslashes in `D:\a\...` as escapes and mangles them.
+        run: node scripts/package-tst-runtime.mjs --source="${{ github.workspace }}/target/debug/tst-daemon" --output="${{ runner.temp }}/cuppet-tst-runtime"
       - run: npm ci
       - run: npm run build
       - name: Build audited OpenCode contract binary

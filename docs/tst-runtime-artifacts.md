@@ -6,7 +6,7 @@ Cuppet desktop consumes the native TST daemon without the OpenCode derivative or
 
 `scripts/package-tst-runtime.mjs` accepts a native `tst-daemon`, executes `tst-daemon --protocol`, and refuses to package anything other than `cuppet.tst.v3`. It then emits a minimal runtime directory containing:
 
-- `bin/tst-daemon`;
+- `bin/tst-daemon` (`bin/tst-daemon.exe` on Windows);
 - `tst-runtime.json` with platform, architecture, libc, source revision, protocol and SHA-256 identity;
 - `LICENSE`, `NOTICE`, and `THIRD_PARTY_NOTICES.md`.
 
@@ -17,9 +17,11 @@ The supported release matrix matches the native Cuppet runtime matrix:
 - `darwin-arm64`;
 - `darwin-x64`;
 - `linux-arm64-gnu`;
-- `linux-x64-gnu`.
+- `linux-x64-gnu`;
+- `win32-arm64`;
+- `win32-x64`.
 
-Windows is not advertised as a managed native TST platform until Cuppet ships and tests a Windows daemon artifact.
+Windows payloads carry `bin/tst-daemon.exe`, and the release verifier skips the POSIX execute-bit check for them because NTFS has no execute mode.
 
 ## Release contract
 
@@ -30,7 +32,9 @@ The normal platform release build signs the macOS `tst-daemon` before the standa
 - `cuppet-tst-darwin-arm64.tar.gz`;
 - `cuppet-tst-darwin-x64.tar.gz`;
 - `cuppet-tst-linux-arm64-gnu.tar.gz`;
-- `cuppet-tst-linux-x64-gnu.tar.gz`.
+- `cuppet-tst-linux-x64-gnu.tar.gz`;
+- `cuppet-tst-win32-arm64.tar.gz`;
+- `cuppet-tst-win32-x64.tar.gz`.
 
 They are covered by the release `SHA256SUMS` file.
 

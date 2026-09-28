@@ -103,7 +103,8 @@ jobs:
           CUPPET_OPENCODE_BIN: ${{ github.workspace }}/.opencode/opencode
           CUPPET_APPLE_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
       - name: Package standalone TST runtime
-        run: node scripts/package-tst-runtime.mjs --source=${{ github.workspace }}/artifacts/${{ matrix.package_dir }}/bin/tst-daemon --target=${{ matrix.target }} --output=${{ github.workspace }}/artifacts/tst-${{ matrix.package_dir }}
+        # Quote the interpolated Windows paths so backslashes survive the shell.
+        run: node scripts/package-tst-runtime.mjs --source="${{ github.workspace }}/artifacts/${{ matrix.package_dir }}/bin/tst-daemon" --target=${{ matrix.target }} --output="${{ github.workspace }}/artifacts/tst-${{ matrix.package_dir }}"
       - name: Notarize macOS runtime
         if: startsWith(matrix.target, 'aarch64-apple') || startsWith(matrix.target, 'x86_64-apple')
         run: |

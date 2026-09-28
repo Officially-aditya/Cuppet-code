@@ -63,7 +63,7 @@ try {
     OPENCODE_VERSION: version,
     CUPPET_OPENCODE_PATCH_SET_DIGEST: digest,
   }
-  await run('bun', ['install', '--frozen-lockfile'], patchedSource, environment)
+  await installDependencies(patchedSource, environment)
   const buildArguments = [
     'run',
     '--cwd',
@@ -104,6 +104,32 @@ try {
 } finally {
   await run('git', ['worktree', 'remove', '--force', patchedSource], source).catch(() => undefined)
   await rm(temporaryRoot, { recursive: true, force: true }).catch(() => undefined)
+}
+
+// Bun 1.3.14 can reject an unmodified text lockfile in a large workspace
+// monorepo (oven-sh/bun#29348): the frozen check compares in-memory hoisting
+// state instead of the bytes it would write, so it reports drift that a plain
+// install never makes. Prefer the strict install, and when it rejects the
+// lockfile, prove instead that installing leaves `bun.lock` byte-identical.
+// Real drift still fails: an install that changes dependencies rewrites the
+// lockfile.
+async function installDependencies(patchedSource, environment) {
+  const lockfilePath = resolve(patchedSource, 'bun.lock')
+  const committed = await readFile(lockfilePath).catch(() => undefined)
+  try {
+    await run('bun', ['install', '--frozen-lockfile'], patchedSource, environment)
+    return
+  } catch (error) {
+    if (!committed) throw error
+    process.stderr.write(
+      `bun install --frozen-lockfile failed (${error.message}); re-verifying the lockfile by byte identity instead\n`,
+    )
+  }
+  await run('bun', ['install'], patchedSource, environment)
+  const installed = await readFile(lockfilePath).catch(() => undefined)
+  if (!installed || !installed.equals(committed)) {
+    throw new Error(`bun install rewrote ${lockfilePath}: the pinned revision's lockfile does not match its package.json files`)
+  }
 }
 
 function findBuiltBinary(patchedSource) {

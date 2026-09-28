@@ -113,7 +113,10 @@ Build the derived runtime from a local OpenCode checkout with
 `node scripts/build-opencode.mjs --source=/path/to/opencode --output=/tmp/cuppet-opencode`.
 The source checkout must contain the pinned revision and Bun 1.3.14; the
 command applies every numbered patch in a temporary detached worktree and
-writes the hidden derivative marker beside the binary.
+writes the hidden derivative marker beside the binary. Dependency installation
+prefers `bun install --frozen-lockfile` and otherwise proves the committed
+`bun.lock` is byte-identical afterwards, because Bun 1.3.14 can reject an
+unmodified text lockfile in a large workspace monorepo.
 
 The Rust daemon is discovered at `target/debug/tst-daemon` during development.
 Run `cuppet --doctor` for checksum, protocol, storage, provider, and graph

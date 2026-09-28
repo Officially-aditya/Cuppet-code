@@ -50,6 +50,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build TST contract daemon
         run: cargo build --locked -p tst-daemon
+      - name: Verify standalone TST runtime packaging
+        run: node scripts/package-tst-runtime.mjs --source=${{ github.workspace }}/target/debug/tst-daemon --output=${{ runner.temp }}/cuppet-tst-runtime
       - run: npm ci
       - run: npm run build
       - name: Build audited OpenCode contract binary
@@ -58,6 +60,8 @@ jobs:
       - run: npm run fmt:check
       - run: npm run lint
       - name: Run npm test
+        # Bound the full suite so a wedged hosted macOS runner cannot hold a PR indefinitely.
+        timeout-minutes: 12
         run: |
           if npm test; then
             exit 0

@@ -8,7 +8,7 @@ use std::fs;
 use std::io::ErrorKind;
 #[cfg(unix)]
 use std::os::unix::fs::FileTypeExt;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -16,6 +16,7 @@ use tokio::net::TcpListener;
 #[cfg(unix)]
 use tokio::net::UnixListener;
 use tokio::sync::{broadcast, mpsc, Mutex, Notify};
+use tst_core::editing::{parse_staged, resolve_edit_targets, ResolveEditTargetsInput, StagedParseInput};
 use tst_core::memory::MemoryScope;
 use tst_core::service::{
     ContextPrepareInput, EvidenceInput, ObserveInput, QueryInput, RememberInput, StmRefreshInput, TstService,
@@ -23,6 +24,7 @@ use tst_core::service::{
 use tst_core::PROTOCOL_VERSION;
 
 const MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
+const MAX_REFRESH_PATHS: usize = 64;
 
 #[derive(Debug)]
 struct Options {
@@ -107,7 +109,7 @@ async fn run() -> Result<()> {
             tokio::select! {
                 accepted = listener.accept() => {
                     let (stream, _) = accepted?;
-                    spawn_connection(stream, &service, &shutdown, &options.token, &events);
+                    spawn_connection(stream, &service, &shutdown, &options.token, &events, &options.project_root);
                 }
                 _ = shutdown.notified() => break,
             }
@@ -130,7 +132,7 @@ async fn run() -> Result<()> {
                 tokio::select! {
                     accepted = listener.accept() => {
                         let (stream, _) = accepted?;
-                        spawn_connection(stream, &service, &shutdown, &options.token, &events);
+                        spawn_connection(stream, &service, &shutdown, &options.token, &events, &options.project_root);
                     }
                     _ = shutdown.notified() => break,
                 }
@@ -152,6 +154,7 @@ fn spawn_connection<S>(
     shutdown: &Arc<Notify>,
     token: &str,
     events: &broadcast::Sender<RpcNotification>,
+    project_root: &Path,
 ) where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
@@ -159,8 +162,9 @@ fn spawn_connection<S>(
     let shutdown = shutdown.clone();
     let token = token.to_owned();
     let events = events.clone();
+    let project_root = project_root.to_owned();
     tokio::spawn(async move {
-        if let Err(error) = serve_connection(stream, service, shutdown, token, events).await {
+        if let Err(error) = serve_connection(stream, service, shutdown, token, events, project_root).await {
             if !is_expected_disconnect(&error) {
                 eprintln!("tst-daemon connection: {error:#}");
             }
@@ -231,6 +235,7 @@ async fn serve_connection(
     shutdown: Arc<Notify>,
     expected_token: String,
     events: broadcast::Sender<RpcNotification>,
+    project_root: PathBuf,
 ) -> Result<()> {
     let mut authenticated = false;
     let mut notifications_enabled = false;
@@ -300,13 +305,13 @@ async fn serve_connection(
                         "protocol": PROTOCOL_VERSION,
                         "capabilities": [
                             "memory.observe", "memory.query", "memory.remember", "memory.forget", "context.prepare", "turn.completed", "stm.refresh",
-                            "evidence.record", "graph.query", "graph.search", "graph.locate", "graph.list", "graph.workspace", "graph.trace", "graph.trace_summary", "status", "compact", "flush", "shutdown",
-                            "notifications"
+                            "evidence.record", "graph.query", "graph.search", "graph.locate", "graph.list", "graph.workspace", "graph.trace", "graph.trace_summary",
+                            "edit.resolve_targets", "edit.parse_staged", "graph.refresh_paths",
+                            "status", "compact", "flush", "shutdown", "notifications"
                         ]
                     }),
                 ),
-            )
-            .await?;
+            ).await?;
             if notifications_enabled {
                 let health =
                     RpcNotification::new("health", serde_json::to_value(service.lock().await.status())?);
@@ -323,7 +328,6 @@ async fn serve_connection(
             .await?;
             continue;
         }
-
         if !is_known_method(&request.method) {
             write_response(
                 &mut writer,
@@ -334,7 +338,7 @@ async fn serve_connection(
         }
 
         let should_shutdown = request.method == "shutdown";
-        match dispatch(&request.method, request.params, &service).await {
+        match dispatch(&request.method, request.params, &service, &project_root).await {
             Ok(result) => {
                 write_response(&mut writer, Response::success(id, result.clone())).await?;
                 if let Some(notification) = notification_for(&request.method, result) {
@@ -373,6 +377,9 @@ fn is_known_method(method: &str) -> bool {
             | "graph.workspace"
             | "graph.trace"
             | "graph.trace_summary"
+            | "edit.resolve_targets"
+            | "edit.parse_staged"
+            | "graph.refresh_paths"
             | "turn.completed"
             | "status"
             | "compact"
@@ -381,7 +388,12 @@ fn is_known_method(method: &str) -> bool {
     )
 }
 
-async fn dispatch(method: &str, params: Value, service: &Arc<Mutex<TstService>>) -> Result<Value> {
+async fn dispatch(
+    method: &str,
+    params: Value,
+    service: &Arc<Mutex<TstService>>,
+    project_root: &Path,
+) -> Result<Value> {
     match method {
         "memory.observe" => {
             let input: ObserveInput = serde_json::from_value(params)?;
@@ -473,6 +485,37 @@ async fn dispatch(method: &str, params: Value, service: &Arc<Mutex<TstService>>)
                     .graph_trace_summary(query, direction, depth, limit)?,
             )?)
         }
+        "edit.resolve_targets" => {
+            let input: ResolveEditTargetsInput = serde_json::from_value(params)?;
+            Ok(serde_json::to_value(resolve_edit_targets(project_root, input)?)?)
+        }
+        "edit.parse_staged" => {
+            let input: StagedParseInput = serde_json::from_value(params)?;
+            Ok(serde_json::to_value(parse_staged(project_root, input)?)?)
+        }
+        "graph.refresh_paths" => {
+            let values = params
+                .get("paths")
+                .and_then(Value::as_array)
+                .ok_or_else(|| anyhow!("paths array is required"))?;
+            if values.len() > MAX_REFRESH_PATHS {
+                return Err(anyhow!("too many graph refresh paths"));
+            }
+            let mut refreshed = Vec::new();
+            let graph = {
+                let mut service = service.lock().await;
+                for value in values {
+                    let relative = value
+                        .as_str()
+                        .ok_or_else(|| anyhow!("refresh path must be a string"))?;
+                    let path = safe_project_join(project_root, relative)?;
+                    let hash = service.update_graph_path(&path)?;
+                    refreshed.push(json!({ "path": relative.replace('\\', "/"), "content_hash": hash }));
+                }
+                service.status().graph
+            };
+            Ok(json!({ "paths": refreshed, "graph": graph }))
+        }
         "turn.completed" => {
             let session_id = required_string(&params, "session_id")?;
             Ok(json!({ "promoted": service.lock().await.completed_foreground_turn(session_id)? }))
@@ -500,6 +543,7 @@ fn notification_for(method: &str, result: Value) -> Option<RpcNotification> {
             "memory.changed"
         }
         "stm.refresh" => "stm.refreshed",
+        "graph.refresh_paths" => "graph.changed",
         "compact" | "flush" => "health",
         "shutdown" => "health.shutdown",
         _ => return None,
@@ -641,7 +685,6 @@ impl Response {
             error: None,
         }
     }
-
     fn error(id: Value, code: i32, message: String) -> Self {
         Self {
             jsonrpc: "2.0",
@@ -690,19 +733,16 @@ fn set_runtime_mode(path: &Path) -> Result<()> {
     let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o700));
     Ok(())
 }
-
 #[cfg(unix)]
 fn set_socket_mode(path: &Path) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
     fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
     Ok(())
 }
-
 #[cfg(not(unix))]
 fn set_runtime_mode(_path: &Path) -> Result<()> {
     Ok(())
 }
-
 #[cfg(not(unix))]
 #[cfg_attr(not(unix), allow(dead_code))]
 fn set_socket_mode(_path: &Path) -> Result<()> {
@@ -714,6 +754,22 @@ fn required_string<'a>(value: &'a Value, key: &str) -> Result<&'a str> {
         .get(key)
         .and_then(Value::as_str)
         .ok_or_else(|| anyhow!("missing string parameter {key}"))
+}
+
+fn safe_project_join(root: &Path, relative: &str) -> Result<PathBuf> {
+    let path = Path::new(relative);
+    if path.is_absolute()
+        || relative.contains('\0')
+        || path.components().any(|component| {
+            matches!(
+                component,
+                Component::ParentDir | Component::RootDir | Component::Prefix(_)
+            )
+        })
+    {
+        return Err(anyhow!("refresh path must stay inside project root"));
+    }
+    Ok(root.join(path))
 }
 
 fn constant_time_equal(left: &[u8], right: &[u8]) -> bool {
@@ -756,6 +812,17 @@ mod tests {
         assert!(is_known_method("memory.query"));
         assert!(is_known_method("context.prepare"));
         assert!(is_known_method("stm.refresh"));
+        assert!(is_known_method("edit.resolve_targets"));
+        assert!(is_known_method("edit.parse_staged"));
+        assert!(is_known_method("graph.refresh_paths"));
         assert!(!is_known_method("filesystem.delete"));
+    }
+
+    #[test]
+    fn refresh_path_rejects_parent_escape() {
+        let root = Path::new("/tmp/project");
+        assert!(safe_project_join(root, "src/app.ts").is_ok());
+        assert!(safe_project_join(root, "../secret").is_err());
+        assert!(safe_project_join(root, "/etc/passwd").is_err());
     }
 }

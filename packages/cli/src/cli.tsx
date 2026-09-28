@@ -131,7 +131,12 @@ async function main(): Promise<void> {
   const logger = new RedactedLogger(paths.logs)
   const assets = await resolveRuntimeAssets()
   if (!assets.opencode) {
-    throw new Error(`Pinned OpenCode runtime is unavailable. ${assets.diagnostics.join(' ')}`)
+    throw new Error([
+      `Pinned OpenCode runtime is unavailable on ${process.platform}-${process.arch} (Cuppet ${CUPPET_VERSION}).`,
+      ...assets.diagnostics.map((diagnostic) => `  - ${diagnostic}`),
+      'npm skips a missing optionalDependency without failing, so an incomplete release looks like a successful install.',
+      'Reinstall with the matching version (`npm i -g cuppet@same-version`), or point CUPPET_OPENCODE_BIN and CUPPET_TST_BIN at a local build.',
+    ].join('\n'))
   }
 
   let tst: TstRuntime | undefined

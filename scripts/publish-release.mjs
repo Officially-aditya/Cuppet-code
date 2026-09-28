@@ -23,7 +23,57 @@ const publishFlags = [
   registry,
 ]
 
-for (const directory of manifests.map(dirname).sort()) {
+// Refuse to publish `cuppet` unless every runtime it pins resolves from the
+// registry immediately afterwards. npm treats a missing optionalDependency as a
+// silent success, so a partial publish installs a CLI that dies on first run
+// with no install-time signal. A half-published version cannot be repaired by
+// retrying, because npm will not overwrite it; it has to be superseded instead.
+async function preflightPins(artifactDirectories) {
+  if (runtimesOnly) return
+  const cliMetadata = JSON.parse(await readFile(resolve('packages/cli/package.json'), 'utf8'))
+  const pins = Object.entries(cliMetadata.optionalDependencies ?? {})
+  if (pins.length === 0) return
+  if (cliMetadata.version !== releaseVersion) {
+    throw new Error(`packages/cli is version ${cliMetadata.version} but the release is ${releaseVersion}`)
+  }
+  const available = new Set()
+  for (const directory of artifactDirectories) {
+    const metadata = JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'))
+    if (metadata.version !== releaseVersion) {
+      throw new Error(`${metadata.name} is version ${metadata.version} but the release is ${releaseVersion}; rebuild every platform artifact from the same tag`)
+    }
+    available.add(metadata.name)
+  }
+  const missing = []
+  for (const [name, version] of pins) {
+    if (version !== releaseVersion) missing.push(`${name}@${version} (release pins ${releaseVersion})`)
+    else if (!available.has(name)) missing.push(`${name}@${version}`)
+  }
+  if (missing.length === 0) return
+  const already = []
+  for (const [name, version] of pins) {
+    if (await isPublished(name, version)) already.push(`${name}@${version}`)
+  }
+  if (already.length > 0 && already.length < pins.length) {
+    throw new Error([
+      `refusing to publish a partially released ${releaseVersion}`,
+      `already on ${registry}: ${already.join(', ')}`,
+      `still missing: ${missing.join(', ')}`,
+      'npm will not overwrite a published version, so retrying cannot repair this; bump the version instead.',
+    ].join('\n'))
+  }
+  throw new Error([
+    `refusing to publish ${cliMetadata.name}@${releaseVersion}: ${pins.length} pinned runtime(s) are unavailable`,
+    `unresolvable pins: ${missing.join(', ')}`,
+    `built ${artifactDirectories.length} runtime artifact(s) under ${root}`,
+    'Build every platform artifact in a single run, or pass the matching --expected=<count>.',
+  ].join('\n'))
+}
+
+const artifactDirectories = manifests.map(dirname).sort()
+await preflightPins(artifactDirectories)
+
+for (const directory of artifactDirectories) {
   await publishIfMissing(directory, publishFlags)
 }
 if (!runtimesOnly) await publishIfMissing(resolve('packages/cli'), publishFlags, ['--workspace=cuppet'])

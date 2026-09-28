@@ -117,6 +117,118 @@ process.exit(2)
   }
 })
 
+test('release publisher refuses to publish the CLI while a pinned runtime has no artifact', async () => {
+  const fixture = await mkdtemp(join(tmpdir(), 'cuppet-publish-release-'))
+  try {
+    const version = '0.2.0-alpha.3'
+    const runtimes = [
+      '@cuppet-code/runtime-darwin-arm64',
+      '@cuppet-code/runtime-darwin-x64',
+      '@cuppet-code/runtime-linux-arm64-gnu',
+      '@cuppet-code/runtime-linux-x64-gnu',
+      '@cuppet-code/runtime-win32-x64',
+      '@cuppet-code/runtime-win32-arm64',
+    ]
+    await writeFile(join(fixture, 'package.json'), JSON.stringify({ version }))
+    await mkdir(join(fixture, 'packages/cli'), { recursive: true })
+    await writeFile(join(fixture, 'packages/cli/package.json'), JSON.stringify({
+      name: 'cuppet',
+      version,
+      optionalDependencies: Object.fromEntries(runtimes.map((name) => [name, version])),
+    }))
+
+    // Only one of six platforms was built, mirroring a partial release build.
+    const directory = join(fixture, 'artifacts/runtime-linux-x64-gnu')
+    await mkdir(directory, { recursive: true })
+    await writeFile(join(directory, 'manifest.json'), '{}')
+    await writeFile(join(directory, 'package.json'), JSON.stringify({
+      name: '@cuppet-code/runtime-linux-x64-gnu',
+      version,
+    }))
+
+    const bin = await fakeNpmBin(fixture, `
+if (args[0] === 'publish') { process.exit(0) }
+if (args[0] === 'view') {
+  process.stdout.write(JSON.stringify(args[1].split('@').at(-1)))
+  process.exit(0)
+}
+process.exit(2)
+`)
+    const result = await runPublisher(fixture, bin, ['--expected=1'])
+    assert.notEqual(result.code, 0)
+    assert.match(result.stderr, /refusing to publish cuppet@0\.2\.0-alpha\.3: 6 pinned runtime\(s\) are unavailable/)
+    assert.match(result.stderr, /built 1 runtime artifact\(s\)/)
+    assert.doesNotMatch(result.stderr, /npm (notice|ERR!)/)
+  } finally {
+    await rm(fixture, { recursive: true, force: true })
+  }
+})
+
+test('release publisher refuses to complete a version that is already partially published', async () => {
+  const fixture = await mkdtemp(join(tmpdir(), 'cuppet-publish-release-'))
+  try {
+    const version = '0.2.0-alpha.3'
+    const runtimes = [
+      '@cuppet-code/runtime-darwin-arm64',
+      '@cuppet-code/runtime-linux-x64-gnu',
+    ]
+    await writeFile(join(fixture, 'package.json'), JSON.stringify({ version }))
+    await mkdir(join(fixture, 'packages/cli'), { recursive: true })
+    await writeFile(join(fixture, 'packages/cli/package.json'), JSON.stringify({
+      name: 'cuppet',
+      version,
+      optionalDependencies: Object.fromEntries(runtimes.map((name) => [name, version])),
+    }))
+    // Only the linux artifact was rebuilt. darwin-arm64 is absent from this
+    // build yet already live on the registry, which is the split state that
+    // shipped 0.2.0-alpha.2 and that npm cannot repair by republishing.
+    const directory = join(fixture, 'artifacts/runtime-linux-x64-gnu')
+    await mkdir(directory, { recursive: true })
+    await writeFile(join(directory, 'manifest.json'), '{}')
+    await writeFile(join(directory, 'package.json'), JSON.stringify({
+      name: '@cuppet-code/runtime-linux-x64-gnu',
+      version,
+    }))
+
+    const bin = await fakeNpmBin(fixture, `
+if (args[0] === 'publish') { process.exit(0) }
+if (args[0] === 'view') {
+  if (args[1] === '@cuppet-code/runtime-darwin-arm64@${version}') {
+    process.stdout.write(JSON.stringify('${version}'))
+    process.exit(0)
+  }
+  process.stderr.write('E404')
+  process.exit(1)
+}
+process.exit(2)
+`)
+    const result = await runPublisher(fixture, bin, ['--expected=1'])
+    assert.notEqual(result.code, 0)
+    assert.match(result.stderr, /refusing to publish a partially released 0\.2\.0-alpha\.3/)
+    assert.match(result.stderr, /already on .*runtime-darwin-arm64/)
+    assert.match(result.stderr, /still missing: @cuppet-code\/runtime-darwin-arm64@0\.2\.0-alpha\.3/)
+    assert.match(result.stderr, /bump the version instead/)
+  } finally {
+    await rm(fixture, { recursive: true, force: true })
+  }
+})
+
+async function fakeNpmBin(fixture: string, body: string): Promise<string> {
+  const bin = join(fixture, 'bin')
+  await mkdir(bin, { recursive: true })
+  const fakeNpm = join(bin, 'npm')
+  await writeFile(fakeNpm, `#!/usr/bin/env node
+const args = process.argv.slice(2)
+${body}
+`)
+  await chmod(fakeNpm, 0o755)
+  // Windows resolves npm.cmd, not bare npm; provide both shims so the
+  // publisher test passes on every platform.
+  await writeFile(join(bin, 'npm.cmd'), `@echo off\nnode "${fakeNpm}" %*\n`)
+  await chmod(join(bin, 'npm.cmd'), 0o755)
+  return bin
+}
+
 function runPublisher(
   cwd: string,
   bin: string,

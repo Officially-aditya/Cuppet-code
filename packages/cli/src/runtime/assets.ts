@@ -280,7 +280,7 @@ function validateManifest(manifest: RuntimeManifest): void {
     const report = process.report?.getReport() as { header?: { glibcVersionRuntime?: string } }
     const header = report.header ?? {}
     if (manifest.libc !== 'glibc' || !header.glibcVersionRuntime) {
-      throw new Error('Cuppet alpha requires a glibc Linux runtime')
+      throw new Error('Cuppet alpha requires a glibc Linux runtime; this host reports no glibc, so musl-based distributions such as Alpine are not supported yet')
     }
   } else if (manifest.libc !== null) {
     throw new Error('non-Linux runtime manifest must not declare a libc')

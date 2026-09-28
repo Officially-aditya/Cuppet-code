@@ -109,6 +109,16 @@ npm test
 CUPPET_OPENCODE_BIN=/path/to/patched/opencode npm run dev
 ```
 
+Verify the PE3 task-routing surface with `npm run verify:pe3`. It runs the patch
+stack check, workspace build and typecheck, the PE3 regression suite, the task
+affinity, control boundary, and native TUI handoff tests, the routing benchmark,
+and the derivative build. Use `--list` to preview, `--only=<step>` or a repeated
+`--skip=<step>` to narrow the run, and `--source=<checkout>` to point at an
+OpenCode checkout other than `.opencode-src`. Only the patch stack and derivative
+build steps need that checkout, so the remaining gates run without it; the PE3
+contract tests skip the derivative-dependent cases when no patched source has
+been materialized.
+
 Build the derived runtime from a local OpenCode checkout with
 `node scripts/build-opencode.mjs --source=/path/to/opencode --output=/tmp/cuppet-opencode`.
 The source checkout must contain the pinned revision and Bun 1.3.14; the

@@ -65,12 +65,10 @@ index b12340e0f..859a10f7b 100644
              const system = [
                ...env,
 diff --git a/packages/opencode/src/session/compaction.ts b/packages/opencode/src/session/compaction.ts
-index 347d99e8d..b69186a2d 100644
 --- a/packages/opencode/src/session/compaction.ts
 +++ b/packages/opencode/src/session/compaction.ts
-@@ -347,7 +347,24 @@ const layer = Layer.effect(
+@@ -376,4 +376,21 @@ const layer = Layer.effect(
        )
-       const nextPrompt = compacting.prompt ?? buildPrompt({ previousSummary, context: compacting.context })
        const msgs = structuredClone(selected.head)
 -      yield* plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
 +      yield* plugin.trigger(
@@ -91,6 +89,4 @@ index 347d99e8d..b69186a2d 100644
 +        },
 +        { messages: msgs },
 +      )
-       const modelMessages = yield* MessageV2.toModelMessagesEffect(msgs, model, {
-         stripMedia: true,
-         toolOutputMaxChars: TOOL_OUTPUT_MAX_CHARS,
+       const conversation = msgs.map(serialize).filter(Boolean).join("\n\n")

@@ -3,14 +3,14 @@
 > A local-first coding agent with OpenCode's terminal workflow, durable memory,
 > and a Tree-sitter code graph.
 
-Cuppet is a modified OpenCode 1.18.4 derivative with a native Solid/OpenTUI
+Cuppet is a modified OpenCode 1.18.29 derivative with a native Solid/OpenTUI
 terminal client, backed by a private OpenCode server and a native Rust
 tiered-memory/code-graph daemon. The Cuppet wrapper supplies memory and
 background-agent services; the derived TUI owns the interactive transcript,
 composer, sessions, permissions, questions, models, and provider connection.
 
-The alpha pins OpenCode and `@opencode-ai/sdk` to the stable **v1.18.4** release
-at revision `49c69c5ed3ccf706b61b3febb43c8aaff7f8325e`. Numbered patches live in
+The alpha pins OpenCode and `@opencode-ai/sdk` to the stable **v1.18.29** release
+at revision `16747470f976aca3d362ad730bcd3fe82ecc2c9a`. Numbered patches live in
 [`patches/opencode/`](patches/opencode/) and are applied in a temporary detached
 worktree. Provider credentials, tools,
 sessions, model routing, diffs, permissions, compaction, and undo stay inside
@@ -77,7 +77,7 @@ The remote protocol and scope model are documented in
 
 - Node.js 22 or newer
 - Rust 1.88 or newer for source builds
-- macOS 13+ or Ubuntu 22.04+ on arm64/x64
+- macOS 13+, Ubuntu 22.04+, or Windows 10/11 on arm64/x64
 - The pinned OpenCode binary (a release package includes it; source builds can
   set `CUPPET_OPENCODE_BIN`)
 
@@ -130,8 +130,8 @@ the canonical command. The standard `cc` C compiler is never shadowed.
 ## Release and remote host setup
 
 The complete release checklist is in [`docs/releasing.md`](docs/releasing.md).
-The npm package contains the CLI and relay PWA; the four platform runtime
-packages contain the bundled OpenCode and Rust binaries. CI publishes all five
+The npm package contains the CLI and relay PWA; the six platform runtime
+packages contain the bundled OpenCode and Rust binaries. CI publishes all seven
 packages to npm, mirrors the scoped runtime packages to GitHub Packages, and
 creates downloadable runtime archives.
 
@@ -163,7 +163,7 @@ later.
 ## Architecture
 
 ```text
-Derived OpenCode 1.18.4 TUI + Cuppet wrapper
+Derived OpenCode 1.18.29 TUI + Cuppet wrapper
   ├─ private OpenCode server + native attach TUI + SDK observer
   │  └─ sessions, tools, permissions, models, diffs, auth, undo
   ├─ Cuppet server/TUI plugins + authenticated launch-scoped Unix control socket
@@ -411,7 +411,7 @@ and the benchmark methodology is documented in
 
 ## Alpha limits
 
-Windows, musl, remote daemons, cloud memory sync, vector databases, and
+musl, remote daemons, cloud memory sync, vector databases, and
 multi-user operation are not supported. One Cuppet process may own writable
 memory for a project; it can manage multiple OpenCode sessions. Offline means
 no runtime binary download, not offline provider inference.

@@ -1,8 +1,96 @@
+diff --git a/packages/opencode/src/session/compaction.ts b/packages/opencode/src/session/compaction.ts
+index 79412171a4..ca9154f3cc 100644
+--- a/packages/opencode/src/session/compaction.ts
++++ b/packages/opencode/src/session/compaction.ts
+@@ -376,6 +376,24 @@ const layer = Layer.effect(
+         { context: [], prompt: undefined },
+       )
+       const msgs = structuredClone(selected.head)
++      const conversation = msgs.map(serialize).filter(Boolean).join("\n\n")
++      const nextPrompt =
++        compacting.prompt ??
++        [
++          buildPrompt({
++            previousSummary,
++            context: [conversation],
++          }),
++          ...compacting.context,
++        ]
++          .filter(Boolean)
++          .join("\n\n")
++      const transformed = { messages: msgs, cuppetCompaction: undefined as {
++        mode: "stm_only"
++        abort: boolean
++        directive: string
++        error?: string
++      } | undefined }
+       yield* plugin.trigger(
+         "experimental.chat.messages.transform",
+         {
+@@ -391,21 +409,20 @@ const layer = Layer.effect(
+               outputTokenMax: flags.outputTokenMax,
+             }),
+           },
++          compaction: {
++            mode: process.env.CUPPET_STM_ONLY_COMPACTION === "1" ? "stm_only" : "native",
++            prompt: nextPrompt,
++          },
+         },
+-        { messages: msgs },
++        transformed,
+       )
+-      const conversation = msgs.map(serialize).filter(Boolean).join("\n\n")
+-      const nextPrompt =
+-        compacting.prompt ??
+-        [
+-          buildPrompt({
+-            previousSummary,
+-            context: [conversation],
+-          }),
+-          ...compacting.context,
+-        ]
+-          .filter(Boolean)
+-          .join("\n\n")
++      if (transformed.cuppetCompaction?.abort) {
++        yield* Effect.logWarning("STM-only compaction aborted before transcript mutation", {
++          sessionID: input.sessionID,
++          error: transformed.cuppetCompaction.error,
++        })
++        return "stop"
++      }
+       const ctx = yield* InstanceState.context
+       const msg: SessionV1.Assistant = {
+         id: MessageID.ascending(),
+@@ -433,6 +450,24 @@ const layer = Layer.effect(
+           created: Date.now(),
+         },
+       }
++      if (transformed.cuppetCompaction?.mode === "stm_only") {
++        msg.finish = "stop"
++        yield* session.updateMessage(msg)
++        yield* session.updatePart({
++          id: PartID.ascending(),
++          messageID: msg.id,
++          sessionID: input.sessionID,
++          type: "text",
++          synthetic: true,
++          text: transformed.cuppetCompaction.directive,
++          time: {
++            start: Date.now(),
++            end: Date.now(),
++          },
++        })
++        yield* events.publish(Event.Compacted, { sessionID: input.sessionID })
++        return "continue"
++      }
+       yield* session.updateMessage(msg)
+       const processor = yield* processors.create({
+         assistantMessage: msg,
 diff --git a/packages/plugin/src/index.ts b/packages/plugin/src/index.ts
+index 675957eed0..41e6a5d32d 100644
 --- a/packages/plugin/src/index.ts
 +++ b/packages/plugin/src/index.ts
 @@ -289,12 +289,25 @@ export interface Hooks {
-       history: {
          estimatedTokens: number
          usableTokens: number
        }
@@ -27,67 +115,4 @@ diff --git a/packages/plugin/src/index.ts b/packages/plugin/src/index.ts
 +      cuppetCompactionAbort?: boolean
      },
    ) => Promise<void>
-diff --git a/packages/opencode/src/session/compaction.ts b/packages/opencode/src/session/compaction.ts
---- a/packages/opencode/src/session/compaction.ts
-+++ b/packages/opencode/src/session/compaction.ts
-@@ -347,6 +347,12 @@
-       )
-       const nextPrompt = compacting.prompt ?? buildPrompt({ previousSummary, context: compacting.context })
-       const msgs = structuredClone(selected.head)
-+      const transformed = { messages: msgs, cuppetCompaction: undefined as {
-+        mode: "stm_only"
-+        abort: boolean
-+        directive: string
-+        error?: string
-+      } | undefined }
-       yield* plugin.trigger(
-         "experimental.chat.messages.transform",
-         {
-@@ -362,10 +368,21 @@
-               outputTokenMax: flags.outputTokenMax,
-             }),
-           },
--        },
--        { messages: msgs },
-+          compaction: {
-+            mode: process.env.CUPPET_STM_ONLY_COMPACTION === "1" ? "stm_only" : "native",
-+            prompt: nextPrompt,
-+          },
-+        },
-+        transformed,
-       )
--      const modelMessages = yield* MessageV2.toModelMessagesEffect(msgs, model, {
-+      if (transformed.cuppetCompaction?.abort) {
-+        yield* Effect.logWarning("STM-only compaction aborted before transcript mutation", {
-+          sessionID: input.sessionID,
-+          error: transformed.cuppetCompaction.error,
-+        })
-+        return "stop"
-+      }
-+      const modelMessages = yield* MessageV2.toModelMessagesEffect(transformed.messages, model, {
-         stripMedia: true,
-         toolOutputMaxChars: TOOL_OUTPUT_MAX_CHARS,
-       })
-@@ -396,4 +413,22 @@
-           created: Date.now(),
-         },
-       }
-+      if (transformed.cuppetCompaction?.mode === "stm_only") {
-+        msg.finish = "stop"
-+        yield* session.updateMessage(msg)
-+        yield* session.updatePart({
-+          id: PartID.ascending(),
-+          messageID: msg.id,
-+          sessionID: input.sessionID,
-+          type: "text",
-+          synthetic: true,
-+          text: transformed.cuppetCompaction.directive,
-+          time: {
-+            start: Date.now(),
-+            end: Date.now(),
-+          },
-+        })
-+        yield* events.publish(Event.Compacted, { sessionID: input.sessionID })
-+        return "continue"
-+      }
-       yield* session.updateMessage(msg)
+   "experimental.chat.system.transform"?: (

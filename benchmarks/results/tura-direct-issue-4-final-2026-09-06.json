@@ -1,0 +1,93 @@
+{
+  "schema": 1,
+  "status": "completed_run_with_acceptance_failures",
+  "benchmarkVersion": "issue-4.1",
+  "taskSet": "issue-4-core@2026-09-05",
+  "runCount": 1,
+  "repetitions": 1,
+  "sessionTopology": "marathon",
+  "arm": {
+    "id": "tura-direct",
+    "version": "0.1.37",
+    "provider": "openai",
+    "model": "openai/gpt-5.6-luna",
+    "reasoningEffort": "low",
+    "parity": "exact",
+    "sessionId": "tura-direct-53053c0c9325249fd320"
+  },
+  "command": "TURA_HOME=/Users/addy/Downloads/cuppet TURA_PROJECT_ROOT=/private/tmp/tura-direct-install/node_modules/tura-darwin-arm64/target/release TURA_ROUTER_HEALTH_TIMEOUT_SECS=120 TURA_ROUTER_EXECUTION_TIMEOUT_SECS=900 CUPPET_TURA_BIN=/private/tmp/tura-direct-install/node_modules/.bin/tura CUPPET_TURA_ROUTER_BIN=/private/tmp/tura-direct-install/node_modules/tura-darwin-arm64/target/release/tura_router CUPPET_TURA_VERSION=0.1.37 CUPPET_TURA_MODEL=openai/gpt-5.6-luna CUPPET_TURA_REASONING=low npm run benchmark -- --session-topology marathon --arms tura-direct --repeats 1",
+  "rawReport": "benchmarks/results/benchmark-cuppet-harness-comparison-2026-09-06T09-41-20.085Z.json",
+  "rawMarkdown": "benchmarks/results/benchmark-cuppet-harness-comparison-2026-09-06T09-41-20.085Z.md",
+  "rawRunRoot": ".benchmarks/cuppet-harness-comparison-qKv57A",
+  "metrics": {
+    "tasks": 12,
+    "tasksSuccessful": 10,
+    "successRate": 0.8333333333,
+    "acceptanceChecksPassed": 13,
+    "acceptanceChecksTotal": 15,
+    "totalModelTokens": 3441061,
+    "uncachedInputTokens": 3254708,
+    "cachedInputTokens": 17272576,
+    "outputTokens": 175223,
+    "reasoningTokens": 11130,
+    "toolCalls": 241,
+    "durationSeconds": 1346.343,
+    "retries": 0,
+    "compactions": 0,
+    "effectiveCost": null,
+    "earlyUncachedInputMedian": 195356,
+    "lateUncachedInputMedian": 344356,
+    "earlyCacheShareMedian": 0.6989531231,
+    "lateCacheShareMedian": 0.847578562
+  },
+  "frozenBaseline": {
+    "cuppet": {
+      "totalModelTokens": 146476,
+      "uncachedInputTokens": 122007,
+      "cachedInputTokens": 3087360,
+      "toolCalls": 101,
+      "durationSeconds": 594
+    },
+    "opencode": {
+      "totalModelTokens": 166998,
+      "uncachedInputTokens": 131492,
+      "cachedInputTokens": 4158464,
+      "toolCalls": 141,
+      "durationSeconds": 833
+    }
+  },
+  "verificationFailures": [
+    {
+      "taskId": "task-tracker-cross-file",
+      "check": "task-tracker-hidden-contract",
+      "error": "priority must be low, normal, or high"
+    },
+    {
+      "taskId": "quiz-game-greenfield",
+      "check": "quiz-game-hidden-contract",
+      "error": "quiz-game has too few local records"
+    }
+  ],
+  "comparison": {
+    "turaMinusCuppet": {
+      "totalModelTokens": 3294585,
+      "uncachedInputTokens": 3132701,
+      "cachedInputTokens": 14185216,
+      "toolCalls": 140,
+      "durationSeconds": 752.343
+    },
+    "turaMinusOpencode": {
+      "totalModelTokens": 3274063,
+      "uncachedInputTokens": 3123216,
+      "cachedInputTokens": 13114112,
+      "toolCalls": 100,
+      "durationSeconds": 513.343
+    }
+  },
+  "notes": [
+    "Exactly one Tura Direct repetition ran; no Cuppet or OpenCode rerun was performed.",
+    "The Tura session remained persistent across all 12 prompts.",
+    "The two failed tasks are deterministic acceptance failures, not provider or router failures; the sequence continued after both verifier failures.",
+    "All Tura telemetry is preserved in the raw JSON report and per-task Tura JSONL/turn-log sidecars."
+  ]
+}

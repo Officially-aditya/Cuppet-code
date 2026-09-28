@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "taskSet": "issue-4-core@2026-09-05",
+  "repetitions": 1,
+  "arms": {
+    "cuppet": {
+      "source": "fresh rerun",
+      "report": "benchmarks/results/benchmark-cuppet-harness-comparison-2026-09-06T10-26-19.884Z.json",
+      "acceptedTasks": "11/12",
+      "acceptanceChecks": "14/15",
+      "totalModelTokens": 167676,
+      "totalInputContextTokens": 4307059,
+      "uncachedInputTokens": 138867,
+      "cachedInputTokens": 4168192,
+      "outputTokens": 27279,
+      "reasoningTokens": 1530,
+      "cacheShare": 0.9677582777,
+      "toolCalls": 112,
+      "wallTimeSeconds": 849.795,
+      "failure": "long-tool-use-dashboard"
+    },
+    "opencode": {
+      "source": "frozen repeat-one baseline",
+      "report": "benchmarks/results/benchmark-cuppet-harness-comparison-2026-09-06T03-08-46.119Z.json",
+      "acceptedTasks": "11/12",
+      "acceptanceChecks": "14/15",
+      "totalModelTokens": 166998,
+      "totalInputContextTokens": 4289956,
+      "uncachedInputTokens": 131492,
+      "cachedInputTokens": 4158464,
+      "outputTokens": 33856,
+      "reasoningTokens": 1650,
+      "cacheShare": 0.9693505746,
+      "toolCalls": 141,
+      "wallTimeSeconds": 833.498,
+      "failure": "long-tool-use-dashboard"
+    },
+    "tura-direct": {
+      "source": "fresh full run",
+      "report": "benchmarks/results/benchmark-cuppet-harness-comparison-2026-09-06T09-41-20.085Z.json",
+      "acceptedTasks": "10/12",
+      "acceptanceChecks": "13/15",
+      "totalModelTokens": 3441061,
+      "totalInputContextTokens": 20527284,
+      "uncachedInputTokens": 3254708,
+      "cachedInputTokens": 17272576,
+      "outputTokens": 175223,
+      "reasoningTokens": 11130,
+      "cacheShare": 0.8414447815,
+      "toolCalls": 241,
+      "wallTimeSeconds": 1346.343,
+      "failure": "task-tracker-cross-file; quiz-game-greenfield"
+    }
+  },
+  "notes": [
+    "All three arms use openai/gpt-5.6-luna with low reasoning and exact parity labels.",
+    "Cuppet is the fresh rerun requested by the user; OpenCode remains the frozen repeat-one baseline and was not rerun.",
+    "Total model tokens means uncached input + output + reasoning. Total input context means uncached input + cached input.",
+    "No Cuppet, OpenCode, or Tura retries were included in these one-repetition figures."
+  ]
+}

@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { constants } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { basename } from 'node:path'
+import { basename, sep } from 'node:path'
 import { BackgroundWorker, type BackgroundStats } from './background/worker.js'
 import { readOrchestratorState, writeOrchestratorState } from './control/orchestrator-state.js'
 import { DEFAULT_STEP_LIMIT } from './constants.js'
@@ -648,7 +648,8 @@ export class CuppetController extends EventEmitter {
   workspaceInfo(): Record<string, unknown> {
     const home = homedir()
     const full = this.#paths.projectRealpath
-    const pathDisplay = home !== '/' && (full === home || full.startsWith(`${home}/`))
+    const homePrefix = home.endsWith(sep) ? home : `${home}${sep}`
+    const pathDisplay = home !== '/' && (full === home || full.startsWith(homePrefix))
       ? `~${full.slice(home.length)}`
       : full
     return {
@@ -745,11 +746,15 @@ export class CuppetController extends EventEmitter {
           ['project', this.#paths.projectStore, constants.R_OK | constants.W_OK],
           ['global', this.#paths.globalStore, constants.R_OK | constants.W_OK],
           ['runtime', this.#paths.runtime, constants.R_OK | constants.W_OK],
-          ['socket', this.#paths.tstSocket, constants.R_OK | constants.W_OK],
           ['opencode-state', this.#paths.opencode.state, constants.R_OK | constants.W_OK],
         ].map(async ([name, path, mode]) => [name, await inspectPath(String(path), Number(mode))]),
       ),
     )
+    // Windows TST uses supervisor-picked loopback TCP, so there is no socket
+    // file to stat; the live daemon status is reported in `tst` below.
+    storagePermissions.socket = this.#paths.tstTransport === 'tcp'
+      ? { available: true, transport: 'tcp', endpoint: 'loopback' }
+      : await inspectPath(this.#paths.tstSocket, constants.R_OK | constants.W_OK)
     return {
       platform: `${process.platform}-${process.arch}`,
       selectedProvider: this.#provider,

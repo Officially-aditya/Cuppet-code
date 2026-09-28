@@ -36,6 +36,12 @@ jobs:
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             package_dir: runtime-linux-arm64-gnu
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            package_dir: runtime-win32-x64
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            package_dir: runtime-win32-arm64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -44,7 +50,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: anomalyco/opencode
-          ref: 49c69c5ed3ccf706b61b3febb43c8aaff7f8325e
+          ref: 16747470f976aca3d362ad730bcd3fe82ecc2c9a
           path: .opencode-src
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -72,6 +78,9 @@ jobs:
       - name: Build audited OpenCode binary
         run: node scripts/build-opencode.mjs --source=.opencode-src --output=.opencode/opencode
       - name: Run npm test
+        # PowerShell is the default shell on Windows runners, but this retry
+        # uses POSIX shell syntax, so pin bash on every platform.
+        shell: bash
         run: |
           if npm test; then
             exit 0
@@ -126,6 +135,9 @@ jobs:
         with:
           path: artifacts
       - name: Restore runtime executable permissions
+        # Windows artifacts carry `.exe` binaries without POSIX execute bits;
+        # verify-release.mjs skips the mode check for them, but keep any
+        # POSIX binaries executable after the artifact round-trip.
         run: find artifacts -type f \( -name opencode -o -name tst-daemon \) -exec chmod 755 {} +
       - run: npm ci
       - run: npm run build:ts

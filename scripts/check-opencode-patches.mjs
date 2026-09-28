@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 
-const revision = '49c69c5ed3ccf706b61b3febb43c8aaff7f8325e'
+const revision = '16747470f976aca3d362ad730bcd3fe82ecc2c9a'
 const sourceArgument = process.argv.find((argument) => argument.startsWith('--source='))
 const outputArgument = process.argv.find((argument) => argument.startsWith('--output='))
 if (!sourceArgument) throw new Error('usage: check-opencode-patches.mjs --source=<checkout> [--output=<patched-source>]')

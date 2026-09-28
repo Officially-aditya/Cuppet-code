@@ -11,7 +11,7 @@ await rm(output, { recursive: true, force: true })
 await mkdir(output, { recursive: true })
 
 const manifests = await findFiles(artifacts, 'manifest.json')
-if (manifests.length !== 4) throw new Error(`expected four platform manifests, found ${manifests.length}`)
+if (manifests.length !== 6) throw new Error(`expected six platform manifests, found ${manifests.length}`)
 
 for (const manifestPath of manifests) {
   const directory = dirname(manifestPath)

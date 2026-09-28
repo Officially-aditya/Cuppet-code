@@ -9,7 +9,7 @@ const root = resolve(process.argv[2] ?? 'artifacts')
 const expectedTstProtocol = 'cuppet.tst.v3'
 const verifyExecutables = process.env.CUPPET_VERIFY_EXECUTABLES === '1'
 const expectedArgument = process.argv.find((argument) => argument.startsWith('--expected='))
-const expectedCount = Number(expectedArgument?.slice('--expected='.length) ?? 4)
+const expectedCount = Number(expectedArgument?.slice('--expected='.length) ?? 6)
 if (!Number.isInteger(expectedCount) || expectedCount < 1) throw new Error('--expected must be a positive integer')
 const releaseVersion = JSON.parse(await readFile(resolve('package.json'), 'utf8')).version
 const manifests = await find(root, 'manifest.json')
@@ -21,9 +21,9 @@ for (const manifestPath of manifests) {
   const directory = dirname(manifestPath)
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
   if (
-    manifest.opencodeVersion !== '1.18.4' ||
-    manifest.sdkVersion !== '1.18.4' ||
-    manifest.opencodeRevision !== '49c69c5ed3ccf706b61b3febb43c8aaff7f8325e'
+    manifest.opencodeVersion !== '1.18.29' ||
+    manifest.sdkVersion !== '1.18.29' ||
+    manifest.opencodeRevision !== '16747470f976aca3d362ad730bcd3fe82ecc2c9a'
   ) {
     throw new Error(`version mismatch in ${manifestPath}`)
   }
@@ -40,12 +40,17 @@ for (const manifestPath of manifests) {
     const path = join(directory, relative)
     const actual = createHash('sha256').update(await readFile(path)).digest('hex')
     if (actual !== expected) throw new Error(`checksum mismatch for ${path}`)
-    if ((relative === 'bin/opencode' || relative === 'bin/tst-daemon') && ((await stat(path)).mode & 0o111) === 0) {
+    // Windows executables carry the `.exe` suffix and NTFS has no POSIX
+    // execute bits, so only enforce the mode check on POSIX artifacts.
+    const isBinary = relative === 'bin/opencode' || relative === 'bin/opencode.exe' ||
+      relative === 'bin/tst-daemon' || relative === 'bin/tst-daemon.exe'
+    if (isBinary && manifest.platform !== 'win32' && ((await stat(path)).mode & 0o111) === 0) {
       throw new Error(`binary is not executable: ${path}`)
     }
   }
   if (verifyExecutables && canExecuteRuntime(manifest)) {
-    const daemonProtocol = (await capture(join(directory, 'bin/tst-daemon'), ['--protocol'])).trim()
+    const daemonName = manifest.platform === 'win32' ? 'bin/tst-daemon.exe' : 'bin/tst-daemon'
+    const daemonProtocol = (await capture(join(directory, daemonName), ['--protocol'])).trim()
     if (daemonProtocol !== expectedTstProtocol) {
       throw new Error(`TST daemon protocol mismatch in ${directory}: expected ${expectedTstProtocol}, received ${daemonProtocol || 'no identity'}`)
     }
@@ -53,8 +58,8 @@ for (const manifestPath of manifests) {
   const marker = JSON.parse(await readFile(join(directory, 'bin/.cuppet-derivative.json'), 'utf8'))
   if (
     marker.product !== 'cuppet-opencode-derivative' ||
-    marker.upstreamVersion !== '1.18.4' ||
-    marker.upstreamRevision !== '49c69c5ed3ccf706b61b3febb43c8aaff7f8325e' ||
+    marker.upstreamVersion !== '1.18.29' ||
+    marker.upstreamRevision !== '16747470f976aca3d362ad730bcd3fe82ecc2c9a' ||
     marker.patchSetDigest !== manifest.patchSetDigest
   ) throw new Error(`invalid derivative identity marker in ${directory}`)
   for (const required of ['LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md', 'sbom.spdx.json']) {
@@ -64,7 +69,7 @@ for (const manifestPath of manifests) {
   if (
     sbom.spdxVersion !== 'SPDX-2.3' ||
     !Array.isArray(sbom.packages) ||
-    !sbom.packages.some((item) => item.name === 'OpenCode' && item.versionInfo === '1.18.4') ||
+    !sbom.packages.some((item) => item.name === 'OpenCode' && item.versionInfo === '1.18.29') ||
     !sbom.packages.some((item) => item.name === 'tst-daemon') ||
     !sbom.packages.some((item) => item.name === 'Cuppet OpenCode derivative patch set')
   ) {

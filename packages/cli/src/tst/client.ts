@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
-import { createConnection, type Socket } from 'node:net'
+import type { Socket } from 'node:net'
+import { connectIpc } from '../runtime/ipc.js'
 import { TST_PROTOCOL_VERSION } from '../constants.js'
 
 const MAX_FRAME_BYTES = 16 * 1024 * 1024
@@ -37,12 +38,8 @@ export class TstClient extends EventEmitter {
     socket.on('close', () => this.#disconnect(new Error('TST socket closed')))
   }
 
-  static async connect(socketPath: string, token: string): Promise<TstClient> {
-    const socket = await new Promise<Socket>((resolve, reject) => {
-      const candidate = createConnection(socketPath)
-      candidate.once('connect', () => resolve(candidate))
-      candidate.once('error', reject)
-    })
+  static async connect(endpoint: string, token: string): Promise<TstClient> {
+    const socket = await connectIpc(endpoint)
     const client = new TstClient(socket)
     const initialized = (await client.call('initialize', { token, notifications: true })) as { protocol?: string }
     if (initialized.protocol !== TST_PROTOCOL_VERSION) {

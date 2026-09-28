@@ -207,7 +207,7 @@ try {
     schema: 1,
     createdAt: new Date().toISOString(),
     project,
-    opencodeVersion: '1.18.4',
+    opencodeVersion: '1.18.29',
     model,
     taskOffset,
     design: persistentGraph

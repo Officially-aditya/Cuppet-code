@@ -1,8 +1,8 @@
 # Cuppet OpenCode patch stack
 
 These patches are intentionally numbered and applied in order to a detached
-worktree of OpenCode `1.18.4` at revision
-`49c69c5ed3ccf706b61b3febb43c8aaff7f8325e`. The build refuses to continue when
+worktree of OpenCode `1.18.29` at revision
+`16747470f976aca3d362ad730bcd3fe82ecc2c9a`. The build refuses to continue when
 the revision, patch context, or patch digest changes. The source files added by
 the stack carry the derivative implementation units and identity marker used by
 the corresponding native Solid/OpenTUI changes in the derived source checkout;

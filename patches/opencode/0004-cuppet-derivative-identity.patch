@@ -5,8 +5,8 @@ new file mode 100644
 @@ -0,0 +1,9 @@
 +export const CUPPET_DERIVATIVE = {
 +  product: "cuppet-opencode-derivative",
-+  upstreamVersion: "1.18.4",
-+  upstreamRevision: "49c69c5ed3ccf706b61b3febb43c8aaff7f8325e",
++  upstreamVersion: "1.18.29",
++  upstreamRevision: "16747470f976aca3d362ad730bcd3fe82ecc2c9a",
 +} as const
 +
 +/** Kept in the compiled derivative as a hidden identity marker. */

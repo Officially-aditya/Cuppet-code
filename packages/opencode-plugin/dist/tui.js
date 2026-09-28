@@ -1,5 +1,28 @@
-// src/control.ts
+// src/ipc.ts
 import { createConnection } from "node:net";
+function parseIpcEndpoint(endpoint) {
+  const trimmed = endpoint.trim();
+  const tcp = /^(127\.0\.0\.1|localhost):(\d{1,5})$/.exec(trimmed);
+  if (tcp) {
+    const host = tcp[1];
+    const portText = tcp[2];
+    if (host && portText) {
+      const port = Number(portText);
+      if (Number.isInteger(port) && port > 0 && port <= 65535) return { kind: "tcp", host, port };
+    }
+  }
+  return { kind: "path", path: endpoint };
+}
+function connectIpc(endpoint) {
+  const parsed = parseIpcEndpoint(endpoint);
+  return new Promise((resolve, reject) => {
+    const socket = parsed.kind === "tcp" ? createConnection({ host: parsed.host, port: parsed.port }) : createConnection(parsed.path);
+    socket.once("connect", () => resolve(socket));
+    socket.once("error", reject);
+  });
+}
+
+// src/control.ts
 var CuppetControlClient = class {
   #socketPath;
   #token;
@@ -22,11 +45,7 @@ var CuppetControlClient = class {
   }
 };
 function connect(path) {
-  return new Promise((resolve, reject) => {
-    const socket = createConnection(path);
-    socket.once("connect", () => resolve(socket));
-    socket.once("error", reject);
-  });
+  return connectIpc(path);
 }
 function readLine(socket) {
   return new Promise((resolve, reject) => {
@@ -67,48 +86,27 @@ function readLine(socket) {
 }
 
 // src/tui.ts
-function uniqueModelRows(models) {
-  const rows = /* @__PURE__ */ new Map();
-  for (const model of models) {
-    const key = `${model.providerID}\0${model.modelID}`;
-    const row2 = rows.get(key) ?? {
-      providerID: model.providerID,
-      modelID: model.modelID,
-      name: model.name.replace(/\s+\[[^\]]+\]$/, ""),
-      efforts: []
-    };
-    if (model.variant && !row2.efforts.includes(model.variant)) row2.efforts.push(model.variant);
-    rows.set(key, row2);
-  }
-  return [...rows.values()].sort((left, right) => left.name.localeCompare(right.name));
-}
-function modelSelectionSequence(row2) {
-  return row2.efforts.length > 0 ? ["model", "effort"] : ["model"];
-}
 var CuppetTuiPlugin = {
   id: "cuppet-tui",
   async tui(api) {
     if (!process.env.CUPPET_CONTROL_SOCKET || !process.env.CUPPET_CONTROL_TOKEN) return;
     const client = new CuppetControlClient();
-    let lastNavigatedSessionID;
+    let lastActiveSessionID;
+    let syncingRoute = false;
     const syncActiveRoute = async () => {
+      if (syncingRoute) return;
+      syncingRoute = true;
       try {
-        const status = await client.call("status");
-        const foreground = status.foreground;
-        const session = status.session;
-        const currentSessionID = session?.id;
-        const isRunning = foreground?.running === true;
-        if (currentSessionID) {
-          const currentRoute = api.route?.current;
-          if (isRunning && currentRoute?.name === "home") {
-            lastNavigatedSessionID = currentSessionID;
-            api.route?.navigate?.("session", { sessionID: currentSessionID });
-          } else if (currentRoute?.name === "home" && currentSessionID !== lastNavigatedSessionID) {
-            lastNavigatedSessionID = currentSessionID;
-            api.route?.navigate?.("session", { sessionID: currentSessionID });
-          }
+        const snapshot = await client.call("session.snapshot");
+        const currentSessionID = snapshot.activeSession?.id;
+        const currentRoute = api.route?.current;
+        if (currentSessionID && currentSessionID !== lastActiveSessionID && (currentRoute?.name === "home" || currentRoute?.name === "session") && currentRoute.params?.sessionID !== currentSessionID) {
+          api.route?.navigate?.("session", { sessionID: currentSessionID });
         }
+        lastActiveSessionID = currentSessionID;
       } catch {
+      } finally {
+        syncingRoute = false;
       }
     };
     const timer = setInterval(syncActiveRoute, 350);
@@ -692,11 +690,6 @@ function removedMessage(value) {
   if (removed === 0) return "No matching memory records found.";
   return `${removed} memory record${removed === 1 ? "" : "s"} removed.`;
 }
-function planMessage(value) {
-  const state = record(value);
-  const enabled = state.agent === "plan" ? true : state.agent === "build" ? false : booleanValue(state.enabled);
-  return enabled ? "Plan mode enabled." : "Plan mode disabled.";
-}
 function nextPlanAgent(value) {
   const current = typeof value === "string" ? value : value?.id ?? value?.name ?? "";
   return current === "plan" ? "build" : "plan";
@@ -772,16 +765,67 @@ function formatBytes(value) {
   if (value >= 1024) return `${(value / 1024).toFixed(1).replace(/\.0$/, "")} KB`;
   return `${value} B`;
 }
+
+// src/pe3-tui.ts
+function installPe3TuiNavigation(api) {
+  if (!process.env.CUPPET_CONTROL_SOCKET || !process.env.CUPPET_CONTROL_TOKEN) return;
+  const client = new CuppetControlClient();
+  let observedSequence = 0;
+  let running = false;
+  const sync = async () => {
+    if (running) return;
+    running = true;
+    try {
+      const status = await client.call("status");
+      const decision = pe3TuiNavigationDecision(status, api.route?.current, observedSequence);
+      observedSequence = decision.observedSequence;
+      if (decision.targetSessionID) {
+        api.route?.navigate?.("session", { sessionID: decision.targetSessionID });
+      }
+    } catch {
+    } finally {
+      running = false;
+    }
+  };
+  const timer = setInterval(() => void sync(), 200);
+  if (typeof timer.unref === "function") timer.unref();
+  void sync();
+}
+function pe3TuiNavigationDecision(status, current, observedSequence) {
+  const pe3 = record2(status.pe3);
+  const routing = record2(pe3.routing);
+  const sequence = numberValue2(routing.sequence);
+  if (sequence === void 0 || sequence <= observedSequence) return { observedSequence };
+  const decision = { observedSequence: sequence };
+  const action = stringValue2(routing.lastAction);
+  if (action !== "create" && action !== "reactivate") return decision;
+  const session = record2(status.session);
+  const targetSessionID = stringValue2(session.id);
+  if (!targetSessionID) return decision;
+  const currentSessionID = typeof current?.params?.sessionID === "string" ? current.params.sessionID : void 0;
+  if (current?.name === "session" && currentSessionID === targetSessionID) return decision;
+  return { ...decision, targetSessionID };
+}
+function record2(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+function stringValue2(value) {
+  return typeof value === "string" && value ? value : void 0;
+}
+function numberValue2(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+
+// src/tui-entry.ts
+var CuppetPe3TuiPlugin = {
+  id: "cuppet-tui",
+  async tui(api) {
+    await tui_default.tui(api);
+    installPe3TuiNavigation(api);
+  }
+};
+var tui_entry_default = CuppetPe3TuiPlugin;
 export {
-  tui_default as default,
-  formatDoctor,
-  formatMemory,
-  formatRemoteControl,
-  formatStatus,
-  modelSelectionSequence,
-  nextPlanAgent,
-  planMessage,
-  removedMessage,
-  uniqueModelRows
+  tui_entry_default as default
 };
 //# sourceMappingURL=tui.js.map

@@ -44,7 +44,7 @@ export type OpenCodeGatewayAgents = {
 }
 
 /**
- * OpenCode 1.18.4 exposes the complete live catalog through v2, but its new
+ * OpenCode 1.18.29 exposes the complete live catalog through v2, but its new
  * native runner only implements a subset of the provider adapters. The stable
  * session API on the same server is the compatibility execution path used by
  * OpenCode itself and delegates configured provider execution to OpenCode.

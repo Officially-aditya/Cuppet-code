@@ -222,7 +222,7 @@ const model: ModelRef = parseRequestedModel() ?? {
 }
 const timeoutMs = 15 * 60_000
 const officialOpenCodeBinary = process.env.CUPPET_OFFICIAL_OPENCODE_BIN
-  ?? '/private/tmp/cuppet-opencode-official-1.18.4/node_modules/opencode-darwin-arm64/bin/opencode'
+  ?? '/private/tmp/cuppet-opencode-official-1.18.29/node_modules/opencode-darwin-arm64/bin/opencode'
 const keepWorkspaces = process.env.CUPPET_10_TASK_KEEP_WORKSPACES !== '0'
 // Task-conditioned relevance is the default context mode; set
 // CUPPET_TASK_CONTEXT_AB=0 to benchmark the plain bounded projection.

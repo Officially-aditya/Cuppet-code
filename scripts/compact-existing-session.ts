@@ -153,7 +153,7 @@ async function runArm(
     if (!forkedSession) throw new Error(`OpenCode did not return a forked session for ${arm}`)
     const sourceModel = normalizeModel(source.model)
     if (!sourceModel) throw new Error('Source session has no selected model')
-    // OpenCode 1.18.4 copies the forked messages but leaves the child model
+    // OpenCode 1.18.29 copies the forked messages but leaves the child model
     // empty. Re-attach the source selection before asking the native compact
     // endpoint to run; this changes only the disposable child session.
     await opencode.client.v2.session.switchModel({

@@ -1,0 +1,10 @@
+{
+  "verifier": "actionlint-node-contract-v1",
+  "workspace": "/private/tmp/actionlint-classic-sol-high-final3",
+  "passed": true,
+  "checks": 27,
+  "passedChecks": 27,
+  "failedChecks": 0,
+  "findings": [],
+  "limitation": "Contract-level Node verification is not binary-equivalent to the official Go verifier."
+}

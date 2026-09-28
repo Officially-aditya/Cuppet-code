@@ -31,7 +31,14 @@ try {
   const tarballs = (await readdir(staging)).filter((name) => name.endsWith('.tgz'))
   if (tarballs.length !== 1) throw new Error(`expected one CLI tarball, found ${tarballs.length}`)
   const tarball = resolve(staging, tarballs[0])
-  const listing = await capture('tar', ['-tzf', tarball], root)
+  let listing
+  try {
+    listing = await capture('tar', ['-tzf', tarball], root)
+  } catch (error) {
+    throw new Error(
+      `unable to list the CLI tarball with 'tar' (required on macOS, Linux, and Windows 10+: ${error.message ?? error})`,
+    )
+  }
   const entries = new Set(listing.split(/\r?\n/).filter(Boolean))
   for (const required of [
     'package/package.json',
@@ -72,9 +79,16 @@ try {
   await rm(staging, { recursive: true, force: true })
 }
 
+function useShell(command) {
+  // `npm` is a batch file (`npm.cmd`) on Windows, which CreateProcess cannot
+  // execute directly; route it through the shell there. Real executables
+  // (`tar`, `node`) spawn without a shell on every platform.
+  return process.platform === 'win32' && (command === 'npm' || command === 'npm.cmd')
+}
+
 function run(command, arguments_, cwd) {
   return new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn(command, arguments_, { cwd, stdio: 'inherit' })
+    const child = spawn(command, arguments_, { cwd, stdio: 'inherit', shell: useShell(command) })
     child.once('error', rejectPromise)
     child.once('exit', (code) => code === 0
       ? resolvePromise()

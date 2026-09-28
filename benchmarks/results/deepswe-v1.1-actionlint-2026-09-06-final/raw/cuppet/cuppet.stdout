@@ -1,0 +1,11 @@
+I’ll inspect the repository structure and current branch, then create a fresh branch from `main` before implementing the rule and tests.The linter already exposes both step and job callbacks, so the rule can be isolated without changing parsing. I’m locating the exact AST fields and config precedence flow now, then I’ll add the rule, CLI option, validation, and focused tests.I’ll add a dedicated `RuleActionPinning` with merged config resolution, keeping the existing action/workflow rules unchanged. The rule will inspect exact AST positions for actionable diagnostics and use the known-actions map to produce version suggestions where available.The implementation is in place, including per-path matching and CLI precedence. I’m formatting and compiling now; this should catch structural issues before adding or adjusting tests.The package tests pass; the remaining failures are unrelated network-dependent generator tests blocked by the environment. I’m tightening CLI validation and the `major-minor` matcher, then I’ll run the core test suite and commit the branch as requested.Implemented and committed on branch `action-pinning`.
+
+- Added `action-pinning` lint rule and configuration.
+- Added semver, major-minor, and commit-SHA validation.
+- Added allow/deny lists with precedence and per-path overrides.
+- Added reusable workflow checks and dynamic-expression handling.
+- Added `-action-pinning-level` CLI flag.
+- Core tests pass.
+- Network-dependent generator tests remain blocked by environment restrictions.
+
+Commit: `3de1955 Add action pinning lint rule`

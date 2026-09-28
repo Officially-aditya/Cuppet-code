@@ -30,5 +30,5 @@ test('disabled mode retains the native transformed-message path', async () => {
   assert.match(hookPatch, /MessageV2\.toModelMessagesEffect\(transformed\.messages, model\)/)
   const patch = await readFile(patchPath, 'utf8')
   assert.match(patch, /mode: process\.env\.CUPPET_STM_ONLY_COMPACTION === "1" \? "stm_only" : "native"/)
-  assert.match(patch, /const modelMessages = yield\* MessageV2\.toModelMessagesEffect\(transformed\.messages, model/)
+  assert.match(patch, /const conversation = msgs\.map\(serialize\)\.filter\(Boolean\)\.join\("\\n\\n"\)/)
 })

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { CuppetControlClient } from '../src/control.js'
 import CuppetTuiPlugin, {
   formatDoctor,
   formatMemory,
@@ -78,6 +79,71 @@ test('native TUI preserves Cuppet slash commands', async () => {
   ]) {
     assert.equal(names.includes(removed), false, `unexpected /${removed}`)
   }
+})
+
+test('remote session selection follows into the TUI without overriding unchanged local navigation', async (t) => {
+  const previousSocket = process.env.CUPPET_CONTROL_SOCKET
+  const previousToken = process.env.CUPPET_CONTROL_TOKEN
+  process.env.CUPPET_CONTROL_SOCKET = '/tmp/cuppet-test-control.sock'
+  process.env.CUPPET_CONTROL_TOKEN = 'test-token'
+  t.after(() => {
+    if (previousSocket === undefined) delete process.env.CUPPET_CONTROL_SOCKET
+    else process.env.CUPPET_CONTROL_SOCKET = previousSocket
+    if (previousToken === undefined) delete process.env.CUPPET_CONTROL_TOKEN
+    else process.env.CUPPET_CONTROL_TOKEN = previousToken
+  })
+  let poll!: () => Promise<void>
+  t.mock.method(globalThis, 'setInterval', (callback: () => Promise<void>) => {
+    poll = callback
+    return { unref() {} }
+  })
+  let activeSession: { id: string } | undefined
+  let pending: Promise<void> | undefined
+  let calls = 0
+  t.mock.method(CuppetControlClient.prototype, 'call', async (method: string) => {
+    assert.equal(method, 'session.snapshot')
+    calls++
+    await pending
+    return { activeSession }
+  })
+  const navigated: string[] = []
+  const route = {
+    current: { name: 'home', params: {} as Record<string, unknown> },
+    navigate(name: string, params: Record<string, unknown>) {
+      navigated.push(params.sessionID as string)
+      route.current = { name, params }
+    },
+  }
+  await CuppetTuiPlugin.tui({
+    keymap: { registerLayer() { return () => {} }, dispatchCommand() {} },
+    ui: { toast() {} },
+    route,
+  })
+  await poll()
+  assert.deepEqual(navigated, [])
+  activeSession = { id: 'from-app' }
+  await poll()
+  assert.deepEqual(navigated, ['from-app'])
+  activeSession = { id: 'second-from-app' }
+  await poll()
+  assert.deepEqual(navigated, ['from-app', 'second-from-app'])
+  route.current = { name: 'home', params: {} }
+  await poll()
+  assert.equal(route.current.name, 'home')
+  route.current = { name: 'session', params: { sessionID: 'local-history' } }
+  await poll()
+  assert.equal(route.current.params.sessionID, 'local-history')
+  activeSession = { id: 'local-history' }
+  await poll()
+  assert.equal(navigated.length, 2)
+  let release!: () => void
+  pending = new Promise<void>((resolve) => { release = resolve })
+  const before = calls
+  const inFlight = poll()
+  await poll()
+  assert.equal(calls, before + 1, 'slow polls must not overlap')
+  release()
+  await inFlight
 })
 
 test('/plan toggles directly between native plan and build agents', () => {

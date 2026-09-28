@@ -35,6 +35,14 @@ const packageNames: Record<string, string> = {
   'darwin-x64': '@cuppet-code/runtime-darwin-x64',
   'linux-arm64': '@cuppet-code/runtime-linux-arm64-gnu',
   'linux-x64': '@cuppet-code/runtime-linux-x64-gnu',
+  'win32-x64': '@cuppet-code/runtime-win32-x64',
+  'win32-arm64': '@cuppet-code/runtime-win32-arm64',
+}
+
+/** Windows binaries carry the `.exe` suffix; POSIX binaries have none. */
+const executableSuffix = process.platform === 'win32' ? '.exe' : ''
+function binaryFileName(base: string): string {
+  return `${base}${executableSuffix}`
 }
 
 export async function resolveRuntimeAssets(): Promise<RuntimeAssets> {
@@ -70,8 +78,8 @@ export async function resolveRuntimeAssets(): Promise<RuntimeAssets> {
     validateManifest(manifest)
     const assets: RuntimeAssets = {
       source: 'package',
-      opencode: join(root, 'bin', 'opencode'),
-      tst: join(root, 'bin', 'tst-daemon'),
+      opencode: join(root, 'bin', binaryFileName('opencode')),
+      tst: join(root, 'bin', binaryFileName('tst-daemon')),
       plugin: join(root, 'plugin', 'index.js'),
       tuiPlugin: join(root, 'plugin', 'tui.js'),
       manifest,
@@ -120,21 +128,21 @@ async function fillDevelopmentDefaults(assets: RuntimeAssets): Promise<void> {
 
   const candidates = {
     opencode: [
-      ...(localRuntime ? [resolve(localRuntime, 'bin/opencode')] : []),
-      ...(repositoryRoot && runtimeDirectory ? [resolve(repositoryRoot, 'packages', runtimeDirectory, 'bin/opencode')] : []),
-      ...(globalPackageRoot ? [resolve(globalPackageRoot, 'bin/opencode')] : []),
+      ...(localRuntime ? [resolve(localRuntime, 'bin', binaryFileName('opencode'))] : []),
+      ...(repositoryRoot && runtimeDirectory ? [resolve(repositoryRoot, 'packages', runtimeDirectory, 'bin', binaryFileName('opencode'))] : []),
+      ...(globalPackageRoot ? [resolve(globalPackageRoot, 'bin', binaryFileName('opencode'))] : []),
       ...(pathOpencode ? [pathOpencode] : []),
     ],
     tst: [
-      resolve(process.cwd(), 'target/release/tst-daemon'),
-      resolve(process.cwd(), 'target/debug/tst-daemon'),
-      ...(localRuntime ? [resolve(localRuntime, 'bin/tst-daemon')] : []),
+      resolve(process.cwd(), 'target/release', binaryFileName('tst-daemon')),
+      resolve(process.cwd(), 'target/debug', binaryFileName('tst-daemon')),
+      ...(localRuntime ? [resolve(localRuntime, 'bin', binaryFileName('tst-daemon'))] : []),
       ...(repositoryRoot ? [
-        resolve(repositoryRoot, 'target/release/tst-daemon'),
-        resolve(repositoryRoot, 'target/debug/tst-daemon'),
+        resolve(repositoryRoot, 'target/release', binaryFileName('tst-daemon')),
+        resolve(repositoryRoot, 'target/debug', binaryFileName('tst-daemon')),
       ] : []),
-      ...(repositoryRoot && runtimeDirectory ? [resolve(repositoryRoot, 'packages', runtimeDirectory, 'bin/tst-daemon')] : []),
-      ...(globalPackageRoot ? [resolve(globalPackageRoot, 'bin/tst-daemon')] : []),
+      ...(repositoryRoot && runtimeDirectory ? [resolve(repositoryRoot, 'packages', runtimeDirectory, 'bin', binaryFileName('tst-daemon'))] : []),
+      ...(globalPackageRoot ? [resolve(globalPackageRoot, 'bin', binaryFileName('tst-daemon'))] : []),
       ...(pathTst ? [pathTst] : []),
     ],
     plugin: [
@@ -162,14 +170,22 @@ async function findInPath(binaryName: string): Promise<string | undefined> {
   const pathEnv = process.env.PATH
   if (!pathEnv) return undefined
   const directories = pathEnv.split(delimiter)
+  // Windows executables need the `.exe` suffix; PATHEXT resolution does not
+  // apply to direct filesystem probes.
+  const names = process.platform === 'win32' ? [`${binaryName}.exe`, binaryName] : [binaryName]
+  // X_OK has no meaning on Windows (only the read-only attribute exists);
+  // existence is the correct probe there.
+  const mode = process.platform === 'win32' ? constants.F_OK : constants.X_OK
   for (const directory of directories) {
     if (!directory) continue
-    const candidate = join(directory, binaryName)
-    try {
-      await access(candidate, constants.X_OK)
-      return candidate
-    } catch {
-      // Continue searching PATH
+    for (const name of names) {
+      const candidate = join(directory, name)
+      try {
+        await access(candidate, mode)
+        return candidate
+      } catch {
+        // Continue searching PATH
+      }
     }
   }
   return undefined
@@ -180,6 +196,8 @@ const runtimeDirectories: Record<string, string> = {
   'darwin-x64': 'runtime-darwin-x64',
   'linux-arm64': 'runtime-linux-arm64-gnu',
   'linux-x64': 'runtime-linux-x64-gnu',
+  'win32-x64': 'runtime-win32-x64',
+  'win32-arm64': 'runtime-win32-arm64',
 }
 
 async function verifyLocalRuntime(root: string, diagnostics: string[]): Promise<boolean> {
@@ -193,7 +211,7 @@ async function verifyLocalRuntime(root: string, diagnostics: string[]): Promise<
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as RuntimeManifest
     validateManifest(manifest)
     await verifyChecksums(root, manifest)
-    await readDerivativeMarker(resolve(root, 'bin/opencode'))
+    await readDerivativeMarker(resolve(root, 'bin', binaryFileName('opencode')))
     return true
   } catch (error) {
     diagnostics.push(`Local runtime artifact is invalid: ${(error as Error).message}`)
@@ -218,9 +236,12 @@ async function findRepositoryRoot(start: string): Promise<string | undefined> {
 }
 
 async function checkPresence(assets: RuntimeAssets): Promise<void> {
+  // X_OK has no meaning on Windows; existence is the correct probe for `.exe`
+  // binaries there, while POSIX keeps the executability check.
+  const executableMode = process.platform === 'win32' ? constants.F_OK : constants.X_OK
   for (const [label, path, mode] of [
-    ['OpenCode', assets.opencode, constants.X_OK],
-    ['TST daemon', assets.tst, constants.X_OK],
+    ['OpenCode', assets.opencode, executableMode],
+    ['TST daemon', assets.tst, executableMode],
     ['memory plugin', assets.plugin, constants.R_OK],
     ['TUI plugin', assets.tuiPlugin, constants.R_OK],
   ] as const) {
@@ -268,9 +289,9 @@ function validateManifest(manifest: RuntimeManifest): void {
 
 async function verifyChecksums(root: string, manifest: RuntimeManifest): Promise<void> {
   const required = [
-    'bin/opencode',
+    `bin/${binaryFileName('opencode')}`,
     'bin/.cuppet-derivative.json',
-    'bin/tst-daemon',
+    `bin/${binaryFileName('tst-daemon')}`,
     'package.json',
     'plugin/index.js',
     'plugin/server.js',

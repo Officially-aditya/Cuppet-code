@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "arm": "cuppet",
+  "taskId": "actionlint-action-pinning-lint",
+  "harnessVersion": "1.18.4",
+  "sessionId": "ses_f84ff0844ffe3LO61MaBC8ZIPX",
+  "startedAt": "2026-09-07T08:34:03.752Z",
+  "completedAt": "2026-09-07T08:59:36.396Z",
+  "durationMs": 1532633,
+  "success": true,
+  "attempts": 1,
+  "firstAttemptSuccess": true,
+  "retries": 0,
+  "usage": {
+    "inputTokens": 155842,
+    "cachedInputTokens": 4454016,
+    "uncachedInputTokens": 155842,
+    "outputTokens": 18187,
+    "reasoningTokens": 11161,
+    "totalModelTokens": 185190,
+    "effectiveCost": null
+  },
+  "toolCalls": 156,
+  "compactions": 0,
+  "regressions": 0,
+  "permissionRequests": 53,
+  "rejectedPermissions": 0,
+  "telemetry": {
+    "source": "native",
+    "complete": true,
+    "eventCount": 1665
+  },
+  "model": {
+    "provider": "openai",
+    "model": "gpt-5.6-sol",
+    "reasoningEffort": "high"
+  },
+  "parity": {
+    "status": "exact",
+    "notes": "Cuppet uses the configured model and 1.18.4 derivative runtime."
+  },
+  "finalMessage": "I’ll first inspect the repository’s rule, configuration, CLI, and known-action patterns, then create a clean feature branch from `main` without disturbing unrelated worktree changes. I’ll implement the rule and documentation, run only existing local tooling, and commit the complete change.\nThe checkout is clean but detached, and this benchmark clone has no local or remote `main` ref; `HEAD` is the supplied main snapshot (`0bdc957`). I’ll branch directly from that snapshot under a new branch name, preserving the requested clean-base semantics.\nThe implementation will be an opt-in visitor rule, leaving existing `uses:` validation unchanged. Effective policy will merge all matching allow/deny lists case-insensitively, let any matching path section override the global level, apply the CLI level last, and treat a denial as revoking an allowance rather than as a separate blocking error.\nI’m editing the configuration model and linter wiring first, then adding the focused visitor. The rule remains disabled for absent or `null` configuration, while `{}` and the CLI override explicitly enable it.\nThe first compile/test pass exposed one integration issue: always registering an opt-in rule changes SARIF rule metadata even when the rule is disabled. I’ll register `action-pinning` only when the effective global, path, or CLI policy enables it, which preserves default output and avoids the explicitly protected SARIF fixture.\nCore behavior and focused tests now pass. I’m documenting the opt-in model, level ordering, exemptions, denial precedence, path merging, and CLI-only level override; the checks document section will avoid generated output changes, so `testdata/format/test.sarif` remains untouched.\nImplementation and docs are complete. I’m now running the repository package tests and static checks, plus targeted CLI scenarios for disabled, default, path-enabled, allow/deny, dynamic-ref, and SHA-only behavior.\nReview found two edge cases worth correcting: a path block used only to add lists should not silently weaken an inherited global level, and the action/ref separator must be the first `@` so malformed dynamic refs cannot be mistaken for dynamic action names. I’ll also make known-action guidance level-aware so it never presents a mutable major tag as if it directly satisfied semver or SHA enforcement.\nAll focused and root tests pass, including the CLI path and race detector. The documentation checker cannot complete in this environment because its existing shellcheck-backed example reports no error when shellcheck is unavailable; I’m leaving those unrelated generated fixtures unchanged as required and doing the final diff/test review before committing.\nFinal review confirms only the rule, config/CLI plumbing, tests, and documentation are changed; the protected SARIF fixture is clean. I’m staging exactly those files and committing them on `feature/action-pinning-rule`.\nImplemented and committed the action-pinning rule.\n\n- Branch: `feature/action-pinning-rule`\n- Commit: `3724d94 Add configurable action pinning rule`\n- `go test .`: passed\n- `go test -race .`: passed\n- `go vet ./...`: passed\n- Worktree is clean\n- `testdata/format/test.sarif` was not modified\n\nThe documentation checker remains blocked by unavailable shellcheck integration in an existing example."
+}

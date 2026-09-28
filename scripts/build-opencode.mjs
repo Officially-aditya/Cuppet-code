@@ -1,20 +1,22 @@
 #!/usr/bin/env node
-import { createHash } from 'node:crypto'
-import { chmod, copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { createHash, randomBytes } from 'node:crypto'
+import { chmod, copyFile, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
+import { access } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
-const revision = '49c69c5ed3ccf706b61b3febb43c8aaff7f8325e'
-const version = '1.18.4'
+const revision = '16747470f976aca3d362ad730bcd3fe82ecc2c9a'
+const version = '1.18.29'
 const sourceArgument = process.argv.find((argument) => argument.startsWith('--source='))
 const outputArgument = process.argv.find((argument) => argument.startsWith('--output='))
 if (!sourceArgument || !outputArgument) {
   throw new Error('usage: build-opencode.mjs --source=<checkout> --output=<binary>')
 }
 const source = resolve(sourceArgument.slice('--source='.length))
-const output = resolve(outputArgument.slice('--output='.length))
+let output = resolve(outputArgument.slice('--output='.length))
+if (process.platform === 'win32' && !output.toLowerCase().endsWith('.exe')) output += '.exe'
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const patchDirectory = resolve(repositoryRoot, 'patches', 'opencode')
 
@@ -72,15 +74,20 @@ try {
   if (process.arch === 'x64') buildArguments.push('--baseline')
   await run('bun', buildArguments, patchedSource, environment)
 
-  const platform = process.platform === 'darwin' ? 'darwin' : process.platform === 'linux' ? 'linux' : undefined
+  const platform = process.platform === 'darwin' ? 'darwin' : process.platform === 'linux' ? 'linux' : process.platform === 'win32' ? 'win32' : undefined
   if (!platform || !['arm64', 'x64'].includes(process.arch)) {
     throw new Error(`unsupported OpenCode build host ${process.platform}-${process.arch}`)
   }
-  const packageName = `opencode-${platform}-${process.arch}${process.arch === 'x64' ? '-baseline' : ''}`
-  const built = resolve(patchedSource, 'packages/opencode/dist', packageName, 'bin/opencode')
+  const built = await findBuiltBinary(patchedSource)
   await mkdir(dirname(output), { recursive: true })
-  await copyFile(built, output)
-  await chmod(output, 0o755)
+  const temporaryOutput = `${output}.${randomBytes(6).toString('hex')}.tmp`
+  try {
+    await copyFile(built, temporaryOutput)
+    await rename(temporaryOutput, output)
+  } finally {
+    await rm(temporaryOutput, { force: true }).catch(() => undefined)
+  }
+  if (process.platform !== 'win32') await chmod(output, 0o755)
   const markerPath = join(dirname(output), '.cuppet-derivative.json')
   await writeFile(markerPath, `${JSON.stringify({
     schema: 1,
@@ -95,6 +102,46 @@ try {
 } finally {
   await run('git', ['worktree', 'remove', '--force', patchedSource], source).catch(() => undefined)
   await rm(temporaryRoot, { recursive: true, force: true }).catch(() => undefined)
+}
+
+function findBuiltBinary(patchedSource) {
+  const platform = process.platform === 'darwin'
+    ? 'darwin'
+    : process.platform === 'linux'
+      ? 'linux'
+      : process.platform === 'win32'
+        ? 'win32'
+        : undefined
+  if (!platform || !['arm64', 'x64'].includes(process.arch)) {
+    throw new Error(`unsupported OpenCode build host ${process.platform}-${process.arch}`)
+  }
+  const suffix = platform === 'win32' ? '.exe' : ''
+  const baseline = process.arch === 'x64' ? '-baseline' : ''
+  const candidates = [
+    // Preferred layout from `packages/opencode/script/build.ts --single`:
+    // `dist/opencode-<platform>-<arch>[-baseline]/bin/opencode[.exe]`.
+    resolve(patchedSource, 'packages/opencode/dist', `opencode-${platform}-${process.arch}${baseline}`, `bin/opencode${suffix}`),
+    resolve(patchedSource, 'packages/opencode/dist', `opencode-${platform}-${process.arch}`, `bin/opencode${suffix}`),
+  ]
+  return (async () => {
+    for (const candidate of candidates) {
+      try {
+        await access(candidate)
+        return candidate
+      } catch {
+        // Try the next candidate.
+      }
+    }
+    let entries = []
+    try {
+      entries = await readdir(resolve(patchedSource, 'packages/opencode/dist'))
+    } catch {
+      entries = []
+    }
+    throw new Error(
+      `built OpenCode binary not found (tried ${candidates.join(', ')}; dist contains: ${entries.join(', ') || 'nothing'})`,
+    )
+  })()
 }
 
 function run(command, arguments_, cwd, env) {

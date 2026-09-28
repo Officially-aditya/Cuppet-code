@@ -3,7 +3,7 @@
 The release has four parts:
 
 1. The `cuppet` npm CLI package.
-2. Four platform runtime npm packages containing OpenCode and `tst-daemon`.
+2. Six platform runtime npm packages containing OpenCode and `tst-daemon`.
 3. Scoped runtime package mirrors in GitHub Packages.
 4. Downloadable GitHub Release assets.
 5. Runtime configuration for the Sydney API, relay, and Cuppet-code host.
@@ -29,10 +29,10 @@ Each platform job uses Node 22, Bun 1.3.14, and Rust 1.88 to:
 
 The publish job then:
 
-- verifies all four runtime manifests and checksums;
+- verifies all six runtime manifests and checksums;
 - creates and smoke-installs the `cuppet-<version>.tgz` npm bundle;
-- publishes the four `@cuppet-code/runtime-*` packages and `cuppet`;
-- creates a GitHub Release containing the four runtime archives, the npm
+- publishes the six `@cuppet-code/runtime-*` packages and `cuppet`;
+- creates a GitHub Release containing the six runtime archives, the npm
   tarball, and `SHA256SUMS`.
 
 The GitHub Packages job is a separate mirror path. It publishes every runtime
@@ -52,7 +52,9 @@ be allowed to publish:
 - `@cuppet-code/runtime-darwin-arm64`;
 - `@cuppet-code/runtime-darwin-x64`;
 - `@cuppet-code/runtime-linux-arm64-gnu`;
-- `@cuppet-code/runtime-linux-x64-gnu`.
+- `@cuppet-code/runtime-linux-x64-gnu`;
+- `@cuppet-code/runtime-win32-x64`;
+- `@cuppet-code/runtime-win32-arm64`.
 
 Create an npm automation token and add it as `NPM_TOKEN` in a GitHub
 Environment named exactly `npm`. The workflow passes that secret to
@@ -96,7 +98,7 @@ automatically when present.
 
 ## Release steps
 
-1. Update the root, CLI, and four runtime package versions together.
+1. Update the root, CLI, and six runtime package versions together.
 2. Regenerate `package-lock.json` if the version update changes it.
 3. Run the normal CI checks and commit the version.
 4. Create and push the matching tag:

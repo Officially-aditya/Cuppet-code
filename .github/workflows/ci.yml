@@ -10,18 +10,24 @@ permissions:
 
 jobs:
   test:
+    defaults:
+      run:
+        # Windows runners default to PowerShell; the retry step below uses
+        # POSIX shell syntax, so pin bash on every platform.
+        shell: bash
     strategy:
       matrix:
         include:
           - os: macos-15-intel
           - os: ubuntu-24.04
+          - os: windows-2022
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with:
           repository: anomalyco/opencode
-          ref: 49c69c5ed3ccf706b61b3febb43c8aaff7f8325e
+          ref: 16747470f976aca3d362ad730bcd3fe82ecc2c9a
           path: .opencode-src
           persist-credentials: false
       - uses: actions/setup-node@v4

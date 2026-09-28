@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { CuppetControlClient } from '../src/control/client.js'
 import { CuppetControlServer, createControlAddress } from '../src/control/server.js'
+import { isPipeEndpoint } from '../src/runtime/ipc.js'
 import type { NativeRoutingAttachment } from '../src/pe3/native-envelope.js'
 
 test('launch-scoped control API authenticates and exposes diagnostics', async (t) => {
@@ -121,7 +122,9 @@ test('launch-scoped control API authenticates and exposes diagnostics', async (t
       /unsupported field url/,
     )
     assert.equal(nativeRoutes.length, 1)
-    assert.equal((await stat(address.socket)).mode & 0o777, 0o600)
+    if (!isPipeEndpoint(address.socket)) {
+      assert.equal((await stat(address.socket)).mode & 0o777, 0o600)
+    }
     await assert.rejects(() => new CuppetControlClient(address.socket, 'wrong').call('status'), /unauthorized/)
   } finally {
     await server.close()

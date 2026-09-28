@@ -618,7 +618,7 @@ try {
     project,
     task: 'Rename Task.dueDate to deadline, add priority-aware indexed filtering, reject past deadlines, and fix deadline-loss plus stale-index bugs.',
     model,
-    kernel: { name: benchmarkArms ? 'DeepSeek Harness + Cuppet' : 'official OpenCode', version: '1.18.4' },
+    kernel: { name: benchmarkArms ? 'DeepSeek Harness + Cuppet' : 'official OpenCode', version: '1.18.29' },
     followupEnabled,
     design: benchmarkArms
       ? 'two-arm DeepSeek Harness/Cuppet comparison; fresh repository copies; identical task/model/evaluator; Cuppet adds bounded TST context; arm order alternates; hidden suite is generated outside trial workspaces; mutations are isolated per trial'

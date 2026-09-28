@@ -4048,8 +4048,31 @@ var NEVER = INVALID;
 // src/index.ts
 import { readFile as readFile3, writeFile as writeFile2 } from "node:fs/promises";
 
-// src/rpc.ts
+// src/ipc.ts
 import { createConnection } from "node:net";
+function parseIpcEndpoint(endpoint) {
+  const trimmed = endpoint.trim();
+  const tcp = /^(127\.0\.0\.1|localhost):(\d{1,5})$/.exec(trimmed);
+  if (tcp) {
+    const host = tcp[1];
+    const portText = tcp[2];
+    if (host && portText) {
+      const port = Number(portText);
+      if (Number.isInteger(port) && port > 0 && port <= 65535) return { kind: "tcp", host, port };
+    }
+  }
+  return { kind: "path", path: endpoint };
+}
+function connectIpc(endpoint) {
+  const parsed = parseIpcEndpoint(endpoint);
+  return new Promise((resolve2, reject) => {
+    const socket = parsed.kind === "tcp" ? createConnection({ host: parsed.host, port: parsed.port }) : createConnection(parsed.path);
+    socket.once("connect", () => resolve2(socket));
+    socket.once("error", reject);
+  });
+}
+
+// src/rpc.ts
 var MAX_FRAME_BYTES = 16 * 1024 * 1024;
 var TST_PROTOCOL_VERSION = "cuppet.tst.v3";
 var TstToolClient = class {
@@ -4173,11 +4196,7 @@ var TstToolClient = class {
   }
 };
 function connect(socketPath) {
-  return new Promise((resolve2, reject) => {
-    const socket = createConnection(socketPath);
-    socket.once("connect", () => resolve2(socket));
-    socket.once("error", reject);
-  });
+  return connectIpc(socketPath);
 }
 function readFrame(socket) {
   return new Promise((resolve2, reject) => {
@@ -6701,7 +6720,7 @@ var GRAPH_NATIVE_TOOL_PROFILE = {
   cuppet_graph_search: true,
   cuppet_graph_trace: true
 };
-var index_default = CuppetPlugin;
+var src_default = CuppetPlugin;
 function foregroundPermissionRules() {
   const navigationEffect = process.env.CUPPET_GRAPH_FIRST_GATE === "1" ? "ask" : "allow";
   const graphNativeProfile = process.env.CUPPET_GRAPH_NATIVE_PROFILE === "1";
@@ -6769,7 +6788,7 @@ async function readBridge(path) {
 }
 export {
   CuppetMemoryPlugin,
-  index_default as default,
+  src_default as default,
   foregroundPermissionRules,
   graphToolOutput
 };

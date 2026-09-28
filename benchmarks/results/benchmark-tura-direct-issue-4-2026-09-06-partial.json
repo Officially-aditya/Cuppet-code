@@ -1,0 +1,91 @@
+{
+  "schema": 1,
+  "status": "incomplete",
+  "benchmark": "cuppet-harness-comparison",
+  "benchmarkVersion": "issue-4.1",
+  "repositorySha": "840ed751b61c04afc881a393b7836d4d2c932f61",
+  "manifestSha256": "cac6a529218e093c9b0fc2d4868ded3f29d1f1ffebb6d99c9a1e0accdf71ea63",
+  "taskSet": {
+    "id": "issue-4-core",
+    "version": "2026-09-05",
+    "tasksScheduled": 12
+  },
+  "sessionTopology": "marathon",
+  "repetitionsRequested": 1,
+  "arm": {
+    "id": "tura-direct",
+    "version": "0.1.37",
+    "provider": "openai",
+    "model": "openai/gpt-5.6-luna",
+    "reasoningEffort": "low",
+    "parity": "exact",
+    "sessionId": "tura-direct-981bfedc38169416db51",
+    "command": "tura exec --cwd <workspace> --agent-id direct --model openai/gpt-5.6-luna --model-reasoning-effort low --session-id tura-direct-981bfedc38169416db51 --json --log --sandbox"
+  },
+  "preflight": {
+    "status": "passed",
+    "authenticated": true,
+    "providerRuntime": "ready",
+    "exactModelCatalogEntry": true,
+    "modelRequestSent": false
+  },
+  "execution": {
+    "tasksExecuted": 1,
+    "tasksWithHarnessTelemetry": 1,
+    "tasksAccepted": 0,
+    "modelRequests": 1,
+    "retries": 0,
+    "automaticReruns": 0,
+    "stopReason": "The first run predated verifier capture in the Tura arm. The run was stopped after task 1; the preserved workspace then failed the deterministic hidden verifier.",
+    "comparisonEligible": false
+  },
+  "taskResults": [
+    {
+      "taskId": "task-tracker-cross-file",
+      "harnessSuccess": true,
+      "verification": {
+        "id": "task-tracker-hidden-contract",
+        "passed": false,
+        "exitCode": 1,
+        "error": "priority must be low, normal, or high"
+      },
+      "usage": {
+        "inputTokens": 396014,
+        "cachedInputTokens": 285696,
+        "uncachedInputTokens": 110318,
+        "outputTokens": 3806,
+        "reasoningTokens": 452,
+        "totalModelTokens": 114576,
+        "effectiveCost": null
+      },
+      "toolCalls": 7,
+      "compactions": 0,
+      "durationMs": 120411,
+      "rawResult": ".benchmarks/cuppet-harness-comparison-PGcDUs/results/marathon-repeat-1-task-tracker-cross-file-tura-direct.json",
+      "stdoutTelemetry": ".benchmarks/cuppet-harness-comparison-PGcDUs/results/marathon-repeat-1-task-tracker-cross-file-tura-direct.json.tura.stdout.ndjson",
+      "stderrTelemetry": ".benchmarks/cuppet-harness-comparison-PGcDUs/results/marathon-repeat-1-task-tracker-cross-file-tura-direct.json.tura.stderr.log"
+    }
+  ],
+  "frozenBaseline": {
+    "cuppet": {
+      "totalModelTokens": 146476,
+      "uncachedInputTokens": 122007,
+      "cachedInputTokens": 3087360,
+      "toolCalls": 101,
+      "durationSeconds": 594
+    },
+    "opencode": {
+      "totalModelTokens": 166998,
+      "uncachedInputTokens": 131492,
+      "cachedInputTokens": 4158464,
+      "toolCalls": 141,
+      "durationSeconds": 833
+    }
+  },
+  "notes": [
+    "This is not a completed 12-task benchmark and must not be used as a Tura-versus-baseline comparison.",
+    "No Cuppet or OpenCode task was rerun.",
+    "No Tura retry, repetition, fallback model, Balanced mode, or DeepSWE mode was run.",
+    "The working-tree integration now captures deterministic verifier results between Tura turns and refuses to fabricate missing Tura task results; those fixes were verified with typecheck, benchmark contract tests, preflight, and dry run but were not exercised by another paid model run."
+  ]
+}

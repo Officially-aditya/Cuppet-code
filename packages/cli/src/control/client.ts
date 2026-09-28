@@ -1,4 +1,5 @@
-import { createConnection, type Socket } from 'node:net'
+import type { Socket } from 'node:net'
+import { connectIpc } from '../runtime/ipc.js'
 
 const MAX_LINE_BYTES = 256 * 1024
 
@@ -27,11 +28,7 @@ export class CuppetControlClient {
 type Response = { ok: boolean; result?: unknown; error?: string }
 
 function connect(path: string): Promise<Socket> {
-  return new Promise((resolve, reject) => {
-    const socket = createConnection(path)
-    socket.once('connect', () => resolve(socket))
-    socket.once('error', reject)
-  })
+  return connectIpc(path)
 }
 
 function readLine(socket: Socket): Promise<Response> {

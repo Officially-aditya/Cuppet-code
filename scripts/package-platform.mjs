@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { createHash } from 'node:crypto'
-import { chmod, copyFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
+import { createHash, randomBytes } from 'node:crypto'
+import { access, chmod, copyFile, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { basename, dirname, join, resolve } from 'node:path'
 
@@ -12,6 +12,8 @@ const targets = {
   'x86_64-apple-darwin': ['runtime-darwin-x64', 'darwin', 'x64', null],
   'aarch64-unknown-linux-gnu': ['runtime-linux-arm64-gnu', 'linux', 'arm64', 'glibc'],
   'x86_64-unknown-linux-gnu': ['runtime-linux-x64-gnu', 'linux', 'x64', 'glibc'],
+  'x86_64-pc-windows-msvc': ['runtime-win32-x64', 'win32', 'x64', null],
+  'aarch64-pc-windows-msvc': ['runtime-win32-arm64', 'win32', 'arm64', null],
 }
 const configuration = targets[target]
 if (!configuration) throw new Error(`unsupported release target ${target}`)
@@ -19,7 +21,7 @@ const [packageDirectory, platform, arch, libc] = configuration
 const expectedTstProtocol = 'cuppet.tst.v3'
 const releaseVersion = JSON.parse(await readFile(resolve('package.json'), 'utf8')).version
 const opencodeSource = process.env.CUPPET_OPENCODE_BIN
-if (!opencodeSource) throw new Error('CUPPET_OPENCODE_BIN must point to OpenCode v1.18.4 at revision 49c69c5ed3ccf706b61b3febb43c8aaff7f8325e')
+if (!opencodeSource) throw new Error('CUPPET_OPENCODE_BIN must point to OpenCode v1.18.29 at revision 16747470f976aca3d362ad730bcd3fe82ecc2c9a')
 const derivativeMarker = join(dirname(resolve(opencodeSource)), '.cuppet-derivative.json')
 let marker
 try {
@@ -27,31 +29,44 @@ try {
 } catch {
   throw new Error(`OpenCode binary is not a Cuppet derivative: missing or unreadable ${derivativeMarker}`)
 }
-if (marker.product !== 'cuppet-opencode-derivative' || marker.upstreamVersion !== '1.18.4' || marker.upstreamRevision !== '49c69c5ed3ccf706b61b3febb43c8aaff7f8325e') {
+if (marker.product !== 'cuppet-opencode-derivative' || marker.upstreamVersion !== '1.18.29' || marker.upstreamRevision !== '16747470f976aca3d362ad730bcd3fe82ecc2c9a') {
   throw new Error('OpenCode derivative marker targets an incompatible upstream binary')
 }
 
 const output = resolve('artifacts', packageDirectory)
 await mkdir(join(output, 'bin'), { recursive: true })
 await mkdir(join(output, 'plugin'), { recursive: true })
+// Windows binaries carry the `.exe` suffix everywhere: manifest checksums,
+// runtime discovery, and process spawning all expect it.
+const executableSuffix = platform === 'win32' ? '.exe' : ''
+const opencodeBinary = `bin/opencode${executableSuffix}`
+const tstBinary = `bin/tst-daemon${executableSuffix}`
+let opencodeSourcePath = resolve(opencodeSource)
+if (platform === 'win32' && !opencodeSourcePath.toLowerCase().endsWith('.exe')) {
+  try {
+    await access(opencodeSourcePath)
+  } catch {
+    opencodeSourcePath = `${opencodeSourcePath}.exe`
+  }
+}
 const files = {
-  'bin/opencode': resolve(opencodeSource),
+  [opencodeBinary]: opencodeSourcePath,
   'bin/.cuppet-derivative.json': derivativeMarker,
-  'bin/tst-daemon': resolve('target', target, 'release', 'tst-daemon'),
+  [tstBinary]: resolve('target', target, 'release', `tst-daemon${executableSuffix}`),
   'package.json': resolve('packages', packageDirectory, 'package.json'),
   'plugin/index.js': resolve('packages/opencode-plugin/dist/index.js'),
   'plugin/server.js': resolve('packages/opencode-plugin/dist/server.js'),
   'plugin/tui.js': resolve('packages/opencode-plugin/dist/tui.js'),
 }
 const sourcePackage = JSON.parse(await readFile(files['package.json'], 'utf8'))
-const daemonProtocol = (await capture(files['bin/tst-daemon'], ['--protocol'])).trim()
+const daemonProtocol = (await capture(files[tstBinary], ['--protocol'])).trim()
 if (daemonProtocol !== expectedTstProtocol) {
   throw new Error(`TST daemon protocol mismatch: expected ${expectedTstProtocol}, received ${daemonProtocol || 'no identity'}`)
 }
 for (const [destination, source] of Object.entries(files)) {
   if (destination === 'package.json') continue
   const targetPath = join(output, destination)
-  if (resolve(source) !== resolve(targetPath)) await copyFile(source, targetPath)
+  if (resolve(source) !== resolve(targetPath)) await replaceFile(source, targetPath)
 }
 const packageMetadata = {
   ...sourcePackage,
@@ -60,8 +75,10 @@ const packageMetadata = {
   ...(libc ? { libc: [libc] } : {}),
 }
 await writeFile(join(output, 'package.json'), `${JSON.stringify(packageMetadata)}\n`)
-await chmod(join(output, 'bin/opencode'), 0o755)
-await chmod(join(output, 'bin/tst-daemon'), 0o755)
+if (platform !== 'win32') {
+  await chmod(join(output, opencodeBinary), 0o755)
+  await chmod(join(output, tstBinary), 0o755)
+}
 await chmod(join(output, 'plugin/index.js'), 0o644)
 
 if (platform === 'darwin') {
@@ -101,7 +118,7 @@ const cargoMetadata = JSON.parse(await capture('cargo', [
 ]))
 const softwarePackages = [
   spdxPackage('Cuppet', releaseVersion, 'Apache-2.0', 'SPDXRef-Cuppet'),
-  spdxPackage('OpenCode', '1.18.4', 'MIT', 'SPDXRef-OpenCode'),
+  spdxPackage('OpenCode', '1.18.29', 'MIT', 'SPDXRef-OpenCode'),
   spdxPackage('Cuppet OpenCode derivative patch set', manifest.patchSetDigest, 'Apache-2.0', 'SPDXRef-Cuppet-Patches'),
   spdxPackage('zod', '3.25.76', 'MIT', 'SPDXRef-Zod'),
   ...cargoMetadata.packages.map((item, index) => spdxPackage(
@@ -138,6 +155,16 @@ async function sha256(path) {
   const data = await readFile(path)
   hash.update(data)
   return hash.digest('hex')
+}
+
+async function replaceFile(source, destination) {
+  const temporary = `${destination}.${randomBytes(6).toString('hex')}.tmp`
+  try {
+    await copyFile(source, temporary)
+    await rename(temporary, destination)
+  } finally {
+    await rm(temporary, { force: true }).catch(() => undefined)
+  }
 }
 
 function run(command, arguments_) {

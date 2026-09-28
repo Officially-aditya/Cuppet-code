@@ -1,7 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { chmod, mkdir, realpath } from 'node:fs/promises'
+import { mkdir, realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { chmodPrivate, isWindows } from './ipc.js'
 
 export type RuntimePaths = Awaited<ReturnType<typeof createRuntimePaths>>
 
@@ -23,7 +24,9 @@ export async function createRuntimePaths(
     preferences: join(base, 'preferences.json'),
     logs: join(base, 'logs'),
     runtime,
-    tstSocket: join(runtime, 'tst.sock'),
+    tstSocket: isWindows ? '' : join(runtime, 'tst.sock'),
+    // Windows TST uses supervisor-picked loopback TCP (no socket file).
+    tstTransport: isWindows ? 'tcp' : 'unix' as const,
     opencode: {
       config: join(base, 'opencode', 'config'),
       data: join(base, 'opencode', 'data'),
@@ -43,6 +46,6 @@ export async function createRuntimePaths(
     paths.opencode.state,
   ]
   await Promise.all(privateDirectories.map((directory) => mkdir(directory, { recursive: true, mode: 0o700 })))
-  await Promise.all(privateDirectories.map((directory) => chmod(directory, 0o700)))
+  await Promise.all(privateDirectories.map((directory) => chmodPrivate(directory, 0o700)))
   return paths
 }

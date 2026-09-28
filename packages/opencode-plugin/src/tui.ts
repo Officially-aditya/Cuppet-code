@@ -108,26 +108,26 @@ const CuppetTuiPlugin: TuiPluginModule = {
     if (!process.env.CUPPET_CONTROL_SOCKET || !process.env.CUPPET_CONTROL_TOKEN) return
     const client = new CuppetControlClient()
 
-    let lastNavigatedSessionID: string | undefined
+    let lastActiveSessionID: string | undefined
+    let syncingRoute = false
     const syncActiveRoute = async () => {
+      if (syncingRoute) return
+      syncingRoute = true
       try {
-        const status = await client.call<Record<string, unknown>>('status')
-        const foreground = status.foreground as Record<string, unknown> | undefined
-        const session = status.session as Record<string, unknown> | undefined
-        const currentSessionID = session?.id as string | undefined
-        const isRunning = foreground?.running === true
-
-        if (currentSessionID) {
-          const currentRoute = api.route?.current
-          if (isRunning && currentRoute?.name === 'home') {
-            lastNavigatedSessionID = currentSessionID
-            api.route?.navigate?.('session', { sessionID: currentSessionID })
-          } else if (currentRoute?.name === 'home' && currentSessionID !== lastNavigatedSessionID) {
-            lastNavigatedSessionID = currentSessionID
-            api.route?.navigate?.('session', { sessionID: currentSessionID })
-          }
+        const snapshot = await client.call<{ activeSession?: { id: string } }>('session.snapshot')
+        const currentSessionID = snapshot.activeSession?.id
+        const currentRoute = api.route?.current
+        // Follow controller selection changes, not every poll: local /new and
+        // history navigation must remain usable while the controller is idle.
+        if (currentSessionID && currentSessionID !== lastActiveSessionID &&
+          (currentRoute?.name === 'home' || currentRoute?.name === 'session') &&
+          currentRoute.params?.sessionID !== currentSessionID) {
+          api.route?.navigate?.('session', { sessionID: currentSessionID })
         }
-      } catch {}
+        lastActiveSessionID = currentSessionID
+      } catch {} finally {
+        syncingRoute = false
+      }
     }
 
     const timer = setInterval(syncActiveRoute, 350)

@@ -22,6 +22,8 @@ test('release publisher skips packages already published at the exact version', 
       '@cuppet-code/runtime-darwin-x64',
       '@cuppet-code/runtime-linux-arm64-gnu',
       '@cuppet-code/runtime-linux-x64-gnu',
+      '@cuppet-code/runtime-win32-x64',
+      '@cuppet-code/runtime-win32-arm64',
     ].entries()) {
       const directory = join(fixture, `artifacts/runtime-${index}`)
       await mkdir(directory, { recursive: true })
@@ -41,10 +43,14 @@ if (args[0] !== 'view') {
 process.stdout.write(JSON.stringify(args[1].split('@').at(-1)))
 `)
     await chmod(fakeNpm, 0o755)
+    // Windows resolves `npm.cmd`, not bare `npm`; provide both shims so the
+    // publisher test passes on every platform.
+    await writeFile(join(bin, 'npm.cmd'), `@echo off\nnode "${fakeNpm}" %*\n`)
+    await chmod(join(bin, 'npm.cmd'), 0o755)
 
     const result = await runPublisher(fixture, bin)
     assert.equal(result.code, 0, result.stderr)
-    assert.equal((result.stdout.match(/already published/g) ?? []).length, 5)
+    assert.equal((result.stdout.match(/already published/g) ?? []).length, 7)
     assert.doesNotMatch(result.stderr, /unexpected npm command/)
   } finally {
     await rm(fixture, { recursive: true, force: true })
@@ -82,6 +88,10 @@ console.error('unexpected npm command: ' + args.join(' '))
 process.exit(2)
 `)
     await chmod(fakeNpm, 0o755)
+    // Windows resolves `npm.cmd`, not bare `npm`; provide both shims so the
+    // publisher test passes on every platform.
+    await writeFile(join(bin, 'npm.cmd'), `@echo off\nnode "${fakeNpm}" %*\n`)
+    await chmod(join(bin, 'npm.cmd'), 0o755)
 
     const result = await runPublisher(fixture, bin, [
       `--registry=${registry}`,

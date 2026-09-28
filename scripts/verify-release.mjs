@@ -2,14 +2,14 @@
 import { createHash } from 'node:crypto'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { canExecuteRuntime } from './release-platform.mjs'
 
 const root = resolve(process.argv[2] ?? 'artifacts')
 const expectedTstProtocol = 'cuppet.tst.v3'
 const verifyExecutables = process.env.CUPPET_VERIFY_EXECUTABLES === '1'
 const expectedArgument = process.argv.find((argument) => argument.startsWith('--expected='))
-const expectedCount = Number(expectedArgument?.slice('--expected='.length) ?? 4)
+const expectedCount = Number(expectedArgument?.slice('--expected='.length) ?? 6)
 if (!Number.isInteger(expectedCount) || expectedCount < 1) throw new Error('--expected must be a positive integer')
 const releaseVersion = JSON.parse(await readFile(resolve('package.json'), 'utf8')).version
 const manifests = await find(root, 'manifest.json')
@@ -18,7 +18,7 @@ if (manifests.length !== expectedCount) {
 }
 const platformKeys = new Set()
 for (const manifestPath of manifests) {
-  const directory = manifestPath.slice(0, -'/manifest.json'.length)
+  const directory = dirname(manifestPath)
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
   if (
     manifest.opencodeVersion !== '1.18.29' ||
@@ -40,12 +40,17 @@ for (const manifestPath of manifests) {
     const path = join(directory, relative)
     const actual = createHash('sha256').update(await readFile(path)).digest('hex')
     if (actual !== expected) throw new Error(`checksum mismatch for ${path}`)
-    if ((relative === 'bin/opencode' || relative === 'bin/tst-daemon') && ((await stat(path)).mode & 0o111) === 0) {
+    // Windows executables carry the `.exe` suffix and NTFS has no POSIX
+    // execute bits, so only enforce the mode check on POSIX artifacts.
+    const isBinary = relative === 'bin/opencode' || relative === 'bin/opencode.exe' ||
+      relative === 'bin/tst-daemon' || relative === 'bin/tst-daemon.exe'
+    if (isBinary && manifest.platform !== 'win32' && ((await stat(path)).mode & 0o111) === 0) {
       throw new Error(`binary is not executable: ${path}`)
     }
   }
   if (verifyExecutables && canExecuteRuntime(manifest)) {
-    const daemonProtocol = (await capture(join(directory, 'bin/tst-daemon'), ['--protocol'])).trim()
+    const daemonName = manifest.platform === 'win32' ? 'bin/tst-daemon.exe' : 'bin/tst-daemon'
+    const daemonProtocol = (await capture(join(directory, daemonName), ['--protocol'])).trim()
     if (daemonProtocol !== expectedTstProtocol) {
       throw new Error(`TST daemon protocol mismatch in ${directory}: expected ${expectedTstProtocol}, received ${daemonProtocol || 'no identity'}`)
     }

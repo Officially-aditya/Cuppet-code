@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFile as execFileCallback } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
@@ -15,6 +16,14 @@ import type { AgentEvent } from '../src/types.js'
 
 const binary = process.env.CUPPET_CONTRACT_OPENCODE_BIN
 const execFile = promisify(execFileCallback)
+
+function resolveBinary(value: string): string {
+  // CI passes the extensionless build output path; Windows binaries carry
+  // the `.exe` suffix, so fall back to it when the exact path is missing.
+  if (process.platform !== 'win32' || value.toLowerCase().endsWith('.exe')) return value
+  if (existsSync(value)) return value
+  return `${value}.exe`
+}
 
 test('pinned OpenCode binary exposes the v2 catalog and stable cross-provider execution contract', { skip: !binary }, async () => {
   const root = process.platform === 'darwin' ? '/private/tmp' : tmpdir()
@@ -44,13 +53,13 @@ test('pinned OpenCode binary exposes the v2 catalog and stable cross-provider ex
   const logger = new RedactedLogger(paths.logs)
   let tst: TstRuntime | undefined
   if (process.env.CUPPET_TEST_TST_BIN) {
-    tst = await startTstDaemon(resolve(process.env.CUPPET_TEST_TST_BIN), paths, logger)
+    tst = await startTstDaemon(resolveBinary(resolve(process.env.CUPPET_TEST_TST_BIN)), paths, logger)
   }
   let runtime: OpenCodeRuntime | undefined
   let gateway: OpenCodeGateway | undefined
   try {
     runtime = await startOpenCodeServer({
-      binary: binary!,
+      binary: resolveBinary(binary!),
       paths,
       logger,
       plugin: resolve(import.meta.dirname, '../../opencode-plugin/dist/index.js'),
@@ -125,7 +134,7 @@ test('pinned OpenCode binary exposes the v2 catalog and stable cross-provider ex
     await Promise.all(Object.values(vertexXdg).map((directory) => mkdir(directory, { recursive: true })))
     const dummyAdc = resolve(vertexDebug, 'adc.json')
     await writeFile(dummyAdc, '{}', 'utf8')
-    const debug = await execFile(binary!, ['debug', 'v2'], {
+    const debug = await execFile(resolveBinary(binary!), ['debug', 'v2'], {
       cwd: resolve(import.meta.dirname, '../../..'),
       env: {
         ...process.env,

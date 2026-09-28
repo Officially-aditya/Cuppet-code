@@ -1,11 +1,13 @@
 import { randomBytes } from 'node:crypto'
-import { chmod, mkdir, unlink } from 'node:fs/promises'
+import { unlink } from 'node:fs/promises'
+import { basename } from 'node:path'
 import { createServer, type Server, type Socket } from 'node:net'
 
 import type { CuppetController } from '../controller.js'
 import { parseNativeRoutingAttachments, type NativeRoutingAttachment } from '../pe3/native-envelope.js'
 import { ControlRouter, providerState } from './router.js'
 import type { RuntimePaths } from '../runtime/paths.js'
+import { chmodPrivate, isPipeEndpoint, isWindows, mkdirPrivate, pipeEndpoint } from '../runtime/ipc.js'
 
 const MAX_LINE_BYTES = 256 * 1024
 
@@ -80,7 +82,22 @@ export class CuppetControlServer {
     options: ControlServerOptions = {},
   ): Promise<CuppetControlServer> {
     const { socket } = address
-    await mkdir(paths.runtime, { recursive: true, mode: 0o700 })
+    // Windows has no Unix-domain sockets: serve the control API on a
+    // launch-scoped named pipe. The endpoint is known upfront, like a path.
+    if (isPipeEndpoint(socket)) {
+      const server = createServer()
+      const instance = new CuppetControlServer(controller, server, address, options.remote)
+      server.on('connection', (connection) => instance.#handle(connection))
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject)
+        server.listen(socket, () => {
+          server.off('error', reject)
+          resolve()
+        })
+      })
+      return instance
+    }
+    await mkdirPrivate(paths.runtime)
     await unlink(socket).catch((error) => {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     })
@@ -94,7 +111,7 @@ export class CuppetControlServer {
         resolve()
       })
     })
-    await chmod(socket, 0o600)
+    await chmodPrivate(socket, 0o600)
     return instance
   }
 
@@ -102,7 +119,11 @@ export class CuppetControlServer {
 
   async close(): Promise<void> {
     await new Promise<void>((resolve) => this.#server.close(() => resolve()))
-    await unlink(this.#address.socket).catch(() => undefined)
+    // Named pipes are kernel objects, not filesystem entries: there is
+    // nothing to unlink on Windows. Unix socket files must be removed.
+    if (!isPipeEndpoint(this.#address.socket)) {
+      await unlink(this.#address.socket).catch(() => undefined)
+    }
   }
 
   #handle(socket: Socket): void {
@@ -237,6 +258,10 @@ export class CuppetControlServer {
 }
 
 export function createControlAddress(paths: RuntimePaths): ControlAddress {
+  if (isWindows) {
+    // Launch directory names already embed `${pid}-${random}` uniqueness.
+    return { socket: pipeEndpoint(`cuppet-${basename(paths.runtime)}`), token: randomBytes(32).toString('base64url') }
+  }
   return { socket: `${paths.runtime}/control.sock`, token: randomBytes(32).toString('base64url') }
 }
 

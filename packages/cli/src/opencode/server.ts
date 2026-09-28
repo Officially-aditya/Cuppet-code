@@ -1,12 +1,13 @@
 import { randomBytes } from 'node:crypto'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { constants as fsConstants } from 'node:fs'
-import { access, chmod, copyFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { access, copyFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { createOpencodeClient } from '@opencode-ai/sdk/v2'
 import { DEFAULT_STEP_LIMIT, OPENCODE_VERSION } from '../constants.js'
 import type { RuntimePaths } from '../runtime/paths.js'
 import type { RedactedLogger } from '../runtime/logger.js'
+import { chmodPrivate } from '../runtime/ipc.js'
 import { buildVariantBridge, type VariantBridge } from './variant-bridge.js'
 import { readDerivativeMarker } from '../runtime/derivative.js'
 import { BASH_PERMISSION } from './safe-bash.js'
@@ -147,7 +148,7 @@ export async function startOpenCodeServer(options: StartOptions): Promise<OpenCo
   const pluginStatusPath = join(options.paths.runtime, 'opencode-plugin-status.json')
   const losslessPlanDirectory = join(options.paths.projectStore, 'lossless-plans')
   await mkdir(losslessPlanDirectory, { recursive: true, mode: 0o700 })
-  await chmod(losslessPlanDirectory, 0o700)
+  await chmodPrivate(losslessPlanDirectory, 0o700)
   const tuiPlugin = options.tuiPlugin ?? (options.plugin ? join(dirname(options.plugin), 'tui.js') : undefined)
   if (options.plugin) {
     await installOpenCodePlugin(options.plugin, options.paths.opencode.config, tuiPlugin)
@@ -349,9 +350,9 @@ export async function installOpenCodePlugin(source: string, xdgConfig: string, t
   const destination = join(directory, 'cuppet.js')
   const temporary = join(directory, `.cuppet-${randomBytes(6).toString('hex')}.tmp`)
   await mkdir(directory, { recursive: true, mode: 0o700 })
-  await chmod(directory, 0o700)
+  await chmodPrivate(directory, 0o700)
   await copyFile(source, temporary)
-  await chmod(temporary, 0o600)
+  await chmodPrivate(temporary, 0o600)
   await rename(temporary, destination)
   if (tuiSource) {
     // TUI modules must not live in the auto-discovered server plugin directory:
@@ -361,9 +362,9 @@ export async function installOpenCodePlugin(source: string, xdgConfig: string, t
     const tuiDestination = join(tuiDirectory, 'cuppet-tui.js')
     const tuiTemporary = join(tuiDirectory, `.cuppet-tui-${randomBytes(6).toString('hex')}.tmp`)
     await mkdir(tuiDirectory, { recursive: true, mode: 0o700 })
-    await chmod(tuiDirectory, 0o700)
+    await chmodPrivate(tuiDirectory, 0o700)
     await copyFile(tuiSource, tuiTemporary)
-    await chmod(tuiTemporary, 0o600)
+    await chmodPrivate(tuiTemporary, 0o600)
     await rename(tuiTemporary, tuiDestination)
     await rm(join(directory, 'cuppet-tui.js'), { force: true })
     await rm(join(directory, 'tui.json'), { force: true })
@@ -472,9 +473,14 @@ export async function resolveVertexEnvironment(
 ): Promise<{ status: VertexRuntimeStatus; environment: Record<string, string> }> {
   const explicitPath = environment.GOOGLE_APPLICATION_CREDENTIALS?.trim()
   const explicitAvailable = explicitPath ? await isReadable(explicitPath) : false
-  const defaultPath = home
-    ? join(home, '.config', 'gcloud', 'application_default_credentials.json')
-    : undefined
+  // gcloud stores application-default credentials under %APPDATA% on Windows,
+  // not under the POSIX `~/.config/gcloud` path.
+  const windowsAppData = process.platform === 'win32' ? environment.APPDATA?.trim() : undefined
+  const defaultPath = windowsAppData
+    ? join(windowsAppData, 'gcloud', 'application_default_credentials.json')
+    : home
+      ? join(home, '.config', 'gcloud', 'application_default_credentials.json')
+      : undefined
   const defaultAvailable = !explicitAvailable && defaultPath ? await isReadable(defaultPath) : false
   const adcPath = explicitAvailable ? explicitPath : defaultAvailable ? defaultPath : undefined
 

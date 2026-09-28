@@ -1,4 +1,5 @@
-import { createConnection, type Socket } from 'node:net'
+import type { Socket } from 'node:net'
+import { connectIpc } from './ipc.js'
 
 const MAX_FRAME_BYTES = 16 * 1024 * 1024
 export const TST_PROTOCOL_VERSION = 'cuppet.tst.v3'
@@ -210,11 +211,7 @@ export class TstToolClient {
 }
 
 function connect(socketPath: string): Promise<Socket> {
-  return new Promise((resolve, reject) => {
-    const socket = createConnection(socketPath)
-    socket.once('connect', () => resolve(socket))
-    socket.once('error', reject)
-  })
+  return connectIpc(socketPath)
 }
 
 function readFrame<T>(socket: Socket): Promise<T> {

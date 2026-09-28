@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
+import { existsSync } from 'node:fs'
 import { mkdtemp, rm, stat } from 'node:fs/promises'
+import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 import { test } from 'node:test'
@@ -9,10 +11,16 @@ import { TstClient } from '../src/tst/client.js'
 
 const binary = process.env.CUPPET_TEST_TST_BIN
 const binaryPath = binary
-  ? isAbsolute(binary)
-    ? binary
-    : resolve(import.meta.dirname, '../../..', binary)
+  ? resolveBinary(isAbsolute(binary) ? binary : resolve(import.meta.dirname, '../../..', binary))
   : undefined
+
+function resolveBinary(value: string): string {
+  // CI passes the extensionless cargo output path; Windows binaries carry
+  // the `.exe` suffix, so fall back to it when the exact path is missing.
+  if (process.platform !== 'win32' || value.toLowerCase().endsWith('.exe')) return value
+  if (existsSync(value)) return value
+  return `${value}.exe`
+}
 
 test('native daemon retains ranked session history, persists verified memory, compacts, and restarts', { skip: !binary }, async () => {
   const root = process.platform === 'darwin' ? '/private/tmp' : tmpdir()
@@ -166,7 +174,11 @@ test('native daemon retains ranked session history, persists verified memory, co
     assert.ok(trace.edges.length <= 12)
     assert.ok(trace.edges.every((edge) => edge.from.path && edge.to.path && edge.span === undefined))
     await first.client.call('compact')
-    assert.equal((await stat(join(directory, 'first.sock'))).mode & 0o777, 0o600)
+    // Windows daemons use loopback TCP, so there is no socket file whose
+    // mode can be asserted; POSIX daemons must keep the socket private.
+    if (process.platform !== 'win32') {
+      assert.equal((await stat(join(directory, 'first.sock'))).mode & 0o777, 0o600)
+    }
     await stop(first)
 
     const second = await launch(binaryPath!, join(directory, 'second.sock'), projectStore, globalStore)
@@ -184,10 +196,16 @@ test('native daemon retains ranked session history, persists verified memory, co
 
 async function launch(binaryPath: string, socket: string, projectStore: string, globalStore: string) {
   const token = randomBytes(32).toString('hex')
+  // Windows has no Unix-domain sockets: run the contract daemon on loopback
+  // TCP, mirroring the supervisor's Windows transport.
+  const endpoint = process.platform === 'win32' ? `127.0.0.1:${await pickLoopbackPort()}` : socket
+  const transportArguments = process.platform === 'win32'
+    ? ['--host', '127.0.0.1', '--port', endpoint.split(':')[1]!]
+    : ['--socket', socket]
   const child = spawn(
     binaryPath,
     [
-      '--socket', socket,
+      ...transportArguments,
       '--project-root', process.cwd(),
       '--project-store', projectStore,
       '--global-store', globalStore,
@@ -200,13 +218,26 @@ async function launch(binaryPath: string, socket: string, projectStore: string, 
   while (Date.now() < deadline) {
     if (child.exitCode !== null) throw new Error(`daemon exited ${child.exitCode}: ${errorText}`)
     try {
-      return { child, client: await TstClient.connect(socket, token) }
+      return { child, client: await TstClient.connect(endpoint, token) }
     } catch {
       await new Promise((resolvePromise) => setTimeout(resolvePromise, 50))
     }
   }
   child.kill('SIGTERM')
   throw new Error(`daemon startup timed out: ${errorText}`)
+}
+
+async function pickLoopbackPort(host = '127.0.0.1'): Promise<number> {
+  const probe = createServer()
+  await new Promise<void>((resolve, reject) => {
+    probe.once('error', reject)
+    probe.listen(0, host, () => resolve())
+  })
+  const address = probe.address()
+  const port = typeof address === 'object' && address !== null ? address.port : 0
+  await new Promise<void>((resolve) => probe.close(() => resolve()))
+  if (!port) throw new Error('unable to allocate a loopback TCP port')
+  return port
 }
 
 async function stop(runtime: { child: ChildProcess; client: TstClient }) {

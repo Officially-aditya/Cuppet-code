@@ -11,7 +11,9 @@
     "packages/runtime-darwin-arm64",
     "packages/runtime-darwin-x64",
     "packages/runtime-linux-arm64-gnu",
-    "packages/runtime-linux-x64-gnu"
+    "packages/runtime-linux-x64-gnu",
+    "packages/runtime-win32-x64",
+    "packages/runtime-win32-arm64"
   ],
   "engines": {
     "node": ">=22"

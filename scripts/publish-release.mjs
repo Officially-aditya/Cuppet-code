@@ -9,7 +9,7 @@ const registryArgument = process.argv.find((argument) => argument.startsWith('--
 const expectedArgument = process.argv.find((argument) => argument.startsWith('--expected='))
 const runtimesOnly = process.argv.includes('--runtimes-only')
 const registry = registryArgument?.slice('--registry='.length) ?? 'https://registry.npmjs.org'
-const expectedCount = Number(expectedArgument?.slice('--expected='.length) ?? (runtimesOnly ? 1 : 4))
+const expectedCount = Number(expectedArgument?.slice('--expected='.length) ?? (runtimesOnly ? 1 : 6))
 if (!process.env.NODE_AUTH_TOKEN) throw new Error('NODE_AUTH_TOKEN is required')
 if (!Number.isInteger(expectedCount) || expectedCount < 1) throw new Error('--expected must be a positive integer')
 if (manifests.length !== expectedCount) throw new Error(`expected ${expectedCount} platform packages, found ${manifests.length}`)
@@ -40,7 +40,7 @@ async function find(directory, name) {
 
 function run(command, arguments_) {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(command, arguments_, { stdio: 'inherit' })
+    const child = spawn(command, arguments_, npmSpawnOptions({ stdio: 'inherit' }))
     child.once('error', reject)
     child.once('exit', (code) => code === 0
       ? resolvePromise()
@@ -55,12 +55,23 @@ async function publishIfMissing(directory, flags, extraArguments = []) {
     return
   }
   const publishArguments = extraArguments.length > 0 ? extraArguments : [directory]
-  await run('npm', ['publish', ...publishArguments, ...flags])
+  await run(npmCommand(), ['publish', ...publishArguments, ...flags])
+}
+
+function npmCommand() {
+  // Kept as a single command name: `run`/`isPublished` route npm through
+  // the shell on Windows, where `npm` is a batch file (`npm.cmd`) that
+  // CreateProcess cannot execute directly.
+  return 'npm'
+}
+
+function npmSpawnOptions(base) {
+  return { ...base, shell: process.platform === 'win32' }
 }
 
 function isPublished(name, version) {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn('npm', ['view', `${name}@${version}`, 'version', '--json', '--registry', registry], { stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn(npmCommand(), ['view', `${name}@${version}`, 'version', '--json', '--registry', registry], npmSpawnOptions({ stdio: ['ignore', 'pipe', 'pipe'] }))
     let stdout = ''
     let stderr = ''
     child.stdout.on('data', (chunk) => (stdout += chunk.toString('utf8')))

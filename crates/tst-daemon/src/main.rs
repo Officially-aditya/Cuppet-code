@@ -12,7 +12,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use tokio::net::{UnixListener, UnixStream};
+use tokio::net::TcpListener;
+#[cfg(unix)]
+use tokio::net::UnixListener;
 use tokio::sync::{broadcast, mpsc, Mutex, Notify};
 use tst_core::memory::MemoryScope;
 use tst_core::service::{
@@ -24,7 +26,9 @@ const MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
 
 #[derive(Debug)]
 struct Options {
-    socket: PathBuf,
+    socket: Option<PathBuf>,
+    host: Option<String>,
+    port: Option<u16>,
     project_root: PathBuf,
     project_store: PathBuf,
     global_store: PathBuf,
@@ -78,11 +82,6 @@ async fn run() -> Result<()> {
         return Ok(());
     }
     let options = Options::parse()?;
-    prepare_socket(&options.socket)?;
-    let listener = UnixListener::bind(&options.socket)
-        .with_context(|| format!("bind socket {}", options.socket.display()))?;
-    set_socket_mode(&options.socket)?;
-
     let service = Arc::new(Mutex::new(TstService::open(
         &options.project_root,
         &options.project_store,
@@ -94,30 +93,79 @@ async fn run() -> Result<()> {
     spawn_initial_index(service.clone(), events.clone());
     spawn_watcher(options.project_root.clone(), service.clone(), events.clone())?;
 
-    loop {
-        tokio::select! {
-            accepted = listener.accept() => {
-                let (stream, _) = accepted?;
-                let service = service.clone();
-                let shutdown = shutdown.clone();
-                let token = options.token.clone();
-                let events = events.clone();
-                tokio::spawn(async move {
-                    if let Err(error) = serve_connection(stream, service, shutdown, token, events).await {
-                        if !is_expected_disconnect(&error) {
-                            eprintln!("tst-daemon connection: {error:#}");
-                        }
-                    }
-                });
-            }
-            _ = shutdown.notified() => break,
+    if let Some(port) = options.port {
+        // Loopback TCP transport for platforms without Unix-domain sockets
+        // (Windows). The supervisor allocates the port and passes it here.
+        let host = options.host.clone().unwrap_or_else(|| String::from("127.0.0.1"));
+        if host != "127.0.0.1" && host != "localhost" && host != "::1" {
+            return Err(anyhow!("--host must be a loopback address"));
         }
+        let listener = TcpListener::bind((host.as_str(), port))
+            .await
+            .with_context(|| format!("bind TCP {host}:{port}"))?;
+        loop {
+            tokio::select! {
+                accepted = listener.accept() => {
+                    let (stream, _) = accepted?;
+                    spawn_connection(stream, &service, &shutdown, &options.token, &events);
+                }
+                _ = shutdown.notified() => break,
+            }
+        }
+    } else if let Some(socket) = options.socket.clone() {
+        #[cfg(not(unix))]
+        {
+            let _ = socket;
+            return Err(anyhow!(
+                "Unix-domain sockets are unavailable on this platform; use --host/--port instead"
+            ));
+        }
+        #[cfg(unix)]
+        {
+            prepare_socket(&socket)?;
+            let listener = UnixListener::bind(&socket)
+                .with_context(|| format!("bind socket {}", socket.display()))?;
+            set_socket_mode(&socket)?;
+            loop {
+                tokio::select! {
+                    accepted = listener.accept() => {
+                        let (stream, _) = accepted?;
+                        spawn_connection(stream, &service, &shutdown, &options.token, &events);
+                    }
+                    _ = shutdown.notified() => break,
+                }
+            }
+            drop(listener);
+            let _ = fs::remove_file(&socket);
+        }
+    } else {
+        return Err(anyhow!("either --socket or --port is required"));
     }
 
     service.lock().await.flush()?;
-    drop(listener);
-    let _ = fs::remove_file(&options.socket);
     Ok(())
+}
+
+fn spawn_connection<S>(
+    stream: S,
+    service: &Arc<Mutex<TstService>>,
+    shutdown: &Arc<Notify>,
+    token: &str,
+    events: &broadcast::Sender<RpcNotification>,
+) where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    let service = service.clone();
+    let shutdown = shutdown.clone();
+    let token = token.to_owned();
+    let events = events.clone();
+    tokio::spawn(async move {
+        if let Err(error) = serve_connection(stream, service, shutdown, token, events).await {
+            if !is_expected_disconnect(&error) {
+                eprintln!("tst-daemon connection: {error:#}");
+            }
+        }
+    });
 }
 
 fn is_expected_disconnect(error: &anyhow::Error) -> bool {
@@ -134,6 +182,8 @@ fn is_expected_disconnect(error: &anyhow::Error) -> bool {
 impl Options {
     fn parse() -> Result<Self> {
         let mut socket = None;
+        let mut host: Option<String> = None;
+        let mut port: Option<u16> = None;
         let mut project_root = None;
         let mut project_store = None;
         let mut global_store = None;
@@ -144,6 +194,14 @@ impl Options {
                 .ok_or_else(|| anyhow!("missing value for {argument}"))?;
             match argument.as_str() {
                 "--socket" => socket = Some(PathBuf::from(value)),
+                "--host" => host = Some(value),
+                "--port" => {
+                    port = Some(
+                        value
+                            .parse::<u16>()
+                            .map_err(|_| anyhow!("invalid --port {value}"))?,
+                    )
+                }
                 "--project-root" => project_root = Some(PathBuf::from(value)),
                 "--project-store" => project_store = Some(PathBuf::from(value)),
                 "--global-store" => global_store = Some(PathBuf::from(value)),
@@ -156,7 +214,9 @@ impl Options {
             return Err(anyhow!("CUPPET_TST_TOKEN is too short"));
         }
         Ok(Self {
-            socket: socket.ok_or_else(|| anyhow!("--socket is required"))?,
+            socket,
+            host,
+            port: port.filter(|value| *value != 0),
             project_root: project_root.ok_or_else(|| anyhow!("--project-root is required"))?,
             project_store: project_store.ok_or_else(|| anyhow!("--project-store is required"))?,
             global_store: global_store.ok_or_else(|| anyhow!("--global-store is required"))?,
@@ -166,7 +226,7 @@ impl Options {
 }
 
 async fn serve_connection(
-    stream: UnixStream,
+    stream: impl AsyncRead + AsyncWrite + Unpin + Send + 'static,
     service: Arc<Mutex<TstService>>,
     shutdown: Arc<Notify>,
     expected_token: String,
@@ -175,7 +235,7 @@ async fn serve_connection(
     let mut authenticated = false;
     let mut notifications_enabled = false;
     let mut event_receiver = events.subscribe();
-    let (mut reader, mut writer) = stream.into_split();
+    let (mut reader, mut writer) = tokio::io::split(stream);
     loop {
         let payload = tokio::select! {
             payload = read_frame(&mut reader) => {
@@ -602,16 +662,24 @@ impl RpcNotification {
     }
 }
 
+#[cfg_attr(not(unix), allow(dead_code))]
 fn prepare_socket(path: &Path) -> Result<()> {
     let parent = path.parent().ok_or_else(|| anyhow!("socket has no parent"))?;
     fs::create_dir_all(parent)?;
     set_runtime_mode(parent)?;
     if path.exists() {
-        let metadata = fs::symlink_metadata(path)?;
-        if !metadata.file_type().is_socket() {
-            return Err(anyhow!("refusing to replace non-socket path {}", path.display()));
+        #[cfg(unix)]
+        {
+            let metadata = fs::symlink_metadata(path)?;
+            if !metadata.file_type().is_socket() {
+                return Err(anyhow!("refusing to replace non-socket path {}", path.display()));
+            }
+            fs::remove_file(path)?;
         }
-        fs::remove_file(path)?;
+        #[cfg(not(unix))]
+        {
+            return Err(anyhow!("refusing to replace existing path {}", path.display()));
+        }
     }
     Ok(())
 }
@@ -636,6 +704,7 @@ fn set_runtime_mode(_path: &Path) -> Result<()> {
 }
 
 #[cfg(not(unix))]
+#[cfg_attr(not(unix), allow(dead_code))]
 fn set_socket_mode(_path: &Path) -> Result<()> {
     Ok(())
 }

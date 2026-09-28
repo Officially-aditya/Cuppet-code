@@ -10,11 +10,17 @@ permissions:
 
 jobs:
   test:
+    defaults:
+      run:
+        # Windows runners default to PowerShell; the retry step below uses
+        # POSIX shell syntax, so pin bash on every platform.
+        shell: bash
     strategy:
       matrix:
         include:
           - os: macos-15-intel
           - os: ubuntu-24.04
+          - os: windows-2022
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4

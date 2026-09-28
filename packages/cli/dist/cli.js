@@ -2,7 +2,7 @@
 
 // src/cli.tsx
 import { rm as rm3 } from "node:fs/promises";
-import { join as join14 } from "node:path";
+import { join as join16 } from "node:path";
 
 // src/config/preferences.ts
 import { randomBytes } from "node:crypto";
@@ -97,16 +97,311 @@ import { EventEmitter as EventEmitter2 } from "node:events";
 import { constants } from "node:fs";
 import { access, stat as stat2 } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename } from "node:path";
+import { basename as basename2, sep as sep2 } from "node:path";
 
 // src/background/worker.ts
 import { EventEmitter } from "node:events";
-import { mkdir as mkdir3, readFile as readFile2, rename as rename3, writeFile as writeFile3 } from "node:fs/promises";
-import { dirname as dirname2, join as join2 } from "node:path";
+import { mkdir as mkdir4, readFile as readFile3, rename as rename4, writeFile as writeFile4 } from "node:fs/promises";
+import { basename, dirname as dirname3, join as join2 } from "node:path";
 import { z as z2 } from "zod";
 
+// src/background/candidate-ledger.ts
+import { createHash } from "node:crypto";
+import { mkdir as mkdir2, readFile as readFile2, rename as rename2, writeFile as writeFile2 } from "node:fs/promises";
+import { dirname as dirname2 } from "node:path";
+var LEDGER_SCHEMA_VERSION = 1;
+var DEFAULT_MAX_ENTRIES = 512;
+var DEFAULT_WEAK_TTL_MS = 30 * 24 * 60 * 60 * 1e3;
+var MAX_SOURCE_REFS = 8;
+var MAX_IDENTITY_REFS = 16;
+var MAX_KEY_BYTES = 120;
+var MAX_CLAIM_BYTES = 600;
+var CandidateLedger = class {
+  #path;
+  #now;
+  #maxEntries;
+  #weakTtlMs;
+  #entries = /* @__PURE__ */ new Map();
+  #persisting = Promise.resolve();
+  #writeID = 0;
+  #ready;
+  constructor(options = {}) {
+    this.#path = options.path;
+    this.#now = options.now ?? Date.now;
+    this.#maxEntries = Math.max(1, Math.floor(options.maxEntries ?? DEFAULT_MAX_ENTRIES));
+    this.#weakTtlMs = Math.max(0, Math.floor(options.weakTtlMs ?? DEFAULT_WEAK_TTL_MS));
+    this.#ready = this.#restore();
+  }
+  async ready() {
+    await this.#ready;
+  }
+  get size() {
+    return this.#entries.size;
+  }
+  entry(key, kind) {
+    const entry = this.#entries.get(ledgerKey(key, kind));
+    return entry ? cloneEntry(entry) : void 0;
+  }
+  observe(observation) {
+    const canonicalKey = bounded(observation.key, MAX_KEY_BYTES);
+    const claim = bounded(observation.claim, MAX_CLAIM_BYTES);
+    const id = ledgerKey(canonicalKey, observation.kind);
+    const entry = this.#entries.get(id) ?? {
+      key: canonicalKey,
+      claim,
+      kind: observation.kind,
+      support_count: 0,
+      explicit_user_count: 0,
+      correction_count: 0,
+      session_count: 0,
+      project_count: 0,
+      contradiction_count: 0,
+      downstream_verification_count: 0,
+      last_seen: observation.timestampMs,
+      source_refs: [],
+      session_refs: [],
+      project_refs: []
+    };
+    entry.key = canonicalKey;
+    entry.claim = claim;
+    entry.last_seen = Math.max(entry.last_seen, Math.max(0, Math.floor(observation.timestampMs)));
+    if (observation.trustedSupport) {
+      if (observation.relation === "contradiction") {
+        entry.contradiction_count = saturatingIncrement(entry.contradiction_count);
+      } else {
+        entry.support_count = saturatingIncrement(entry.support_count);
+        if (observation.relation === "correction") {
+          entry.correction_count = saturatingIncrement(entry.correction_count);
+          entry.contradiction_count = Math.max(0, entry.contradiction_count - 1);
+        }
+        if (observation.explicitUser) {
+          entry.explicit_user_count = saturatingIncrement(entry.explicit_user_count);
+        }
+        if (observation.downstreamVerified) {
+          entry.downstream_verification_count = saturatingIncrement(entry.downstream_verification_count);
+        }
+      }
+      pushUniqueBounded(entry.session_refs, identityRef(observation.sessionID), MAX_IDENTITY_REFS);
+      pushUniqueBounded(entry.project_refs, identityRef(observation.projectID), MAX_IDENTITY_REFS);
+    }
+    entry.session_count = entry.session_refs.length;
+    entry.project_count = entry.project_refs.length;
+    if (observation.sourceRef) pushUniqueBounded(entry.source_refs, bounded(observation.sourceRef, 160), MAX_SOURCE_REFS);
+    this.#entries.set(id, entry);
+    this.#enforceBound();
+    return cloneEntry(this.#entries.get(id) ?? entry);
+  }
+  admission(key, kind) {
+    const entry = this.#entries.get(ledgerKey(key, kind));
+    if (!entry) {
+      return {
+        blocked: false,
+        explicitUserPreference: false,
+        independentlyReinforced: false,
+        reinforcementEvidenceCount: 0,
+        score: 0.5,
+        sourceRefs: []
+      };
+    }
+    const blocked = entry.contradiction_count > 0;
+    const independentlyReinforced = !blocked && hasIndependentReinforcement(entry);
+    return {
+      blocked,
+      explicitUserPreference: !blocked && kind === "preference" && entry.explicit_user_count > 0,
+      independentlyReinforced,
+      reinforcementEvidenceCount: independentlyReinforced ? reinforcementEvidenceCount(entry) : 0,
+      score: admissionScore(entry, this.#now()),
+      sourceRefs: [...entry.source_refs]
+    };
+  }
+  decay(nowMs = this.#now()) {
+    const before = this.#entries.size;
+    for (const [id, entry] of this.#entries) {
+      const weak = entry.explicit_user_count === 0 && entry.correction_count === 0 && entry.downstream_verification_count === 0 && !hasIndependentReinforcement(entry);
+      if (weak && Math.max(0, nowMs - entry.last_seen) > this.#weakTtlMs) this.#entries.delete(id);
+    }
+    return before - this.#entries.size;
+  }
+  compact() {
+    const before = this.#entries.size;
+    this.decay();
+    this.#enforceBound();
+    return before - this.#entries.size;
+  }
+  async persist() {
+    await this.#ready;
+    if (!this.#path) return;
+    this.compact();
+    const snapshot = {
+      version: LEDGER_SCHEMA_VERSION,
+      entries: [...this.#entries.values()].map(cloneEntry)
+    };
+    this.#persisting = this.#persisting.catch(() => void 0).then(async () => {
+      if (!this.#path) return;
+      await mkdir2(dirname2(this.#path), { recursive: true, mode: 448 });
+      const temporary = `${this.#path}.${process.pid}.${this.#writeID++}.tmp`;
+      await writeFile2(temporary, `${JSON.stringify(snapshot)}
+`, { mode: 384 });
+      await rename2(temporary, this.#path);
+    });
+    await this.#persisting;
+  }
+  async close() {
+    await this.persist();
+  }
+  async #restore() {
+    if (!this.#path) return;
+    try {
+      const parsed = JSON.parse(await readFile2(this.#path, "utf8"));
+      if (parsed.version !== LEDGER_SCHEMA_VERSION || !Array.isArray(parsed.entries)) return;
+      for (const raw of parsed.entries.slice(-this.#maxEntries * 2)) {
+        const entry = normalizePersistedEntry(raw);
+        if (!entry) continue;
+        this.#entries.set(ledgerKey(entry.key, entry.kind), entry);
+      }
+      this.compact();
+    } catch {
+      this.#entries.clear();
+    }
+  }
+  #enforceBound() {
+    while (this.#entries.size > this.#maxEntries) {
+      const victim = [...this.#entries.entries()].sort((left, right) => retentionStrength(left[1]) - retentionStrength(right[1]) || left[1].last_seen - right[1].last_seen || left[0].localeCompare(right[0]))[0]?.[0];
+      if (!victim) return;
+      this.#entries.delete(victim);
+    }
+  }
+};
+function canonicalLedgerKey(value) {
+  return value.trim().toLowerCase().replace(/[\s\-_]+/g, " ").replace(/[^\p{L}\p{N} .:/]/gu, "").replace(/\s+/g, " ");
+}
+function hasDurableUserCue(value) {
+  const text = value.trim();
+  if (!text) return false;
+  return /\b(?:i\s+(?:prefer|want|like)|i(?:'d| would)\s+rather|always\s+use|never\s+(?:use|do)|do\s+not\s+(?:use|do)|don't\s+(?:use|do)|remember\s+(?:that|this)|from\s+now\s+on|this\s+(?:repo|project)\s+should|should\s+(?:always\s+)?use|must\s+(?:always\s+)?use|i\s+said|already\s+told\s+you|don't\s+do\s+that\s+again)\b/i.test(text) || /^(?:please\s+)?(?:use|avoid|keep|prefer|never\s+use|don't\s+use|do\s+not\s+use)\b/i.test(text);
+}
+function hasCorrectionCue(value) {
+  return /\b(?:i\s+said|already\s+told\s+you|don't\s+do\s+that\s+again|do\s+not\s+do\s+that\s+again|as\s+i\s+said|again[, :]\s*(?:use|don't|do\s+not|never))\b/i.test(value);
+}
+function hasContradictionCue(value) {
+  return /\b(?:never\s+(?:use|do)|don't\s+(?:use|do)|do\s+not\s+(?:use|do)|stop\s+(?:using|doing)|no\s+longer\s+(?:use|want|prefer)|instead\s+(?:use|do)|not\s+.+\s+anymore)\b/i.test(value);
+}
+function isSensitiveCandidate(key, value) {
+  const text = `${key.toLowerCase()} ${value.toLowerCase()}`;
+  if ([
+    "api_key",
+    "api-key",
+    "password",
+    "private key",
+    "authorization: bearer",
+    "refresh_token",
+    "access_token",
+    "client_secret"
+  ].some((marker) => text.includes(marker))) return true;
+  if (value.includes("-----BEGIN ")) return true;
+  if (value.split(/\s+/).some(
+    (part) => (part.startsWith("sk-") || part.startsWith("ghp_") || part.startsWith("glpat-") || part.startsWith("xoxb-") || part.startsWith("AIza") || part.startsWith("AKIA") || part.startsWith("ASIA")) && part.length > 16
+  )) return true;
+  return value.startsWith("eyJ") && (value.match(/\./g)?.length ?? 0) >= 2 && value.length > 40;
+}
+function candidateSourceRef(kind, value) {
+  return `${kind}:${createHash("sha256").update(`${kind}\0${value}`).digest("hex").slice(0, 16)}`;
+}
+function hasIndependentReinforcement(entry) {
+  return entry.session_count >= 2 || entry.project_count >= 2 || entry.correction_count > 0 || entry.support_count >= 3;
+}
+function reinforcementEvidenceCount(entry) {
+  let count = 0;
+  if (entry.session_count >= 2) count += 2;
+  if (entry.project_count >= 2) count += 1;
+  if (entry.support_count >= 3) count += 1;
+  if (entry.correction_count > 0) count += 2;
+  return Math.min(4, count);
+}
+function admissionScore(entry, nowMs) {
+  let score = 0.5;
+  if (entry.explicit_user_count > 0) score += 0.1;
+  if (entry.session_count >= 2) score += 0.2;
+  if (entry.project_count >= 2) score += 0.1;
+  if (entry.support_count >= 3) score += 0.1;
+  if (entry.correction_count > 0) score += 0.2;
+  if (entry.downstream_verification_count > 0) score += 0.1;
+  if (entry.contradiction_count > 0) score = Math.min(score, 0.79);
+  const ageDays = Math.max(0, nowMs - entry.last_seen) / 864e5;
+  if (ageDays > 30 && entry.explicit_user_count === 0 && entry.downstream_verification_count === 0 && !hasIndependentReinforcement(entry)) {
+    score *= 0.98 ** (ageDays - 30);
+  }
+  return Math.max(0, Math.min(1, score));
+}
+function retentionStrength(entry) {
+  return entry.explicit_user_count * 100 + entry.downstream_verification_count * 50 + entry.correction_count * 30 + Math.max(0, entry.session_count - 1) * 20 + Math.max(0, entry.project_count - 1) * 20 + entry.support_count - Math.min(entry.contradiction_count, entry.support_count);
+}
+function normalizePersistedEntry(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return void 0;
+  const raw = value;
+  if (!isCandidateKind(raw.kind) || typeof raw.key !== "string" || typeof raw.claim !== "string") return void 0;
+  const numeric = (input) => typeof input === "number" && Number.isFinite(input) ? Math.max(0, Math.floor(input)) : 0;
+  const refs = (input, max) => Array.isArray(input) ? input.filter((item) => typeof item === "string" && item.length > 0).slice(-max) : [];
+  const entry = {
+    key: bounded(raw.key, MAX_KEY_BYTES),
+    claim: bounded(raw.claim, MAX_CLAIM_BYTES),
+    kind: raw.kind,
+    support_count: numeric(raw.support_count),
+    explicit_user_count: numeric(raw.explicit_user_count),
+    correction_count: numeric(raw.correction_count),
+    session_count: 0,
+    project_count: 0,
+    contradiction_count: numeric(raw.contradiction_count),
+    downstream_verification_count: numeric(raw.downstream_verification_count),
+    last_seen: numeric(raw.last_seen),
+    source_refs: refs(raw.source_refs, MAX_SOURCE_REFS),
+    session_refs: refs(raw.session_refs, MAX_IDENTITY_REFS),
+    project_refs: refs(raw.project_refs, MAX_IDENTITY_REFS)
+  };
+  entry.session_count = entry.session_refs.length;
+  entry.project_count = entry.project_refs.length;
+  return entry;
+}
+function isCandidateKind(value) {
+  return value === "token_statistics" || value === "concept_anchor" || value === "structure_pattern" || value === "behavioral_claim" || value === "preference";
+}
+function ledgerKey(key, kind) {
+  return `${kind}:${canonicalLedgerKey(key)}`;
+}
+function identityRef(value) {
+  return createHash("sha256").update(value).digest("hex").slice(0, 16);
+}
+function pushUniqueBounded(values, value, max) {
+  if (values.includes(value)) return;
+  values.push(value);
+  if (values.length > max) values.splice(0, values.length - max);
+}
+function saturatingIncrement(value) {
+  return Math.min(Number.MAX_SAFE_INTEGER, value + 1);
+}
+function bounded(value, maxBytes) {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  if (Buffer.byteLength(normalized) <= maxBytes) return normalized;
+  let low = 0;
+  let high = normalized.length;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (Buffer.byteLength(normalized.slice(0, middle)) <= Math.max(0, maxBytes - 1)) low = middle;
+    else high = middle - 1;
+  }
+  return `${normalized.slice(0, low)}\u2026`;
+}
+function cloneEntry(entry) {
+  return {
+    ...entry,
+    source_refs: [...entry.source_refs],
+    session_refs: [...entry.session_refs],
+    project_refs: [...entry.project_refs]
+  };
+}
+
 // src/runtime/logger.ts
-import { appendFile, chmod as chmod2, mkdir as mkdir2, rename as rename2, stat, writeFile as writeFile2 } from "node:fs/promises";
+import { appendFile, chmod as chmod2, mkdir as mkdir3, rename as rename3, stat, writeFile as writeFile3 } from "node:fs/promises";
 import { join } from "node:path";
 var MAX_LOG_BYTES = 1e6;
 var RedactedLogger = class {
@@ -117,7 +412,7 @@ var RedactedLogger = class {
     this.#path = join(directory, "cuppet.log");
   }
   async write(level, message2) {
-    await mkdir2(this.#directory, { recursive: true, mode: 448 });
+    await mkdir3(this.#directory, { recursive: true, mode: 448 });
     await this.#rotate();
     const line = JSON.stringify({ time: (/* @__PURE__ */ new Date()).toISOString(), level, message: redact(message2) });
     await appendFile(this.#path, `${line}
@@ -127,8 +422,8 @@ var RedactedLogger = class {
   async #rotate() {
     try {
       if ((await stat(this.#path)).size < MAX_LOG_BYTES) return;
-      await rename2(this.#path, join(this.#directory, "cuppet.log.1"));
-      await writeFile2(this.#path, "", { mode: 384 });
+      await rename3(this.#path, join(this.#directory, "cuppet.log.1"));
+      await writeFile3(this.#path, "", { mode: 384 });
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
     }
@@ -142,6 +437,7 @@ function redact(value) {
 var MAX_BATCH_INPUT_BYTES = 4 * 1024;
 var MAX_SIGNAL_BYTES = 1200;
 var MAX_SIGNALS_PER_BATCH = 8;
+var MAX_USER_SIGNALS_PER_BATCH = 2;
 var MAX_PERSISTED_BATCHES = 50;
 var DEFAULT_IDLE_DELAY_MS = 6e4;
 var DEFAULT_COOLDOWN_MS = 15 * 6e4;
@@ -157,7 +453,9 @@ var candidateSchema = z2.object({
     "preference"
   ]),
   file_hashes: z2.record(z2.string().min(1).max(512), z2.string().min(1).max(128)).optional(),
-  scope: z2.enum(["session", "project"]).default("project")
+  scope: z2.enum(["session", "project"]).default("project"),
+  source_ids: z2.array(z2.string().regex(/^s[0-7]$/)).max(MAX_SIGNALS_PER_BATCH).default([]),
+  relation: z2.enum(["support", "correction", "contradiction"]).default("support")
 }).strict();
 var outputSchema = z2.object({
   candidates: z2.array(candidateSchema).max(4)
@@ -167,6 +465,8 @@ var BackgroundWorker = class extends EventEmitter {
   #gateway;
   #tst;
   #pendingPath;
+  #ledger;
+  #projectID;
   #now;
   #idleDelayMs;
   #cooldownMs;
@@ -200,10 +500,16 @@ var BackgroundWorker = class extends EventEmitter {
     this.#model = options.model;
     this.#paused = options.paused ?? false;
     this.#pendingPath = options.projectStore ? join2(options.projectStore, "background-pending.json") : void 0;
+    this.#projectID = options.projectStore ? basename(options.projectStore) : "ephemeral-project";
     this.#now = options.now ?? Date.now;
     this.#idleDelayMs = Math.max(0, options.idleDelayMs ?? DEFAULT_IDLE_DELAY_MS);
     this.#cooldownMs = Math.max(0, options.cooldownMs ?? DEFAULT_COOLDOWN_MS);
-    this.#ready = this.#restore();
+    const ledgerPath = options.projectStore ? candidateLedgerPath(options.projectStore) : void 0;
+    this.#ledger = new CandidateLedger({
+      ...ledgerPath ? { path: ledgerPath } : {},
+      now: this.#now
+    });
+    this.#ready = this.#initialize();
   }
   async ready() {
     await this.#ready;
@@ -260,7 +566,7 @@ var BackgroundWorker = class extends EventEmitter {
   }
   async recordSuccessfulValidation(sessionID, reference) {
     await this.#ready;
-    const safeReference = bounded(redact(reference), 500);
+    const safeReference = bounded2(redact(reference), 500);
     if (!safeReference) return;
     this.#recordSignal(sessionID, "validation", safeReference);
     const references = this.#validationReferences.get(sessionID) ?? [];
@@ -287,7 +593,7 @@ var BackgroundWorker = class extends EventEmitter {
   async close() {
     this.pause();
     await this.#ready;
-    await this.#persistPending();
+    await Promise.all([this.#persistPending(), this.#ledger.close()]);
   }
   get stats() {
     const deferred = this.#deferredCount();
@@ -310,8 +616,8 @@ var BackgroundWorker = class extends EventEmitter {
     return this.#backgroundSessions.has(sessionID);
   }
   #recordSignal(sessionID, kind, summary) {
-    const safeSessionID = bounded(redact(sessionID), 256);
-    const safeSummary = bounded(redact(summary), MAX_SIGNAL_BYTES);
+    const safeSessionID = bounded2(redact(sessionID), 256);
+    const safeSummary = bounded2(redact(summary), MAX_SIGNAL_BYTES);
     if (!safeSessionID || !safeSummary) return;
     const now = this.#now();
     const batch = this.#batches.get(safeSessionID) ?? {
@@ -395,11 +701,7 @@ var BackgroundWorker = class extends EventEmitter {
         addUsage(usage, attempt.usage);
         cost += attempt.cost;
         candidates += attempt.candidates;
-        if (this.#isCancelled(batch)) {
-          status = "cancelled";
-        } else {
-          status = "completed";
-        }
+        status = this.#isCancelled(batch) ? "cancelled" : "completed";
         break;
       } catch (error) {
         const failure = error instanceof AttemptFailure ? error : new AttemptFailure(error, emptyUsage(), 0);
@@ -436,22 +738,28 @@ var BackgroundWorker = class extends EventEmitter {
     let failure;
     try {
       if (this.#isCancelled(batch)) throw new BackgroundCancelledError();
+      const foregroundMessages = await this.#gateway.messages(batch.sessionID).catch(() => []);
+      const signals = prepareSignals(batch, foregroundMessages, this.#now());
+      const signalMap = new Map(signals.map((signal) => [signal.id, signal]));
+      if (this.#isCancelled(batch)) throw new BackgroundCancelledError();
       session = await this.#gateway.createSession(this.#model, true);
       this.#rememberBackgroundSession(session.id);
       this.#activeSecondarySessionID = session.id;
       if (this.#isCancelled(batch)) throw new BackgroundCancelledError();
       before = await this.#gateway.getSession(session.id).catch(() => session);
       if (this.#isCancelled(batch)) throw new BackgroundCancelledError();
-      const summary = batchSummary(batch);
+      const summary = batchSummary(signals);
       const prompt = [
         "Canonicalize at most four short memory candidates from the supplied bounded foreground signals.",
-        'Return JSON only: {"candidates":[{"key":"...","value":"...","kind":"concept_anchor|structure_pattern|behavioral_claim|token_statistics|preference","scope":"session|project","file_hashes":{}}]}.',
-        "Turn context may produce only session-scoped requirements, decisions, symbols, or unresolved work. Project-scoped candidates must be supported solely by verified diffs or successful validations.",
-        "Do not include secrets, credentials, raw transcripts, unrestricted tool output, or unverifiable claims. Candidates are not verification evidence.",
+        'Return JSON only: {"candidates":[{"key":"...","value":"...","kind":"concept_anchor|structure_pattern|behavioral_claim|token_statistics|preference","scope":"session|project","file_hashes":{},"source_ids":["s0"],"relation":"support|correction|contradiction"}]}.',
+        "source_ids must contain only IDs shown below and identify the bounded signals that support the canonical claim. relation describes how those cited sources relate to the canonical claim; it is not an importance score.",
+        "The model only canonicalizes and deduplicates. It must not decide whether a candidate is important, durable, verified, or promotable.",
+        "User-authored signals remain distinct from turn/outcome summaries. Project scope is only a request; deterministic evidence decides whether it is actually allowed.",
+        "Do not include secrets, credentials, raw transcripts, unrestricted tool output, or unverifiable claims. Model selection of a candidate is never verification evidence.",
         `Signals (redacted and bounded to ${MAX_BATCH_INPUT_BYTES} bytes):
 ${summary}`
       ].join("\n\n");
-      if (Buffer.byteLength(prompt) > MAX_BATCH_INPUT_BYTES + 1e3) {
+      if (Buffer.byteLength(prompt) > MAX_BATCH_INPUT_BYTES + 1700) {
         throw new Error("background batch prompt exceeded its bounded input budget");
       }
       await this.#gateway.prompt(session.id, prompt);
@@ -459,15 +767,74 @@ ${summary}`
       if (this.#isCancelled(batch)) throw new BackgroundCancelledError();
       const messages = await this.#gateway.messages(session.id);
       const parsed = outputSchema.parse(findStructuredOutput(messages));
-      const hasVerifiedSignals = batch.signals.some((signal) => signal.kind !== "turn_context");
+      const batchHasVerifiedSignals = batch.signals.some((signal) => signal.kind !== "turn_context");
+      const seenCandidates = /* @__PURE__ */ new Set();
       for (const candidate of parsed.candidates) {
         if (this.#isCancelled(batch)) throw new BackgroundCancelledError();
+        if (isSensitiveCandidate(candidate.key, candidate.value)) {
+          throw new Error("candidate rejected by secret-bearing memory policy");
+        }
+        const candidateID = `${candidate.kind}:${canonicalLedgerKey(candidate.key)}`;
+        if (seenCandidates.has(candidateID)) continue;
+        seenCandidates.add(candidateID);
+        const citedSources = [...new Set(candidate.source_ids)].map((id) => signalMap.get(id)).filter((signal) => Boolean(signal));
+        if (citedSources.length === 0) {
+          this.#ledger.observe({
+            key: candidate.key,
+            claim: candidate.value,
+            kind: candidate.kind,
+            relation: "support",
+            sessionID: batch.sessionID,
+            projectID: this.#projectID,
+            sourceRef: candidateSourceRef("model_candidate", `${candidate.key}\0${candidate.value}`),
+            timestampMs: this.#now(),
+            trustedSupport: false,
+            explicitUser: false,
+            downstreamVerified: false
+          });
+        } else {
+          for (const source of citedSources) {
+            const trustedSupport = source.kind === "user_context" || source.kind === "verified_diff" || source.kind === "validation";
+            const explicitUser = source.kind === "user_context" && source.durableCue;
+            const downstreamVerified = source.kind === "verified_diff" || source.kind === "validation";
+            const relation = candidate.relation === "contradiction" ? source.kind === "user_context" ? source.contradictionCue ? "contradiction" : source.correctionCue ? "correction" : "support" : "contradiction" : source.correctionCue ? "correction" : candidate.relation;
+            this.#ledger.observe({
+              key: candidate.key,
+              claim: candidate.value,
+              kind: candidate.kind,
+              relation,
+              sessionID: batch.sessionID,
+              projectID: this.#projectID,
+              sourceRef: candidateSourceRef(source.kind, source.summary),
+              timestampMs: source.recordedAt,
+              trustedSupport,
+              explicitUser,
+              downstreamVerified
+            });
+          }
+        }
+        const admission = this.#ledger.admission(candidate.key, candidate.kind);
+        const trustedContradiction = candidate.relation === "contradiction" && citedSources.some((source) => source.kind === "user_context" && source.contradictionCue);
+        if (admission.blocked) {
+          if (trustedContradiction) {
+            await tst.call("memory.forget", {
+              session_id: batch.sessionID,
+              key: candidate.key
+            }).catch(() => void 0);
+          }
+          candidates += 1;
+          continue;
+        }
+        const hasVerifiedSource = citedSources.some(
+          (source) => source.kind === "verified_diff" || source.kind === "validation"
+        ) || candidate.source_ids.length === 0 && batchHasVerifiedSignals;
+        const scope = candidate.scope === "project" && (hasVerifiedSource || admission.independentlyReinforced) ? "project" : "session";
         const result = await tst.call("memory.observe", {
           session_id: batch.sessionID,
           key: candidate.key,
           value: candidate.value,
           kind: candidate.kind,
-          scope: candidate.scope === "project" && hasVerifiedSignals ? "project" : "session",
+          scope,
           provenance: "model_candidate",
           file_hashes: candidate.file_hashes ?? {}
         });
@@ -477,6 +844,25 @@ ${summary}`
         );
         this.#candidateIDs.push({ sessionID: batch.sessionID, memoryID: result.id, kind: candidate.kind });
         this.#candidateIDs = this.#candidateIDs.slice(-256);
+        const evidenceRef = candidateSourceRef("candidate", `${candidate.kind}\0${candidate.key}`);
+        if (candidate.kind === "preference" && admission.explicitUserPreference) {
+          await tst.call("evidence.record", {
+            session_id: batch.sessionID,
+            memory_id: result.id,
+            kind: "user_preference",
+            reference: `candidate-ledger:user:${evidenceRef}`,
+            success: true
+          });
+        }
+        for (let index = 0; index < admission.reinforcementEvidenceCount; index += 1) {
+          await tst.call("evidence.record", {
+            session_id: batch.sessionID,
+            memory_id: result.id,
+            kind: "independent_reinforcement",
+            reference: `candidate-ledger:reinforcement:${index + 1}:${evidenceRef}`,
+            success: true
+          });
+        }
         if (candidate.kind === "behavioral_claim") {
           for (const reference of this.#validationReferences.get(batch.sessionID) ?? []) {
             await tst.call("evidence.record", {
@@ -501,9 +887,11 @@ ${summary}`
           }
         }
       }
+      await this.#ledger.persist();
     } catch (error) {
       failure = error;
     } finally {
+      await this.#ledger.persist().catch(() => void 0);
       const after = session ? await this.#gateway.getSession(session.id).catch(() => before ?? session) : void 0;
       if (this.#activeSecondarySessionID === session?.id) this.#activeSecondarySessionID = void 0;
       const usage = after && before ? difference(after.tokens, before.tokens) : emptyUsage();
@@ -562,20 +950,24 @@ ${summary}`
     const oldest = [...this.#lastCompleted.entries()].sort((left, right) => left[1] - right[1])[0]?.[0];
     if (oldest) this.#lastCompleted.delete(oldest);
   }
+  async #initialize() {
+    await Promise.all([this.#restore(), this.#ledger.ready()]);
+    this.#schedule();
+  }
   async #restore() {
     if (!this.#pendingPath) return;
     try {
-      const parsed = JSON.parse(await readFile2(this.#pendingPath, "utf8"));
+      const parsed = JSON.parse(await readFile3(this.#pendingPath, "utf8"));
       if (parsed.version !== PENDING_SCHEMA_VERSION || !Array.isArray(parsed.batches)) return;
       const now = this.#now();
       for (const raw of parsed.batches.slice(-MAX_PERSISTED_BATCHES)) {
-        const sessionID = typeof raw.sessionID === "string" ? bounded(redact(raw.sessionID), 256) : "";
+        const sessionID = typeof raw.sessionID === "string" ? bounded2(redact(raw.sessionID), 256) : "";
         if (!sessionID || !Array.isArray(raw.signals)) continue;
         const signals = raw.signals.filter(
           (signal) => Boolean(signal) && (signal.kind === "verified_diff" || signal.kind === "validation") && typeof signal.summary === "string" && typeof signal.recordedAt === "number"
         ).slice(-MAX_SIGNALS_PER_BATCH).map((signal) => ({
           kind: signal.kind,
-          summary: bounded(redact(signal.summary), MAX_SIGNAL_BYTES),
+          summary: bounded2(redact(signal.summary), MAX_SIGNAL_BYTES),
           recordedAt: Math.max(0, Math.floor(signal.recordedAt))
         })).filter((signal) => signal.summary.length > 0);
         if (signals.length === 0) continue;
@@ -589,12 +981,11 @@ ${summary}`
       }
       if (Array.isArray(parsed.cooldowns)) {
         for (const raw of parsed.cooldowns.slice(-MAX_PERSISTED_BATCHES)) {
-          const sessionID = typeof raw.sessionID === "string" ? bounded(redact(raw.sessionID), 256) : "";
+          const sessionID = typeof raw.sessionID === "string" ? bounded2(redact(raw.sessionID), 256) : "";
           const completedAt = typeof raw.completedAt === "number" ? Math.max(0, Math.floor(raw.completedAt)) : 0;
           if (sessionID && completedAt > 0) this.#lastCompleted.set(sessionID, completedAt);
         }
       }
-      this.#schedule();
     } catch {
     }
   }
@@ -603,24 +994,24 @@ ${summary}`
     const snapshot = {
       version: PENDING_SCHEMA_VERSION,
       batches: [...this.#batches.values()].slice(-MAX_PERSISTED_BATCHES).map((batch) => ({
-        sessionID: bounded(redact(batch.sessionID), 256),
+        sessionID: bounded2(redact(batch.sessionID), 256),
         signals: batch.signals.filter((signal) => signal.kind !== "turn_context").slice(-MAX_SIGNALS_PER_BATCH).map((signal) => ({
           kind: signal.kind,
-          summary: bounded(redact(signal.summary), MAX_SIGNAL_BYTES),
+          summary: bounded2(redact(signal.summary), MAX_SIGNAL_BYTES),
           recordedAt: signal.recordedAt
         })),
         updatedAt: batch.updatedAt
       })).filter((batch) => batch.signals.length > 0),
-      cooldowns: [...this.#lastCompleted.entries()].sort((left, right) => left[1] - right[1]).slice(-MAX_PERSISTED_BATCHES).map(([sessionID, completedAt]) => ({ sessionID: bounded(redact(sessionID), 256), completedAt }))
+      cooldowns: [...this.#lastCompleted.entries()].sort((left, right) => left[1] - right[1]).slice(-MAX_PERSISTED_BATCHES).map(([sessionID, completedAt]) => ({ sessionID: bounded2(redact(sessionID), 256), completedAt }))
     };
     this.#persisting = this.#persisting.catch(() => void 0).then(async () => {
-      const directory = this.#pendingPath ? dirname2(this.#pendingPath) : void 0;
+      const directory = this.#pendingPath ? dirname3(this.#pendingPath) : void 0;
       if (!directory || !this.#pendingPath) return;
-      await mkdir3(directory, { recursive: true, mode: 448 });
+      await mkdir4(directory, { recursive: true, mode: 448 });
       const temporary = `${this.#pendingPath}.${process.pid}.${this.#writeID++}.tmp`;
-      await writeFile3(temporary, `${JSON.stringify(snapshot)}
+      await writeFile4(temporary, `${JSON.stringify(snapshot)}
 `, { mode: 384 });
-      await rename3(temporary, this.#pendingPath);
+      await rename4(temporary, this.#pendingPath);
     }).catch(() => void 0);
     await this.#persisting;
   }
@@ -641,14 +1032,62 @@ var AttemptFailure = class extends Error {
     this.cost = cost;
   }
 };
-function batchSummary(batch) {
-  const lines = batch.signals.map((signal) => {
-    const label = signal.kind === "verified_diff" ? "Verified diff" : signal.kind === "validation" ? "Successful validation" : "Session turn context";
-    return `- ${label}: ${signal.summary}`;
-  });
-  return bounded(lines.join("\n"), MAX_BATCH_INPUT_BYTES);
+function prepareSignals(batch, messages, now) {
+  const users = latestUserSignals(messages, now).slice(-MAX_USER_SIGNALS_PER_BATCH);
+  const retainedBatchSignals = batch.signals.slice(-(MAX_SIGNALS_PER_BATCH - users.length));
+  return [...retainedBatchSignals.map((signal) => ({
+    id: "",
+    ...signal,
+    durableCue: false,
+    correctionCue: false,
+    contradictionCue: false
+  })), ...users].slice(-MAX_SIGNALS_PER_BATCH).map((signal, index) => ({ ...signal, id: `s${index}` }));
 }
-function bounded(value, maxBytes) {
+function latestUserSignals(messages, now) {
+  const output = [];
+  for (const message2 of messages) {
+    const value = recordValue(message2);
+    const info = recordValue(value.info);
+    if (info.role !== "user") continue;
+    const text = bounded2(redact(messagePartText(value)), MAX_SIGNAL_BYTES);
+    if (!text) continue;
+    output.push({
+      id: "",
+      kind: "user_context",
+      summary: text,
+      recordedAt: now,
+      durableCue: hasDurableUserCue(text),
+      correctionCue: hasCorrectionCue(text),
+      contradictionCue: hasContradictionCue(text)
+    });
+  }
+  return output.slice(-MAX_USER_SIGNALS_PER_BATCH);
+}
+function batchSummary(signals) {
+  const lines = signals.map((signal) => {
+    const label = signal.kind === "verified_diff" ? "Verified diff" : signal.kind === "validation" ? "Successful validation" : signal.kind === "user_context" ? "User-authored foreground message" : "Session turn/outcome context";
+    return `- [${signal.id}] ${label}: ${signal.summary}`;
+  });
+  return bounded2(lines.join("\n"), MAX_BATCH_INPUT_BYTES);
+}
+function messagePartText(message2) {
+  if (!Array.isArray(message2.parts)) return "";
+  return message2.parts.flatMap((part) => {
+    const value = recordValue(part);
+    return value.type === "text" && typeof value.text === "string" && value.synthetic !== true ? [value.text] : [];
+  }).join(" ");
+}
+function recordValue(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+function candidateLedgerPath(projectStore) {
+  const projectsDirectory = dirname3(projectStore);
+  if (basename(projectsDirectory) === "projects") {
+    return join2(dirname3(projectsDirectory), "global", "candidate-ledger.json");
+  }
+  return join2(projectStore, "candidate-ledger.json");
+}
+function bounded2(value, maxBytes) {
   const normalized = value.trim();
   if (Buffer.byteLength(normalized) <= maxBytes) return normalized;
   let low = 0;
@@ -715,7 +1154,7 @@ function cloneBatchStats(stats) {
 }
 
 // src/control/orchestrator-state.ts
-import { mkdir as mkdir4, rename as rename4, writeFile as writeFile4 } from "node:fs/promises";
+import { mkdir as mkdir5, rename as rename5, writeFile as writeFile5 } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { join as join3 } from "node:path";
 function orchestratorStatePath(paths) {
@@ -731,24 +1170,24 @@ function readOrchestratorState(paths) {
 }
 async function writeOrchestratorState(paths, enabled) {
   const path = orchestratorStatePath(paths);
-  await mkdir4(join3(path, ".."), { recursive: true, mode: 448 });
+  await mkdir5(join3(path, ".."), { recursive: true, mode: 448 });
   const temporary = `${path}.${process.pid}.tmp`;
-  await writeFile4(temporary, `${JSON.stringify({ schema: 1, enabled })}
+  await writeFile5(temporary, `${JSON.stringify({ schema: 1, enabled })}
 `, { encoding: "utf8", mode: 384 });
-  await rename4(temporary, path);
+  await rename5(temporary, path);
 }
 
 // src/constants.ts
 var CUPPET_VERSION = "0.2.0-alpha.2";
 var DEFAULT_CUPPET_API_BASE = "https://connect.cuppet.in";
-var OPENCODE_VERSION = "1.18.4";
-var OPENCODE_REVISION = "49c69c5ed3ccf706b61b3febb43c8aaff7f8325e";
+var OPENCODE_VERSION = "1.18.29";
+var OPENCODE_REVISION = "16747470f976aca3d362ad730bcd3fe82ecc2c9a";
 var TST_PROTOCOL_VERSION = "cuppet.tst.v3";
 var DEFAULT_STEP_LIMIT = 128;
 
 // src/opencode/safe-bash.ts
 import { realpath } from "node:fs/promises";
-import { dirname as dirname3, isAbsolute, relative, resolve, sep } from "node:path";
+import { dirname as dirname4, isAbsolute, relative, resolve, sep } from "node:path";
 var BASH_PERMISSION = "ask";
 var MAX_COMMAND_LENGTH = 256;
 var PLAIN_COMMAND = /^[A-Za-z0-9._:=+-]+(?: [A-Za-z0-9._:=+-]+)*$/;
@@ -823,7 +1262,7 @@ async function nearestExistingAncestorIsInside(candidate, root) {
     } catch (error) {
       const code = error.code;
       if (code !== "ENOENT" && code !== "ENOTDIR") return false;
-      const parent = dirname3(ancestor);
+      const parent = dirname4(ancestor);
       if (parent === ancestor) return false;
       ancestor = parent;
     }
@@ -1305,11 +1744,11 @@ var CuppetController = class extends EventEmitter2 {
     }
   }
   async submitAndWait(prompt) {
-    const completion = new Promise((resolve4, reject) => {
+    const completion = new Promise((resolve5, reject) => {
       const listener = (event) => {
         if (event.type === "idle") {
           cleanup();
-          resolve4();
+          resolve5();
         } else if (event.type === "error" && (!event.sessionID || event.sessionID === this.#session?.id)) {
           cleanup();
           reject(new Error(event.message));
@@ -1504,10 +1943,11 @@ var CuppetController = class extends EventEmitter2 {
   workspaceInfo() {
     const home = homedir();
     const full = this.#paths.projectRealpath;
-    const pathDisplay = home !== "/" && (full === home || full.startsWith(`${home}/`)) ? `~${full.slice(home.length)}` : full;
+    const homePrefix = home.endsWith(sep2) ? home : `${home}${sep2}`;
+    const pathDisplay = home !== "/" && (full === home || full.startsWith(homePrefix)) ? `~${full.slice(home.length)}` : full;
     return {
       workspaceId: this.#paths.projectID,
-      name: basename(full),
+      name: basename2(full),
       pathDisplay,
       activeSessionId: this.#session?.id
     };
@@ -1584,11 +2024,11 @@ var CuppetController = class extends EventEmitter2 {
           ["project", this.#paths.projectStore, constants.R_OK | constants.W_OK],
           ["global", this.#paths.globalStore, constants.R_OK | constants.W_OK],
           ["runtime", this.#paths.runtime, constants.R_OK | constants.W_OK],
-          ["socket", this.#paths.tstSocket, constants.R_OK | constants.W_OK],
           ["opencode-state", this.#paths.opencode.state, constants.R_OK | constants.W_OK]
         ].map(async ([name, path, mode]) => [name, await inspectPath(String(path), Number(mode))])
       )
     );
+    storagePermissions.socket = this.#paths.tstTransport === "tcp" ? { available: true, transport: "tcp", endpoint: "loopback" } : await inspectPath(this.#paths.tstSocket, constants.R_OK | constants.W_OK);
     return {
       platform: `${process.platform}-${process.arch}`,
       selectedProvider: this.#provider,
@@ -1659,7 +2099,7 @@ var CuppetController = class extends EventEmitter2 {
       ]);
       this.#providers = buildProviderCatalog(this.#models, this.#integrations);
       if (this.#models.length > 0 || this.#integrations.length > 0) return;
-      await new Promise((resolve4) => setTimeout(resolve4, 150));
+      await new Promise((resolve5) => setTimeout(resolve5, 150));
     } while (Date.now() < deadline);
   }
   async #requireSession() {
@@ -1905,7 +2345,7 @@ function latestTurnObservation(messages) {
   const normalized = messages.map((item) => item && typeof item === "object" ? item : {});
   let userIndex = -1;
   for (let index = normalized.length - 1; index >= 0; index -= 1) {
-    const info = recordValue(normalized[index]?.info);
+    const info = recordValue2(normalized[index]?.info);
     if (info.role === "user") {
       userIndex = index;
       break;
@@ -1913,9 +2353,9 @@ function latestTurnObservation(messages) {
   }
   if (userIndex < 0) return void 0;
   const user = normalized[userIndex];
-  const userInfo = recordValue(user.info);
-  const request = messagePartText(user);
-  const outcome = normalized.slice(userIndex + 1).filter((message2) => recordValue(message2.info).role === "assistant").map(messagePartText).filter(Boolean).join(" ");
+  const userInfo = recordValue2(user.info);
+  const request = messagePartText2(user);
+  const outcome = normalized.slice(userIndex + 1).filter((message2) => recordValue2(message2.info).role === "assistant").map(messagePartText2).filter(Boolean).join(" ");
   const value = redact([
     request ? `Requirement: ${request}` : "",
     outcome ? `Outcome: ${outcome}` : ""
@@ -1924,14 +2364,14 @@ function latestTurnObservation(messages) {
   const messageID = typeof userInfo.id === "string" ? userInfo.id : String(userIndex);
   return { key: `turn:${messageID}`.slice(0, 120), value };
 }
-function messagePartText(message2) {
+function messagePartText2(message2) {
   if (!Array.isArray(message2.parts)) return "";
   return message2.parts.flatMap((part) => {
-    const value = recordValue(part);
+    const value = recordValue2(part);
     return value.type === "text" && typeof value.text === "string" && value.synthetic !== true ? [value.text] : [];
   }).join(" ");
 }
-function recordValue(value) {
+function recordValue2(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 async function inspectPath(path, accessMode) {
@@ -1961,28 +2401,1899 @@ function missingVertexStatus() {
   };
 }
 
-// src/control/server.ts
-import { randomBytes as randomBytes3 } from "node:crypto";
-import { chmod as chmod4, mkdir as mkdir6, unlink } from "node:fs/promises";
-import { createServer } from "node:net";
+// src/pe3/controller.ts
+import { randomUUID } from "node:crypto";
 
-// src/control/router.ts
+// src/pe3/localizer.ts
+var MAX_LOCALIZED_PATHS = 6;
+var MAX_LOCALIZED_SYMBOLS = 8;
+var DECISIVE_SCORE_FLOOR = 0.55;
+var DECISIVE_MARGIN = 0.08;
+var TstTaskLocalizer = class {
+  #client;
+  constructor(client) {
+    this.#client = client;
+  }
+  async locate(sessionID, prompt) {
+    if (!this.#client?.connected || !prompt.trim()) return {};
+    const result = await this.#client.call("memory.query", {
+      session_id: sessionID,
+      query: prompt,
+      limit: 12
+    }).catch(() => ({}));
+    const graph = (result.graph ?? []).filter((item) => Boolean(item?.node)).sort((left, right) => finiteScore(right.score) - finiteScore(left.score));
+    if (graph.length === 0) return {};
+    const topScore = Math.max(0, finiteScore(graph[0].score));
+    const runnerUpScore = graph.length > 1 ? Math.max(0, finiteScore(graph[1].score)) : void 0;
+    const margin = runnerUpScore === void 0 ? topScore : topScore - runnerUpScore;
+    const decisive = topScore >= DECISIVE_SCORE_FLOOR && margin >= DECISIVE_MARGIN;
+    const localization = {
+      topScore,
+      ...runnerUpScore !== void 0 ? { runnerUpScore } : {},
+      decisive,
+      reason: decisive ? "graph localization cleared absolute score and winner-margin thresholds" : topScore < DECISIVE_SCORE_FLOOR ? "graph localization top score is below the hard-evidence floor" : "graph localization winner margin is too small for hard evidence"
+    };
+    if (!decisive) return { localization };
+    const relativeFloor = topScore * 0.55;
+    const selected = graph.filter((item, index) => {
+      if (index === 0) return true;
+      return finiteScore(item.score) >= relativeFloor;
+    }).slice(0, 10);
+    const localizedPaths = unique(
+      selected.flatMap((item) => typeof item.node.path === "string" ? [item.node.path] : []),
+      MAX_LOCALIZED_PATHS
+    );
+    const localizedSymbols = unique(
+      selected.flatMap((item) => typeof item.node.name === "string" ? [item.node.name] : []),
+      MAX_LOCALIZED_SYMBOLS
+    );
+    return {
+      localization,
+      ...localizedPaths.length ? { localizedPaths } : {},
+      ...localizedSymbols.length ? { localizedSymbols } : {}
+    };
+  }
+};
+function finiteScore(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+function unique(values, limit) {
+  const output = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const raw of values) {
+    const value = raw.trim();
+    const key = value.toLowerCase();
+    if (!value || seen.has(key)) continue;
+    seen.add(key);
+    output.push(value);
+    if (output.length >= limit) break;
+  }
+  return output;
+}
+
+// src/pe3/persistence.ts
+import { chmod as chmod3, lstat, mkdir as mkdir6, readFile as readFile5, rename as rename6, writeFile as writeFile6 } from "node:fs/promises";
+import { dirname as dirname5, isAbsolute as isAbsolute2, join as join4, relative as relative2, resolve as resolve2 } from "node:path";
+var REGISTRY_SCHEMA_VERSION = 1;
+var MAX_PERSISTED_AGENTS = 32;
+var MAX_PATH_SIGNATURES = 128;
+var MAX_DESCRIPTOR_BYTES = 320;
+var MAX_PATHS = 16;
+var MAX_SYMBOLS = 16;
+var MAX_TERMS = 32;
+var Pe3TaskRegistry = class {
+  #path;
+  #projectRoot;
+  constructor(projectStore, projectRoot) {
+    this.#path = join4(projectStore, "pe3-task-agents.json");
+    this.#projectRoot = projectRoot;
+  }
+  get path() {
+    return this.#path;
+  }
+  async load(validSessionIDs) {
+    let parsed;
+    try {
+      parsed = JSON.parse(await readFile5(this.#path, "utf8"));
+    } catch (error) {
+      if (error.code === "ENOENT") return emptyLoadResult(false);
+      return emptyLoadResult(true);
+    }
+    const stored = parseRegistry(parsed);
+    if (!stored) return emptyLoadResult(true);
+    const bounded4 = stored.agents.filter((agent) => validSessionIDs.has(agent.sessionID)).sort((left, right) => right.lastActiveAt - left.lastActiveAt).slice(0, MAX_PERSISTED_AGENTS);
+    const droppedSessionCount = stored.agents.length - bounded4.length;
+    const changedPaths = await this.#changedPaths(stored.fileSignatures);
+    const staleBySession = /* @__PURE__ */ new Map();
+    const agents = bounded4.map((agent) => {
+      const privileged = /* @__PURE__ */ new Set([...agent.activePaths, ...agent.touchedPaths]);
+      const offlineChanged = [...changedPaths].filter((path) => privileged.has(path));
+      const stale = boundedUnique([...agent.stalePaths, ...offlineChanged], MAX_PATHS);
+      if (stale.length > 0) staleBySession.set(agent.sessionID, stale);
+      if (offlineChanged.length === 0) return cloneAgent(agent);
+      const changed = new Set(offlineChanged);
+      const cloned = cloneAgent(agent);
+      return {
+        ...cloned,
+        activePaths: cloned.activePaths.filter((path) => !changed.has(path)),
+        touchedPaths: cloned.touchedPaths.filter((path) => !changed.has(path)),
+        fingerprint: {
+          ...cloned.fingerprint,
+          revision: cloned.fingerprint.revision + 1,
+          paths: cloned.fingerprint.paths.filter((signal) => !changed.has(signal.value))
+        },
+        stalePaths: stale,
+        cacheEpoch: cloned.cacheEpoch + 1,
+        workspaceEpoch: cloned.workspaceEpoch + 1
+      };
+    });
+    const activeSessionID = stored.activeSessionID && validSessionIDs.has(stored.activeSessionID) ? stored.activeSessionID : void 0;
+    return {
+      agents,
+      ...activeSessionID ? { activeSessionID } : {},
+      staleBySession,
+      droppedSessionCount,
+      recoveredFromCorruption: false
+    };
+  }
+  async save(agents, activeSessionID, supplementalStale = /* @__PURE__ */ new Map()) {
+    const boundedAgents = [...agents].sort((left, right) => right.lastActiveAt - left.lastActiveAt).slice(0, MAX_PERSISTED_AGENTS).map((agent) => sanitizeAgent(agent, supplementalStale.get(agent.sessionID) ?? []));
+    const activeAgent = activeSessionID ? boundedAgents.find((agent) => agent.sessionID === activeSessionID) : void 0;
+    const signatureAgents = activeAgent ? [activeAgent, ...boundedAgents.filter((agent) => agent.sessionID !== activeAgent.sessionID)] : boundedAgents;
+    const signaturePaths = firstUnique(
+      signatureAgents.flatMap((agent) => [...agent.activePaths, ...agent.touchedPaths]),
+      MAX_PATH_SIGNATURES
+    );
+    const fileSignatures = {};
+    for (const path of signaturePaths) {
+      const signature = await this.#signature(path);
+      if (signature) fileSignatures[path] = signature;
+    }
+    const state = {
+      schemaVersion: REGISTRY_SCHEMA_VERSION,
+      ...activeSessionID && boundedAgents.some((agent) => agent.sessionID === activeSessionID) ? { activeSessionID } : {},
+      agents: boundedAgents,
+      fileSignatures
+    };
+    await mkdir6(dirname5(this.#path), { recursive: true, mode: 448 });
+    const temp = `${this.#path}.${process.pid}.tmp`;
+    await writeFile6(temp, `${JSON.stringify(state)}
+`, { mode: 384 });
+    await chmod3(temp, 384);
+    await rename6(temp, this.#path);
+    await chmod3(this.#path, 384);
+  }
+  async #changedPaths(signatures) {
+    const changed = /* @__PURE__ */ new Set();
+    for (const [path, previous] of Object.entries(signatures).slice(0, MAX_PATH_SIGNATURES)) {
+      const current = await this.#signature(path);
+      if (!current || !sameSignature(previous, current)) changed.add(path);
+    }
+    return changed;
+  }
+  async #signature(path) {
+    const target = safeProjectPath(this.#projectRoot, path);
+    if (!target) return void 0;
+    try {
+      const info = await lstat(target);
+      return { size: Math.max(0, info.size), mtimeMs: Math.trunc(info.mtimeMs), mode: info.mode };
+    } catch {
+      return void 0;
+    }
+  }
+};
+function restorePersistedTaskAgents(router, loaded, currentActiveSessionID) {
+  for (const agent of loaded.agents) router.restoreAgent(agent);
+  const activeSessionID = currentActiveSessionID ?? loaded.activeSessionID;
+  if (activeSessionID) router.selectRestoredSession(activeSessionID);
+}
+function parseRegistry(value) {
+  if (!isRecord(value) || value.schemaVersion !== REGISTRY_SCHEMA_VERSION || !Array.isArray(value.agents)) return void 0;
+  const agents = value.agents.map(parseAgent).filter((agent) => Boolean(agent));
+  const fileSignatures = {};
+  if (isRecord(value.fileSignatures)) {
+    for (const [path, signature] of Object.entries(value.fileSignatures).slice(0, MAX_PATH_SIGNATURES)) {
+      if (!isRecord(signature)) continue;
+      const size = finiteNumber(signature.size);
+      const mtimeMs = finiteNumber(signature.mtimeMs);
+      const mode = finiteNumber(signature.mode);
+      if (size === void 0 || mtimeMs === void 0 || mode === void 0) continue;
+      fileSignatures[bounded3(path, 512)] = { size, mtimeMs, mode };
+    }
+  }
+  return {
+    schemaVersion: REGISTRY_SCHEMA_VERSION,
+    ...typeof value.activeSessionID === "string" ? { activeSessionID: bounded3(value.activeSessionID, 256) } : {},
+    agents,
+    fileSignatures
+  };
+}
+function parseAgent(value) {
+  if (!isRecord(value) || typeof value.sessionID !== "string") return void 0;
+  const sessionID = bounded3(value.sessionID, 256);
+  if (!sessionID) return void 0;
+  const createdAt = finiteNumber(value.createdAt) ?? Date.now();
+  const lastActiveAt = finiteNumber(value.lastActiveAt) ?? createdAt;
+  return {
+    id: `task:${sessionID}`,
+    sessionID,
+    taskDescriptor: bounded3(typeof value.taskDescriptor === "string" ? redact(value.taskDescriptor) : "", MAX_DESCRIPTOR_BYTES),
+    activePaths: stringArray(value.activePaths, MAX_PATHS, 512),
+    touchedPaths: stringArray(value.touchedPaths, MAX_PATHS, 512),
+    recentSymbols: stringArray(value.recentSymbols, MAX_SYMBOLS, 128),
+    terms: stringArray(value.terms, MAX_TERMS, 96),
+    fingerprint: parseFingerprint(value.fingerprint),
+    stalePaths: stringArray(value.stalePaths, MAX_PATHS, 512),
+    cacheEpoch: nonNegativeInteger(value.cacheEpoch),
+    workspaceEpoch: nonNegativeInteger(value.workspaceEpoch),
+    createdAt,
+    lastActiveAt,
+    turns: nonNegativeInteger(value.turns)
+  };
+}
+function parseFingerprint(value) {
+  if (!isRecord(value)) return { revision: 0, paths: [], symbols: [], terms: [] };
+  return {
+    revision: nonNegativeInteger(value.revision),
+    paths: signalArray(value.paths, MAX_PATHS),
+    symbols: signalArray(value.symbols, MAX_SYMBOLS),
+    terms: signalArray(value.terms, MAX_TERMS)
+  };
+}
+function signalArray(value, limit) {
+  if (!Array.isArray(value)) return [];
+  const allowedSources = /* @__PURE__ */ new Set(["prompt", "localized", "active", "touched", "symbol"]);
+  return value.slice(0, limit).flatMap((item) => {
+    if (!isRecord(item) || typeof item.value !== "string" || typeof item.source !== "string") return [];
+    if (!allowedSources.has(item.source)) return [];
+    const weight = finiteNumber(item.weight);
+    const updatedAt = finiteNumber(item.updatedAt);
+    if (weight === void 0 || updatedAt === void 0) return [];
+    const safe = safeArrayValue(item.value, 512);
+    if (!safe) return [];
+    return [{ value: safe, weight: Math.max(0, Math.min(1, weight)), source: item.source, updatedAt }];
+  });
+}
+function sanitizeAgent(agent, supplementalStale) {
+  return {
+    ...cloneAgent(agent),
+    id: `task:${bounded3(agent.sessionID, 256)}`,
+    sessionID: bounded3(agent.sessionID, 256),
+    taskDescriptor: bounded3(redact(agent.taskDescriptor), MAX_DESCRIPTOR_BYTES),
+    activePaths: safeArray(agent.activePaths, MAX_PATHS, 512),
+    touchedPaths: safeArray(agent.touchedPaths, MAX_PATHS, 512),
+    recentSymbols: safeArray(agent.recentSymbols, MAX_SYMBOLS, 128),
+    terms: safeArray(agent.terms, MAX_TERMS, 96),
+    stalePaths: safeArray([...agent.stalePaths, ...supplementalStale], MAX_PATHS, 512),
+    fingerprint: {
+      revision: nonNegativeInteger(agent.fingerprint.revision),
+      paths: sanitizeSignals(agent.fingerprint.paths, MAX_PATHS),
+      symbols: sanitizeSignals(agent.fingerprint.symbols, MAX_SYMBOLS),
+      terms: sanitizeSignals(agent.fingerprint.terms, MAX_TERMS)
+    },
+    cacheEpoch: nonNegativeInteger(agent.cacheEpoch),
+    workspaceEpoch: nonNegativeInteger(agent.workspaceEpoch),
+    turns: nonNegativeInteger(agent.turns)
+  };
+}
+function sanitizeSignals(signals, limit) {
+  return signals.slice(0, limit).flatMap((signal) => {
+    const value = safeArrayValue(signal.value, 512);
+    if (!value) return [];
+    return [{ ...signal, value, weight: Math.max(0, Math.min(1, signal.weight)) }];
+  });
+}
+function safeArray(values, limit, bytes) {
+  return boundedUnique([...values].map((value) => safeArrayValue(value, bytes)).filter(Boolean), limit);
+}
+function stringArray(value, limit, bytes) {
+  return Array.isArray(value) ? safeArray(value.filter((item) => typeof item === "string"), limit, bytes) : [];
+}
+function safeArrayValue(value, bytes) {
+  const redacted = redact(value.trim());
+  if (!redacted || redacted.includes("[REDACTED]")) return "";
+  return bounded3(redacted, bytes);
+}
+function safeProjectPath(root, path) {
+  if (!path || isAbsolute2(path)) return void 0;
+  const target = resolve2(root, path);
+  const rel = relative2(root, target);
+  if (!rel || rel.startsWith("..") || isAbsolute2(rel)) return void 0;
+  return target;
+}
+function sameSignature(left, right) {
+  return left.size === right.size && left.mtimeMs === right.mtimeMs && left.mode === right.mode;
+}
+function cloneAgent(agent) {
+  return {
+    ...agent,
+    activePaths: [...agent.activePaths],
+    touchedPaths: [...agent.touchedPaths],
+    recentSymbols: [...agent.recentSymbols],
+    terms: [...agent.terms],
+    stalePaths: [...agent.stalePaths],
+    fingerprint: {
+      revision: agent.fingerprint.revision,
+      paths: agent.fingerprint.paths.map((signal) => ({ ...signal })),
+      symbols: agent.fingerprint.symbols.map((signal) => ({ ...signal })),
+      terms: agent.fingerprint.terms.map((signal) => ({ ...signal }))
+    }
+  };
+}
+function emptyLoadResult(recoveredFromCorruption) {
+  return { agents: [], staleBySession: /* @__PURE__ */ new Map(), droppedSessionCount: 0, recoveredFromCorruption };
+}
+function isRecord(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+function finiteNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+function nonNegativeInteger(value) {
+  const number = finiteNumber(value) ?? 0;
+  return Math.max(0, Math.trunc(number));
+}
+function boundedUnique(values, limit) {
+  const output = [];
+  for (const raw of values) {
+    const value = String(raw).trim();
+    if (!value) continue;
+    const index = output.indexOf(value);
+    if (index >= 0) output.splice(index, 1);
+    output.push(value);
+    if (output.length > limit) output.splice(0, output.length - limit);
+  }
+  return output;
+}
+function firstUnique(values, limit) {
+  const output = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const raw of values) {
+    const value = String(raw).trim();
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    output.push(value);
+    if (output.length >= limit) break;
+  }
+  return output;
+}
+function bounded3(value, maxBytes) {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  if (Buffer.byteLength(normalized) <= maxBytes) return normalized;
+  let end = normalized.length;
+  while (end > 0 && Buffer.byteLength(normalized.slice(0, end)) > maxBytes) end -= 1;
+  return normalized.slice(0, end);
+}
+
+// src/pe3/native-envelope.ts
+var MAX_ATTACHMENTS = 16;
+var MAX_FILENAME_BYTES = 256;
+var MAX_MIME_BYTES = 128;
+var MAX_ATTACHMENT_METADATA_BYTES = 8 * 1024;
+var MIME_TOKEN = /^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,63}\/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,63}$/;
+function parseNativeRoutingAttachments(value) {
+  if (value === void 0) return [];
+  if (!Array.isArray(value)) throw new Error("attachments must be an array");
+  if (value.length > MAX_ATTACHMENTS) throw new Error(`attachments exceed limit ${MAX_ATTACHMENTS}`);
+  const attachments = value.map((item, index) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new Error(`attachments[${index}] must be an object`);
+    }
+    const record2 = item;
+    const allowed = /* @__PURE__ */ new Set(["type", "mime", "filename"]);
+    const unsupported = Object.keys(record2).find((key) => !allowed.has(key));
+    if (unsupported) throw new Error(`attachments[${index}] contains unsupported field ${unsupported}`);
+    if (record2.type !== "file") throw new Error(`attachments[${index}].type must be file`);
+    const mime = boundedRequiredString(record2.mime, `attachments[${index}].mime`, MAX_MIME_BYTES);
+    if (!MIME_TOKEN.test(mime)) throw new Error(`attachments[${index}].mime must be a media type`);
+    const filename = boundedOptionalString(record2.filename, `attachments[${index}].filename`, MAX_FILENAME_BYTES);
+    return {
+      type: "file",
+      mime,
+      ...filename ? { filename } : {}
+    };
+  });
+  if (Buffer.byteLength(JSON.stringify(attachments)) > MAX_ATTACHMENT_METADATA_BYTES) {
+    throw new Error("attachment metadata exceeds routing limit");
+  }
+  return attachments;
+}
+function nativeRoutingPrompt(prompt, _attachments) {
+  return prompt;
+}
+function nativeSemanticAttachmentText(attachments) {
+  return attachments.map((attachment) => {
+    const filename = attachment.filename ? ` ${routingLabel(attachment.filename)}` : "";
+    return `[attachment${filename} ${attachment.mime}]`;
+  }).join("\n");
+}
+function routingLabel(value) {
+  return value.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+}
+function boundedRequiredString(value, name, maxBytes) {
+  if (typeof value !== "string" || !value.trim()) throw new Error(`${name} is required`);
+  return boundedString(value.trim(), name, maxBytes);
+}
+function boundedOptionalString(value, name, maxBytes) {
+  if (value === void 0) return void 0;
+  if (typeof value !== "string" || !value.trim()) throw new Error(`${name} must be a non-empty string`);
+  return boundedString(value.trim(), name, maxBytes);
+}
+function boundedString(value, name, maxBytes) {
+  if (Buffer.byteLength(value) > maxBytes) throw new Error(`${name} exceeds ${maxBytes} bytes`);
+  return value;
+}
+
+// src/pe3/task-agents.ts
+var MAX_TERMS2 = 32;
+var MAX_PATHS2 = 16;
+var MAX_SYMBOLS2 = 16;
+var MAX_DESCRIPTOR_BYTES2 = 320;
+var FINGERPRINT_DECAY = 0.96;
+var MIN_FINGERPRINT_WEIGHT = 0.08;
+var STRONG_LEXICAL_WEIGHT = 0.9;
+var MIME_PATH = /^(?:application|audio|font|image|message|model|multipart|text|video)\/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,127}$/i;
+var PATH_TOKEN = /(?:\.?\.?\/)?[A-Za-z0-9_.@-]+(?:\/[A-Za-z0-9_.@-]+)+(?:\.[A-Za-z0-9_-]+)?|[A-Za-z0-9_.@-]+\.(?:ts|tsx|js|jsx|rs|py|go|java|json|md|yaml|yml|toml|css|html)/g;
+var CONTINUATION_CUES = ["also", "that", "those", "the previous", "same task", "same issue", "continue", "keep going", "update the tests", "fix the tests", "what about"];
+var SWITCH_CUES = ["new task", "separate task", "separately", "unrelated", "instead", "switch to", "now build", "now implement", "move on to"];
+var RETURN_CUES = ["go back to", "return to", "back to", "resume the", "resume that", "previous task", "earlier task"];
+var STOP_TERMS = /* @__PURE__ */ new Set([
+  "about",
+  "after",
+  "again",
+  "also",
+  "and",
+  "are",
+  "been",
+  "before",
+  "build",
+  "can",
+  "change",
+  "code",
+  "could",
+  "create",
+  "does",
+  "doing",
+  "file",
+  "files",
+  "fix",
+  "for",
+  "from",
+  "have",
+  "here",
+  "into",
+  "issue",
+  "just",
+  "make",
+  "more",
+  "need",
+  "now",
+  "please",
+  "should",
+  "task",
+  "that",
+  "the",
+  "their",
+  "then",
+  "there",
+  "these",
+  "they",
+  "this",
+  "those",
+  "update",
+  "use",
+  "using",
+  "want",
+  "what",
+  "when",
+  "where",
+  "which",
+  "with",
+  "work",
+  "working",
+  "would",
+  "you"
+]);
+var FINGERPRINT_SOURCE_STRENGTH = {
+  prompt: 0,
+  localized: 1,
+  active: 2,
+  symbol: 2,
+  touched: 3
+};
+var TaskAgentRouter = class {
+  #agents = /* @__PURE__ */ new Map();
+  #now;
+  #activeID;
+  #workspaceEpoch = 0;
+  constructor(options = {}) {
+    this.#now = options.now ?? Date.now;
+  }
+  get active() {
+    return this.#activeID ? cloneAgent2(this.#agents.get(this.#activeID)) : void 0;
+  }
+  list() {
+    return [...this.#agents.values()].sort((left, right) => right.lastActiveAt - left.lastActiveAt).map((agent) => cloneAgent2(agent));
+  }
+  checkpoint() {
+    return {
+      agents: [...this.#agents.values()].map((agent) => cloneAgent2(agent)),
+      ...this.#activeID ? { activeID: this.#activeID } : {},
+      workspaceEpoch: this.#workspaceEpoch
+    };
+  }
+  restoreCheckpoint(checkpoint) {
+    this.#agents.clear();
+    for (const agent of checkpoint.agents) {
+      const restored = cloneAgent2(agent);
+      restored.id = agentID(restored.sessionID);
+      this.#agents.set(restored.id, restored);
+    }
+    this.#workspaceEpoch = checkpoint.workspaceEpoch;
+    this.#activeID = checkpoint.activeID && this.#agents.has(checkpoint.activeID) ? checkpoint.activeID : void 0;
+  }
+  register(sessionID, prompt = "", evidence = {}) {
+    const id = agentID(sessionID);
+    const existing = this.#agents.get(id);
+    if (existing) {
+      this.#activeID = id;
+      this.recordTurn(prompt, evidence);
+      return cloneAgent2(existing);
+    }
+    const now = this.#now();
+    const state = {
+      id,
+      sessionID,
+      taskDescriptor: boundedDescriptor(prompt),
+      activePaths: boundedUnique2(normalizePaths(evidence.activePaths ?? extractPaths(prompt)), MAX_PATHS2),
+      touchedPaths: boundedUnique2(normalizePaths(evidence.touchedPaths ?? []), MAX_PATHS2),
+      recentSymbols: boundedUnique2(normalizeSymbols(evidence.recentSymbols ?? extractSymbols(prompt)), MAX_SYMBOLS2),
+      terms: boundedUnique2(extractTerms(prompt), MAX_TERMS2),
+      fingerprint: emptyFingerprint(),
+      stalePaths: [],
+      cacheEpoch: 0,
+      workspaceEpoch: Math.max(this.#workspaceEpoch, evidence.workspaceEpoch ?? 0),
+      createdAt: now,
+      lastActiveAt: now,
+      turns: prompt.trim() ? 1 : 0
+    };
+    seedFingerprint(state, prompt, evidence, now);
+    this.#agents.set(id, state);
+    this.#activeID = id;
+    return cloneAgent2(state);
+  }
+  restore(state) {
+    const restored = cloneAgent2(state);
+    restored.id = agentID(restored.sessionID);
+    this.#agents.set(restored.id, restored);
+    this.#workspaceEpoch = Math.max(this.#workspaceEpoch, restored.workspaceEpoch);
+    return cloneAgent2(restored);
+  }
+  select(agentIDValue) {
+    const state = this.#agents.get(agentIDValue);
+    if (!state) return void 0;
+    this.#activeID = state.id;
+    return cloneAgent2(state);
+  }
+  activate(agentIDValue) {
+    const state = this.#agents.get(agentIDValue);
+    if (!state) return void 0;
+    this.#activeID = state.id;
+    state.lastActiveAt = this.#now();
+    return cloneAgent2(state);
+  }
+  recordSessionEvidence(sessionID, evidence) {
+    const state = this.#agents.get(agentID(sessionID));
+    if (!state) return void 0;
+    this.#mergeObservedEvidence(state, evidence);
+    return cloneAgent2(state);
+  }
+  acknowledgeSessionRefresh(sessionID, paths) {
+    this.acknowledgeRefresh(agentID(sessionID), paths);
+  }
+  route(prompt, evidence = {}) {
+    const active = this.#activeID ? this.#agents.get(this.#activeID) : void 0;
+    if (!active) return { action: "create", reason: "no active task agent", affinity: emptyAffinity() };
+    this.#mergeObservedEvidence(active, evidence);
+    const currentAffinity = affinityFor(active, prompt, evidence);
+    const normalizedPrompt2 = normalizeText(prompt);
+    const explicitSwitch = hasCue(normalizedPrompt2, SWITCH_CUES);
+    const explicitReturn = hasCue(normalizedPrompt2, RETURN_CUES);
+    const dormant = this.#bestDormantMatch(active, prompt, normalizedPrompt2, evidence);
+    if (explicitReturn && dormant) {
+      return { action: "reactivate", agent: cloneAgent2(dormant.agent), reason: "explicit return language matches a dormant task agent", affinity: dormant.affinity, refreshPaths: [...dormant.agent.stalePaths] };
+    }
+    if (!explicitSwitch && hasCue(normalizedPrompt2, CONTINUATION_CUES)) {
+      return { action: "continue", agent: cloneAgent2(active), reason: "continuation language defaults to the active agent", affinity: currentAffinity };
+    }
+    if (!explicitSwitch && isStrongMatch(currentAffinity)) {
+      return { action: "continue", agent: cloneAgent2(active), reason: "active working-set affinity is sufficient", affinity: currentAffinity };
+    }
+    if (!isStrongMismatch(active, prompt, currentAffinity, evidence, explicitSwitch)) {
+      return {
+        action: "continue",
+        agent: cloneAgent2(active),
+        reason: "ambiguous or weak mismatch stays on the active agent",
+        affinity: currentAffinity,
+        ...semanticEscalationEligible(prompt, currentAffinity) ? { semanticEligible: true } : {}
+      };
+    }
+    if (dormant) {
+      return { action: "reactivate", agent: cloneAgent2(dormant.agent), reason: "strong active mismatch with a matching dormant task agent", affinity: dormant.affinity, refreshPaths: [...dormant.agent.stalePaths] };
+    }
+    return { action: "create", reason: "strong task mismatch with no matching dormant agent", affinity: currentAffinity };
+  }
+  recordTurn(prompt, evidence = {}) {
+    const active = this.#activeID ? this.#agents.get(this.#activeID) : void 0;
+    if (!active) return void 0;
+    const trimmed = prompt.trim();
+    const now = this.#now();
+    if (trimmed) {
+      const promptTerms = extractTerms(trimmed);
+      const promptPaths = extractPaths(trimmed);
+      const promptSymbols = extractSymbols(trimmed);
+      const hasPromptEvidence = promptTerms.length > 0 || promptPaths.length > 0 || promptSymbols.length > 0;
+      if (hasPromptEvidence) {
+        active.taskDescriptor = boundedDescriptor(trimmed);
+        active.terms = mergeRecent(active.terms, promptTerms, MAX_TERMS2);
+        active.activePaths = mergeRecent(active.activePaths, promptPaths, MAX_PATHS2);
+        active.recentSymbols = mergeRecent(active.recentSymbols, promptSymbols, MAX_SYMBOLS2);
+        decayFingerprint(active.fingerprint);
+      }
+      active.turns += 1;
+    }
+    this.#mergeObservedEvidence(active, evidence);
+    commitPromptFingerprint(active, trimmed, evidence, now);
+    active.lastActiveAt = now;
+    return cloneAgent2(active);
+  }
+  noteWorkspaceChange(paths) {
+    const changed = new Set(normalizePaths(paths));
+    if (changed.size === 0) return;
+    this.#workspaceEpoch += 1;
+    for (const agent of this.#agents.values()) {
+      const privileged = /* @__PURE__ */ new Set([...agent.activePaths, ...agent.touchedPaths]);
+      const stale = [...changed].filter((path) => privileged.has(path));
+      if (stale.length === 0) continue;
+      agent.stalePaths = mergeRecent(agent.stalePaths, stale, MAX_PATHS2);
+      agent.workspaceEpoch = this.#workspaceEpoch;
+      agent.cacheEpoch += 1;
+      agent.fingerprint.revision += 1;
+    }
+  }
+  acknowledgeRefresh(agentIDValue, paths) {
+    const agent = this.#agents.get(agentIDValue);
+    if (!agent) return;
+    const refreshed = new Set(normalizePaths(paths));
+    if (refreshed.size === 0) return;
+    agent.stalePaths = agent.stalePaths.filter((path) => !refreshed.has(path));
+  }
+  #mergeObservedEvidence(agent, evidence) {
+    const now = this.#now();
+    const activePaths = normalizePaths(evidence.activePaths ?? []);
+    const touchedPaths = normalizePaths(evidence.touchedPaths ?? []);
+    const recentSymbols = normalizeSymbols(evidence.recentSymbols ?? []);
+    agent.activePaths = mergeRecent(agent.activePaths, activePaths, MAX_PATHS2);
+    agent.touchedPaths = mergeRecent(agent.touchedPaths, touchedPaths, MAX_PATHS2);
+    agent.recentSymbols = mergeRecent(agent.recentSymbols, recentSymbols, MAX_SYMBOLS2);
+    mergeFingerprintSignals(agent.fingerprint.paths, activePaths, 0.78, "active", MAX_PATHS2, now);
+    mergeFingerprintSignals(agent.fingerprint.paths, touchedPaths, 1, "touched", MAX_PATHS2, now);
+    mergeFingerprintSignals(agent.fingerprint.symbols, recentSymbols, 0.84, "symbol", MAX_SYMBOLS2, now);
+    if (activePaths.length > 0 || touchedPaths.length > 0 || recentSymbols.length > 0) agent.fingerprint.revision += 1;
+    if (evidence.workspaceEpoch !== void 0) {
+      agent.workspaceEpoch = Math.max(agent.workspaceEpoch, evidence.workspaceEpoch);
+      this.#workspaceEpoch = Math.max(this.#workspaceEpoch, evidence.workspaceEpoch);
+    }
+  }
+  #bestDormantMatch(active, prompt, normalizedPrompt2, evidence) {
+    return [...this.#agents.values()].filter((agent) => agent.id !== active.id).map((agent) => ({ agent, affinity: affinityFor(agent, prompt, evidence) })).filter(({ affinity }) => isDormantMatch(affinity, normalizedPrompt2)).sort((left, right) => right.affinity.score - left.affinity.score || right.agent.lastActiveAt - left.agent.lastActiveAt)[0];
+  }
+};
+function taskFingerprintText(agent) {
+  const paths = strongest(agent.fingerprint.paths, 10);
+  const symbols = strongest(agent.fingerprint.symbols, 10);
+  const terms = strongest(agent.fingerprint.terms, 16);
+  return [
+    agent.taskDescriptor ? `task: ${agent.taskDescriptor}` : "",
+    paths.length ? `artifacts: ${paths.map(renderSignal).join(", ")}` : "",
+    symbols.length ? `symbols: ${symbols.map(renderSignal).join(", ")}` : "",
+    terms.length ? `terms: ${terms.map(renderSignal).join(", ")}` : ""
+  ].filter(Boolean).join("\n");
+}
+function affinityFor(agent, prompt, evidence = {}) {
+  const paths = /* @__PURE__ */ new Set([...extractPaths(prompt), ...normalizePaths(evidence.localizedPaths ?? [])]);
+  const symbols = /* @__PURE__ */ new Set([...extractSymbols(prompt), ...normalizeSymbols(evidence.localizedSymbols ?? [])]);
+  const terms = new Set(extractTerms(prompt));
+  const agentPaths = new Set(strongValues(agent.fingerprint.paths, 0.35));
+  const agentSymbols = new Set(strongValues(agent.fingerprint.symbols, 0.35));
+  const agentTerms = new Set(strongValues(agent.fingerprint.terms, 0.12));
+  const pathOverlap = overlapCount(paths, agentPaths);
+  const symbolOverlap = overlapCount(symbols, agentSymbols);
+  const termOverlap = overlapCount(terms, agentTerms);
+  const denominator = Math.max(1, Math.min(terms.size, agentTerms.size));
+  const lexicalRatio = termOverlap / denominator;
+  const weightedOverlap = weightedOverlapScore(paths, agent.fingerprint.paths) * 8 + weightedOverlapScore(symbols, agent.fingerprint.symbols) * 5 + weightedOverlapScore(terms, agent.fingerprint.terms);
+  return { score: weightedOverlap, pathOverlap, symbolOverlap, termOverlap, lexicalRatio, weightedOverlap };
+}
+function isStrongMatch(affinity) {
+  if (affinity.pathOverlap > 0 || affinity.symbolOverlap > 0) return true;
+  return affinity.weightedOverlap >= STRONG_LEXICAL_WEIGHT && (affinity.termOverlap >= 3 || affinity.lexicalRatio >= 0.6);
+}
+function isStrongMismatch(agent, prompt, affinity, evidence, explicitSwitch = hasCue(normalizeText(prompt), SWITCH_CUES)) {
+  const promptTerms = extractTerms(prompt);
+  const promptPaths = boundedUnique2([...extractPaths(prompt), ...normalizePaths(evidence.localizedPaths ?? [])], MAX_PATHS2);
+  const agentPaths = strongValues(agent.fingerprint.paths, 0.35);
+  if (affinity.pathOverlap > 0 || affinity.symbolOverlap > 0) return false;
+  if (promptPaths.length > 0 && agentPaths.length > 0 && promptTerms.length >= 2) return true;
+  if (explicitSwitch) return promptTerms.length >= 2 && affinity.termOverlap <= 1 && affinity.lexicalRatio < 0.34;
+  return false;
+}
+function semanticEscalationEligible(prompt, affinity) {
+  const normalized = normalizeText(prompt);
+  if (hasCue(normalized, CONTINUATION_CUES) || hasCue(normalized, SWITCH_CUES) || hasCue(normalized, RETURN_CUES)) return false;
+  const terms = extractTerms(prompt);
+  if (terms.length < 2 || isStrongMatch(affinity)) return false;
+  return true;
+}
+function isDormantMatch(affinity, normalizedPrompt2) {
+  if (affinity.pathOverlap > 0 || affinity.symbolOverlap > 0) return true;
+  if (affinity.termOverlap >= 3) return true;
+  return hasCue(normalizedPrompt2, RETURN_CUES) && affinity.termOverlap >= 2;
+}
+function seedFingerprint(agent, prompt, evidence, now) {
+  mergeFingerprintSignals(agent.fingerprint.paths, extractPaths(prompt), 0.46, "prompt", MAX_PATHS2, now);
+  mergeFingerprintSignals(agent.fingerprint.paths, normalizePaths(evidence.localizedPaths ?? []), 0.58, "localized", MAX_PATHS2, now);
+  mergeFingerprintSignals(agent.fingerprint.paths, normalizePaths(evidence.activePaths ?? []), 0.78, "active", MAX_PATHS2, now);
+  mergeFingerprintSignals(agent.fingerprint.paths, normalizePaths(evidence.touchedPaths ?? []), 1, "touched", MAX_PATHS2, now);
+  mergeFingerprintSignals(agent.fingerprint.symbols, extractSymbols(prompt), 0.46, "prompt", MAX_SYMBOLS2, now);
+  mergeFingerprintSignals(agent.fingerprint.symbols, normalizeSymbols(evidence.localizedSymbols ?? []), 0.58, "localized", MAX_SYMBOLS2, now);
+  mergeFingerprintSignals(agent.fingerprint.symbols, normalizeSymbols(evidence.recentSymbols ?? []), 0.84, "symbol", MAX_SYMBOLS2, now);
+  mergeFingerprintSignals(agent.fingerprint.terms, extractTerms(prompt), 0.32, "prompt", MAX_TERMS2, now);
+  agent.fingerprint.revision += 1;
+}
+function commitPromptFingerprint(agent, prompt, evidence, now) {
+  const promptPaths = extractPaths(prompt);
+  const localizedPaths = normalizePaths(evidence.localizedPaths ?? []);
+  const promptSymbols = extractSymbols(prompt);
+  const localizedSymbols = normalizeSymbols(evidence.localizedSymbols ?? []);
+  const promptTerms = extractTerms(prompt);
+  if (promptPaths.length === 0 && localizedPaths.length === 0 && promptSymbols.length === 0 && localizedSymbols.length === 0 && promptTerms.length === 0) return;
+  mergeFingerprintSignals(agent.fingerprint.paths, promptPaths, 0.46, "prompt", MAX_PATHS2, now);
+  mergeFingerprintSignals(agent.fingerprint.paths, localizedPaths, 0.58, "localized", MAX_PATHS2, now);
+  mergeFingerprintSignals(agent.fingerprint.symbols, promptSymbols, 0.46, "prompt", MAX_SYMBOLS2, now);
+  mergeFingerprintSignals(agent.fingerprint.symbols, localizedSymbols, 0.58, "localized", MAX_SYMBOLS2, now);
+  mergeFingerprintSignals(agent.fingerprint.terms, promptTerms, 0.32, "prompt", MAX_TERMS2, now);
+  agent.fingerprint.revision += 1;
+}
+function emptyFingerprint() {
+  return { revision: 0, paths: [], symbols: [], terms: [] };
+}
+function decayFingerprint(fingerprint) {
+  for (const collection of [fingerprint.paths, fingerprint.symbols, fingerprint.terms]) {
+    for (const signal of collection) signal.weight *= FINGERPRINT_DECAY;
+    for (let index = collection.length - 1; index >= 0; index -= 1) if (collection[index].weight < MIN_FINGERPRINT_WEIGHT) collection.splice(index, 1);
+  }
+}
+function mergeFingerprintSignals(target, values, weight, source, limit, now) {
+  for (const raw of values) {
+    const value = String(raw).trim();
+    if (!value) continue;
+    const existing = target.find((signal) => signal.value === value);
+    if (existing) {
+      const previousSource = existing.source;
+      existing.weight = Math.min(1, Math.max(existing.weight, weight) + Math.min(existing.weight, weight) * 0.12);
+      if (FINGERPRINT_SOURCE_STRENGTH[source] > FINGERPRINT_SOURCE_STRENGTH[previousSource]) existing.source = source;
+      existing.updatedAt = now;
+    } else target.push({ value, weight, source, updatedAt: now });
+  }
+  target.sort((left, right) => left.weight - right.weight || left.updatedAt - right.updatedAt);
+  if (target.length > limit) target.splice(0, target.length - limit);
+}
+function weightedOverlapScore(query, signals) {
+  let score = 0;
+  for (const signal of signals) if (query.has(signal.value)) score += signal.weight;
+  return score;
+}
+function strongValues(signals, minimum) {
+  return signals.filter((signal) => signal.weight >= minimum).map((signal) => signal.value);
+}
+function strongest(signals, limit) {
+  return [...signals].sort((left, right) => right.weight - left.weight || right.updatedAt - left.updatedAt).slice(0, limit);
+}
+function renderSignal(signal) {
+  return `${signal.value}(${signal.weight.toFixed(2)})`;
+}
+function agentID(sessionID) {
+  return `task:${sessionID}`;
+}
+function cloneAgent2(agent) {
+  if (!agent) return void 0;
+  return {
+    ...agent,
+    activePaths: [...agent.activePaths],
+    touchedPaths: [...agent.touchedPaths],
+    recentSymbols: [...agent.recentSymbols],
+    terms: [...agent.terms],
+    fingerprint: {
+      revision: agent.fingerprint.revision,
+      paths: agent.fingerprint.paths.map((signal) => ({ ...signal })),
+      symbols: agent.fingerprint.symbols.map((signal) => ({ ...signal })),
+      terms: agent.fingerprint.terms.map((signal) => ({ ...signal }))
+    },
+    stalePaths: [...agent.stalePaths]
+  };
+}
+function emptyAffinity() {
+  return { score: 0, pathOverlap: 0, symbolOverlap: 0, termOverlap: 0, lexicalRatio: 0, weightedOverlap: 0 };
+}
+function overlapCount(left, right) {
+  let count = 0;
+  for (const value of left) if (right.has(value)) count += 1;
+  return count;
+}
+function extractTerms(value) {
+  const normalized = normalizeText(value.replace(PATH_TOKEN, " "));
+  const terms = normalized.match(/[a-z0-9][a-z0-9_-]{2,}/g) ?? [];
+  return boundedUnique2(terms.filter((term) => !STOP_TERMS.has(term) && !looksLikePath(term)), MAX_TERMS2);
+}
+function extractPaths(value) {
+  const matches = value.match(PATH_TOKEN) ?? [];
+  return boundedUnique2(normalizePaths(matches), MAX_PATHS2);
+}
+function extractSymbols(value) {
+  const symbols = value.match(/\b(?:[A-Z][A-Za-z0-9]{2,}|[a-z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*)\b/g) ?? [];
+  return boundedUnique2(normalizeSymbols(symbols), MAX_SYMBOLS2);
+}
+function normalizePaths(values) {
+  const output = [];
+  for (const value of values) {
+    let path = String(value).trim().replaceAll("\\", "/").replace(/^\.\//, "");
+    path = path.replace(/[),.;:'"\]}>]+$/g, "");
+    if (!path || path.startsWith("http://") || path.startsWith("https://") || path.length > 512 || looksLikeMimeType(path)) continue;
+    output.push(path.toLowerCase());
+  }
+  return output;
+}
+function normalizeSymbols(values) {
+  return [...values].map((value) => String(value).trim().toLowerCase()).filter(Boolean);
+}
+function normalizeText(value) {
+  return value.toLowerCase().replace(/\s+/g, " ").trim();
+}
+function hasCue(value, cues) {
+  return cues.some((cue) => value.includes(cue));
+}
+function looksLikePath(value) {
+  return value.includes("/") || /\.[a-z0-9]{1,8}$/.test(value);
+}
+function looksLikeMimeType(value) {
+  return MIME_PATH.test(value);
+}
+function mergeRecent(existing, incoming, limit) {
+  return boundedUnique2([...existing, ...incoming], limit);
+}
+function boundedUnique2(values, limit) {
+  const output = [];
+  for (const raw of values) {
+    const value = String(raw).trim();
+    if (!value) continue;
+    const index = output.indexOf(value);
+    if (index >= 0) output.splice(index, 1);
+    output.push(value);
+    if (output.length > limit) output.splice(0, output.length - limit);
+  }
+  return output;
+}
+function boundedDescriptor(value) {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  if (Buffer.byteLength(normalized) <= MAX_DESCRIPTOR_BYTES2) return normalized;
+  let end = MAX_DESCRIPTOR_BYTES2;
+  while (end > 0 && Buffer.byteLength(normalized.slice(0, end)) > MAX_DESCRIPTOR_BYTES2) end -= 1;
+  return normalized.slice(0, end);
+}
+
+// src/pe3/local-embedding.ts
 import { homedir as homedir2 } from "node:os";
 import { join as join5 } from "node:path";
+var DEFAULT_MODEL_ID = "Xenova/all-MiniLM-L6-v2";
+var LocalTransformersEmbeddingProvider = class {
+  modelID;
+  #cacheDir;
+  #localModelPath;
+  #allowModelDownload;
+  #loadTransformers;
+  #extractor;
+  constructor(options = {}) {
+    this.modelID = options.modelID ?? process.env.CUPPET_PE3_EMBED_MODEL ?? DEFAULT_MODEL_ID;
+    this.#cacheDir = options.cacheDir ?? process.env.CUPPET_PE3_MODEL_CACHE ?? join5(homedir2(), ".cache", "cuppet", "transformers");
+    this.#localModelPath = options.localModelPath ?? process.env.CUPPET_PE3_MODEL_DIR;
+    this.#allowModelDownload = options.allowModelDownload ?? process.env.CUPPET_PE3_ALLOW_MODEL_DOWNLOAD !== "0";
+    this.#loadTransformers = options.loadTransformers ?? loadTransformers;
+  }
+  async embed(text) {
+    const normalized = text.trim();
+    if (!normalized) throw new Error("cannot embed an empty task description");
+    const extractor = await this.#getExtractor();
+    const output = await extractor(normalized, { pooling: "mean", normalize: true });
+    const data = isArrayLike(output) ? output : output.data;
+    if (!data || data.length === 0) throw new Error("local embedding model returned no values");
+    return Float32Array.from(data);
+  }
+  #getExtractor() {
+    if (this.#extractor) return this.#extractor;
+    const pending = this.#createExtractor();
+    this.#extractor = pending;
+    void pending.catch(() => {
+      if (this.#extractor === pending) this.#extractor = void 0;
+    });
+    return pending;
+  }
+  async #createExtractor() {
+    const transformers = await this.#loadTransformers();
+    transformers.env.allowLocalModels = true;
+    transformers.env.allowRemoteModels = this.#allowModelDownload;
+    transformers.env.cacheDir = this.#cacheDir;
+    if (this.#localModelPath) transformers.env.localModelPath = this.#localModelPath;
+    return transformers.pipeline("feature-extraction", this.modelID, { device: "cpu" });
+  }
+};
+async function loadTransformers() {
+  const moduleName = "@huggingface/transformers";
+  return import(moduleName);
+}
+function isArrayLike(value) {
+  if (!value || typeof value !== "object") return false;
+  const length = value.length;
+  return typeof length === "number" && Number.isFinite(length) && length >= 0;
+}
+
+// src/pe3/semantic-router.ts
+var DEFAULT_SEMANTIC_THRESHOLDS = {
+  activeContinueMin: 0.52,
+  dormantMatchMin: 0.6,
+  dormantActiveMargin: 0.1,
+  dormantRunnerUpMargin: 0.04,
+  noveltyMax: 0.34
+};
+var SemanticTaskRouter = class {
+  #provider;
+  #thresholds;
+  #cache = /* @__PURE__ */ new Map();
+  #now;
+  constructor(provider, thresholds = {}, options = {}) {
+    this.#provider = provider;
+    this.#thresholds = { ...DEFAULT_SEMANTIC_THRESHOLDS, ...thresholds };
+    this.#now = options.now ?? Date.now;
+  }
+  get modelID() {
+    return this.#provider.modelID;
+  }
+  get thresholds() {
+    return { ...this.#thresholds };
+  }
+  async decide(prompt, active, dormant) {
+    const startedAt = this.#now();
+    let promptEmbeddingCount = 0;
+    let agentEmbeddingCount = 0;
+    try {
+      const promptVector = await this.#provider.embed(prompt);
+      promptEmbeddingCount = 1;
+      ensureVector(promptVector);
+      const activeResult = await this.#taskVector(active);
+      agentEmbeddingCount += activeResult.created ? 1 : 0;
+      const activeSimilarity = cosineSimilarity(promptVector, activeResult.vector);
+      const dormantScores = [];
+      for (const agent of dormant) {
+        const result = await this.#taskVector(agent);
+        agentEmbeddingCount += result.created ? 1 : 0;
+        dormantScores.push({ agent, similarity: cosineSimilarity(promptVector, result.vector) });
+      }
+      dormantScores.sort((left, right) => right.similarity - left.similarity || right.agent.lastActiveAt - left.agent.lastActiveAt);
+      const best = dormantScores[0];
+      const runnerUp = dormantScores[1];
+      const dormantBeatsActive = best ? best.similarity - activeSimilarity >= this.#thresholds.dormantActiveMargin : false;
+      const dormantWinsField = best ? best.similarity - (runnerUp?.similarity ?? -1) >= this.#thresholds.dormantRunnerUpMargin : false;
+      if (best && best.similarity >= this.#thresholds.dormantMatchMin && dormantBeatsActive && dormantWinsField) {
+        return {
+          action: "reactivate",
+          agent: cloneAgent3(best.agent),
+          reason: "semantic task fingerprint decisively matches a dormant agent",
+          confidence: clamp01(Math.min(best.similarity, best.similarity - activeSimilarity + 0.5)),
+          modelID: this.#provider.modelID,
+          activeSimilarity,
+          bestDormantSimilarity: best.similarity,
+          ...runnerUp ? { runnerUpDormantSimilarity: runnerUp.similarity } : {},
+          promptEmbeddingCount,
+          agentEmbeddingCount,
+          embeddingLatencyMs: Math.max(0, this.#now() - startedAt),
+          fallback: false
+        };
+      }
+      if (activeSimilarity >= this.#thresholds.activeContinueMin) {
+        return {
+          action: "continue",
+          reason: "semantic task fingerprint supports the active agent",
+          confidence: clamp01(activeSimilarity),
+          modelID: this.#provider.modelID,
+          activeSimilarity,
+          ...best ? { bestDormantSimilarity: best.similarity } : {},
+          ...runnerUp ? { runnerUpDormantSimilarity: runnerUp.similarity } : {},
+          promptEmbeddingCount,
+          agentEmbeddingCount,
+          embeddingLatencyMs: Math.max(0, this.#now() - startedAt),
+          fallback: false
+        };
+      }
+      const bestKnownSimilarity = Math.max(activeSimilarity, best?.similarity ?? -1);
+      if (bestKnownSimilarity <= this.#thresholds.noveltyMax) {
+        return {
+          action: "create",
+          reason: "semantic novelty is low against every known task agent",
+          confidence: clamp01(1 - bestKnownSimilarity),
+          modelID: this.#provider.modelID,
+          activeSimilarity,
+          ...best ? { bestDormantSimilarity: best.similarity } : {},
+          ...runnerUp ? { runnerUpDormantSimilarity: runnerUp.similarity } : {},
+          promptEmbeddingCount,
+          agentEmbeddingCount,
+          embeddingLatencyMs: Math.max(0, this.#now() - startedAt),
+          fallback: false
+        };
+      }
+      return {
+        action: "continue",
+        reason: "semantic evidence is low-confidence; preserve the active task",
+        confidence: clamp01(activeSimilarity),
+        modelID: this.#provider.modelID,
+        activeSimilarity,
+        ...best ? { bestDormantSimilarity: best.similarity } : {},
+        ...runnerUp ? { runnerUpDormantSimilarity: runnerUp.similarity } : {},
+        promptEmbeddingCount,
+        agentEmbeddingCount,
+        embeddingLatencyMs: Math.max(0, this.#now() - startedAt),
+        fallback: true
+      };
+    } catch (error) {
+      return {
+        action: "continue",
+        reason: "semantic routing unavailable; deterministic fallback preserves the active task",
+        confidence: 0,
+        modelID: this.#provider.modelID,
+        activeSimilarity: 0,
+        promptEmbeddingCount,
+        agentEmbeddingCount,
+        embeddingLatencyMs: Math.max(0, this.#now() - startedAt),
+        fallback: true,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+  clear(agentID2) {
+    if (!agentID2) {
+      this.#cache.clear();
+      return;
+    }
+    this.#cache.delete(agentID2);
+  }
+  async #taskVector(agent) {
+    const signature = fingerprintSignature(agent);
+    const cached = this.#cache.get(agent.id);
+    if (cached?.signature === signature) return { vector: cached.vector, created: false };
+    const text = taskFingerprintText(agent) || agent.taskDescriptor || `task session ${agent.sessionID}`;
+    const vector = await this.#provider.embed(text);
+    ensureVector(vector);
+    this.#cache.set(agent.id, { signature, vector });
+    return { vector, created: true };
+  }
+};
+function cosineSimilarity(left, right) {
+  if (left.length === 0 || left.length !== right.length) throw new Error("embedding dimension mismatch");
+  let dot = 0;
+  let leftNorm = 0;
+  let rightNorm = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    const a = left[index];
+    const b = right[index];
+    dot += a * b;
+    leftNorm += a * a;
+    rightNorm += b * b;
+  }
+  if (leftNorm <= 0 || rightNorm <= 0) throw new Error("embedding vector has zero norm");
+  return dot / Math.sqrt(leftNorm * rightNorm);
+}
+function fingerprintSignature(agent) {
+  return [agent.fingerprint.revision, agent.cacheEpoch, agent.workspaceEpoch, agent.taskDescriptor].join(":");
+}
+function ensureVector(vector) {
+  if (!(vector instanceof Float32Array) || vector.length === 0) throw new Error("embedding provider returned an empty vector");
+  for (const value of vector) if (!Number.isFinite(value)) throw new Error("embedding provider returned a non-finite vector");
+}
+function cloneAgent3(agent) {
+  return {
+    ...agent,
+    activePaths: [...agent.activePaths],
+    touchedPaths: [...agent.touchedPaths],
+    recentSymbols: [...agent.recentSymbols],
+    terms: [...agent.terms],
+    fingerprint: {
+      revision: agent.fingerprint.revision,
+      paths: agent.fingerprint.paths.map((signal) => ({ ...signal })),
+      symbols: agent.fingerprint.symbols.map((signal) => ({ ...signal })),
+      terms: agent.fingerprint.terms.map((signal) => ({ ...signal }))
+    },
+    stalePaths: [...agent.stalePaths]
+  };
+}
+function clamp01(value) {
+  return Math.max(0, Math.min(1, value));
+}
+
+// src/pe3/session-router.ts
+var TaskSessionRouter = class {
+  #router;
+  #semantic;
+  #stats = emptyRoutingStats();
+  constructor(router = new TaskAgentRouter(), options = {}) {
+    this.#router = router;
+    this.#semantic = options.semantic === false ? void 0 : options.semantic ?? new SemanticTaskRouter(new LocalTransformersEmbeddingProvider());
+  }
+  get active() {
+    return this.#router.active;
+  }
+  agents() {
+    return this.#router.list();
+  }
+  stats() {
+    return { ...this.#stats };
+  }
+  checkpoint() {
+    return {
+      router: this.#router.checkpoint(),
+      stats: this.stats()
+    };
+  }
+  restoreCheckpoint(checkpoint) {
+    this.#router.restoreCheckpoint(checkpoint.router);
+    this.#stats = { ...checkpoint.stats };
+  }
+  bindSession(sessionID, evidence = {}, descriptor = "") {
+    const activated = this.#router.activate(taskAgentID(sessionID));
+    if (activated) return activated;
+    return this.#router.register(sessionID, descriptor, evidence);
+  }
+  restoreAgent(state) {
+    return this.#router.restore(state);
+  }
+  selectRestoredSession(sessionID) {
+    return this.#router.select(taskAgentID(sessionID));
+  }
+  async prepare(prompt, adapter, options = {}) {
+    let evidence = adapter.evidence();
+    let current = adapter.current();
+    if (!current) {
+      current = await adapter.create();
+      this.bindSession(current.id, evidence);
+      this.#router.recordTurn(prompt, evidence);
+      return this.#record({ action: "create", sessionID: current.id, prompt, reason: "no active session; created initial task-local agent", refreshPaths: [] });
+    }
+    this.bindSession(current.id, evidence);
+    const active = this.#router.active;
+    if (!active || active.turns === 0) {
+      this.#router.recordTurn(prompt, evidence);
+      return this.#record({ action: "continue", sessionID: current.id, prompt, reason: "first turn seeds the active task agent", refreshPaths: [] });
+    }
+    let route = this.#router.route(prompt, evidence);
+    if (route.action === "continue" && isHardExplicitSwitchPrompt(prompt)) {
+      const dormantPath = findDormantPathMatch(prompt, active, this.#router.list());
+      if (dormantPath) {
+        route = {
+          action: "reactivate",
+          agent: dormantPath.agent,
+          reason: "explicit switch path matches a dormant task agent",
+          affinity: pathMatchAffinity(dormantPath.overlap),
+          refreshPaths: [...dormantPath.agent.stalePaths]
+        };
+      } else if (shouldForceExplicitSwitch(prompt, active, route.affinity)) {
+        route = {
+          action: "create",
+          reason: "explicit task-switch intent has no active structural match or dormant path target",
+          affinity: route.affinity
+        };
+      }
+    }
+    if (route.action === "continue" && route.semanticEligible && adapter.localize) {
+      this.#stats.localizationQueries += 1;
+      const localized = await adapter.localize(current.id, prompt).catch(() => ({}));
+      this.#recordLocalization(localized.localization);
+      if (hasLocalizedEvidence(localized)) {
+        this.#stats.localizationHits += 1;
+        evidence = mergeEvidence(evidence, localized);
+        route = this.#router.route(prompt, evidence);
+      }
+    }
+    const semanticReturnOnly = route.action === "continue" && isExplicitReturnPrompt(prompt);
+    const semanticContextEligible = route.action === "continue" && semanticContextEscalationEligible(prompt, route.affinity, options.semanticContext);
+    if (route.action === "continue" && (route.semanticEligible || semanticReturnOnly || semanticContextEligible) && this.#semantic) {
+      route = await this.#semanticRoute(prompt, route, semanticReturnOnly, options.semanticContext);
+    }
+    if (route.action === "continue") {
+      this.#router.recordTurn(prompt, evidence);
+      return this.#record({ action: "continue", sessionID: current.id, prompt, reason: route.reason, refreshPaths: [], affinity: route.affinity });
+    }
+    const transitionEvidence = mergeTransitionEvidence(adapter.evidence(), evidence);
+    if (route.action === "reactivate") {
+      const resumed = await adapter.resume(route.agent.sessionID);
+      this.bindSession(resumed.id);
+      this.#router.recordTurn(prompt, transitionEvidence);
+      return this.#record({ action: "reactivate", sessionID: resumed.id, prompt: withRefreshHint(prompt, route.refreshPaths), reason: route.reason, refreshPaths: [...route.refreshPaths], affinity: route.affinity });
+    }
+    const created = await adapter.create();
+    this.bindSession(created.id, transitionEvidence);
+    this.#router.recordTurn(prompt, transitionEvidence);
+    return this.#record({ action: "create", sessionID: created.id, prompt, reason: route.reason, refreshPaths: [], affinity: route.affinity });
+  }
+  noteSessionObservedPaths(sessionID, paths) {
+    const bounded4 = [...paths];
+    if (bounded4.length === 0) return;
+    this.#router.recordSessionEvidence(sessionID, { activePaths: bounded4 });
+    this.#router.acknowledgeSessionRefresh(sessionID, bounded4);
+  }
+  noteSessionPaths(sessionID, paths) {
+    this.noteSessionObservedPaths(sessionID, paths);
+  }
+  noteSessionWorkspaceMutation(sessionID, paths) {
+    const bounded4 = [...paths];
+    if (bounded4.length === 0) return;
+    this.#router.recordSessionEvidence(sessionID, { activePaths: bounded4, touchedPaths: bounded4 });
+    this.#router.noteWorkspaceChange(bounded4);
+    this.#router.acknowledgeSessionRefresh(sessionID, bounded4);
+  }
+  noteActivePaths(paths) {
+    const active = this.#router.active;
+    if (active) this.noteSessionObservedPaths(active.sessionID, paths);
+  }
+  noteWorkspaceMutation(paths) {
+    const active = this.#router.active;
+    if (active) this.noteSessionWorkspaceMutation(active.sessionID, paths);
+  }
+  async #semanticRoute(prompt, deterministic, returnOnly = false, semanticContext = "") {
+    const active = this.#router.active;
+    if (!active || !this.#semantic) return deterministic;
+    const dormant = this.#router.list().filter((agent) => agent.id !== active.id);
+    this.#stats.semanticEscalations += 1;
+    const decision = await this.#semantic.decide(semanticInput(prompt, semanticContext), active, dormant);
+    this.#recordSemantic(decision);
+    if (decision.action === "reactivate" && decision.agent) {
+      return { action: "reactivate", agent: decision.agent, reason: decision.reason, affinity: deterministic.affinity, refreshPaths: [...decision.agent.stalePaths] };
+    }
+    if (decision.action === "create") {
+      if (returnOnly) return { ...deterministic, reason: "explicit return had no decisive dormant semantic match; preserve the active task", semanticEligible: false };
+      return { action: "create", reason: decision.reason, affinity: deterministic.affinity };
+    }
+    return { ...deterministic, reason: decision.reason, semanticEligible: false };
+  }
+  #recordLocalization(localization) {
+    if (!localization) {
+      delete this.#stats.lastLocalizationTopScore;
+      delete this.#stats.lastLocalizationRunnerUpScore;
+      delete this.#stats.lastLocalizationReason;
+      return;
+    }
+    this.#stats.lastLocalizationTopScore = localization.topScore;
+    if (localization.runnerUpScore !== void 0) this.#stats.lastLocalizationRunnerUpScore = localization.runnerUpScore;
+    else delete this.#stats.lastLocalizationRunnerUpScore;
+    this.#stats.lastLocalizationReason = localization.reason;
+    if (localization.decisive) this.#stats.localizationDecisive += 1;
+    else this.#stats.localizationWeak += 1;
+  }
+  #recordSemantic(decision) {
+    this.#stats.semanticModelID = decision.modelID;
+    this.#stats.semanticPromptEmbeddings += decision.promptEmbeddingCount;
+    this.#stats.semanticAgentEmbeddings += decision.agentEmbeddingCount;
+    this.#stats.semanticEmbeddingLatencyMs += decision.embeddingLatencyMs;
+    this.#stats.semanticEmbeddingLatencyMaxMs = Math.max(this.#stats.semanticEmbeddingLatencyMaxMs, decision.embeddingLatencyMs);
+    this.#stats.lastSemanticActiveSimilarity = decision.activeSimilarity;
+    if (decision.bestDormantSimilarity !== void 0) this.#stats.lastSemanticDormantSimilarity = decision.bestDormantSimilarity;
+    else delete this.#stats.lastSemanticDormantSimilarity;
+    if (decision.fallback) this.#stats.semanticFallbacks += 1;
+    if (decision.error) this.#stats.semanticFailures += 1;
+    if (decision.action === "continue") this.#stats.semanticContinuations += 1;
+    if (decision.action === "create") this.#stats.semanticCreated += 1;
+    if (decision.action === "reactivate") this.#stats.semanticReactivated += 1;
+  }
+  #record(result) {
+    this.#stats.sequence += 1;
+    if (result.action === "continue") this.#stats.continuations += 1;
+    if (result.action === "create") this.#stats.created += 1;
+    if (result.action === "reactivate") this.#stats.reactivated += 1;
+    if (result.action !== "continue") this.#stats.switches += 1;
+    this.#stats.lastAction = result.action;
+    this.#stats.lastReason = result.reason;
+    return result;
+  }
+};
+var ROUTING_PATH_TOKEN = /(?:\.?\.?\/)?[A-Za-z0-9_.@-]+(?:\/[A-Za-z0-9_.@-]+)+(?:\.[A-Za-z0-9_-]+)?|[A-Za-z0-9_.@-]+\.(?:ts|tsx|js|jsx|rs|py|go|java|json|md|yaml|yml|toml|css|html)/g;
+var HARD_EXPLICIT_SWITCH_CUES = ["new task", "separate task", "separately", "unrelated", "switch to", "move on to"];
+var CONTINUATION_CUES2 = ["also", "that", "those", "the previous", "same task", "same issue", "continue", "keep going", "update the tests", "fix the tests", "what about"];
+function emptyRoutingStats() {
+  return {
+    sequence: 0,
+    continuations: 0,
+    created: 0,
+    reactivated: 0,
+    switches: 0,
+    localizationQueries: 0,
+    localizationHits: 0,
+    localizationDecisive: 0,
+    localizationWeak: 0,
+    semanticEscalations: 0,
+    semanticContinuations: 0,
+    semanticCreated: 0,
+    semanticReactivated: 0,
+    semanticFallbacks: 0,
+    semanticFailures: 0,
+    semanticPromptEmbeddings: 0,
+    semanticAgentEmbeddings: 0,
+    semanticEmbeddingLatencyMs: 0,
+    semanticEmbeddingLatencyMaxMs: 0
+  };
+}
+function taskAgentID(sessionID) {
+  return `task:${sessionID}`;
+}
+function withRefreshHint(prompt, paths) {
+  if (paths.length === 0) return prompt;
+  const bounded4 = paths.slice(0, 12).join(", ");
+  return ["[PE3 task resume]", "The workspace changed while this task was dormant.", `Before relying on prior file-specific assumptions, refresh these paths from current workspace truth: ${bounded4}`, "Do not assume their previous contents are still current.", "", prompt].join("\n");
+}
+function normalizedPrompt(prompt) {
+  return prompt.toLowerCase().replace(/\s+/g, " ").trim();
+}
+function hasCue2(prompt, cues) {
+  const normalized = normalizedPrompt(prompt);
+  return cues.some((cue) => normalized.includes(cue));
+}
+function isExplicitReturnPrompt(prompt) {
+  return hasCue2(prompt, ["go back to", "return to", "back to", "resume the", "resume that", "previous task", "earlier task"]);
+}
+function isHardExplicitSwitchPrompt(prompt) {
+  return hasCue2(prompt, HARD_EXPLICIT_SWITCH_CUES);
+}
+function hasContinuationPrompt(prompt) {
+  return hasCue2(prompt, CONTINUATION_CUES2);
+}
+function taskPaths(agent) {
+  return new Set([
+    ...agent.activePaths,
+    ...agent.touchedPaths,
+    ...agent.fingerprint.paths.map((signal) => signal.value)
+  ].map(normalizeRoutingPath).filter(Boolean));
+}
+function shouldForceExplicitSwitch(prompt, active, affinity) {
+  if (!isHardExplicitSwitchPrompt(prompt)) return false;
+  if (affinity.pathOverlap > 0 || affinity.symbolOverlap > 0) return false;
+  const promptPaths = extractRoutingPaths(prompt);
+  if (promptPaths.length === 0) return true;
+  const knownPaths = taskPaths(active);
+  return knownPaths.size === 0 || promptPaths.every((path) => !knownPaths.has(path));
+}
+function findDormantPathMatch(prompt, active, agents) {
+  const promptPaths = extractRoutingPaths(prompt);
+  if (promptPaths.length === 0) return void 0;
+  const candidates = agents.filter((agent) => agent.id !== active.id).map((agent) => ({
+    agent,
+    overlap: promptPaths.filter((path) => taskPaths(agent).has(path)).length
+  })).filter((candidate) => candidate.overlap > 0).sort((left, right) => right.overlap - left.overlap || right.agent.lastActiveAt - left.agent.lastActiveAt);
+  const best = candidates[0];
+  if (!best) return void 0;
+  const runnerUp = candidates[1];
+  if (runnerUp && runnerUp.overlap === best.overlap) return void 0;
+  return best;
+}
+function pathMatchAffinity(pathOverlap) {
+  return {
+    score: pathOverlap * 8,
+    pathOverlap,
+    symbolOverlap: 0,
+    termOverlap: 0,
+    lexicalRatio: 0,
+    weightedOverlap: pathOverlap
+  };
+}
+function extractRoutingPaths(prompt) {
+  return [...new Set((prompt.match(ROUTING_PATH_TOKEN) ?? []).map(normalizeRoutingPath).filter(Boolean))];
+}
+function normalizeRoutingPath(path) {
+  return path.trim().replaceAll("\\", "/").replace(/^\.\//, "").replace(/[),.;:'"\]}>]+$/g, "").toLowerCase();
+}
+function semanticContextEscalationEligible(prompt, affinity, semanticContext) {
+  if (!semanticContext?.trim()) return false;
+  if (hasContinuationPrompt(prompt)) return false;
+  return affinity.pathOverlap === 0 && affinity.symbolOverlap === 0 && affinity.weightedOverlap < 0.9;
+}
+function semanticInput(prompt, semanticContext) {
+  const context = semanticContext.trim();
+  return context ? `${prompt}
+${context}` : prompt;
+}
+function hasLocalizedEvidence(evidence) {
+  return iterableHasValues(evidence.localizedPaths) || iterableHasValues(evidence.localizedSymbols);
+}
+function iterableHasValues(values) {
+  if (!values) return false;
+  for (const _value of values) return true;
+  return false;
+}
+function mergeEvidence(left, right) {
+  return { activePaths: mergeIterables(left.activePaths, right.activePaths), touchedPaths: mergeIterables(left.touchedPaths, right.touchedPaths), recentSymbols: mergeIterables(left.recentSymbols, right.recentSymbols), localizedPaths: mergeIterables(left.localizedPaths, right.localizedPaths), localizedSymbols: mergeIterables(left.localizedSymbols, right.localizedSymbols), workspaceEpoch: Math.max(left.workspaceEpoch ?? 0, right.workspaceEpoch ?? 0) };
+}
+function mergeTransitionEvidence(left, right) {
+  return { localizedPaths: mergeIterables(left.localizedPaths, right.localizedPaths), localizedSymbols: mergeIterables(left.localizedSymbols, right.localizedSymbols), workspaceEpoch: Math.max(left.workspaceEpoch ?? 0, right.workspaceEpoch ?? 0) };
+}
+function mergeIterables(left, right) {
+  return [.../* @__PURE__ */ new Set([...left ?? [], ...right ?? []])];
+}
+
+// src/pe3/controller.ts
+var NATIVE_ROUTE_GUARD_MS = 5e3;
+var NATIVE_ROUTE_TRANSACTION_MS = 3e4;
+var emptyUsage3 = () => ({ input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 });
+var Pe3Controller = class extends CuppetController {
+  #taskSessions = new TaskSessionRouter();
+  #taskLocalizer;
+  #taskRegistry;
+  #nativeBypass = /* @__PURE__ */ new Map();
+  #suppressedNativeSessions = /* @__PURE__ */ new Map();
+  #pendingNativeRoutes = /* @__PURE__ */ new Map();
+  #nativeRouteReleases = /* @__PURE__ */ new Map();
+  #restoredStaleBySession = /* @__PURE__ */ new Map();
+  #cumulativeUsage = emptyUsage3();
+  #turnStartedAt = /* @__PURE__ */ new Map();
+  #routingTail = Promise.resolve();
+  #persistTail = Promise.resolve();
+  #registryReady = false;
+  #cumulativeCost = 0;
+  #completedTurns = 0;
+  #totalLatencyMs = 0;
+  #nativeRouteFailures = 0;
+  #restoredAgents = 0;
+  #droppedPersistedSessions = 0;
+  #registryRecoveredFromCorruption = false;
+  #registryWriteFailures = 0;
+  constructor(options) {
+    super(options);
+    this.#taskLocalizer = new TstTaskLocalizer(options.tst);
+    this.#taskRegistry = new Pe3TaskRegistry(options.paths.projectStore, options.paths.projectRealpath);
+    this.onAgentEvent((event) => this.#observeTaskEvent(event));
+  }
+  async initialize() {
+    await super.initialize();
+    const session = this.snapshot.activeSession;
+    const sessions = await this.gateway.listSessions().catch(() => []);
+    const validSessionIDs = new Set(
+      sessions.filter((candidate) => candidate.agent !== "cuppet-background").map((candidate) => candidate.id)
+    );
+    if (session) validSessionIDs.add(session.id);
+    const loaded = await this.#taskRegistry.load(validSessionIDs);
+    this.#restoredAgents = loaded.agents.length;
+    this.#droppedPersistedSessions = loaded.droppedSessionCount;
+    this.#registryRecoveredFromCorruption = loaded.recoveredFromCorruption;
+    for (const [sessionID, paths] of loaded.staleBySession) {
+      this.#restoredStaleBySession.set(sessionID, [...paths]);
+    }
+    restorePersistedTaskAgents(this.#taskSessions, loaded, session?.id);
+    if (session && !this.#taskSessions.agents().some((agent) => agent.sessionID === session.id)) {
+      this.#taskSessions.bindSession(session.id, this.#taskEvidence());
+    }
+    this.#registryReady = true;
+    await this.#persistRegistry();
+  }
+  async close() {
+    if (this.#registryReady) await this.#persistRegistry();
+    await this.#persistTail;
+    await super.close();
+  }
+  async newSession() {
+    this.#expireNativeGuards();
+    const release = await this.#acquireRoutingLock();
+    try {
+      const session = await super.newSession();
+      this.#taskSessions.bindSession(session.id, this.#taskEvidence());
+      this.#schedulePersist();
+      return session;
+    } finally {
+      release();
+    }
+  }
+  async resume(sessionID) {
+    this.#expireNativeGuards();
+    const release = await this.#acquireRoutingLock();
+    try {
+      const session = await super.resume(sessionID);
+      this.#taskSessions.bindSession(session.id, this.#taskEvidence());
+      this.#schedulePersist();
+      return session;
+    } finally {
+      release();
+    }
+  }
+  async adoptSession(sessionID) {
+    this.#expireNativeGuards();
+    const release = await this.#acquireRoutingLock();
+    try {
+      const suppressedUntil = this.#suppressedNativeSessions.get(sessionID);
+      if (suppressedUntil && suppressedUntil > Date.now()) return this.gateway.getSession(sessionID);
+      if (suppressedUntil) this.#suppressedNativeSessions.delete(sessionID);
+      const session = await super.adoptSession(sessionID);
+      if (session.agent !== "cuppet-background") {
+        this.#taskSessions.bindSession(session.id, this.#taskEvidence());
+        this.#schedulePersist();
+      }
+      return session;
+    } finally {
+      release();
+    }
+  }
+  async submit(prompt, delivery = "queue") {
+    this.#expireNativeGuards();
+    const release = await this.#acquireRoutingLock();
+    let prepared;
+    try {
+      prepared = await this.#prepareTaskSession(prompt);
+      this.#schedulePersist();
+      this.#armNativeBypass(prepared.sessionID, prepared.prompt);
+      this.#turnStartedAt.set(prepared.sessionID, Date.now());
+    } finally {
+      release();
+    }
+    await super.submit(prepared.prompt, delivery);
+  }
+  async routeNativePrompt(sessionID, prompt, attachments = []) {
+    this.#expireNativeGuards();
+    const release = await this.#acquireRoutingLock();
+    let transferred = false;
+    try {
+      const result = await this.#routeNativePromptLocked(sessionID, prompt, attachments);
+      if (result.routeToken) {
+        this.#nativeRouteReleases.set(result.routeToken, release);
+        transferred = true;
+      }
+      return result;
+    } finally {
+      if (!transferred) release();
+    }
+  }
+  async #routeNativePromptLocked(sessionID, prompt, attachments) {
+    const bypass = this.#nativeBypass.get(sessionID);
+    if (attachments.length === 0 && bypass && bypass.expiresAt > Date.now() && bypass.prompt === prompt) {
+      this.#nativeBypass.delete(sessionID);
+      return {
+        rerouted: false,
+        action: "continue",
+        sourceSessionID: sessionID,
+        targetSessionID: sessionID,
+        reason: "controller-forwarded prompt already passed PE3 routing",
+        sequence: this.#taskSessions.stats().sequence,
+        refreshPaths: [],
+        forwarded: true
+      };
+    }
+    const source = await super.adoptSession(sessionID);
+    if (source.agent === "cuppet-background") {
+      return {
+        rerouted: false,
+        action: "continue",
+        sourceSessionID: sessionID,
+        targetSessionID: sessionID,
+        reason: "background sessions are outside PE3 foreground routing",
+        sequence: this.#taskSessions.stats().sequence,
+        refreshPaths: []
+      };
+    }
+    this.#taskSessions.bindSession(source.id);
+    const before = this.#taskSessions.checkpoint();
+    let prepared;
+    try {
+      prepared = await this.#prepareTaskSession(
+        nativeRoutingPrompt(prompt, attachments),
+        nativeSemanticAttachmentText(attachments)
+      );
+    } catch (error) {
+      this.#taskSessions.restoreCheckpoint(before);
+      await super.resume(source.id).catch(() => void 0);
+      this.#nativeRouteFailures += 1;
+      throw error;
+    }
+    if (prepared.action === "continue") {
+      if (prepared.sessionID !== sessionID) throw new Error("PE3 continue route changed the active session unexpectedly");
+      this.#schedulePersist();
+      this.#turnStartedAt.set(sessionID, Date.now());
+      return {
+        rerouted: false,
+        action: "continue",
+        sourceSessionID: sessionID,
+        targetSessionID: sessionID,
+        reason: prepared.reason,
+        sequence: this.#taskSessions.stats().sequence,
+        refreshPaths: [...prepared.refreshPaths]
+      };
+    }
+    const after = this.#taskSessions.checkpoint();
+    this.#taskSessions.restoreCheckpoint(before);
+    try {
+      await super.resume(source.id);
+    } catch (error) {
+      this.#nativeRouteFailures += 1;
+      throw error;
+    }
+    const routeToken = randomUUID();
+    this.#pendingNativeRoutes.set(routeToken, {
+      sourceSessionID: source.id,
+      targetSessionID: prepared.sessionID,
+      action: prepared.action,
+      before,
+      after,
+      expiresAt: Date.now() + NATIVE_ROUTE_TRANSACTION_MS
+    });
+    return {
+      rerouted: true,
+      action: prepared.action,
+      sourceSessionID: sessionID,
+      targetSessionID: prepared.sessionID,
+      reason: prepared.reason,
+      sequence: after.stats.sequence,
+      refreshPaths: [...prepared.refreshPaths],
+      routeToken
+    };
+  }
+  async commitNativeRoute(routeToken) {
+    this.#expireNativeGuards();
+    const transaction = this.#pendingNativeRoutes.get(routeToken);
+    if (!transaction) throw new Error("native PE3 route token is missing or expired");
+    await super.resume(transaction.targetSessionID);
+    this.#taskSessions.restoreCheckpoint(transaction.after);
+    this.#pendingNativeRoutes.delete(routeToken);
+    this.#suppressedNativeSessions.set(transaction.sourceSessionID, Date.now() + NATIVE_ROUTE_GUARD_MS);
+    this.#turnStartedAt.set(transaction.targetSessionID, Date.now());
+    this.#schedulePersist();
+    this.#releaseNativeRoute(routeToken);
+    return { committed: true, targetSessionID: transaction.targetSessionID };
+  }
+  async abortNativeRoute(routeToken) {
+    this.#expireNativeGuards();
+    const transaction = this.#pendingNativeRoutes.get(routeToken);
+    if (!transaction) throw new Error("native PE3 route token is missing or expired");
+    this.#pendingNativeRoutes.delete(routeToken);
+    this.#nativeRouteFailures += 1;
+    try {
+      this.#taskSessions.restoreCheckpoint(transaction.before);
+      if (this.snapshot.activeSession?.id !== transaction.sourceSessionID) {
+        await super.resume(transaction.sourceSessionID);
+      }
+      if (transaction.action === "create") {
+        await this.gateway.interrupt(transaction.targetSessionID).catch(() => void 0);
+      }
+      this.#turnStartedAt.delete(transaction.targetSessionID);
+      this.#suppressedNativeSessions.delete(transaction.sourceSessionID);
+      this.#schedulePersist();
+      return { aborted: true, sourceSessionID: transaction.sourceSessionID };
+    } finally {
+      this.#releaseNativeRoute(routeToken);
+    }
+  }
+  async status() {
+    const status = await super.status();
+    return { ...status, pe3: this.pe3Snapshot() };
+  }
+  pe3Snapshot() {
+    const cachedInput = boundedCachedInput(this.#cumulativeUsage);
+    const agents = this.#taskSessions.agents();
+    return {
+      ...this.#taskSessions.active ? { activeAgent: this.#taskSessions.active } : {},
+      agents,
+      routing: this.#taskSessions.stats(),
+      cachedInput,
+      uncachedInput: Math.max(0, this.#cumulativeUsage.input - cachedInput),
+      outputTokens: this.#cumulativeUsage.output,
+      reasoningTokens: this.#cumulativeUsage.reasoning,
+      cacheWrite: Math.max(0, this.#cumulativeUsage.cacheWrite),
+      totalModelTokens: totalTokenUsage(this.#cumulativeUsage),
+      providerAdjustedCost: Math.max(0, this.#cumulativeCost),
+      completedTurns: this.#completedTurns,
+      totalLatencyMs: this.#totalLatencyMs,
+      averageLatencyMs: this.#completedTurns > 0 ? this.#totalLatencyMs / this.#completedTurns : 0,
+      nativeRouteFailures: this.#nativeRouteFailures,
+      restoredAgents: this.#restoredAgents,
+      droppedPersistedSessions: this.#droppedPersistedSessions,
+      registryRecoveredFromCorruption: this.#registryRecoveredFromCorruption,
+      registryWriteFailures: this.#registryWriteFailures
+    };
+  }
+  async #prepareTaskSession(prompt, semanticContext = "") {
+    const prepared = await this.#taskSessions.prepare(prompt, {
+      current: () => {
+        const session = this.snapshot.activeSession;
+        return session ? { id: session.id } : void 0;
+      },
+      create: async () => {
+        const session = await super.newSession();
+        return { id: session.id };
+      },
+      resume: async (sessionID) => {
+        const session = await super.resume(sessionID);
+        return { id: session.id };
+      },
+      evidence: () => this.#taskEvidence(),
+      localize: (sessionID, value) => this.#taskLocalizer.locate(sessionID, value)
+    }, { semanticContext });
+    return this.#withRestoredRefreshGuard(prepared);
+  }
+  #withRestoredRefreshGuard(prepared) {
+    const restoredStale = this.#restoredStaleBySession.get(prepared.sessionID) ?? [];
+    if (restoredStale.length === 0) return prepared;
+    const refreshPaths = [.../* @__PURE__ */ new Set([...prepared.refreshPaths, ...restoredStale])].slice(0, 16);
+    return {
+      ...prepared,
+      refreshPaths,
+      prompt: withPersistedRefreshHint(prepared.prompt, restoredStale)
+    };
+  }
+  #armNativeBypass(sessionID, prompt) {
+    this.#nativeBypass.set(sessionID, { prompt, expiresAt: Date.now() + NATIVE_ROUTE_GUARD_MS });
+  }
+  async #acquireRoutingLock() {
+    const previous = this.#routingTail;
+    let resolveGate;
+    const gate = new Promise((resolve5) => {
+      resolveGate = resolve5;
+    });
+    this.#routingTail = previous.then(() => gate);
+    await previous;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      resolveGate();
+    };
+  }
+  #releaseNativeRoute(routeToken) {
+    const release = this.#nativeRouteReleases.get(routeToken);
+    if (!release) return;
+    this.#nativeRouteReleases.delete(routeToken);
+    release();
+  }
+  #expireNativeGuards() {
+    const now = Date.now();
+    for (const [sessionID, bypass] of this.#nativeBypass) {
+      if (bypass.expiresAt <= now) this.#nativeBypass.delete(sessionID);
+    }
+    for (const [sessionID, expiresAt] of this.#suppressedNativeSessions) {
+      if (expiresAt <= now) this.#suppressedNativeSessions.delete(sessionID);
+    }
+    for (const [routeToken, transaction] of this.#pendingNativeRoutes) {
+      if (transaction.expiresAt > now) continue;
+      this.#pendingNativeRoutes.delete(routeToken);
+      this.#nativeRouteFailures += 1;
+      this.#releaseNativeRoute(routeToken);
+      if (transaction.action === "create") {
+        void this.gateway.interrupt(transaction.targetSessionID).catch(() => void 0);
+      }
+    }
+  }
+  #taskEvidence() {
+    const session = this.snapshot.activeSession;
+    const active = this.#taskSessions.active;
+    return { ...session ? { workspaceEpoch: active?.workspaceEpoch ?? 0 } : {} };
+  }
+  #clearRestoredStale(sessionID, paths) {
+    const current = this.#restoredStaleBySession.get(sessionID);
+    if (!current?.length) return;
+    const refreshed = new Set([...paths].map((path) => normalizePath(path)));
+    const remaining = current.filter((path) => !refreshed.has(normalizePath(path)));
+    if (remaining.length > 0) this.#restoredStaleBySession.set(sessionID, remaining);
+    else this.#restoredStaleBySession.delete(sessionID);
+  }
+  #schedulePersist() {
+    if (!this.#registryReady) return;
+    this.#persistTail = this.#persistTail.then(() => this.#persistRegistry()).catch(() => void 0);
+  }
+  async #persistRegistry() {
+    try {
+      await this.#taskRegistry.save(
+        this.#taskSessions.agents(),
+        this.snapshot.activeSession?.id,
+        this.#restoredStaleBySession
+      );
+    } catch {
+      this.#registryWriteFailures += 1;
+    }
+  }
+  #observeTaskEvent(event) {
+    if (event.type === "usage") {
+      this.#cumulativeUsage.input += event.usage.input;
+      this.#cumulativeUsage.output += event.usage.output;
+      this.#cumulativeUsage.reasoning += event.usage.reasoning;
+      this.#cumulativeUsage.cacheRead += event.usage.cacheRead;
+      this.#cumulativeUsage.cacheWrite += event.usage.cacheWrite;
+      this.#cumulativeCost += event.cost;
+    }
+    if (event.type === "idle") {
+      const startedAt = this.#turnStartedAt.get(event.sessionID);
+      if (startedAt !== void 0) {
+        this.#turnStartedAt.delete(event.sessionID);
+        this.#completedTurns += 1;
+        this.#totalLatencyMs += Math.max(0, Date.now() - startedAt);
+      }
+      this.#schedulePersist();
+    }
+    if (event.type === "tool-end" && event.success && event.outputPaths?.length) {
+      if (event.diff) this.#taskSessions.noteSessionWorkspaceMutation(event.sessionID, event.outputPaths);
+      else this.#taskSessions.noteSessionObservedPaths(event.sessionID, event.outputPaths);
+      this.#clearRestoredStale(event.sessionID, event.outputPaths);
+      this.#schedulePersist();
+      return;
+    }
+    if (event.type === "diff") {
+      const paths = pathsFromDiff(event.diff);
+      if (paths.length > 0) {
+        this.#taskSessions.noteSessionWorkspaceMutation(event.sessionID, paths);
+        this.#clearRestoredStale(event.sessionID, paths);
+        this.#schedulePersist();
+      }
+    }
+  }
+};
+function boundedCachedInput(usage) {
+  return Math.max(0, Math.min(usage.input, usage.cacheRead));
+}
+function withPersistedRefreshHint(prompt, paths) {
+  if (paths.length === 0) return prompt;
+  const bounded4 = paths.slice(0, 12).join(", ");
+  return [
+    "[PE3 persisted task resume]",
+    "This task was restored after a Cuppet restart and the workspace changed while it was offline.",
+    `Refresh these paths from current workspace truth before relying on prior file-specific assumptions: ${bounded4}`,
+    "",
+    prompt
+  ].join("\n");
+}
+function pathsFromDiff(diff) {
+  let text = "";
+  try {
+    text = typeof diff === "string" ? diff : JSON.stringify(diff);
+  } catch {
+    return [];
+  }
+  const matches = text.match(/(?:\.?\.?\/)?[A-Za-z0-9_.@-]+(?:\/[A-Za-z0-9_.@-]+)+(?:\.[A-Za-z0-9_-]+)?|[A-Za-z0-9_.@-]+\.(?:ts|tsx|js|jsx|rs|py|go|java|json|md|yaml|yml|toml|css|html)/g) ?? [];
+  return [...new Set(matches.map(normalizePath))].slice(0, 16);
+}
+function normalizePath(path) {
+  return path.replaceAll("\\", "/").replace(/^\.\//, "").toLowerCase();
+}
+
+// src/control/server.ts
+import { randomBytes as randomBytes3 } from "node:crypto";
+import { unlink } from "node:fs/promises";
+import { basename as basename3 } from "node:path";
+import { createServer as createServer2 } from "node:net";
+
+// src/control/router.ts
+import { homedir as homedir3 } from "node:os";
+import { join as join7 } from "node:path";
 
 // src/remote/identity.ts
 import { createPublicKey, generateKeyPairSync, randomBytes as randomBytes2 } from "node:crypto";
 import { hostname } from "node:os";
-import { join as join4 } from "node:path";
-import { chmod as chmod3, mkdir as mkdir5, readFile as readFile4, writeFile as writeFile5 } from "node:fs/promises";
+import { join as join6 } from "node:path";
+import { chmod as chmod4, mkdir as mkdir7, readFile as readFile6, writeFile as writeFile7 } from "node:fs/promises";
 var IDENTITY_VERSION = 3;
 function hostIdentityPath(remoteDir) {
-  return join4(remoteDir, "host.json");
+  return join6(remoteDir, "host.json");
 }
 async function ensureHostIdentity(remoteDir) {
   const path = hostIdentityPath(remoteDir);
   try {
-    const parsed = JSON.parse(await readFile4(path, "utf8"));
+    const parsed = JSON.parse(await readFile6(path, "utf8"));
     if (typeof parsed.hostId === "string" && typeof parsed.publicKeyPem === "string" && typeof parsed.privateKeyPem === "string") {
       const identity2 = {
         hostId: parsed.hostId,
@@ -2033,14 +4344,14 @@ function isEd25519PublicKey(value) {
   }
 }
 async function writeIdentity(path, identity) {
-  await mkdir5(join4(path, ".."), { recursive: true, mode: 448 });
-  await writeFile5(
+  await mkdir7(join6(path, ".."), { recursive: true, mode: 448 });
+  await writeFile7(
     path,
     `${JSON.stringify({ version: IDENTITY_VERSION, ...identity }, null, 2)}
 `,
     { encoding: "utf8", mode: 384 }
   );
-  await chmod3(path, 384);
+  await chmod4(path, 384);
 }
 async function loadHostIdentityOrNull(remoteDir) {
   try {
@@ -2202,7 +4513,7 @@ var ROUTE_TABLE = {
   "host.get": {
     scope: "session.read",
     run: async (c) => {
-      const identity = await loadHostIdentityOrNull(join5(homedir2(), ".cuppet", "v2", "remote")) ?? void 0;
+      const identity = await loadHostIdentityOrNull(join7(homedir3(), ".cuppet", "v2", "remote")) ?? void 0;
       const provider = c.providerStatus();
       return {
         hostId: identity?.hostId ?? null,
@@ -2369,6 +4680,58 @@ function questionAnswersParam(params) {
   });
 }
 
+// src/runtime/ipc.ts
+import { createConnection, createServer } from "node:net";
+import { chmod as chmod5, mkdir as mkdir8 } from "node:fs/promises";
+var isWindows = process.platform === "win32";
+function parseIpcEndpoint(endpoint) {
+  const trimmed = endpoint.trim();
+  const tcp = /^(127\.0\.0\.1|localhost):(\d{1,5})$/.exec(trimmed);
+  if (tcp) {
+    const host = tcp[1];
+    const portText = tcp[2];
+    if (host && portText) {
+      const port = Number(portText);
+      if (Number.isInteger(port) && port > 0 && port <= 65535) return { kind: "tcp", host, port };
+    }
+  }
+  return { kind: "path", path: endpoint };
+}
+function isPipeEndpoint(endpoint) {
+  return endpoint.startsWith("\\\\.\\pipe\\") || endpoint.startsWith("\\\\?\\pipe\\");
+}
+function connectIpc(endpoint) {
+  const parsed = parseIpcEndpoint(endpoint);
+  return new Promise((resolve5, reject) => {
+    const socket = parsed.kind === "tcp" ? createConnection({ host: parsed.host, port: parsed.port }) : createConnection(parsed.path);
+    socket.once("connect", () => resolve5(socket));
+    socket.once("error", reject);
+  });
+}
+async function pickLoopbackPort(host = "127.0.0.1") {
+  const probe = createServer();
+  await new Promise((resolve5, reject) => {
+    probe.once("error", reject);
+    probe.listen(0, host, () => resolve5());
+  });
+  const address = probe.address();
+  const port = typeof address === "object" && address !== null ? address.port : 0;
+  await new Promise((resolve5) => probe.close(() => resolve5()));
+  if (!port) throw new Error("unable to allocate a loopback TCP port");
+  return port;
+}
+function pipeEndpoint(name) {
+  return `\\\\.\\pipe\\${name}`;
+}
+async function chmodPrivate(path, mode) {
+  if (isWindows) return;
+  await chmod5(path, mode);
+}
+async function mkdirPrivate(directory) {
+  await mkdir8(directory, { recursive: true, mode: 448 });
+  await chmodPrivate(directory, 448);
+}
+
 // src/control/server.ts
 var MAX_LINE_BYTES = 256 * 1024;
 var CuppetControlServer = class _CuppetControlServer {
@@ -2386,29 +4749,44 @@ var CuppetControlServer = class _CuppetControlServer {
   }
   static async start(controller, paths, address = createControlAddress(paths), options = {}) {
     const { socket } = address;
-    await mkdir6(paths.runtime, { recursive: true, mode: 448 });
+    if (isPipeEndpoint(socket)) {
+      const server2 = createServer2();
+      const instance2 = new _CuppetControlServer(controller, server2, address, options.remote);
+      server2.on("connection", (connection) => instance2.#handle(connection));
+      await new Promise((resolve5, reject) => {
+        server2.once("error", reject);
+        server2.listen(socket, () => {
+          server2.off("error", reject);
+          resolve5();
+        });
+      });
+      return instance2;
+    }
+    await mkdirPrivate(paths.runtime);
     await unlink(socket).catch((error) => {
       if (error.code !== "ENOENT") throw error;
     });
-    const server = createServer();
+    const server = createServer2();
     const instance = new _CuppetControlServer(controller, server, address, options.remote);
     server.on("connection", (connection) => instance.#handle(connection));
-    await new Promise((resolve4, reject) => {
+    await new Promise((resolve5, reject) => {
       server.once("error", reject);
       server.listen(socket, () => {
         server.off("error", reject);
-        resolve4();
+        resolve5();
       });
     });
-    await chmod4(socket, 384);
+    await chmodPrivate(socket, 384);
     return instance;
   }
   get address() {
     return { ...this.#address };
   }
   async close() {
-    await new Promise((resolve4) => this.#server.close(() => resolve4()));
-    await unlink(this.#address.socket).catch(() => void 0);
+    await new Promise((resolve5) => this.#server.close(() => resolve5()));
+    if (!isPipeEndpoint(this.#address.socket)) {
+      await unlink(this.#address.socket).catch(() => void 0);
+    }
   }
   #handle(socket) {
     let buffer = "";
@@ -2516,6 +4894,31 @@ var CuppetControlServer = class _CuppetControlServer {
         return this.#controller.adoptSession(stringParam2(params, "sessionID"));
       case "session.list":
         return this.#controller.listSessions();
+      case "pe3.route-native": {
+        const controller = this.#controller;
+        if (typeof controller.routeNativePrompt !== "function") {
+          throw new Error("PE3 native routing is unavailable");
+        }
+        return controller.routeNativePrompt(
+          stringParam2(params, "sessionID"),
+          textParam(params, "prompt"),
+          parseNativeRoutingAttachments(params.attachments)
+        );
+      }
+      case "pe3.commit-native-route": {
+        const controller = this.#controller;
+        if (typeof controller.commitNativeRoute !== "function") {
+          throw new Error("PE3 native route commit is unavailable");
+        }
+        return controller.commitNativeRoute(stringParam2(params, "routeToken"));
+      }
+      case "pe3.abort-native-route": {
+        const controller = this.#controller;
+        if (typeof controller.abortNativeRoute !== "function") {
+          throw new Error("PE3 native route abort is unavailable");
+        }
+        return controller.abortNativeRoute(stringParam2(params, "routeToken"));
+      }
       default:
         throw new Error(`unknown control method ${method}`);
     }
@@ -2526,12 +4929,20 @@ var CuppetControlServer = class _CuppetControlServer {
   }
 };
 function createControlAddress(paths) {
+  if (isWindows) {
+    return { socket: pipeEndpoint(`cuppet-${basename3(paths.runtime)}`), token: randomBytes3(32).toString("base64url") };
+  }
   return { socket: `${paths.runtime}/control.sock`, token: randomBytes3(32).toString("base64url") };
 }
 function stringParam2(params, name) {
   const value = params[name];
   if (typeof value !== "string" || !value.trim()) throw new Error(`${name} is required`);
   return value.trim();
+}
+function textParam(params, name) {
+  const value = params[name];
+  if (typeof value !== "string" || !value.trim()) throw new Error(`${name} is required`);
+  return value;
 }
 function optionalStringParam(params, name) {
   const value = params[name];
@@ -2553,7 +4964,7 @@ function providerParam(value) {
 }
 
 // src/opencode/gateway.ts
-import { randomUUID } from "node:crypto";
+import { randomUUID as randomUUID2 } from "node:crypto";
 import { EventEmitter as EventEmitter3 } from "node:events";
 var OpenCodeGateway = class extends EventEmitter3 {
   #client;
@@ -2731,7 +5142,7 @@ var OpenCodeGateway = class extends EventEmitter3 {
         inputs: inputs ?? {}
       })
     );
-    const attemptID = randomUUID();
+    const attemptID = randomUUID2();
     const attempt = {
       providerID: integrationID,
       method,
@@ -3538,15 +5949,15 @@ function message(error) {
   return String(data.message ?? value.message ?? value.name ?? "Unknown OpenCode error");
 }
 function delay(milliseconds) {
-  return new Promise((resolve4) => setTimeout(resolve4, milliseconds));
+  return new Promise((resolve5) => setTimeout(resolve5, milliseconds));
 }
 
 // src/opencode/server.ts
 import { randomBytes as randomBytes4 } from "node:crypto";
 import { spawn } from "node:child_process";
 import { constants as fsConstants } from "node:fs";
-import { access as access3, chmod as chmod5, copyFile, mkdir as mkdir7, readFile as readFile6, rename as rename5, rm, writeFile as writeFile6 } from "node:fs/promises";
-import { dirname as dirname5, join as join7 } from "node:path";
+import { access as access3, copyFile, mkdir as mkdir9, readFile as readFile8, rename as rename7, rm, writeFile as writeFile8 } from "node:fs/promises";
+import { dirname as dirname7, join as join9 } from "node:path";
 import { createOpencodeClient } from "@opencode-ai/sdk/v2";
 
 // src/opencode/variant-bridge.ts
@@ -3574,7 +5985,7 @@ function lowerVariant(model, options) {
     body = snake(options);
     if (options.reasoningEffort !== void 0 || options.reasoningSummary !== void 0) {
       body.reasoning = {
-        ...isRecord(body.reasoning) ? body.reasoning : {},
+        ...isRecord2(body.reasoning) ? body.reasoning : {},
         ...options.reasoningEffort !== void 0 ? { effort: options.reasoningEffort } : {},
         ...options.reasoningSummary !== void 0 ? { summary: options.reasoningSummary } : {}
       };
@@ -3582,7 +5993,7 @@ function lowerVariant(model, options) {
       delete body.reasoning_summary;
     }
     if (options.textVerbosity !== void 0) {
-      body.text = { ...isRecord(body.text) ? body.text : {}, verbosity: options.textVerbosity };
+      body.text = { ...isRecord2(body.text) ? body.text : {}, verbosity: options.textVerbosity };
       delete body.text_verbosity;
     }
   } else if (packageName === "@ai-sdk/anthropic" || packageName === "@ai-sdk/google-vertex/anthropic") {
@@ -3627,8 +6038,8 @@ function removeSecrets(value) {
     Object.entries(value).flatMap(([key, item]) => {
       const normalized = key.replaceAll(/[-_]/g, "").toLowerCase();
       if (secretKeys.has(normalized)) return [];
-      if (Array.isArray(item)) return [[key, item.map((entry) => isRecord(entry) ? removeSecrets(entry) : entry)]];
-      return [[key, isRecord(item) ? removeSecrets(item) : item]];
+      if (Array.isArray(item)) return [[key, item.map((entry) => isRecord2(entry) ? removeSecrets(entry) : entry)]];
+      return [[key, isRecord2(item) ? removeSecrets(item) : item]];
     })
   );
 }
@@ -3647,7 +6058,7 @@ function mergeNestedRequest(base, variant) {
   return Object.fromEntries(
     Object.entries(variant).map(([key, value]) => [
       key,
-      isRecord(base[key]) && isRecord(value) ? deepMerge(base[key], value) : value
+      isRecord2(base[key]) && isRecord2(value) ? deepMerge(base[key], value) : value
     ])
   );
 }
@@ -3657,7 +6068,7 @@ function deepMerge(base, override) {
     ...Object.fromEntries(
       Object.entries(override).map(([key, value]) => [
         key,
-        isRecord(base[key]) && isRecord(value) ? deepMerge(base[key], value) : value
+        isRecord2(base[key]) && isRecord2(value) ? deepMerge(base[key], value) : value
       ])
     )
   };
@@ -3667,7 +6078,7 @@ function snake(value) {
 }
 function snakeValue(value) {
   if (Array.isArray(value)) return value.map(snakeValue);
-  if (!isRecord(value)) return value;
+  if (!isRecord2(value)) return value;
   return snake(value);
 }
 function snakeKey(key) {
@@ -3676,18 +6087,18 @@ function snakeKey(key) {
 function compact(value) {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== void 0));
 }
-function isRecord(value) {
+function isRecord2(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 // src/runtime/derivative.ts
-import { access as access2, readFile as readFile5 } from "node:fs/promises";
+import { access as access2, readFile as readFile7 } from "node:fs/promises";
 import { constants as constants2 } from "node:fs";
-import { dirname as dirname4, join as join6 } from "node:path";
+import { dirname as dirname6, join as join8 } from "node:path";
 var DERIVATIVE_MARKER_SCHEMA = 1;
 var DERIVATIVE_PRODUCT = "cuppet-opencode-derivative";
 function derivativeMarkerPath(binary) {
-  return join6(dirname4(binary), ".cuppet-derivative.json");
+  return join8(dirname6(binary), ".cuppet-derivative.json");
 }
 async function readDerivativeMarker(binary) {
   const path = derivativeMarkerPath(binary);
@@ -3698,7 +6109,7 @@ async function readDerivativeMarker(binary) {
   }
   let parsed;
   try {
-    parsed = JSON.parse(await readFile5(path, "utf8"));
+    parsed = JSON.parse(await readFile7(path, "utf8"));
   } catch {
     throw new Error(`OpenCode derivative marker is unreadable at ${path}`);
   }
@@ -3771,12 +6182,12 @@ async function startOpenCodeServer(options) {
   const derivative = await readDerivativeMarker(options.binary);
   const password = randomBytes4(32).toString("base64url");
   const username = "cuppet";
-  const variantBridgePath = join7(options.paths.runtime, "opencode-model-variants.json");
-  const pluginStatusPath = join7(options.paths.runtime, "opencode-plugin-status.json");
-  const losslessPlanDirectory = join7(options.paths.projectStore, "lossless-plans");
-  await mkdir7(losslessPlanDirectory, { recursive: true, mode: 448 });
-  await chmod5(losslessPlanDirectory, 448);
-  const tuiPlugin = options.tuiPlugin ?? (options.plugin ? join7(dirname5(options.plugin), "tui.js") : void 0);
+  const variantBridgePath = join9(options.paths.runtime, "opencode-model-variants.json");
+  const pluginStatusPath = join9(options.paths.runtime, "opencode-plugin-status.json");
+  const losslessPlanDirectory = join9(options.paths.projectStore, "lossless-plans");
+  await mkdir9(losslessPlanDirectory, { recursive: true, mode: 448 });
+  await chmodPrivate(losslessPlanDirectory, 448);
+  const tuiPlugin = options.tuiPlugin ?? (options.plugin ? join9(dirname7(options.plugin), "tui.js") : void 0);
   if (options.plugin) {
     await installOpenCodePlugin(options.plugin, options.paths.opencode.config, tuiPlugin);
   }
@@ -3914,7 +6325,7 @@ async function startOpenCodeServer(options) {
         try {
           await Promise.race([
             client.global.dispose({ throwOnError: true }),
-            new Promise((resolve4) => setTimeout(resolve4, 1500))
+            new Promise((resolve5) => setTimeout(resolve5, 1500))
           ]);
         } catch {
         }
@@ -3934,35 +6345,35 @@ async function waitForCuppetAgents(client, directory, statusPath) {
     lastIDs = (response.data?.data ?? []).map((agent) => agent.id);
     const ids = new Set(lastIDs);
     if (ids.has("cuppet") && ids.has("cuppet-background")) return;
-    await new Promise((resolve4) => setTimeout(resolve4, 50));
+    await new Promise((resolve5) => setTimeout(resolve5, 50));
   } while (Date.now() < deadline);
-  const status = await readFile6(statusPath, "utf8").catch(() => void 0);
+  const status = await readFile8(statusPath, "utf8").catch(() => void 0);
   throw new Error(
     status ? `bundled OpenCode did not load the Cuppet v2 agents (plugin status: ${status.trim()}; agents: ${lastIDs.join(", ") || "none"})` : `bundled OpenCode did not start the Cuppet v2 plugin (agents: ${lastIDs.join(", ") || "none"})`
   );
 }
 async function installOpenCodePlugin(source, xdgConfig, tuiSource) {
-  const directory = join7(xdgConfig, "opencode", "plugins");
-  const destination = join7(directory, "cuppet.js");
-  const temporary = join7(directory, `.cuppet-${randomBytes4(6).toString("hex")}.tmp`);
-  await mkdir7(directory, { recursive: true, mode: 448 });
-  await chmod5(directory, 448);
+  const directory = join9(xdgConfig, "opencode", "plugins");
+  const destination = join9(directory, "cuppet.js");
+  const temporary = join9(directory, `.cuppet-${randomBytes4(6).toString("hex")}.tmp`);
+  await mkdir9(directory, { recursive: true, mode: 448 });
+  await chmodPrivate(directory, 448);
   await copyFile(source, temporary);
-  await chmod5(temporary, 384);
-  await rename5(temporary, destination);
+  await chmodPrivate(temporary, 384);
+  await rename7(temporary, destination);
   if (tuiSource) {
-    const tuiDirectory = join7(xdgConfig, "opencode", "tui-plugins");
-    const tuiDestination = join7(tuiDirectory, "cuppet-tui.js");
-    const tuiTemporary = join7(tuiDirectory, `.cuppet-tui-${randomBytes4(6).toString("hex")}.tmp`);
-    await mkdir7(tuiDirectory, { recursive: true, mode: 448 });
-    await chmod5(tuiDirectory, 448);
+    const tuiDirectory = join9(xdgConfig, "opencode", "tui-plugins");
+    const tuiDestination = join9(tuiDirectory, "cuppet-tui.js");
+    const tuiTemporary = join9(tuiDirectory, `.cuppet-tui-${randomBytes4(6).toString("hex")}.tmp`);
+    await mkdir9(tuiDirectory, { recursive: true, mode: 448 });
+    await chmodPrivate(tuiDirectory, 448);
     await copyFile(tuiSource, tuiTemporary);
-    await chmod5(tuiTemporary, 384);
-    await rename5(tuiTemporary, tuiDestination);
-    await rm(join7(directory, "cuppet-tui.js"), { force: true });
-    await rm(join7(directory, "tui.json"), { force: true });
-    await writeFile6(
-      join7(xdgConfig, "opencode", "tui.json"),
+    await chmodPrivate(tuiTemporary, 384);
+    await rename7(tuiTemporary, tuiDestination);
+    await rm(join9(directory, "cuppet-tui.js"), { force: true });
+    await rm(join9(directory, "tui.json"), { force: true });
+    await writeFile8(
+      join9(xdgConfig, "opencode", "tui.json"),
       `${JSON.stringify({ plugin: [tuiDestination] }, null, 2)}
 `,
       { mode: 384 }
@@ -3993,15 +6404,15 @@ async function synchronizeVariants(client, directory, path) {
       return !variants || [...variants].every((id) => model.variants.some((variant) => variant.id === id));
     });
     if (ready) return;
-    await new Promise((resolve4) => setTimeout(resolve4, 50));
+    await new Promise((resolve5) => setTimeout(resolve5, 50));
   } while (Date.now() < deadline);
   throw new Error("timed out waiting for the v2 catalog to load advertised model variants");
 }
 async function writeVariantBridge(path, bridge) {
   const temporary = `${path}.${randomBytes4(6).toString("hex")}.tmp`;
-  await writeFile6(temporary, `${JSON.stringify(bridge)}
+  await writeFile8(temporary, `${JSON.stringify(bridge)}
 `, { mode: 384 });
-  await rename5(temporary, path);
+  await rename7(temporary, path);
 }
 function foregroundPermissions2(graphFirstGate = false, graphOnlySearch = false, graphNativeProfile = false, orchestrator = false) {
   const navigationEffect = graphFirstGate ? "ask" : "allow";
@@ -4055,7 +6466,8 @@ function mutationPermissions() {
 async function resolveVertexEnvironment(environment = process.env, home = environment.HOME ?? environment.USERPROFILE) {
   const explicitPath = environment.GOOGLE_APPLICATION_CREDENTIALS?.trim();
   const explicitAvailable = explicitPath ? await isReadable(explicitPath) : false;
-  const defaultPath = home ? join7(home, ".config", "gcloud", "application_default_credentials.json") : void 0;
+  const windowsAppData = process.platform === "win32" ? environment.APPDATA?.trim() : void 0;
+  const defaultPath = windowsAppData ? join9(windowsAppData, "gcloud", "application_default_credentials.json") : home ? join9(home, ".config", "gcloud", "application_default_credentials.json") : void 0;
   const defaultAvailable = !explicitAvailable && defaultPath ? await isReadable(defaultPath) : false;
   const adcPath = explicitAvailable ? explicitPath : defaultAvailable ? defaultPath : void 0;
   const projectEntries = [
@@ -4099,14 +6511,14 @@ async function isReadable(path) {
   }
 }
 async function verifyVersion(binary) {
-  const output = await new Promise((resolve4, reject) => {
+  const output = await new Promise((resolve5, reject) => {
     const child = spawn(binary, ["--version"], { stdio: ["ignore", "pipe", "pipe"] });
     let text = "";
     child.stdout.on("data", (chunk) => text += chunk.toString("utf8"));
     child.stderr.on("data", (chunk) => text += chunk.toString("utf8"));
     child.once("error", reject);
     child.once("exit", (code) => {
-      if (code === 0) resolve4(text.trim());
+      if (code === 0) resolve5(text.trim());
       else reject(new Error(`OpenCode --version exited with code ${code}`));
     });
   });
@@ -4115,7 +6527,7 @@ async function verifyVersion(binary) {
   }
 }
 function waitForListening(child) {
-  return new Promise((resolve4, reject) => {
+  return new Promise((resolve5, reject) => {
     if (!child.stdout) return reject(new Error("OpenCode stdout is unavailable"));
     const stdout = child.stdout;
     let output = "";
@@ -4129,7 +6541,7 @@ function waitForListening(child) {
         const match = /^opencode server listening on (https?:\/\/\S+)/.exec(line.trim());
         if (!match?.[1]) continue;
         cleanup();
-        resolve4(match[1]);
+        resolve5(match[1]);
         return;
       }
     };
@@ -4169,9 +6581,9 @@ async function runNativeTui(options) {
   process.once("SIGINT", onInterrupt);
   process.once("SIGTERM", onTerminate);
   try {
-    return await new Promise((resolve4, reject) => {
+    return await new Promise((resolve5, reject) => {
       child.once("error", reject);
-      child.once("exit", (code, signal) => resolve4(code ?? signalExitCode(signal)));
+      child.once("exit", (code, signal) => resolve5(code ?? signalExitCode(signal)));
     });
   } finally {
     process.off("SIGINT", onInterrupt);
@@ -4197,7 +6609,7 @@ function signalExitCode(signal) {
 }
 
 // src/remote/bridge.ts
-import { randomUUID as randomUUID2 } from "node:crypto";
+import { randomUUID as randomUUID3 } from "node:crypto";
 
 // src/remote/protocol.ts
 import { z as z3 } from "zod";
@@ -4388,7 +6800,7 @@ var RemoteBridge = class {
   #write;
   #seq = 0;
   /** Changes when a new host process takes authority for this host id. */
-  #connectionId = randomUUID2();
+  #connectionId = randomUUID3();
   #unsubscribers = [];
   #seenCommandIds = /* @__PURE__ */ new Map();
   #offlineBuffer = [];
@@ -4849,7 +7261,7 @@ var WebSocketTransport = class {
   async waitUntilConnected(timeoutMs = 12e3) {
     if (this.#connected) return;
     this.start();
-    await new Promise((resolve4, reject) => {
+    await new Promise((resolve5, reject) => {
       const timeout = setTimeout(() => {
         const detail = this.#lastClose?.reason || (this.#lastClose?.code ? `relay closed with code ${this.#lastClose.code}` : "relay did not answer");
         reject(new Error(`Remote relay connection failed: ${detail}.`));
@@ -4857,7 +7269,7 @@ var WebSocketTransport = class {
       this.onStatusChange((connected) => {
         if (!connected) return;
         clearTimeout(timeout);
-        resolve4();
+        resolve5();
       });
     });
   }
@@ -4935,9 +7347,9 @@ var WebSocketTransport = class {
 };
 
 // src/remote/pairing.ts
-import { createHash, randomBytes as randomBytes6, timingSafeEqual } from "node:crypto";
-import { join as join8 } from "node:path";
-import { mkdir as mkdir8, readFile as readFile7, rm as rm2, writeFile as writeFile7 } from "node:fs/promises";
+import { createHash as createHash2, randomBytes as randomBytes6, timingSafeEqual } from "node:crypto";
+import { join as join10 } from "node:path";
+import { mkdir as mkdir10, readFile as readFile9, rm as rm2, writeFile as writeFile9 } from "node:fs/promises";
 function relayWebSocketUrl(relayUrl) {
   const url = new URL(relayUrl);
   if (url.protocol === "http:") url.protocol = "ws:";
@@ -4952,7 +7364,7 @@ function relayWebSocketUrl(relayUrl) {
 }
 var INVITE_TTL_MS = 2 * 6e4;
 function sha256(value) {
-  return createHash("sha256").update(value).digest("hex");
+  return createHash2("sha256").update(value).digest("hex");
 }
 async function createPairingInvite(remoteDir, options = {}) {
   const invite = {
@@ -4961,10 +7373,10 @@ async function createPairingInvite(remoteDir, options = {}) {
     expiresAt: Date.now() + (options.ttlMs ?? INVITE_TTL_MS),
     role: options.role ?? "trusted"
   };
-  await mkdir8(join8(remoteDir, "pending"), { recursive: true, mode: 448 });
+  await mkdir10(join10(remoteDir, "pending"), { recursive: true, mode: 448 });
   await sweepExpiredInvites(remoteDir);
-  await writeFile7(
-    join8(remoteDir, "pending", `${invite.code}.json`),
+  await writeFile9(
+    join10(remoteDir, "pending", `${invite.code}.json`),
     JSON.stringify(invite),
     { encoding: "utf8", mode: 384 }
   );
@@ -4988,16 +7400,16 @@ async function createPairingInvite(remoteDir, options = {}) {
 async function sweepExpiredInvites(remoteDir) {
   try {
     const { readdir } = await import("node:fs/promises");
-    const pendingDir = join8(remoteDir, "pending");
+    const pendingDir = join10(remoteDir, "pending");
     const files = (await readdir(pendingDir)).filter((file) => file.endsWith(".json"));
     await Promise.all(files.map(async (file) => {
       try {
-        const parsed = JSON.parse(await readFile7(join8(pendingDir, file), "utf8"));
+        const parsed = JSON.parse(await readFile9(join10(pendingDir, file), "utf8"));
         if (typeof parsed.expiresAt !== "number" || parsed.expiresAt < Date.now()) {
-          await rm2(join8(pendingDir, file), { force: true });
+          await rm2(join10(pendingDir, file), { force: true });
         }
       } catch {
-        await rm2(join8(pendingDir, file), { force: true });
+        await rm2(join10(pendingDir, file), { force: true });
       }
     }));
   } catch {
@@ -5005,7 +7417,7 @@ async function sweepExpiredInvites(remoteDir) {
 }
 async function readInviteFile(path) {
   try {
-    const parsed = JSON.parse(await readFile7(path, "utf8"));
+    const parsed = JSON.parse(await readFile9(path, "utf8"));
     if (typeof parsed.code !== "string" || typeof parsed.expiresAt !== "number") return void 0;
     return parsed;
   } catch {
@@ -5014,11 +7426,11 @@ async function readInviteFile(path) {
 }
 async function claimPairingInvite(remoteDir, code, deviceName) {
   if (!/^[A-Za-z0-9_-]+$/.test(code)) return void 0;
-  const { rename: rename7 } = await import("node:fs/promises");
-  const invitePath = join8(remoteDir, "pending", `${code}.json`);
+  const { rename: rename9 } = await import("node:fs/promises");
+  const invitePath = join10(remoteDir, "pending", `${code}.json`);
   const claimedPath = `${invitePath}.${randomBytes6(6).toString("hex")}.claiming`;
   try {
-    await rename7(invitePath, claimedPath);
+    await rename9(invitePath, claimedPath);
   } catch {
     return void 0;
   }
@@ -5034,9 +7446,9 @@ async function claimPairingInvite(remoteDir, code, deviceName) {
       scopes: invite.role === "viewer" ? VIEWER_DEVICE_SCOPES : DEFAULT_DEVICE_SCOPES,
       createdAt: Date.now()
     };
-    await mkdir8(join8(remoteDir, "devices"), { recursive: true, mode: 448 });
-    await writeFile7(
-      join8(remoteDir, "devices", `${deviceId}.json`),
+    await mkdir10(join10(remoteDir, "devices"), { recursive: true, mode: 448 });
+    await writeFile9(
+      join10(remoteDir, "devices", `${deviceId}.json`),
       JSON.stringify(device),
       { encoding: "utf8", mode: 384 }
     );
@@ -5048,11 +7460,11 @@ async function claimPairingInvite(remoteDir, code, deviceName) {
 async function listPairedDevices(remoteDir) {
   try {
     const { readdir } = await import("node:fs/promises");
-    const files = await readdir(join8(remoteDir, "devices"));
+    const files = await readdir(join10(remoteDir, "devices"));
     const devices = await Promise.all(
       files.filter((file) => file.endsWith(".json")).map(async (file) => {
         try {
-          const parsed = JSON.parse(await readFile7(join8(remoteDir, "devices", file), "utf8"));
+          const parsed = JSON.parse(await readFile9(join10(remoteDir, "devices", file), "utf8"));
           return { deviceId: parsed.deviceId, name: parsed.name, scopes: parsed.scopes, createdAt: parsed.createdAt };
         } catch {
           return void 0;
@@ -5067,7 +7479,7 @@ async function listPairedDevices(remoteDir) {
 async function authenticateDevice(remoteDir, deviceId, secret) {
   if (!/^[A-Za-z0-9_-]+$/.test(deviceId)) return void 0;
   try {
-    const parsed = JSON.parse(await readFile7(join8(remoteDir, "devices", `${deviceId}.json`), "utf8"));
+    const parsed = JSON.parse(await readFile9(join10(remoteDir, "devices", `${deviceId}.json`), "utf8"));
     const provided = Buffer.from(sha256(secret));
     const stored = Buffer.from(parsed.secretHash);
     if (provided.length !== stored.length || !timingSafeEqual(provided, stored)) return void 0;
@@ -5079,8 +7491,8 @@ async function authenticateDevice(remoteDir, deviceId, secret) {
 
 // src/remote/enroll.ts
 import { hostname as hostname2 } from "node:os";
-import { homedir as homedir3 } from "node:os";
-import { join as join9 } from "node:path";
+import { homedir as homedir4 } from "node:os";
+import { join as join11 } from "node:path";
 async function registerHost(options) {
   if (!/^https?:\/\//.test(options.apiBase)) {
     throw new Error(`--api-base must be an http(s) URL, got ${options.apiBase}`);
@@ -5123,7 +7535,7 @@ async function runEnroll(options, write = (line) => process.stdout.write(line)) 
   if (!/^https?:\/\//.test(options.apiBase)) {
     throw new Error(`--api-base must be an http(s) URL, got ${options.apiBase}`);
   }
-  const remoteDir = join9(homedir3(), ".cuppet", "v2", "remote");
+  const remoteDir = join11(homedir4(), ".cuppet", "v2", "remote");
   let identity = await ensureHostIdentity(remoteDir);
   const displayName = options.name?.trim() || identity.deviceName || hostname2();
   const enrollment = await registerHost({
@@ -5297,7 +7709,7 @@ function errorMessage2(payload) {
 }
 function wait(milliseconds, signal) {
   if (signal?.aborted) return Promise.reject(signal.reason ?? new Error("Remote setup cancelled."));
-  return new Promise((resolve4, reject) => {
+  return new Promise((resolve5, reject) => {
     const timeout = setTimeout(done, milliseconds);
     const onAbort = () => {
       clearTimeout(timeout);
@@ -5306,7 +7718,7 @@ function wait(milliseconds, signal) {
     };
     function done() {
       signal?.removeEventListener("abort", onAbort);
-      resolve4();
+      resolve5();
     }
     signal?.addEventListener("abort", onAbort, { once: true });
   });
@@ -5425,10 +7837,10 @@ async function startRemoteControl(options) {
 }
 
 // src/remote/relay.ts
-import { createHash as createHash2, randomBytes as randomBytes7, timingSafeEqual as timingSafeEqual2 } from "node:crypto";
-import { createServer as createServer2 } from "node:http";
-import { mkdir as mkdir9, readFile as readFile8, rename as rename6, writeFile as writeFile8 } from "node:fs/promises";
-import { dirname as dirname6, extname, join as join10, normalize } from "node:path";
+import { createHash as createHash3, randomBytes as randomBytes7, timingSafeEqual as timingSafeEqual2 } from "node:crypto";
+import { createServer as createServer3 } from "node:http";
+import { mkdir as mkdir11, readFile as readFile10, rename as rename8, writeFile as writeFile10 } from "node:fs/promises";
+import { dirname as dirname8, extname, join as join12, normalize } from "node:path";
 var MAX_FRAME_BYTES2 = 512 * 1024;
 var REPLAY_LIMIT = 200;
 var RATE_WINDOW_MS = 1e4;
@@ -5437,7 +7849,7 @@ var PAIR_ATTEMPT_LIMIT = 3;
 var HOST_ID_PATTERN = /^[\w.-]{1,128}$/;
 var DEFAULT_RELAY_BIND = "127.0.0.1";
 function sha2562(value) {
-  return createHash2("sha256").update(value).digest("hex");
+  return createHash3("sha256").update(value).digest("hex");
 }
 function isValidRelayHostId(value) {
   return HOST_ID_PATTERN.test(value);
@@ -5465,7 +7877,7 @@ var CuppetRelay = class {
   #authWrite = Promise.resolve();
   constructor(options = {}) {
     this.#options = options;
-    this.#http = createServer2((request, response) => void this.#handleHttp(request, response));
+    this.#http = createServer3((request, response) => void this.#handleHttp(request, response));
     this.#http.on("upgrade", (request, socket) => this.#handleUpgrade(request, socket));
   }
   get port() {
@@ -5489,7 +7901,7 @@ var CuppetRelay = class {
   async #loadAuthorizedHosts() {
     if (!this.#options.authFile) return void 0;
     try {
-      const parsed = JSON.parse(await readFile8(this.#options.authFile, "utf8"));
+      const parsed = JSON.parse(await readFile10(this.#options.authFile, "utf8"));
       return parsed.hosts ?? {};
     } catch {
       return {};
@@ -5511,11 +7923,11 @@ var CuppetRelay = class {
   async #writeAuthorizedHosts(hosts) {
     const authFile = this.#options.authFile;
     if (!authFile) throw new Error("relay auth file is not configured");
-    await mkdir9(dirname6(authFile), { recursive: true, mode: 448 });
+    await mkdir11(dirname8(authFile), { recursive: true, mode: 448 });
     const temporary = `${authFile}.${randomBytes7(12).toString("hex")}.tmp`;
-    await writeFile8(temporary, `${JSON.stringify({ hosts }, null, 2)}
+    await writeFile10(temporary, `${JSON.stringify({ hosts }, null, 2)}
 `, { mode: 384 });
-    await rename6(temporary, authFile);
+    await rename8(temporary, authFile);
   }
   async #handleHttp(request, response) {
     const url = new URL(request.url ?? "/", "http://localhost");
@@ -5551,10 +7963,10 @@ var CuppetRelay = class {
       response.writeHead(404, { "content-type": "text/plain" }).end("cuppet relay\n");
       return;
     }
-    const relative2 = url.pathname === "/app" ? "/index.html" : url.pathname.slice("/app".length);
-    const safe = normalize(relative2).replace(/^([.][.][/\\])+/, "");
+    const relative3 = url.pathname === "/app" ? "/index.html" : url.pathname.slice("/app".length);
+    const safe = normalize(relative3).replace(/^([.][.][/\\])+/, "");
     try {
-      const body = await readFile8(join10(this.#options.appDirectory, safe));
+      const body = await readFile10(join12(this.#options.appDirectory, safe));
       const types = {
         ".html": "text/html",
         ".js": "text/javascript",
@@ -5631,7 +8043,7 @@ var CuppetRelay = class {
       socket.destroy();
       return;
     }
-    const acceptKey = createHash2("sha1").update(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").digest("base64");
+    const acceptKey = createHash3("sha1").update(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").digest("base64");
     socket.write(
       `HTTP/1.1 101 Switching Protocols\r
 Upgrade: websocket\r
@@ -5914,25 +8326,25 @@ function generateSecret() {
 }
 
 // src/remote/relay-main.ts
-import { mkdir as mkdir10, readFile as readFile9, writeFile as writeFile9 } from "node:fs/promises";
-import { dirname as dirname7, join as join11, resolve as resolve2 } from "node:path";
+import { mkdir as mkdir12, readFile as readFile11, writeFile as writeFile11 } from "node:fs/promises";
+import { dirname as dirname9, join as join13, resolve as resolve3 } from "node:path";
 import { fileURLToPath } from "node:url";
 var DEFAULT_RELAY_PORT = 8787;
 function defaultRelayAuthPath() {
-  return join11(process.cwd(), "cuppet-relay-auth.json");
+  return join13(process.cwd(), "cuppet-relay-auth.json");
 }
 function resolveRelayServerSecurity(options) {
   return {
-    authFile: resolve2(options.authFile ?? defaultRelayAuthPath()),
+    authFile: resolve3(options.authFile ?? defaultRelayAuthPath()),
     bind: resolveRelayBind(options.bind)
   };
 }
 async function defaultAppDir() {
-  const moduleDir = dirname7(fileURLToPath(import.meta.url));
-  const candidates = [join11(moduleDir, "app"), join11(moduleDir, "../src/remote/app"), join11(moduleDir, "../relay-app")];
+  const moduleDir = dirname9(fileURLToPath(import.meta.url));
+  const candidates = [join13(moduleDir, "app"), join13(moduleDir, "../src/remote/app"), join13(moduleDir, "../relay-app")];
   for (const candidate of candidates) {
     try {
-      await readFile9(join11(candidate, "index.html"));
+      await readFile11(join13(candidate, "index.html"));
       return candidate;
     } catch {
     }
@@ -5943,7 +8355,7 @@ async function runRelayServer(options, write = (line) => process.stdout.write(li
   const { authFile, bind } = resolveRelayServerSecurity(options);
   await ensureRelayAuthFile(authFile, write);
   const token = options.adminToken ?? generateSecret();
-  const appDir = options.appDir ? resolve2(options.appDir) : await defaultAppDir();
+  const appDir = options.appDir ? resolve3(options.appDir) : await defaultAppDir();
   const relay = new CuppetRelay({
     port: options.port,
     authFile,
@@ -5980,15 +8392,15 @@ async function runRelayServer(options, write = (line) => process.stdout.write(li
 }
 async function ensureRelayAuthFile(authFile, write = () => void 0) {
   if (await fileExists(authFile)) return;
-  await mkdir10(dirname7(authFile), { recursive: true, mode: 448 });
-  await writeFile9(authFile, `${JSON.stringify({ hosts: {} }, null, 2)}
+  await mkdir12(dirname9(authFile), { recursive: true, mode: 448 });
+  await writeFile11(authFile, `${JSON.stringify({ hosts: {} }, null, 2)}
 `, { encoding: "utf8", mode: 384 });
   write(`relay auth: created ${authFile}
 `);
 }
 async function fileExists(path) {
   try {
-    await readFile9(path);
+    await readFile11(path);
     return true;
   } catch {
     return false;
@@ -6010,18 +8422,24 @@ function shutdownSignal() {
 }
 
 // src/runtime/assets.ts
-import { createHash as createHash3 } from "node:crypto";
+import { createHash as createHash4 } from "node:crypto";
 import { constants as constants3, createReadStream } from "node:fs";
-import { access as access4, readFile as readFile10 } from "node:fs/promises";
+import { access as access4, readFile as readFile12 } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { delimiter, dirname as dirname8, join as join12, resolve as resolve3 } from "node:path";
+import { delimiter, dirname as dirname10, join as join14, resolve as resolve4 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 var packageNames = {
   "darwin-arm64": "@cuppet-code/runtime-darwin-arm64",
   "darwin-x64": "@cuppet-code/runtime-darwin-x64",
   "linux-arm64": "@cuppet-code/runtime-linux-arm64-gnu",
-  "linux-x64": "@cuppet-code/runtime-linux-x64-gnu"
+  "linux-x64": "@cuppet-code/runtime-linux-x64-gnu",
+  "win32-x64": "@cuppet-code/runtime-win32-x64",
+  "win32-arm64": "@cuppet-code/runtime-win32-arm64"
 };
+var executableSuffix = process.platform === "win32" ? ".exe" : "";
+function binaryFileName(base) {
+  return `${base}${executableSuffix}`;
+}
 async function resolveRuntimeAssets() {
   const diagnostics = [];
   const opencodeOverride = process.env.CUPPET_OPENCODE_BIN;
@@ -6032,10 +8450,10 @@ async function resolveRuntimeAssets() {
     const assets = {
       source: "development",
       diagnostics,
-      ...opencodeOverride ? { opencode: resolve3(opencodeOverride) } : {},
-      ...tstOverride ? { tst: resolve3(tstOverride) } : {},
-      ...pluginOverride ? { plugin: resolve3(pluginOverride) } : {},
-      ...tuiPluginOverride ? { tuiPlugin: resolve3(tuiPluginOverride) } : {}
+      ...opencodeOverride ? { opencode: resolve4(opencodeOverride) } : {},
+      ...tstOverride ? { tst: resolve4(tstOverride) } : {},
+      ...pluginOverride ? { plugin: resolve4(pluginOverride) } : {},
+      ...tuiPluginOverride ? { tuiPlugin: resolve4(tuiPluginOverride) } : {}
     };
     await fillDevelopmentDefaults(assets);
     await checkPresence(assets);
@@ -6049,15 +8467,15 @@ async function resolveRuntimeAssets() {
   try {
     const require2 = createRequire(import.meta.url);
     const manifestPath = require2.resolve(`${packageName}/manifest.json`);
-    const root = dirname8(manifestPath);
-    const manifest = JSON.parse(await readFile10(manifestPath, "utf8"));
+    const root = dirname10(manifestPath);
+    const manifest = JSON.parse(await readFile12(manifestPath, "utf8"));
     validateManifest(manifest);
     const assets = {
       source: "package",
-      opencode: join12(root, "bin", "opencode"),
-      tst: join12(root, "bin", "tst-daemon"),
-      plugin: join12(root, "plugin", "index.js"),
-      tuiPlugin: join12(root, "plugin", "tui.js"),
+      opencode: join14(root, "bin", binaryFileName("opencode")),
+      tst: join14(root, "bin", binaryFileName("tst-daemon")),
+      plugin: join14(root, "plugin", "index.js"),
+      tuiPlugin: join14(root, "plugin", "tui.js"),
       manifest,
       diagnostics
     };
@@ -6075,19 +8493,19 @@ async function resolveRuntimeAssets() {
   }
 }
 async function fillDevelopmentDefaults(assets) {
-  const moduleDirectory = dirname8(fileURLToPath2(import.meta.url));
+  const moduleDirectory = dirname10(fileURLToPath2(import.meta.url));
   const repositoryRoot = await findRepositoryRoot(moduleDirectory);
   const key = `${process.platform}-${process.arch}`;
   const packageName = packageNames[key];
   const runtimeDirectory = runtimeDirectories[key];
-  const localRuntimeCandidate = repositoryRoot && runtimeDirectory ? resolve3(repositoryRoot, "artifacts", runtimeDirectory) : void 0;
+  const localRuntimeCandidate = repositoryRoot && runtimeDirectory ? resolve4(repositoryRoot, "artifacts", runtimeDirectory) : void 0;
   const localRuntime = localRuntimeCandidate && await verifyLocalRuntime(localRuntimeCandidate, assets.diagnostics) ? localRuntimeCandidate : void 0;
   let globalPackageRoot;
   if (packageName) {
     try {
       const require2 = createRequire(import.meta.url);
       const manifestPath = require2.resolve(`${packageName}/manifest.json`);
-      globalPackageRoot = dirname8(manifestPath);
+      globalPackageRoot = dirname10(manifestPath);
     } catch {
     }
   }
@@ -6095,36 +8513,36 @@ async function fillDevelopmentDefaults(assets) {
   const pathTst = await findInPath("tst-daemon");
   const candidates = {
     opencode: [
-      ...localRuntime ? [resolve3(localRuntime, "bin/opencode")] : [],
-      ...repositoryRoot && runtimeDirectory ? [resolve3(repositoryRoot, "packages", runtimeDirectory, "bin/opencode")] : [],
-      ...globalPackageRoot ? [resolve3(globalPackageRoot, "bin/opencode")] : [],
+      ...localRuntime ? [resolve4(localRuntime, "bin", binaryFileName("opencode"))] : [],
+      ...repositoryRoot && runtimeDirectory ? [resolve4(repositoryRoot, "packages", runtimeDirectory, "bin", binaryFileName("opencode"))] : [],
+      ...globalPackageRoot ? [resolve4(globalPackageRoot, "bin", binaryFileName("opencode"))] : [],
       ...pathOpencode ? [pathOpencode] : []
     ],
     tst: [
-      resolve3(process.cwd(), "target/release/tst-daemon"),
-      resolve3(process.cwd(), "target/debug/tst-daemon"),
-      ...localRuntime ? [resolve3(localRuntime, "bin/tst-daemon")] : [],
+      resolve4(process.cwd(), "target/release", binaryFileName("tst-daemon")),
+      resolve4(process.cwd(), "target/debug", binaryFileName("tst-daemon")),
+      ...localRuntime ? [resolve4(localRuntime, "bin", binaryFileName("tst-daemon"))] : [],
       ...repositoryRoot ? [
-        resolve3(repositoryRoot, "target/release/tst-daemon"),
-        resolve3(repositoryRoot, "target/debug/tst-daemon")
+        resolve4(repositoryRoot, "target/release", binaryFileName("tst-daemon")),
+        resolve4(repositoryRoot, "target/debug", binaryFileName("tst-daemon"))
       ] : [],
-      ...repositoryRoot && runtimeDirectory ? [resolve3(repositoryRoot, "packages", runtimeDirectory, "bin/tst-daemon")] : [],
-      ...globalPackageRoot ? [resolve3(globalPackageRoot, "bin/tst-daemon")] : [],
+      ...repositoryRoot && runtimeDirectory ? [resolve4(repositoryRoot, "packages", runtimeDirectory, "bin", binaryFileName("tst-daemon"))] : [],
+      ...globalPackageRoot ? [resolve4(globalPackageRoot, "bin", binaryFileName("tst-daemon"))] : [],
       ...pathTst ? [pathTst] : []
     ],
     plugin: [
-      resolve3(process.cwd(), "packages/opencode-plugin/dist/index.js"),
-      ...localRuntime ? [resolve3(localRuntime, "plugin/index.js")] : [],
-      ...repositoryRoot ? [resolve3(repositoryRoot, "packages/opencode-plugin/dist/index.js")] : [],
-      ...repositoryRoot && runtimeDirectory ? [resolve3(repositoryRoot, "packages", runtimeDirectory, "plugin/index.js")] : [],
-      ...globalPackageRoot ? [resolve3(globalPackageRoot, "plugin/index.js")] : []
+      resolve4(process.cwd(), "packages/opencode-plugin/dist/index.js"),
+      ...localRuntime ? [resolve4(localRuntime, "plugin/index.js")] : [],
+      ...repositoryRoot ? [resolve4(repositoryRoot, "packages/opencode-plugin/dist/index.js")] : [],
+      ...repositoryRoot && runtimeDirectory ? [resolve4(repositoryRoot, "packages", runtimeDirectory, "plugin/index.js")] : [],
+      ...globalPackageRoot ? [resolve4(globalPackageRoot, "plugin/index.js")] : []
     ],
     tuiPlugin: [
-      resolve3(process.cwd(), "packages/opencode-plugin/dist/tui.js"),
-      ...localRuntime ? [resolve3(localRuntime, "plugin/tui.js")] : [],
-      ...repositoryRoot ? [resolve3(repositoryRoot, "packages/opencode-plugin/dist/tui.js")] : [],
-      ...repositoryRoot && runtimeDirectory ? [resolve3(repositoryRoot, "packages", runtimeDirectory, "plugin/tui.js")] : [],
-      ...globalPackageRoot ? [resolve3(globalPackageRoot, "plugin/tui.js")] : []
+      resolve4(process.cwd(), "packages/opencode-plugin/dist/tui.js"),
+      ...localRuntime ? [resolve4(localRuntime, "plugin/tui.js")] : [],
+      ...repositoryRoot ? [resolve4(repositoryRoot, "packages/opencode-plugin/dist/tui.js")] : [],
+      ...repositoryRoot && runtimeDirectory ? [resolve4(repositoryRoot, "packages", runtimeDirectory, "plugin/tui.js")] : [],
+      ...globalPackageRoot ? [resolve4(globalPackageRoot, "plugin/tui.js")] : []
     ]
   };
   if (!assets.opencode) assets.opencode = await firstExisting(candidates.opencode);
@@ -6136,13 +8554,17 @@ async function findInPath(binaryName) {
   const pathEnv = process.env.PATH;
   if (!pathEnv) return void 0;
   const directories = pathEnv.split(delimiter);
+  const names = process.platform === "win32" ? [`${binaryName}.exe`, binaryName] : [binaryName];
+  const mode = process.platform === "win32" ? constants3.F_OK : constants3.X_OK;
   for (const directory of directories) {
     if (!directory) continue;
-    const candidate = join12(directory, binaryName);
-    try {
-      await access4(candidate, constants3.X_OK);
-      return candidate;
-    } catch {
+    for (const name of names) {
+      const candidate = join14(directory, name);
+      try {
+        await access4(candidate, mode);
+        return candidate;
+      } catch {
+      }
     }
   }
   return void 0;
@@ -6151,20 +8573,22 @@ var runtimeDirectories = {
   "darwin-arm64": "runtime-darwin-arm64",
   "darwin-x64": "runtime-darwin-x64",
   "linux-arm64": "runtime-linux-arm64-gnu",
-  "linux-x64": "runtime-linux-x64-gnu"
+  "linux-x64": "runtime-linux-x64-gnu",
+  "win32-x64": "runtime-win32-x64",
+  "win32-arm64": "runtime-win32-arm64"
 };
 async function verifyLocalRuntime(root, diagnostics) {
-  const manifestPath = resolve3(root, "manifest.json");
+  const manifestPath = resolve4(root, "manifest.json");
   try {
     await access4(manifestPath, constants3.R_OK);
   } catch {
     return false;
   }
   try {
-    const manifest = JSON.parse(await readFile10(manifestPath, "utf8"));
+    const manifest = JSON.parse(await readFile12(manifestPath, "utf8"));
     validateManifest(manifest);
     await verifyChecksums(root, manifest);
-    await readDerivativeMarker(resolve3(root, "bin/opencode"));
+    await readDerivativeMarker(resolve4(root, "bin", binaryFileName("opencode")));
     return true;
   } catch (error) {
     diagnostics.push(`Local runtime artifact is invalid: ${error.message}`);
@@ -6175,20 +8599,21 @@ async function findRepositoryRoot(start) {
   let directory = start;
   for (let depth = 0; depth < 8; depth += 1) {
     try {
-      const metadata = JSON.parse(await readFile10(resolve3(directory, "package.json"), "utf8"));
+      const metadata = JSON.parse(await readFile12(resolve4(directory, "package.json"), "utf8"));
       if (metadata.name === "cuppet-monorepo") return directory;
     } catch {
     }
-    const parent = dirname8(directory);
+    const parent = dirname10(directory);
     if (parent === directory) break;
     directory = parent;
   }
   return void 0;
 }
 async function checkPresence(assets) {
+  const executableMode = process.platform === "win32" ? constants3.F_OK : constants3.X_OK;
   for (const [label, path, mode] of [
-    ["OpenCode", assets.opencode, constants3.X_OK],
-    ["TST daemon", assets.tst, constants3.X_OK],
+    ["OpenCode", assets.opencode, executableMode],
+    ["TST daemon", assets.tst, executableMode],
     ["memory plugin", assets.plugin, constants3.R_OK],
     ["TUI plugin", assets.tuiPlugin, constants3.R_OK]
   ]) {
@@ -6227,23 +8652,23 @@ function validateManifest(manifest) {
 }
 async function verifyChecksums(root, manifest) {
   const required = [
-    "bin/opencode",
+    `bin/${binaryFileName("opencode")}`,
     "bin/.cuppet-derivative.json",
-    "bin/tst-daemon",
+    `bin/${binaryFileName("tst-daemon")}`,
     "package.json",
     "plugin/index.js",
     "plugin/server.js",
     "plugin/tui.js"
   ];
-  for (const relative2 of required) {
-    const expected = manifest.files[relative2];
-    if (!expected) throw new Error(`manifest has no checksum for ${relative2}`);
-    const actual = await sha2563(join12(root, relative2));
-    if (actual !== expected) throw new Error(`checksum mismatch for ${relative2}`);
+  for (const relative3 of required) {
+    const expected = manifest.files[relative3];
+    if (!expected) throw new Error(`manifest has no checksum for ${relative3}`);
+    const actual = await sha2563(join14(root, relative3));
+    if (actual !== expected) throw new Error(`checksum mismatch for ${relative3}`);
   }
 }
 async function sha2563(path) {
-  const hash = createHash3("sha256");
+  const hash = createHash4("sha256");
   for await (const chunk of createReadStream(path)) hash.update(chunk);
   return hash.digest("hex");
 }
@@ -6259,31 +8684,33 @@ async function firstExisting(paths) {
 }
 
 // src/runtime/paths.ts
-import { createHash as createHash4, randomBytes as randomBytes8 } from "node:crypto";
-import { chmod as chmod6, mkdir as mkdir11, realpath as realpath2 } from "node:fs/promises";
-import { homedir as homedir4 } from "node:os";
-import { join as join13 } from "node:path";
-async function createRuntimePaths(projectDirectory, baseDirectory = join13(homedir4(), ".cuppet", "v2")) {
+import { createHash as createHash5, randomBytes as randomBytes8 } from "node:crypto";
+import { mkdir as mkdir13, realpath as realpath2 } from "node:fs/promises";
+import { homedir as homedir5 } from "node:os";
+import { join as join15 } from "node:path";
+async function createRuntimePaths(projectDirectory, baseDirectory = join15(homedir5(), ".cuppet", "v2")) {
   const projectRealpath = await realpath2(projectDirectory);
   const base = baseDirectory;
-  const projectID = createHash4("sha256").update(projectRealpath).digest("hex");
+  const projectID = createHash5("sha256").update(projectRealpath).digest("hex");
   const launchID = `${process.pid}-${randomBytes8(8).toString("hex")}`;
-  const runtime = join13(base, "run", launchID);
+  const runtime = join15(base, "run", launchID);
   const paths = {
     base,
     projectRealpath,
     projectID,
-    projectStore: join13(base, "projects", projectID),
-    globalStore: join13(base, "global"),
-    preferences: join13(base, "preferences.json"),
-    logs: join13(base, "logs"),
+    projectStore: join15(base, "projects", projectID),
+    globalStore: join15(base, "global"),
+    preferences: join15(base, "preferences.json"),
+    logs: join15(base, "logs"),
     runtime,
-    tstSocket: join13(runtime, "tst.sock"),
+    tstSocket: isWindows ? "" : join15(runtime, "tst.sock"),
+    // Windows TST uses supervisor-picked loopback TCP (no socket file).
+    tstTransport: isWindows ? "tcp" : "unix",
     opencode: {
-      config: join13(base, "opencode", "config"),
-      data: join13(base, "opencode", "data"),
-      cache: join13(base, "opencode", "cache"),
-      state: join13(base, "opencode", "state")
+      config: join15(base, "opencode", "config"),
+      data: join15(base, "opencode", "data"),
+      cache: join15(base, "opencode", "cache"),
+      state: join15(base, "opencode", "state")
     }
   };
   const privateDirectories = [
@@ -6297,8 +8724,8 @@ async function createRuntimePaths(projectDirectory, baseDirectory = join13(homed
     paths.opencode.cache,
     paths.opencode.state
   ];
-  await Promise.all(privateDirectories.map((directory) => mkdir11(directory, { recursive: true, mode: 448 })));
-  await Promise.all(privateDirectories.map((directory) => chmod6(directory, 448)));
+  await Promise.all(privateDirectories.map((directory) => mkdir13(directory, { recursive: true, mode: 448 })));
+  await Promise.all(privateDirectories.map((directory) => chmodPrivate(directory, 448)));
   return paths;
 }
 
@@ -6308,7 +8735,6 @@ import { spawn as spawn3 } from "node:child_process";
 
 // src/tst/client.ts
 import { EventEmitter as EventEmitter4 } from "node:events";
-import { createConnection } from "node:net";
 var MAX_FRAME_BYTES3 = 16 * 1024 * 1024;
 var TstClient = class _TstClient extends EventEmitter4 {
   #socket;
@@ -6323,12 +8749,8 @@ var TstClient = class _TstClient extends EventEmitter4 {
     socket.on("error", (error) => this.#disconnect(error));
     socket.on("close", () => this.#disconnect(new Error("TST socket closed")));
   }
-  static async connect(socketPath, token) {
-    const socket = await new Promise((resolve4, reject) => {
-      const candidate = createConnection(socketPath);
-      candidate.once("connect", () => resolve4(candidate));
-      candidate.once("error", reject);
-    });
+  static async connect(endpoint, token) {
+    const socket = await connectIpc(endpoint);
     const client = new _TstClient(socket);
     const initialized = await client.call("initialize", { token, notifications: true });
     if (initialized.protocol !== TST_PROTOCOL_VERSION) {
@@ -6346,9 +8768,9 @@ var TstClient = class _TstClient extends EventEmitter4 {
     if (payload.length > MAX_FRAME_BYTES3) return Promise.reject(new Error("TST request exceeds frame limit"));
     const header = Buffer.allocUnsafe(4);
     header.writeUInt32BE(payload.length);
-    return new Promise((resolve4, reject) => {
+    return new Promise((resolve5, reject) => {
       this.#pending.set(id, {
-        resolve: (value) => resolve4(value),
+        resolve: (value) => resolve5(value),
         reject
       });
       this.#socket.write(Buffer.concat([header, payload]), (error) => {
@@ -6419,35 +8841,49 @@ var TstClient = class _TstClient extends EventEmitter4 {
 // src/tst/supervisor.ts
 async function startTstDaemon(binary, paths, logger) {
   const token = randomBytes9(32).toString("hex");
+  if (isWindows) {
+    const port = await pickLoopbackPort();
+    const endpoint = `127.0.0.1:${port}`;
+    const child2 = spawnDaemon(binary, ["--host", "127.0.0.1", "--port", String(port), ...storeArguments(paths)], token, logger);
+    return wrapDaemon(child2, endpoint, token);
+  }
+  const child = spawnDaemon(binary, ["--socket", paths.tstSocket, ...storeArguments(paths)], token, logger);
+  return wrapDaemon(child, paths.tstSocket, token);
+}
+function storeArguments(paths) {
+  return [
+    "--project-root",
+    paths.projectRealpath,
+    "--project-store",
+    paths.projectStore,
+    "--global-store",
+    paths.globalStore
+  ];
+}
+function spawnDaemon(binary, arguments_, token, logger) {
   const child = spawn3(
     binary,
-    [
-      "--socket",
-      paths.tstSocket,
-      "--project-root",
-      paths.projectRealpath,
-      "--project-store",
-      paths.projectStore,
-      "--global-store",
-      paths.globalStore
-    ],
+    arguments_,
     {
       stdio: ["ignore", "ignore", "pipe"],
       env: { ...process.env, CUPPET_TST_TOKEN: token }
     }
   );
   child.stderr?.on("data", (chunk) => void logger.write("warn", `tst: ${chunk.toString("utf8")}`));
+  return child;
+}
+async function wrapDaemon(child, endpoint, token) {
   try {
-    const client = await waitForClient(child, paths.tstSocket, token);
+    const client = await waitForClient(child, endpoint, token);
     return {
       client,
-      socket: paths.tstSocket,
+      socket: endpoint,
       token,
       async close() {
         try {
           await Promise.race([
             client.call("shutdown"),
-            new Promise((resolve4) => setTimeout(resolve4, 1500))
+            new Promise((resolve5) => setTimeout(resolve5, 1500))
           ]);
         } finally {
           client.destroy();
@@ -6464,14 +8900,14 @@ async function startTstDaemon(binary, paths, logger) {
 }
 async function waitForExit(child) {
   if (child.exitCode !== null) return;
-  await new Promise((resolve4) => {
+  await new Promise((resolve5) => {
     const timer = setTimeout(() => {
       child.off("exit", onExit);
-      resolve4();
+      resolve5();
     }, 5e3);
     const onExit = () => {
       clearTimeout(timer);
-      resolve4();
+      resolve5();
     };
     child.once("exit", onExit);
   });
@@ -6485,7 +8921,7 @@ async function waitForClient(child, socket, token) {
       return await TstClient.connect(socket, token);
     } catch (error) {
       lastError = error;
-      await new Promise((resolve4) => setTimeout(resolve4, 75));
+      await new Promise((resolve5) => setTimeout(resolve5, 75));
     }
   }
   throw new Error(`Timed out waiting for TST daemon: ${lastError?.message ?? "socket unavailable"}`);
@@ -6611,7 +9047,7 @@ async function main() {
       ...preferences.value.vertexProject ? { vertexProject: preferences.value.vertexProject } : {}
     });
     const gateway = new OpenCodeGateway(opencode.client, paths.projectRealpath);
-    controller = new CuppetController({
+    controller = new Pe3Controller({
       gateway,
       ...tst ? { tst: tst.client } : {},
       preferences,
@@ -6639,7 +9075,7 @@ async function main() {
     const relayUrl = arguments_.relayUrl ?? process.env.CUPPET_RELAY_URL;
     const remoteOptions = (write) => ({
       controller,
-      remoteDir: join14(paths.base, "remote"),
+      remoteDir: join16(paths.base, "remote"),
       ...relayUrl ? { relayUrl } : {},
       ...process.env.CUPPET_RELAY_HOST_SECRET ? { hostSecret: process.env.CUPPET_RELAY_HOST_SECRET } : {},
       ...process.env.CUPPET_TOKEN ? { authToken: process.env.CUPPET_TOKEN } : {},
@@ -6661,12 +9097,12 @@ async function main() {
         if (remoteStartResponse) return remoteStartResponse;
         const abort = new AbortController();
         remoteStartController = abort;
-        remoteStartResponse = new Promise((resolve4, reject) => {
+        remoteStartResponse = new Promise((resolve5, reject) => {
           let returned = false;
           const finishInitial = (status) => {
             if (returned) return;
             returned = true;
-            resolve4(status);
+            resolve5(status);
           };
           const starting = startRemoteControl({
             ...remoteOptions(() => void 0),

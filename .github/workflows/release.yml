@@ -36,6 +36,12 @@ jobs:
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             package_dir: runtime-linux-arm64-gnu
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            package_dir: runtime-win32-x64
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            package_dir: runtime-win32-arm64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -72,6 +78,9 @@ jobs:
       - name: Build audited OpenCode binary
         run: node scripts/build-opencode.mjs --source=.opencode-src --output=.opencode/opencode
       - name: Run npm test
+        # PowerShell is the default shell on Windows runners, but this retry
+        # uses POSIX shell syntax, so pin bash on every platform.
+        shell: bash
         run: |
           if npm test; then
             exit 0
@@ -124,7 +133,10 @@ jobs:
         with:
           path: artifacts
       - name: Restore runtime executable permissions
-        run: chmod 755 artifacts/**/bin/opencode artifacts/**/bin/tst-daemon
+        # Windows artifacts carry `.exe` binaries without POSIX execute bits;
+        # verify-release.mjs skips the mode check for them, but keep any
+        # POSIX binaries executable after the artifact round-trip.
+        run: find artifacts -type f \( -name opencode -o -name tst-daemon \) -exec chmod 755 {} +
       - run: npm ci
       - run: npm run build:ts
       - name: Create and verify installable npm bundle
@@ -172,7 +184,7 @@ jobs:
           path: artifacts
           merge-multiple: true
       - name: Restore runtime executable permissions
-        run: chmod 755 artifacts/**/bin/opencode artifacts/**/bin/tst-daemon
+        run: find artifacts -type f \( -name opencode -o -name tst-daemon \) -exec chmod 755 {} +
       - run: npm ci
       - name: Configure GitHub Packages authentication
         run: npm config set //npm.pkg.github.com/:_authToken "$NODE_AUTH_TOKEN"

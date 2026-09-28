@@ -77,7 +77,7 @@ The remote protocol and scope model are documented in
 
 - Node.js 22 or newer
 - Rust 1.88 or newer for source builds
-- macOS 13+ or Ubuntu 22.04+ on arm64/x64
+- macOS 13+, Ubuntu 22.04+, or Windows 10/11 on arm64/x64
 - The pinned OpenCode binary (a release package includes it; source builds can
   set `CUPPET_OPENCODE_BIN`)
 
@@ -130,8 +130,8 @@ the canonical command. The standard `cc` C compiler is never shadowed.
 ## Release and remote host setup
 
 The complete release checklist is in [`docs/releasing.md`](docs/releasing.md).
-The npm package contains the CLI and relay PWA; the four platform runtime
-packages contain the bundled OpenCode and Rust binaries. CI publishes all five
+The npm package contains the CLI and relay PWA; the six platform runtime
+packages contain the bundled OpenCode and Rust binaries. CI publishes all seven
 packages to npm, mirrors the scoped runtime packages to GitHub Packages, and
 creates downloadable runtime archives.
 
@@ -411,7 +411,7 @@ and the benchmark methodology is documented in
 
 ## Alpha limits
 
-Windows, musl, remote daemons, cloud memory sync, vector databases, and
+musl, remote daemons, cloud memory sync, vector databases, and
 multi-user operation are not supported. One Cuppet process may own writable
 memory for a project; it can manage multiple OpenCode sessions. Offline means
 no runtime binary download, not offline provider inference.

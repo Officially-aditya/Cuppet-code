@@ -15,5 +15,7 @@ export default defineConfig({
     '@cuppet-code/runtime-darwin-x64',
     '@cuppet-code/runtime-linux-arm64-gnu',
     '@cuppet-code/runtime-linux-x64-gnu',
+    '@cuppet-code/runtime-win32-x64',
+    '@cuppet-code/runtime-win32-arm64',
   ],
 })

@@ -11,6 +11,8 @@ const runtimeDirectories = {
   'darwin-x64': 'runtime-darwin-x64',
   'linux-arm64': 'runtime-linux-arm64-gnu',
   'linux-x64': 'runtime-linux-x64-gnu',
+  'win32-x64': 'runtime-win32-x64',
+  'win32-arm64': 'runtime-win32-arm64',
 }
 const expectedTstProtocol = 'cuppet.tst.v3'
 
@@ -57,10 +59,11 @@ async function validateRuntime(root) {
   } catch {
     throw new Error(`runtime artifact is unreadable at ${root}; build and package the pinned OpenCode derivative first`)
   }
+  const executableSuffix = process.platform === 'win32' ? '.exe' : ''
   const expectedFiles = [
-    'bin/opencode',
+    `bin/opencode${executableSuffix}`,
     'bin/.cuppet-derivative.json',
-    'bin/tst-daemon',
+    `bin/tst-daemon${executableSuffix}`,
     'plugin/index.js',
     'plugin/server.js',
     'plugin/tui.js',
@@ -97,7 +100,7 @@ async function validateRuntime(root) {
   if (patchHash.digest('hex') !== manifest.patchSetDigest) {
     throw new Error('runtime artifact patch set does not match this checkout; rebuild it before installing')
   }
-  const daemonProtocol = (await capture(resolve(root, 'bin/tst-daemon'), ['--protocol'], process.env)).trim()
+  const daemonProtocol = (await capture(resolve(root, `bin/tst-daemon${executableSuffix}`), ['--protocol'], process.env)).trim()
   if (daemonProtocol !== expectedTstProtocol) {
     throw new Error(
       `runtime TST daemon protocol mismatch: expected ${expectedTstProtocol}, received ${daemonProtocol || 'no identity'}`,

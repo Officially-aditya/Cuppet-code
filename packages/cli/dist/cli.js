@@ -1178,7 +1178,7 @@ async function writeOrchestratorState(paths, enabled) {
 }
 
 // src/constants.ts
-var CUPPET_VERSION = "0.2.0-alpha.2";
+var CUPPET_VERSION = "0.2.0-alpha.3";
 var DEFAULT_CUPPET_API_BASE = "https://connect.cuppet.in";
 var OPENCODE_VERSION = "1.18.29";
 var OPENCODE_REVISION = "16747470f976aca3d362ad730bcd3fe82ecc2c9a";
@@ -8644,7 +8644,7 @@ function validateManifest(manifest) {
     const report = process.report?.getReport();
     const header = report.header ?? {};
     if (manifest.libc !== "glibc" || !header.glibcVersionRuntime) {
-      throw new Error("Cuppet alpha requires a glibc Linux runtime");
+      throw new Error("Cuppet alpha requires a glibc Linux runtime; this host reports no glibc, so musl-based distributions such as Alpine are not supported yet");
     }
   } else if (manifest.libc !== null) {
     throw new Error("non-Linux runtime manifest must not declare a libc");
@@ -9012,7 +9012,12 @@ async function main() {
   const logger = new RedactedLogger(paths.logs);
   const assets = await resolveRuntimeAssets();
   if (!assets.opencode) {
-    throw new Error(`Pinned OpenCode runtime is unavailable. ${assets.diagnostics.join(" ")}`);
+    throw new Error([
+      `Pinned OpenCode runtime is unavailable on ${process.platform}-${process.arch} (Cuppet ${CUPPET_VERSION}).`,
+      ...assets.diagnostics.map((diagnostic) => `  - ${diagnostic}`),
+      "npm skips a missing optionalDependency without failing, so an incomplete release looks like a successful install.",
+      "Reinstall with the matching version (`npm i -g cuppet@same-version`), or point CUPPET_OPENCODE_BIN and CUPPET_TST_BIN at a local build."
+    ].join("\n"));
   }
   let tst;
   let opencode;

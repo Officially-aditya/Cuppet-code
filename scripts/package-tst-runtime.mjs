@@ -10,6 +10,8 @@ const TARGETS = {
   'x86_64-apple-darwin': { platform: 'darwin', arch: 'x64', libc: null },
   'aarch64-unknown-linux-gnu': { platform: 'linux', arch: 'arm64', libc: 'glibc' },
   'x86_64-unknown-linux-gnu': { platform: 'linux', arch: 'x64', libc: 'glibc' },
+  'aarch64-pc-windows-msvc': { platform: 'win32', arch: 'arm64', libc: null },
+  'x86_64-pc-windows-msvc': { platform: 'win32', arch: 'x64', libc: null },
 }
 
 const sourceArgument = argument('source') ?? process.env.CUPPET_TST_BIN
@@ -74,6 +76,9 @@ function inferCurrentPlatform() {
   }
   if (process.platform === 'linux' && ['arm64', 'x64'].includes(process.arch)) {
     return { platform: 'linux', arch: process.arch, libc: 'glibc' }
+  }
+  if (process.platform === 'win32' && ['arm64', 'x64'].includes(process.arch)) {
+    return { platform: 'win32', arch: process.arch, libc: null }
   }
   return null
 }

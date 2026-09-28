@@ -125,8 +125,8 @@ async fn run() -> Result<()> {
         #[cfg(unix)]
         {
             prepare_socket(&socket)?;
-            let listener = UnixListener::bind(&socket)
-                .with_context(|| format!("bind socket {}", socket.display()))?;
+            let listener =
+                UnixListener::bind(&socket).with_context(|| format!("bind socket {}", socket.display()))?;
             set_socket_mode(&socket)?;
             loop {
                 tokio::select! {

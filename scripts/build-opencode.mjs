@@ -3,7 +3,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { chmod, copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import { access } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
@@ -154,7 +154,10 @@ async function resolveTemporaryBase() {
       ? join(process.env.SystemDrive, 'cuppet-tmp')
       : undefined,
     tmpdir(),
-  ].filter((candidate) => candidate)
+  // A Windows runner variable that leaks into a POSIX shell (`D:\a\_temp`) is
+    // not absolute there, and `resolve` would turn it into a directory named
+    // after the drive letter inside the checkout.
+  ].filter((candidate) => candidate && isAbsolute(candidate))
   for (const candidate of candidates) {
     const base = resolve(candidate)
     try {
@@ -181,11 +184,17 @@ function findBuiltBinary(patchedSource) {
   }
   const suffix = platform === 'win32' ? '.exe' : ''
   const baseline = process.arch === 'x64' ? '-baseline' : ''
+  // Upstream names the dist directory with the Bun/target spelling, which is
+  // `windows` on Windows (see the `opencode-windows-<arch>` optional
+  // dependencies), not Node's `win32`.
+  const distPlatform = platform === 'win32' ? 'windows' : platform
   const candidates = [
     // Preferred layout from `packages/opencode/script/build.ts --single`:
     // `dist/opencode-<platform>-<arch>[-baseline]/bin/opencode[.exe]`.
+    resolve(patchedSource, 'packages/opencode/dist', `opencode-${distPlatform}-${process.arch}${baseline}`, `bin/opencode${suffix}`),
+    resolve(patchedSource, 'packages/opencode/dist', `opencode-${distPlatform}-${process.arch}`, `bin/opencode${suffix}`),
+    // Tolerate the `win32` spelling in case the upstream naming changes back.
     resolve(patchedSource, 'packages/opencode/dist', `opencode-${platform}-${process.arch}${baseline}`, `bin/opencode${suffix}`),
-    resolve(patchedSource, 'packages/opencode/dist', `opencode-${platform}-${process.arch}`, `bin/opencode${suffix}`),
   ]
   return (async () => {
     for (const candidate of candidates) {

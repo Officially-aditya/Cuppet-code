@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { execFile as execFileCallback } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { promisify } from 'node:util'
@@ -27,7 +27,7 @@ function resolveBinary(value: string): string {
 
 test('pinned OpenCode binary exposes the v2 catalog and stable cross-provider execution contract', { skip: !binary }, async () => {
   const root = process.platform === 'darwin' ? '/private/tmp' : tmpdir()
-  const project = await mkdtemp(join(root, 'cuppet-opencode-contract-'))
+  const project = await realpath(await mkdtemp(join(root, 'cuppet-opencode-contract-')))
   await writeFile(join(project, 'input.txt'), 'read contract fixture\n', 'utf8')
   const fakeModel = await startFakeModelServer(project)
   await writeFile(join(project, 'opencode.json'), JSON.stringify({
@@ -108,11 +108,11 @@ test('pinned OpenCode binary exposes the v2 catalog and stable cross-provider ex
     const legacy = await runtime.client.provider.list({ directory: paths.projectRealpath })
     const providerByID = new Map((legacy.data?.all ?? []).map((provider) => [provider.id, provider]))
     const configurable = catalog.find((item) => {
-      if (item.providerID === 'cuppet-contract') return false
+      if (item.providerID === 'cuppet-contract' || item.variants.length === 0) return false
       const variants = providerByID.get(item.providerID)?.models[item.id]?.variants
       return variants && Object.keys(variants).length > 0
     })
-    assert.ok(configurable, 'the legacy catalog should advertise at least one configurable model')
+    assert.ok(configurable, 'the native and legacy catalogs should advertise at least one configurable model')
     gateway = new OpenCodeGateway(runtime.client, paths.projectRealpath)
     const integrations = await gateway.listIntegrations()
     const openAI = integrations.find((integration) => integration.id === 'openai')

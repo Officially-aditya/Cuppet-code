@@ -28,7 +28,7 @@ test('background batches merge meaningful signals, wait for idle, and persist re
     const pending = await readFile(pendingPath, 'utf8')
     assert.doesNotMatch(pending, /secret-value/)
     assert.ok(Buffer.byteLength(pending) < 8_000)
-    assert.equal((await stat(pendingPath)).mode & 0o777, 0o600)
+    if (process.platform !== 'win32') assert.equal((await stat(pendingPath)).mode & 0o777, 0o600)
     assert.equal(worker.stats.queued, 1)
     assert.equal(worker.stats.deferred, 1)
 

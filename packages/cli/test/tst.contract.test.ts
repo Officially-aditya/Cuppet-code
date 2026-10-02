@@ -10,6 +10,7 @@ import { test } from 'node:test'
 import { TstClient } from '../src/tst/client.js'
 
 const binary = process.env.CUPPET_TEST_TST_BIN
+const useTcp = process.platform === 'win32' || process.env.CUPPET_TEST_TST_TCP === '1'
 const binaryPath = binary
   ? resolveBinary(isAbsolute(binary) ? binary : resolve(import.meta.dirname, '../../..', binary))
   : undefined
@@ -22,13 +23,17 @@ function resolveBinary(value: string): string {
   return `${value}.exe`
 }
 
-test('native daemon retains ranked session history, persists verified memory, compacts, and restarts', { skip: !binary }, async () => {
+test('native daemon retains ranked session history, persists verified memory, compacts, and restarts', { skip: !binary, timeout: 60_000 }, async (t) => {
   const root = process.platform === 'darwin' ? '/private/tmp' : tmpdir()
   const directory = await mkdtemp(join(root, 'cuppet-tst-contract-'))
   const projectStore = join(directory, 'project-store')
   const globalStore = join(directory, 'global-store')
   try {
     const first = await launch(binaryPath!, join(directory, 'first.sock'), projectStore, globalStore)
+    t.after(() => {
+      first.client.destroy()
+      if (first.child.exitCode === null) first.child.kill('SIGTERM')
+    })
     const memoryChanged = new Promise<string>((resolvePromise, reject) => {
       const timeout = setTimeout(() => reject(new Error('memory.changed notification timed out')), 2_000)
       const unsubscribe = first.client.onNotification((notification) => {
@@ -176,12 +181,16 @@ test('native daemon retains ranked session history, persists verified memory, co
     await first.client.call('compact')
     // Windows daemons use loopback TCP, so there is no socket file whose
     // mode can be asserted; POSIX daemons must keep the socket private.
-    if (process.platform !== 'win32') {
+    if (!useTcp) {
       assert.equal((await stat(join(directory, 'first.sock'))).mode & 0o777, 0o600)
     }
     await stop(first)
 
     const second = await launch(binaryPath!, join(directory, 'second.sock'), projectStore, globalStore)
+    t.after(() => {
+      second.client.destroy()
+      if (second.child.exitCode === null) second.child.kill('SIGTERM')
+    })
     const restored = await second.client.call<{ ltm: Array<{ key: string }> }>('memory.query', {
       session_id: 'session-2',
       query: 'formatting preference',
@@ -198,8 +207,8 @@ async function launch(binaryPath: string, socket: string, projectStore: string, 
   const token = randomBytes(32).toString('hex')
   // Windows has no Unix-domain sockets: run the contract daemon on loopback
   // TCP, mirroring the supervisor's Windows transport.
-  const endpoint = process.platform === 'win32' ? `127.0.0.1:${await pickLoopbackPort()}` : socket
-  const transportArguments = process.platform === 'win32'
+  const endpoint = useTcp ? `127.0.0.1:${await pickLoopbackPort()}` : socket
+  const transportArguments = useTcp
     ? ['--host', '127.0.0.1', '--port', endpoint.split(':')[1]!]
     : ['--socket', socket]
   const child = spawn(

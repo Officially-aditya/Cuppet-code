@@ -241,9 +241,10 @@ async fn serve_connection(
     let mut notifications_enabled = false;
     let mut event_receiver = events.subscribe();
     let (mut reader, mut writer) = tokio::io::split(stream);
+    let mut read_buffer = Vec::with_capacity(4096);
     loop {
         let payload = tokio::select! {
-            payload = read_frame(&mut reader) => {
+            payload = read_frame(&mut reader, &mut read_buffer) => {
                 let Some(payload) = payload? else { break };
                 payload
             }
@@ -635,23 +636,31 @@ fn spawn_watcher(
     Ok(())
 }
 
-async fn read_frame<R>(stream: &mut R) -> Result<Option<Vec<u8>>>
+async fn read_frame<R>(stream: &mut R, buffer: &mut Vec<u8>) -> Result<Option<Vec<u8>>>
 where
     R: AsyncRead + Unpin,
 {
-    let mut length = [0u8; 4];
-    match stream.read_exact(&mut length).await {
-        Ok(_) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::UnexpectedEof => return Ok(None),
-        Err(error) => return Err(error.into()),
+    loop {
+        if buffer.len() >= 4 {
+            let length = u32::from_be_bytes(buffer[..4].try_into()?) as usize;
+            if length == 0 || length > MAX_FRAME_BYTES {
+                return Err(anyhow!("invalid RPC frame length {length}"));
+            }
+            if buffer.len() >= length + 4 {
+                let payload = buffer[4..length + 4].to_vec();
+                buffer.drain(..length + 4);
+                return Ok(Some(payload));
+            }
+        }
+        // Notifications can cancel this future inside select!. read_buf is
+        // cancellation-safe and retains partial TCP frames for the next poll.
+        if stream.read_buf(buffer).await? == 0 {
+            if buffer.is_empty() {
+                return Ok(None);
+            }
+            return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof).into());
+        }
     }
-    let length = u32::from_be_bytes(length) as usize;
-    if length == 0 || length > MAX_FRAME_BYTES {
-        return Err(anyhow!("invalid RPC frame length {length}"));
-    }
-    let mut payload = vec![0u8; length];
-    stream.read_exact(&mut payload).await?;
-    Ok(Some(payload))
 }
 
 async fn write_response<W>(stream: &mut W, response: Response) -> Result<()>
@@ -802,6 +811,25 @@ fn redact_error(message: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn interrupted_frame_read_retains_partial_bytes() {
+        let (mut reader, mut writer) = tokio::io::duplex(64);
+        let mut buffer = Vec::with_capacity(64);
+        writer.write_all(&[0, 0, 0, 5, b'h', b'e']).await.unwrap();
+        assert!(
+            tokio::time::timeout(Duration::from_millis(10), read_frame(&mut reader, &mut buffer))
+                .await
+                .is_err()
+        );
+        assert_eq!(buffer, [0, 0, 0, 5, b'h', b'e']);
+        writer.write_all(b"llo").await.unwrap();
+        assert_eq!(
+            read_frame(&mut reader, &mut buffer).await.unwrap(),
+            Some(b"hello".to_vec())
+        );
+        assert!(buffer.is_empty());
+    }
 
     #[test]
     fn token_comparison_and_redaction() {

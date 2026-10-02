@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
-import { dirname, join, resolve } from 'node:path'
+import { delimiter, dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
@@ -241,7 +241,7 @@ function runPublisher(
       env: {
         ...process.env,
         NODE_AUTH_TOKEN: 'test-token',
-        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
         ...extraEnvironment,
       },
       stdio: ['ignore', 'pipe', 'pipe'],

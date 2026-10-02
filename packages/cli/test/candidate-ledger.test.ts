@@ -190,7 +190,7 @@ test('bounded persisted ledger is private, reloadable, compactable, and decays w
     assert.equal(ledger.size, 2)
     assert.ok(ledger.entry(baseObservation.key, 'preference'))
     await ledger.persist()
-    assert.equal((await stat(path)).mode & 0o777, 0o600)
+    if (process.platform !== 'win32') assert.equal((await stat(path)).mode & 0o777, 0o600)
 
     const raw = await readFile(path, 'utf8')
     assert.doesNotMatch(raw, /session-1|project-1/)

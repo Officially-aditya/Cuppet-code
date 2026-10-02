@@ -21,7 +21,7 @@ test('preferences persist model references but no credential material', async ()
   assert.match(content, /"providerID": "test"/)
   assert.match(content, /"vertexProject": "sydney-499116"/)
   assert.doesNotMatch(content, /api.?key|access.?token|refresh.?token|password/i)
-  assert.equal((await stat(path)).mode & 0o777, 0o600)
+  if (process.platform !== 'win32') assert.equal((await stat(path)).mode & 0o777, 0o600)
 })
 
 test('legacy platform preferences migrate to an unconstrained provider and are rewritten canonically', async () => {

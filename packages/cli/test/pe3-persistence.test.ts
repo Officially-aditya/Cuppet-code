@@ -152,7 +152,7 @@ test('registry is bounded, private, redacted, and contains routing metadata only
     const parsed = JSON.parse(raw) as Record<string, unknown>
     const info = await stat(registry.path)
     assert.equal((parsed.agents as unknown[]).length, PE3_MAX_PERSISTED_AGENTS)
-    assert.equal(info.mode & 0o777, 0o600)
+    if (process.platform !== 'win32') assert.equal(info.mode & 0o777, 0o600)
     assert.doesNotMatch(raw, /sk-supersecretvalue123456789/)
     assert.doesNotMatch(raw, /assistantBuffer|messages|transcript|toolOutput/)
     assert.match(raw, /REDACTED/)

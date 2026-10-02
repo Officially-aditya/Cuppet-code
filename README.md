@@ -137,8 +137,11 @@ Run `cuppet --doctor` for checksum, protocol, storage, provider, and graph
 diagnostics. Cuppet starts in visible OpenCode-only degraded mode if TST is not
 available, but it stops the agent loop when OpenCode itself cannot start.
 
-For a source checkout with a locally packaged runtime, run
-`npm run install:global`. The installer packs the runtime and CLI before
+For a source checkout, run `npm run install:global`. The installer uses a valid
+local runtime or the matching published runtime. If neither is available, it
+builds the native runtime from the pinned OpenCode source, using Git, Rust, and
+an npm-managed copy of Bun 1.3.14. Set `CUPPET_OPENCODE_BIN` to reuse an already
+built Cuppet derivative. The installer packs the runtime and CLI before
 installing them, so the global commands never symlink back into the checkout
 (which macOS may block when the repository is under `Downloads`). Typing
 `cupet` then launches Cuppet from any directory; `cuppet` remains available as

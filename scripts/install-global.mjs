@@ -27,6 +27,7 @@ const platformBuildTargets = {
   'runtime-win32-arm64': 'aarch64-pc-windows-msvc',
 }
 const expectedTstProtocol = 'cuppet.tst.v3'
+const opencodeRevision = '16747470f976aca3d362ad730bcd3fe82ecc2c9a'
 
 const platformKey = `${process.platform}-${process.arch}`
 const runtimeDirectory = runtimeDirectories[platformKey]
@@ -41,9 +42,11 @@ const buildRemedy = [
   'Build it first:',
   '  1. npm ci',
   '  2. npm run build',
-  '  3. cargo build -p tst-daemon',
-  '  4. node scripts/build-opencode.mjs --source=.opencode-src --output=.opencode/opencode',
-  `  5. CUPPET_OPENCODE_BIN=<repo>/.opencode/opencode node scripts/package-platform.mjs --target=${platformTarget}`,
+  `  3. cargo build -p tst-daemon --release --locked --target=${platformTarget}`,
+  '  4. git clone --filter=blob:none --no-checkout https://github.com/anomalyco/opencode.git .opencode-src (if missing)',
+  `  5. git -C .opencode-src checkout --detach ${opencodeRevision}`,
+  '  6. npm exec --yes --package=bun@1.3.14 -- node scripts/build-opencode.mjs --source=.opencode-src --output=.opencode/opencode',
+  `  7. CUPPET_OPENCODE_BIN=<repo>/.opencode/opencode node scripts/package-platform.mjs --target=${platformTarget}`,
   'Then re-run npm run install:global from the repository root.',
 ].join('\n')
 
@@ -64,7 +67,7 @@ const npmEnvironment = {
 
 // Fresh clones have no gitignored `artifacts/` output. Prefer a local build
 // when present, otherwise fall back to the published `@cuppet-code/*` runtime
-// for this version so `npm run install:global` works on a new machine.
+// for this version. Unpublished checkouts build the native runtime locally.
 try {
   let runtime = localRuntime
   try {
@@ -74,9 +77,18 @@ try {
     await validateRuntime(localRuntime)
   } catch (localError) {
     const fallback = await tryRegistryRuntime()
-    if (!fallback) throw localError
-    runtime = fallback
-    process.stdout.write(`Using published runtime for ${platformKey} (local artifacts missing).\n`)
+    if (fallback) {
+      runtime = fallback
+      process.stdout.write(`Using published runtime for ${platformKey} (local artifacts missing).\n`)
+    } else {
+      process.stdout.write(`No compatible local or published runtime for ${platformKey}; building from source.\n`)
+      try {
+        await buildLocalRuntime()
+        await validateRuntime(localRuntime)
+      } catch (error) {
+        throw new Error(`Unable to build runtime for ${platformKey}: ${error.message ?? error}\nSource builds require Git and Rust.\n${buildRemedy}`, { cause: localError })
+      }
+    }
   }
 
   try {
@@ -138,6 +150,36 @@ async function pack(source, destination, environment) {
     throw new Error(`npm pack reported ${filename} for ${source} but the file is missing at ${tarball}`)
   }
   return tarball
+}
+
+async function buildLocalRuntime() {
+  try {
+    await access(repoPath('node_modules', 'typescript', 'package.json'))
+  } catch {
+    await run(npmLauncher.command, [...npmLauncher.prefix, 'ci'], npmEnvironment, npmLauncher.shell)
+  }
+  await run(npmLauncher.command, [...npmLauncher.prefix, 'run', 'build'], npmEnvironment, npmLauncher.shell)
+  await run('cargo', ['build', '-p', 'tst-daemon', '--release', '--locked', `--target=${platformTarget}`], npmEnvironment)
+
+  let opencodeBinary = process.env.CUPPET_OPENCODE_BIN
+  if (!opencodeBinary) {
+    const source = repoPath('.opencode-src')
+    try {
+      await access(source)
+    } catch {
+      await run('git', ['clone', '--filter=blob:none', '--no-checkout', 'https://github.com/anomalyco/opencode.git', source], npmEnvironment)
+      await run('git', ['-C', source, 'checkout', '--detach', opencodeRevision], npmEnvironment)
+    }
+    opencodeBinary = repoPath('.opencode', process.platform === 'win32' ? 'opencode.exe' : 'opencode')
+    await run(npmLauncher.command, [
+      ...npmLauncher.prefix, 'exec', '--yes', '--package=bun@1.3.14', '--',
+      process.execPath, repoPath('scripts', 'build-opencode.mjs'), `--source=${source}`, `--output=${opencodeBinary}`,
+    ], npmEnvironment, npmLauncher.shell)
+  }
+  await run(process.execPath, [repoPath('scripts', 'package-platform.mjs'), `--target=${platformTarget}`], {
+    ...npmEnvironment,
+    CUPPET_OPENCODE_BIN: resolve(opencodeBinary),
+  })
 }
 
 async function tryRegistryRuntime() {
@@ -310,7 +352,7 @@ function run(command, arguments_, environment, shell = false) {
   return new Promise((resolvePromise, reject) => {
     let child
     try {
-      child = spawn(command, arguments_, { stdio: 'inherit', env: environment, shell })
+      child = spawn(command, arguments_, { cwd: repositoryRoot, stdio: 'inherit', env: environment, shell })
     } catch (error) {
       reject(new Error(`failed to spawn ${display}: ${error.message ?? error}`))
       return
@@ -350,4 +392,3 @@ function capture(command, arguments_, environment, shell = false) {
 function exitReason(code, signal) {
   return signal ?? (code === null ? 'unknown' : code)
 }
-

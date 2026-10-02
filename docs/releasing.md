@@ -4,9 +4,8 @@ The release has four parts:
 
 1. The `cuppet` npm CLI package.
 2. Six platform runtime npm packages containing OpenCode and `tst-daemon`.
-3. Scoped runtime package mirrors in GitHub Packages.
-4. Downloadable GitHub Release assets.
-5. Runtime configuration for the Sydney API, relay, and Cuppet-code host.
+3. Downloadable GitHub Release assets.
+4. Runtime configuration for the Sydney API, relay, and Cuppet-code host.
 
 The release workflow builds and publishes the first three. Human-owned accounts,
 certificates, DNS, and production secrets are deliberately not stored in this
@@ -27,19 +26,24 @@ Each platform job uses Node 22, Bun 1.3.14, and Rust 1.88 to:
 - sign and notarize macOS binaries;
 - create a checked runtime package under `artifacts/`.
 
-The publish job then:
+The `verify` job then:
 
 - verifies all six runtime manifests and checksums;
 - creates and smoke-installs the `cuppet-<version>.tgz` npm bundle;
-- publishes the six `@cuppet-code/runtime-*` packages and `cuppet`;
-- creates a GitHub Release containing the six runtime archives, the npm
-  tarball, and `SHA256SUMS`.
+- assembles the six runtime archives, the npm tarball, and `SHA256SUMS` as a
+  downloadable artifact.
 
-The GitHub Packages job is a separate mirror path. It publishes every runtime
-artifact that finished successfully, so Linux runtime packages can be mirrored
-even while a macOS signing job is waiting for its Apple secrets. It never
-publishes the unscoped `cuppet` CLI because GitHub Packages only supports scoped
-npm package names.
+A tag push stops there. Nothing reaches npm and no GitHub Release is created, so
+a tag push proves the release without spending an immutable version number.
+Publishing is opt-in: start the workflow manually with the existing tag and
+`publish` set to true. That adds the `publish-npm` job, the only job that uses
+the `npm` environment, which publishes the six `@cuppet-code/runtime-*` packages
+and `cuppet` and then creates the GitHub Release from the assets `verify`
+produced.
+
+`environment` is a job-level key and nothing else. Declaring it on an individual
+step makes the whole workflow file invalid: GitHub records a run with no jobs and
+a tag push creates nothing at all, which reads as a trigger that never fired.
 
 ## Human setup required once
 
@@ -120,10 +124,12 @@ automatically when present.
    git push origin v0.2.0-alpha.2
    ```
 
-5. Pushing the tag starts the `release` workflow automatically. If you use
-   **Run workflow** instead, enter the exact tag.
-6. Wait for the platform jobs, the npm publish job, the GitHub Packages mirror,
-   and the GitHub Release creation to finish.
+5. Pushing the tag starts the `release` workflow automatically and builds and
+   verifies the release without publishing it. If you use **Run workflow**
+   instead, enter the exact tag.
+6. When the build and verification are green, run the workflow again from
+   **Actions** with the same tag and `publish` set to true, then approve the
+   `npm` environment when it is held. Wait for `publish-npm` to finish.
 7. Install the published package on a clean Node 22 machine:
 
    ```sh

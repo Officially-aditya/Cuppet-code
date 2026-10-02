@@ -99,10 +99,10 @@ jobs:
           CUPPET_TEST_TST_BIN: ${{ github.workspace }}/target/${{ matrix.target }}/release/tst-daemon
       # Signing and notarization are optional. Apple credentials live in
       # human-owned accounts and have not always been configured, and a
-      # release that blocks on them publishes nothing at all: `publish` needs
-      # every matrix job, so one unsigned-forbidden macOS failure skips the
-      # npm publish entirely. When the secrets are absent the macOS runtimes
-      # are still built and published unsigned.
+      # release that blocks on them publishes nothing at all: `publish-npm`
+      # needs every matrix job, so one unsigned-forbidden macOS failure skips
+      # the npm publish entirely. When the secrets are absent the macOS
+      # runtimes are still built and published unsigned.
       #
       # The set is all-or-nothing. A partial set would sign with a key that is
       # never notarized, so any missing secret disables signing wholesale
@@ -163,12 +163,15 @@ jobs:
           path: artifacts/
           include-hidden-files: true
 
-  publish:
+  verify:
     needs: build-platform
     runs-on: ubuntu-24.04
-    # Only the two mutating steps below are gated. The npm environment is not
-    # declared on this job so a build-only run is never held waiting for an
-    # approval that is not needed yet.
+    # This job verifies the release without mutating anything, and it declares
+    # no `environment`. GitHub accepts `environment` at job scope only, never on
+    # a step, so the npm approval gate cannot wrap just the two mutating steps;
+    # it has to wrap a whole job. Keeping verification separate is what lets a
+    # tag push prove the six platform builds and the assembled bundle without
+    # waiting on an approval that a build-only run does not need.
     steps:
       - uses: actions/checkout@v4
         with:
@@ -192,33 +195,53 @@ jobs:
       - run: node scripts/verify-release.mjs artifacts
         env:
           CUPPET_VERIFY_EXECUTABLES: '0'
-      - name: Publish to npm
-        # Publishing is opt-in so a tag push can prove the six platform builds
-        # and the assembled bundle without spending an immutable version
-        # number. This step needs all six matrix jobs, so a mid-matrix failure
-        # consumes the version even when nothing reaches the registry: npm will
-        # not overwrite a published version, and publish-release.mjs's preflight
-        # refuses to repair a partially released version because only a new
-        # version can. Building first turns that into a re-runnable step.
-        #
-        # `environment` is declared on this step, not the job, so the npm
-        # approval gate still applies to the publish while a build-only run is
-        # not held waiting for an approval it does not need.
-        if: ${{ inputs.publish == true }}
-        environment: npm
-        run: node scripts/publish-release.mjs artifacts
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Create downloadable release assets
         run: node scripts/create-release-assets.mjs artifacts release-assets
       - uses: actions/upload-artifact@v4
         with:
           name: cuppet-release-assets
           path: release-assets/
+
+  publish-npm:
+    # Publishing is opt-in so a tag push can prove the six platform builds and
+    # the assembled bundle without spending an immutable version number. This
+    # job needs the matrix and the verification job, so a mid-matrix failure
+    # consumes the version even when nothing reaches the registry: npm will not
+    # overwrite a published version, and publish-release.mjs's preflight refuses
+    # to repair a partially released version because only a new version can.
+    # Verifying first turns that into a re-runnable job.
+    needs: [build-platform, verify]
+    if: ${{ inputs.publish == true }}
+    runs-on: ubuntu-24.04
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Restore runtime executable permissions
+        run: find artifacts -type f \( -name opencode -o -name tst-daemon \) -exec chmod 755 {} +
+      - run: npm ci
+      # The CLI's `prepack` hook builds it, so the workspace has to be
+      # installed and compiled before `publish-release.mjs` can publish it.
+      - run: npm run build:ts
+      - name: Publish to npm
+        run: node scripts/publish-release.mjs artifacts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: cuppet-release-assets
+          path: release-assets
       - name: Create or update GitHub release
         # Gated with the npm publish so a build-only run does not create a
         # public release pointing at a version that is not on the registry.
-        if: ${{ inputs.publish == true }}
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ env.RELEASE_TAG }}

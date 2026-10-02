@@ -9,6 +9,10 @@ on:
       tag:
         description: Existing v-prefixed release tag
         required: true
+      publish:
+        description: Publish to npm and create the GitHub release
+        type: boolean
+        default: false
 
 env:
   RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
@@ -162,7 +166,9 @@ jobs:
   publish:
     needs: build-platform
     runs-on: ubuntu-24.04
-    environment: npm
+    # Only the two mutating steps below are gated. The npm environment is not
+    # declared on this job so a build-only run is never held waiting for an
+    # approval that is not needed yet.
     steps:
       - uses: actions/checkout@v4
         with:
@@ -186,7 +192,21 @@ jobs:
       - run: node scripts/verify-release.mjs artifacts
         env:
           CUPPET_VERIFY_EXECUTABLES: '0'
-      - run: node scripts/publish-release.mjs artifacts
+      - name: Publish to npm
+        # Publishing is opt-in so a tag push can prove the six platform builds
+        # and the assembled bundle without spending an immutable version
+        # number. This step needs all six matrix jobs, so a mid-matrix failure
+        # consumes the version even when nothing reaches the registry: npm will
+        # not overwrite a published version, and publish-release.mjs's preflight
+        # refuses to repair a partially released version because only a new
+        # version can. Building first turns that into a re-runnable step.
+        #
+        # `environment` is declared on this step, not the job, so the npm
+        # approval gate still applies to the publish while a build-only run is
+        # not held waiting for an approval it does not need.
+        if: ${{ inputs.publish == true }}
+        environment: npm
+        run: node scripts/publish-release.mjs artifacts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Create downloadable release assets
@@ -196,6 +216,9 @@ jobs:
           name: cuppet-release-assets
           path: release-assets/
       - name: Create or update GitHub release
+        # Gated with the npm publish so a build-only run does not create a
+        # public release pointing at a version that is not on the registry.
+        if: ${{ inputs.publish == true }}
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ env.RELEASE_TAG }}

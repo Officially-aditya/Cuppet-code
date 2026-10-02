@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash, randomBytes } from 'node:crypto'
-import { chmod, copyFile, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
+import { chmod, copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import { access } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { dirname, join, resolve } from 'node:path'
@@ -37,7 +37,8 @@ for (const name of patchFiles) {
   patchSetDigest.update(await readFile(join(patchDirectory, name)))
 }
 const digest = patchSetDigest.digest('hex')
-const temporaryRoot = await mkdtemp(join(tmpdir(), 'cuppet-opencode-'))
+const temporaryBase = await resolveTemporaryBase()
+const temporaryRoot = await mkdtemp(join(temporaryBase, 'cuppet-opencode-'))
 const patchedSource = join(temporaryRoot, 'source')
 
 // Windows runners default to core.autocrlf=true, which would materialize CRLF
@@ -62,6 +63,14 @@ try {
     OPENCODE_CHANNEL: 'latest',
     OPENCODE_VERSION: version,
     CUPPET_OPENCODE_PATCH_SET_DIGEST: digest,
+    // Bun 1.3.14 on Windows mixes the 8.3 short form of the temp path with the
+    // long form (oven-sh/bun#23960) and derives unusable workspace symlink
+    // targets such as `..\..\..\runneradmin\AppData\Local\Temp\...`, failing
+    // every workspace package with ENOENT. Pin every temp variable to the one
+    // canonical directory so both forms agree.
+    TEMP: temporaryRoot,
+    TMP: temporaryRoot,
+    TMPDIR: temporaryRoot,
   }
   await installDependencies(patchedSource, environment)
   const buildArguments = [
@@ -130,6 +139,33 @@ async function installDependencies(patchedSource, environment) {
   if (!installed || !installed.equals(committed)) {
     throw new Error(`bun install rewrote ${lockfilePath}: the pinned revision's lockfile does not match its package.json files`)
   }
+}
+
+// Windows runners point `TEMP` at a deep per-user directory
+// (`C:\Users\runneradmin\AppData\Local\Temp`) whose 62 character checkout path
+// leaves the 4687-package install past the 260 character Win32 limit
+// ("Filename too long"). `RUNNER_TEMP` is the short `D:\a\_temp`. Prefer the
+// shortest writable base available, and let local Windows builds override it.
+async function resolveTemporaryBase() {
+  const candidates = [
+    process.env.CUPPET_OPENCODE_TMP,
+    process.env.RUNNER_TEMP,
+    process.platform === 'win32' && process.env.SystemDrive
+      ? join(process.env.SystemDrive, 'cuppet-tmp')
+      : undefined,
+    tmpdir(),
+  ].filter((candidate) => candidate)
+  for (const candidate of candidates) {
+    const base = resolve(candidate)
+    try {
+      await mkdir(base, { recursive: true })
+      // realpath expands 8.3 names, so the child sees one spelling of the path.
+      return await realpath(base)
+    } catch {
+      // Try the next candidate.
+    }
+  }
+  throw new Error(`no writable temporary directory for the OpenCode build (tried ${candidates.join(', ')})`)
 }
 
 function findBuiltBinary(patchedSource) {

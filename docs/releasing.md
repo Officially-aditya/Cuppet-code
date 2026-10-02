@@ -62,8 +62,10 @@ Environment named exactly `npm`. The workflow passes that secret to
 
 ### macOS signing
 
-The current matrix publishes signed and notarized macOS packages. Add these
-GitHub secrets before running a release:
+macOS signing and notarization are optional. When every secret below is
+present the matrix signs and notarizes both macOS packages; when any one of
+them is missing the release publishes unsigned macOS packages instead of
+failing:
 
 ```text
 APPLE_CERTIFICATE_P12
@@ -73,6 +75,16 @@ APPLE_ID
 APPLE_TEAM_ID
 APPLE_APP_PASSWORD
 ```
+
+The set is all-or-nothing. A partial configuration is treated as unsigned
+rather than signing with a key that is never notarized, and the release run
+logs a warning naming the secrets it could not find.
+
+Signing is not optional by accident. `scripts/package-platform.mjs` refuses to
+emit a macOS runtime with no signature unless `CUPPET_ALLOW_UNSIGNED=1`, and
+the workflow sets that flag only when the secrets are absent, so an unsigned
+package always announces itself. macOS Gatekeeper blocks unsigned binaries on
+first launch, so configure the secrets before inviting users to install.
 
 ### GitHub Packages
 

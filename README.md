@@ -126,7 +126,11 @@ command applies every numbered patch in a temporary detached worktree and
 writes the hidden derivative marker beside the binary. Dependency installation
 prefers `bun install --frozen-lockfile` and otherwise proves the committed
 `bun.lock` is byte-identical afterwards, because Bun 1.3.14 can reject an
-unmodified text lockfile in a large workspace monorepo.
+unmodified text lockfile in a large workspace monorepo. The build worktree is
+staged under the shortest writable base available (`RUNNER_TEMP`, else the system
+drive, else the OS temp directory) because Bun 1.3.14 on Windows mixes the 8.3
+short and long spellings of a deep temp path and fails every workspace symlink
+with ENOENT. Set `CUPPET_OPENCODE_TMP` to override that base.
 
 The Rust daemon is discovered at `target/debug/tst-daemon` during development.
 Run `cuppet --doctor` for checksum, protocol, storage, provider, and graph

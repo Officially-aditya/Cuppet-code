@@ -93,8 +93,46 @@ jobs:
         env:
           CUPPET_CONTRACT_OPENCODE_BIN: ${{ github.workspace }}/.opencode/opencode
           CUPPET_TEST_TST_BIN: ${{ github.workspace }}/target/${{ matrix.target }}/release/tst-daemon
-      - uses: apple-actions/import-codesign-certs@v3
+      # Signing and notarization are optional. Apple credentials live in
+      # human-owned accounts and have not always been configured, and a
+      # release that blocks on them publishes nothing at all: `publish` needs
+      # every matrix job, so one unsigned-forbidden macOS failure skips the
+      # npm publish entirely. When the secrets are absent the macOS runtimes
+      # are still built and published unsigned.
+      #
+      # The set is all-or-nothing. A partial set would sign with a key that is
+      # never notarized, so any missing secret disables signing wholesale
+      # rather than failing mid-job. package-platform.mjs refuses to emit an
+      # unsigned macOS runtime unless CUPPET_ALLOW_UNSIGNED=1, which is why
+      # the flag comes from this step instead of being hardcoded.
+      - name: Detect Apple signing configuration
+        id: apple
         if: startsWith(matrix.target, 'aarch64-apple') || startsWith(matrix.target, 'x86_64-apple')
+        shell: bash
+        env:
+          P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          P12_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
+          NOTARY_APPLE_ID: ${{ secrets.APPLE_ID }}
+          NOTARY_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARY_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          missing=""
+          for secret in P12 P12_PASSWORD SIGN_IDENTITY NOTARY_APPLE_ID NOTARY_TEAM_ID NOTARY_APP_PASSWORD; do
+            if [[ -z "${!secret}" ]]; then
+              missing="${missing}${missing:+, }${secret}"
+            fi
+          done
+          if [[ -z "$missing" ]]; then
+            echo "signing=true" >> "$GITHUB_OUTPUT"
+            echo "allow_unsigned=" >> "$GITHUB_OUTPUT"
+          else
+            echo "signing=false" >> "$GITHUB_OUTPUT"
+            echo "allow_unsigned=1" >> "$GITHUB_OUTPUT"
+            echo "::warning::Apple signing secrets missing (${missing}); publishing unsigned macOS runtimes. Gatekeeper will block these binaries until they are signed or explicitly allowed."
+          fi
+      - uses: apple-actions/import-codesign-certs@v3
+        if: steps.apple.outputs.signing == 'true'
         with:
           p12-file-base64: ${{ secrets.APPLE_CERTIFICATE_P12 }}
           p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -102,11 +140,12 @@ jobs:
         env:
           CUPPET_OPENCODE_BIN: ${{ github.workspace }}/.opencode/opencode
           CUPPET_APPLE_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
+          CUPPET_ALLOW_UNSIGNED: ${{ steps.apple.outputs.allow_unsigned }}
       - name: Package standalone TST runtime
         # Quote the interpolated Windows paths so backslashes survive the shell.
         run: node scripts/package-tst-runtime.mjs --source="${{ github.workspace }}/artifacts/${{ matrix.package_dir }}/bin/tst-daemon" --target=${{ matrix.target }} --output="${{ github.workspace }}/artifacts/tst-${{ matrix.package_dir }}"
       - name: Notarize macOS runtime
-        if: startsWith(matrix.target, 'aarch64-apple') || startsWith(matrix.target, 'x86_64-apple')
+        if: steps.apple.outputs.signing == 'true'
         run: |
           ditto -c -k --keepParent "artifacts/${{ matrix.package_dir }}" runtime.zip
           xcrun notarytool submit runtime.zip --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait

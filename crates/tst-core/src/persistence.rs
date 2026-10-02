@@ -95,10 +95,13 @@ impl DurableStore {
             .with_context(|| format!("open append lock {}", append_lock_path.display()))?;
         set_private_file_mode(&append_lock)?;
 
+        // Appends seek to the end under append_lock. Full write access also
+        // lets Windows truncate the WAL for recovery and compaction.
         let wal = OpenOptions::new()
             .create(true)
+            .truncate(false)
             .read(true)
-            .append(true)
+            .write(true)
             .open(&wal_path)
             .with_context(|| format!("open WAL {}", wal_path.display()))?;
         set_private_file_mode(&wal)?;

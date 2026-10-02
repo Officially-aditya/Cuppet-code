@@ -10,7 +10,8 @@ import { TstToolClient } from '../src/rpc.js'
 test('read-only tool client authenticates and uses length-framed JSON-RPC', async (t) => {
   const temporaryRoot = process.platform === 'darwin' ? '/private/tmp' : tmpdir()
   const directory = await mkdtemp(join(temporaryRoot, 'cuppet-plugin-rpc-'))
-  const socketPath = join(directory, 'tst.sock')
+  let socketPath = join(directory, 'tst.sock')
+  const useTcp = process.platform === 'win32' || process.env.CUPPET_TEST_TST_TCP === '1'
   const methods: string[] = []
   let contextParameters: Record<string, unknown> | undefined
   let refreshParameters: Record<string, unknown> | undefined
@@ -56,13 +57,18 @@ test('read-only tool client authenticates and uses length-framed JSON-RPC', asyn
   try {
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject)
-      server.listen(socketPath, resolve)
+      server.listen(useTcp ? { host: '127.0.0.1', port: 0 } : { path: socketPath }, resolve)
     })
+    if (useTcp) {
+      const address = server.address()
+      assert.ok(address && typeof address === 'object')
+      socketPath = `127.0.0.1:${address.port}`
+    }
   } catch (error) {
     server.close()
     await rm(directory, { recursive: true, force: true })
     if ((error as NodeJS.ErrnoException).code === 'EPERM') {
-      t.skip('sandbox does not permit Unix-domain sockets')
+      t.skip('sandbox does not permit local sockets')
       return
     }
     throw error

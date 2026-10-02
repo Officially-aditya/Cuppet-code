@@ -83,7 +83,15 @@ try {
     '--skip-embed-web-ui',
   ]
   if (process.arch === 'x64') buildArguments.push('--baseline')
-  await run('bun', buildArguments, patchedSource, environment)
+  try {
+    await run('bun', buildArguments, patchedSource, environment)
+  } catch (error) {
+    if (process.platform !== 'win32' || process.arch !== 'x64') throw error
+    // Bun's Windows baseline executable download can be incomplete. Retry the
+    // compile once after dependencies and patch verification have succeeded.
+    process.stderr.write(`Windows OpenCode compile failed (${error.message}); retrying once\n`)
+    await run('bun', buildArguments, patchedSource, environment)
+  }
 
   const platform = process.platform === 'darwin' ? 'darwin' : process.platform === 'linux' ? 'linux' : process.platform === 'win32' ? 'win32' : undefined
   if (!platform || !['arm64', 'x64'].includes(process.arch)) {

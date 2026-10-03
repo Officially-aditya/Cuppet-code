@@ -1,0 +1,56 @@
+name: publish verified npm release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing verified release tag
+        required: true
+      artifact_run_id:
+        description: Run with six successful platform builds
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Check release tag and source builds
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id }}
+        run: |
+          node -e "if (process.env.RELEASE_TAG !== 'v' + require('./package.json').version) throw new Error('release tag/version mismatch')"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ARTIFACT_RUN_ID/jobs?per_page=100" > source-jobs.json
+          node -e "const jobs = require('./source-jobs.json').jobs.filter(job => job.name.startsWith('build-platform (')); if (jobs.length !== 6 || jobs.some(job => job.conclusion !== 'success')) throw new Error('all six source platform builds must pass')"
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.artifact_run_id }}
+          github-token: ${{ github.token }}
+          pattern: cuppet-*
+          path: artifacts
+      - name: Restore runtime executable permissions
+        run: find artifacts -type f \( -name opencode -o -name tst-daemon \) -exec chmod 755 {} +
+      - run: npm ci
+      - run: npm run build:ts
+      - run: npm run package:cli
+      - run: node scripts/verify-release.mjs artifacts
+        env:
+          CUPPET_VERIFY_EXECUTABLES: '0'
+      - name: Publish verified packages to npm
+        run: node scripts/publish-release.mjs artifacts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

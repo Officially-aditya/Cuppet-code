@@ -44,7 +44,8 @@ for (const metadataPath of tstMetadata) {
   await run('tar', ['-czf', join(output, `cuppet-tst-${metadata.runtime}.tar.gz`), '-C', directory, '.'])
 }
 
-const cliTarballs = (await findFiles(artifacts, undefined)).filter((path) => path.endsWith('.tgz'))
+const version = JSON.parse(await readFile(resolve('package.json'), 'utf8')).version
+const cliTarballs = await findFiles(artifacts, `cuppet-${version}.tgz`)
 if (cliTarballs.length !== 1) throw new Error(`expected one CLI npm tarball, found ${cliTarballs.length}`)
 await copyFile(cliTarballs[0], join(output, basename(cliTarballs[0])))
 

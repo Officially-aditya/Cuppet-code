@@ -45,6 +45,8 @@ jobs:
       - name: Restore runtime executable permissions
         run: find artifacts -type f \( -name opencode -o -name tst-daemon \) -exec chmod 755 {} +
       - run: npm ci
+      - name: Set CLI repository metadata for provenance
+        run: npm pkg set repository.type=git "repository.url=git+https://github.com/Officially-aditya/Cuppet-code.git" --workspace=cuppet
       - run: npm run build:ts
       - run: npm run package:cli
       - run: node scripts/verify-release.mjs artifacts

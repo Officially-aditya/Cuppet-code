@@ -3,6 +3,10 @@
   "version": "0.2.0-alpha.7",
   "description": "Cuppet-branded OpenCode derivative with native tiered memory",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Officially-aditya/Cuppet-code.git"
+  },
   "type": "module",
   "engines": {
     "node": ">=22"

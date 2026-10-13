@@ -5,11 +5,13 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::fs;
+use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use tree_sitter::{InputEdit, Language, Node, Parser, Point, Tree};
 
 const MAX_FILE_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_REFERENCES_PER_FILE: usize = 2_048;
+const MAX_CACHED_TREES: usize = 64;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -275,12 +277,21 @@ pub struct GraphSnapshot {
     pub top_level_symbols: HashSet<String>,
 }
 
+#[derive(Serialize)]
+struct GraphSnapshotRef<'a> {
+    version: u32,
+    nodes: &'a HashMap<String, GraphNode>,
+    files: &'a HashMap<String, ParsedFile>,
+    top_level_symbols: &'a HashSet<String>,
+}
+
 pub struct CodeGraph {
     root: PathBuf,
     nodes: HashMap<String, GraphNode>,
     edges: Vec<GraphEdge>,
     files: HashMap<String, ParsedFile>,
     trees: HashMap<String, Tree>,
+    tree_order: VecDeque<String>,
     sources: HashMap<String, Vec<u8>>,
     gitignores: Vec<Gitignore>,
     progress: IndexProgress,
@@ -300,6 +311,7 @@ impl CodeGraph {
             edges: Vec::new(),
             files: HashMap::new(),
             trees: HashMap::new(),
+            tree_order: VecDeque::new(),
             sources: HashMap::new(),
             progress: IndexProgress::default(),
             top_level_symbols: HashSet::new(),
@@ -312,15 +324,19 @@ impl CodeGraph {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
-        let snapshot = GraphSnapshot {
+        let snapshot = GraphSnapshotRef {
             version: GRAPH_SNAPSHOT_VERSION,
-            nodes: self.nodes.clone(),
-            files: self.files.clone(),
-            top_level_symbols: self.top_level_symbols.clone(),
+            nodes: &self.nodes,
+            files: &self.files,
+            top_level_symbols: &self.top_level_symbols,
         };
-        let bytes = rmp_serde::to_vec_named(&snapshot).context("serialize graph snapshot")?;
         let temp_path = path.with_extension("tmp");
-        fs::write(&temp_path, &bytes)?;
+        let mut writer = BufWriter::new(fs::File::create(&temp_path)?);
+        snapshot
+            .serialize(&mut rmp_serde::Serializer::new(&mut writer).with_struct_map())
+            .context("serialize graph snapshot")?;
+        writer.flush()?;
+        drop(writer);
         fs::rename(&temp_path, path)?;
         Ok(())
     }
@@ -356,6 +372,7 @@ impl CodeGraph {
     pub fn begin_build(&mut self) -> Vec<PathBuf> {
         self.gitignores = load_gitignores(&self.root);
         self.trees.clear();
+        self.tree_order.clear();
         self.sources.clear();
         self.seen_in_build.clear();
         self.in_build = true;
@@ -478,6 +495,10 @@ impl CodeGraph {
         if self.files.contains_key(&relative) {
             if let Some(existing_node) = self.nodes.get(&file_id) {
                 if existing_node.content_hash == hash {
+                    if self.trees.contains_key(&relative) {
+                        self.tree_order.retain(|path| path != &relative);
+                        self.tree_order.push_back(relative.clone());
+                    }
                     self.sources.insert(relative, source);
                     return Ok(Some(hash));
                 }
@@ -550,7 +571,14 @@ impl CodeGraph {
             true,
         );
         self.files.insert(relative.clone(), parsed);
+        self.tree_order.retain(|path| path != &relative);
+        self.tree_order.push_back(relative.clone());
         self.trees.insert(relative.clone(), tree);
+        while self.trees.len() > MAX_CACHED_TREES {
+            if let Some(oldest) = self.tree_order.pop_front() {
+                self.trees.remove(&oldest);
+            }
+        }
         self.sources.insert(relative, source);
         self.rebuild_edges();
         Ok(Some(hash))
@@ -570,6 +598,7 @@ impl CodeGraph {
         let existed = self.files.contains_key(&relative);
         self.remove_file_nodes(&relative);
         self.trees.remove(&relative);
+        self.tree_order.retain(|path| path != &relative);
         self.sources.remove(&relative);
         self.rebuild_edges();
         Ok(existed)
@@ -2219,6 +2248,49 @@ mod tests {
         let after = graph.index_file(&file).unwrap().unwrap();
         assert_ne!(before, after);
         assert_eq!(graph.query("second", 2).len(), 1);
+    }
+
+    #[test]
+    fn tree_cache_evicts_old_files_without_losing_search_or_updates() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut graph = CodeGraph::new(temp.path()).unwrap();
+        for index in 0..MAX_CACHED_TREES {
+            let file = temp.path().join(format!("file{index}.ts"));
+            fs::write(&file, format!("export function symbol{index}() {{}}")).unwrap();
+            graph.index_file(&file).unwrap();
+        }
+
+        // Re-indexing an unchanged file still marks its cached tree as recent.
+        graph.index_file(&temp.path().join("file0.ts")).unwrap();
+        let newest = temp.path().join("newest.ts");
+        fs::write(&newest, "export function newest() {}").unwrap();
+        graph.index_file(&newest).unwrap();
+        assert_eq!(graph.trees.len(), MAX_CACHED_TREES);
+        assert_eq!(graph.tree_order.len(), MAX_CACHED_TREES);
+        assert!(graph.trees.contains_key("file0.ts"));
+        assert!(!graph.trees.contains_key("file1.ts"));
+        assert_eq!(graph.stats().files, MAX_CACHED_TREES + 1);
+        assert!(!graph
+            .search("symbol1", Some("file1.ts"), 5)
+            .text_matches
+            .is_empty());
+
+        // An evicted file gets a full parse when its contents change.
+        let evicted = temp.path().join("file1.ts");
+        fs::write(&evicted, "export function replacement() {}").unwrap();
+        graph.index_file(&evicted).unwrap();
+        assert!(graph
+            .query_scoped("symbol1", Some("file1.ts"), 5)
+            .is_empty());
+        assert_eq!(graph.query("replacement", 5).len(), 1);
+        assert!(graph.trees.contains_key("file1.ts"));
+        assert_eq!(graph.trees.len(), MAX_CACHED_TREES);
+        graph.remove_file(&evicted).unwrap();
+        assert!(!graph.tree_order.iter().any(|path| path == "file1.ts"));
+
+        graph.begin_build();
+        assert!(graph.trees.is_empty());
+        assert!(graph.tree_order.is_empty());
     }
 
     #[test]

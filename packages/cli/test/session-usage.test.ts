@@ -92,6 +92,60 @@ test('foreground usage starts at zero whenever a session becomes active', async 
   }
 })
 
+test('session evidence keeps recent sessions and evicts the least recently used', async () => {
+  let onEvent: ((event: AgentEvent) => void) | undefined
+  const gateway = {
+    async listModels() { return [model()] },
+    async listIntegrations() { return [] },
+    onEvent(listener: (event: AgentEvent) => void) {
+      onEvent = listener
+      return () => { onEvent = undefined }
+    },
+    startEvents() {},
+    async getSession(id: string) { return session(id, usage(), 0) },
+    async close() {},
+  } as unknown as OpenCodeGateway
+  const preferences = {
+    value: { schema: 1, backgroundPaused: true, lastSessionByProject: {} },
+    async setLastSession() {},
+  } as unknown as PreferenceStore
+  const controller = new CuppetController({
+    gateway,
+    preferences,
+    paths: { projectID: 'project' } as RuntimePaths,
+    assets: {} as RuntimeAssets,
+    interactive: true,
+  })
+
+  try {
+    await controller.initialize()
+    for (let index = 0; index < 16; index += 1) {
+      const sessionID = `session-${index}`
+      await controller.resume(sessionID)
+      assert.equal(controller.snapshot.activeTools, 0)
+      onEvent?.({ type: 'tool-start', sessionID, callID: `call-${index}`, name: 'read' })
+      assert.equal(controller.snapshot.activeTools, 1)
+    }
+
+    // Refresh the oldest session before adding more evidence.
+    await controller.resume('session-0')
+    assert.equal(controller.snapshot.activeTools, 1)
+    await controller.resume('session-16')
+    onEvent?.({ type: 'tool-start', sessionID: 'session-16', callID: 'call-16', name: 'read' })
+    await controller.resume('session-17')
+    assert.equal(controller.snapshot.activeTools, 0)
+
+    await controller.resume('session-0')
+    assert.equal(controller.snapshot.activeTools, 1)
+    await controller.resume('session-1')
+    assert.equal(controller.snapshot.activeTools, 0)
+    await controller.resume('session-16')
+    assert.equal(controller.snapshot.activeTools, 1)
+  } finally {
+    await controller.close()
+  }
+})
+
 function model(): ModelInfo {
   return {
     providerID: 'openai',

@@ -36,6 +36,8 @@ import type { TstClient } from './tst/client.js'
 import type { TstNotification } from './tst/client.js'
 import { redact } from './runtime/logger.js'
 
+const MAX_SESSION_EVIDENCE = 16
+
 const emptyUsage = (): TokenUsage => ({ input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 })
 
 type SessionEvidence = {
@@ -1030,6 +1032,7 @@ export class CuppetController extends EventEmitter {
 
   #saveSessionEvidence(): void {
     if (!this.#session) return
+    this.#sessionEvidence.delete(this.#session.id)
     this.#sessionEvidence.set(this.#session.id, {
       tools: new Map(this.#tools),
       recentSymbols: [...this.#recentSymbols],
@@ -1037,10 +1040,18 @@ export class CuppetController extends EventEmitter {
       assistantBuffer: this.#assistantBuffer,
       lastUserPrompt: this.#lastUserPrompt,
     })
+    while (this.#sessionEvidence.size > MAX_SESSION_EVIDENCE) {
+      const oldest = this.#sessionEvidence.keys().next().value
+      if (oldest !== undefined) this.#sessionEvidence.delete(oldest)
+    }
   }
 
   #loadSessionEvidence(sessionID: string): void {
     const evidence = this.#sessionEvidence.get(sessionID)
+    if (evidence) {
+      this.#sessionEvidence.delete(sessionID)
+      this.#sessionEvidence.set(sessionID, evidence)
+    }
     this.#tools = evidence ? new Map(evidence.tools) : new Map()
     this.#recentSymbols = evidence ? [...evidence.recentSymbols] : []
     this.#activeDiff = evidence?.activeDiff ?? ''
